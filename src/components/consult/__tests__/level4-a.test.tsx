@@ -144,6 +144,25 @@ describe('V3 tell Amp more', () => {
     jest.useRealTimers()
   })
 
+  it('answers the screen and keeps a note of the rest: "some weeks loads, some weeks I crash"', async () => {
+    jest.useFakeTimers()
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([
+      { kind: 'energy', value: '5', label: 'Energy 5/10' },
+      { kind: 'note', value: 'Energy swings week to week: some weeks plenty, some weeks crashing', label: 'Energy swings week to week: some weeks plenty, some weeks crashing' },
+    ])
+    render(<AmpConsult />)
+    toEnergy()
+    fireEvent.click(screen.getByRole('button', { name: /Tell Amp when it dips/ }))
+    await say('some weeks I have loads of energy and then I have weeks where I crash every day')
+    expect(screen.getByText('Got it: Energy 5/10 · Energy swings week to week: some weeks plenty, some weeks crashing')).toBeInTheDocument()
+    act(() => {
+      jest.advanceTimersByTime(DURATION.heard)
+    })
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'sleep')!.copy.question)
+    jest.useRealTimers()
+  })
+
   it('stays put when what was typed doesn’t answer this question', async () => {
     jest.useFakeTimers()
     setQuizArm({ arm: 'v1', consultAi: true })

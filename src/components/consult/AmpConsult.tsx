@@ -36,7 +36,7 @@ import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
 import { Hint, NextButton, QuietLink, Tile, radioArrows } from './controls'
 import { SceneRenderer, resolveScene } from './scenes/registry'
-import { hunchLine, usePinpointAi } from './pinpoint/pinpointAi'
+import { hunchLine, notesOf, readNotes, usePinpointAi } from './pinpoint/pinpointAi'
 import { pickToPatch, type Pick } from '@/lib/consult/ai/understand'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
@@ -170,7 +170,26 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const pKey = pView ? (pView.kind === 'probe' ? pView.probe.id : pView.kind === 'hunch' ? pView.lead.pattern.id : pView.kind) : ''
   // Pinpoint's AI (plan v5 §7): asked ahead, used only if in hand on arrival.
   const pinpointAi = consultAi && !aiUnavailable
-  usePinpointAi(state.answers, state.sceneId, state.phase === 'scenes' && isAnswered(state.sceneId, state.answers) ? sceneAfter(state.sceneId, state.answers) : null, pinpointAi)
+  const comingUp = state.phase === 'scenes' && isAnswered(state.sceneId, state.answers) ? sceneAfter(state.sceneId, state.answers) : null
+  usePinpointAi(state.answers, state.sceneId, comingUp, pinpointAi)
+  // The notes typed answers left, read together for what they point to, just
+  // before the round or the review uses it. Read again when a note changes.
+  const notesKey = notesOf(state.answers).join('|')
+  const readingNotes = pinpointAi && state.phase === 'scenes' && state.answers.noteHints === null && notesKey !== '' &&
+    [state.sceneId, comingUp].some((id) => id === 'pinpoint' || id === 'review')
+  useEffect(() => {
+    if (!readingNotes) return
+    let live = true
+    const asked = state.answers
+    void readNotes(asked).then((hints) => {
+      if (live) dispatch({ type: 'answer', patch: { noteHints: hints ?? [] } })
+    })
+    return () => {
+      live = false
+    }
+    // Once per set of notes: the answers are read as they were when asked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readingNotes, notesKey])
   const hunchLock = useRef<{ key: string; line: string | null }>({ key: '', line: null })
   if (pView?.kind === 'hunch' && hunchLock.current.key !== pKey) hunchLock.current = { key: pKey, line: pinpointAi ? hunchLine(pView.lead, state.answers) : null }
   if (pView && pView.kind === 'hunch' && hunchLock.current.line) pView.hint = hunchLock.current.line

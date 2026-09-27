@@ -15,6 +15,7 @@ import { HunchCard, LeadBars, LeadsSheet, PatternMap, Plain } from './parts'
 import { wordedProbe, TELLABLE_FORMATS, type ProbePick, type ProbeWords } from '@/lib/consult/ai/pinpoint'
 import { foundLine, probeWords, tellCandidates } from './pinpointAi'
 import { TellSheet } from './TellSheet'
+import { PATTERN_BY_ID } from '@/lib/consult/pinpoint/library'
 
 /**
  * Pinpoint on screen (plan v5 §5): the round, and the follow-ups inside the
@@ -111,6 +112,21 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
       body = (
         <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
           <PatternMap answers={answers} leads={top} title={`Amp’s leads so far: ${top.map((l) => l.pattern.name).join(', ')}`} />
+          {(answers.noteHints ?? []).length > 0 && (
+            <div className="amp-anim-rise" style={{ padding: 'var(--amp-space-3) var(--amp-space-4)', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', background: 'var(--amp-accent-fill)' }}>
+              <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
+                Spotted in what you told me
+              </p>
+              <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)', marginTop: 'var(--amp-space-2)' }} aria-label="Spotted in what you told me">
+                {answers.noteHints!.map((h) => (
+                  <li key={h.pattern} style={{ fontSize: 'var(--amp-text-meta)' }}>
+                    <span style={{ fontWeight: 'var(--amp-weight-bold)' }}>{PATTERN_BY_ID[h.pattern].name}</span>
+                    <span style={{ color: 'var(--amp-ink-2)' }}> · {h.why}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="flex flex-col" aria-label="Leads so far">
             {top.map((l) => (
               <li key={l.pattern.id} className="flex items-center justify-between" style={{ gap: 'var(--amp-space-3)', padding: 'var(--amp-space-2) 0', borderBottom: 'var(--amp-hairline) solid var(--amp-edge)' }}>

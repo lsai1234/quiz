@@ -31,16 +31,34 @@ describe('V3 tell Amp more: picks', () => {
     expect(p.label).toBe(labelFor('coffee', '2'))
   })
 
-  it('takes at most four, and no duplicates', () => {
-    const many = Array.from({ length: 8 }, (_, i) => ({ kind: 'note', value: `Fact ${i}`, label: `Fact ${i}` }))
+  it('takes at most four answers and one note, and no duplicates', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ kind: 'coffee', value: String(i), label: `${i} coffees` }))
     expect(validatePicks({ picks: [...many, many[0]] })).toHaveLength(MAX_PICKS)
+    const notes = Array.from({ length: 3 }, (_, i) => ({ kind: 'note', value: `Fact ${i}`, label: `Fact ${i}` }))
+    expect(validatePicks({ picks: notes })).toEqual([{ kind: 'note', value: 'Fact 0', label: 'Fact 0' }])
+  })
+
+  it('answers the screen and sums up the rest in a note', () => {
+    const back = validatePicks({ picks: [{ kind: 'energy', value: '5', label: 'Energy 5/10' }], note: 'Energy swings week to week: some weeks plenty, some weeks crashing' })
+    expect(back).toEqual([
+      { kind: 'energy', value: '5', label: 'Energy 5/10' },
+      { kind: 'note', value: 'Energy swings week to week: some weeks plenty, some weeks crashing', label: 'Energy swings week to week: some weeks plenty, some weeks crashing' },
+    ])
+    // Nothing extra: no note.
+    expect(validatePicks({ picks: [{ kind: 'energy', value: '6', label: 'Energy 6/10' }], note: '' })).toHaveLength(1)
+  })
+
+  it('drops a note that names a condition, sounds medical or runs long', () => {
+    for (const note of ['Probably burnout', 'Worse since starting the pill', 'x'.repeat(100)]) {
+      expect(validatePicks({ picks: [{ kind: 'energy', value: '5', label: 'Energy 5/10' }], note })).toEqual([{ kind: 'energy', value: '5', label: 'Energy 5/10' }])
+    }
   })
 
   it('merges into the answers, never removing anything', () => {
     const a = { ...EMPTY_ANSWERS, plate: ['eggs' as const], caffeine: { coffee: 1, tea: 2, energy: 0 } }
     expect(pickToPatch({ kind: 'food', value: 'oily-fish', label: '' }, a, 'food')).toEqual({ plate: ['eggs', 'oily-fish'] })
     expect(pickToPatch({ kind: 'coffee', value: '3', label: '' }, a, 'caffeine')).toEqual({ caffeine: { coffee: 3, tea: 2, energy: 0 } })
-    expect(pickToPatch({ kind: 'note', value: 'Night shifts', label: 'Night shifts · 3 a week' }, a, 'sleep')).toEqual({ notes: { sleep: 'Night shifts · 3 a week' } })
+    expect(pickToPatch({ kind: 'note', value: 'Night shifts', label: 'Night shifts · 3 a week' }, a, 'sleep')).toEqual({ notes: { sleep: 'Night shifts · 3 a week' }, noteHints: null })
   })
 
   it('applies several picks in a row against the latest answers', () => {

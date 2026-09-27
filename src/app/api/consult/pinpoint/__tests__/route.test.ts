@@ -87,3 +87,16 @@ describe('/api/consult/pinpoint', () => {
     expect(await (await call({ kind: 'probe', probe: 'tired-then-awake', person })).json()).toEqual({ unavailable: true })
   })
 })
+
+describe('/api/consult/pinpoint: the notes', () => {
+  it('reads the notes together into patterns from the list', async () => {
+    create.mockResolvedValue(reply({ hints: [{ pattern: 'crash', why: 'Energy swings week to week' }, { pattern: 'nonsense', why: 'x' }] }))
+    const res = await (await call({ kind: 'notes', notes: ['Energy swings week to week: some weeks plenty, some weeks crashing'], candidates: ['crash', 'wired'], person })).json()
+    expect(res).toEqual({ hints: [{ pattern: 'crash', why: 'Energy swings week to week' }] })
+  })
+
+  it('never sends a medical note, and has nothing to say without notes', async () => {
+    expect(await (await call({ kind: 'notes', notes: ['Since starting statins'], candidates: ['crash'], person })).json()).toEqual({ hints: [] })
+    expect(create).not.toHaveBeenCalled()
+  })
+})

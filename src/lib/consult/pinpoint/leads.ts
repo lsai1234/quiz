@@ -88,6 +88,13 @@ export function leads(a: Answers): Lead[] {
       if (size > 0) support.push({ text, from: 'core' })
       else if (!against || size < against.size) against = { text, size }
     }
+    // What the notes point to (plan v5 §7): a small nudge, and the note as
+    // evidence. Never enough for a hunch on its own: that needs an answer.
+    for (const h of a.noteHints ?? []) {
+      if (h.pattern !== pattern.id) continue
+      score += nudgeSize('a little')
+      support.push({ text: `You mentioned: ${h.why.charAt(0).toLowerCase()}${h.why.slice(1)}`, from: 'core' })
+    }
     return { pattern, score, p: sigmoid(score), state: 'live', support, against: against?.text ?? null, tested: 0 }
   })
   const byId = new Map(out.map((l) => [l.pattern.id, l]))

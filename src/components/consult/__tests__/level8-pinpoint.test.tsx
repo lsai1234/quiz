@@ -485,3 +485,33 @@ describe('the AI (phase 5)', () => {
     expect(counter()).toBe(before)
   })
 })
+
+describe('what the notes point to (typed answers, read together)', () => {
+  beforeEach(() => resetPinpointAi())
+
+  it('leads the review’s offer with a hunch from the notes', async () => {
+    const asked: Record<string, unknown>[] = []
+    global.fetch = jest.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      if (String(url) === '/api/consult/pinpoint' && body.kind === 'notes') {
+        asked.push(body)
+        return { ok: true, json: async () => ({ hints: [{ pattern: (body.candidates as string[])[0], why: 'Energy swings week to week' }] }) } as unknown as Response
+      }
+      return { ok: true, json: async () => ({ fallback: true }) } as unknown as Response
+    }) as typeof fetch
+    render(
+      <AmpConsult
+        ai
+        initial={{
+          ...at('review', { route: 'deep', pinpoint: null, notes: { energy: 'Energy swings week to week: some weeks plenty, some weeks crashing' }, circuit: { flags: [], none: true }, healthConsent: { accepted: true, version: 'x', at: 'x' } }),
+          history: ['goals'],
+        }}
+      />,
+    )
+    await act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve()
+    })
+    expect(asked[0].notes).toEqual(['Energy swings week to week: some weeks plenty, some weeks crashing'])
+    expect(document.querySelector('[data-note-hint]')).toHaveTextContent(/From what you told me, I’ve a hunch: .+ \(energy swings week to week\)\./)
+  })
+})

@@ -6,6 +6,12 @@ import { MAX_TEXT, cleanText, looksMedical, rateLimiter } from '@/lib/consult/ai
 import {
   FOUND_SCHEMA,
   HUNCH_SCHEMA,
+  NOTES_SYSTEM_PROMPT,
+  buildNotesPrompt,
+  cleanNotes,
+  notesSchema,
+  patternIds,
+  validateHints,
   PINPOINT_SYSTEM_PROMPT,
   TELL_SYSTEM_PROMPT,
   WORDED_FORMATS,
@@ -37,6 +43,7 @@ import { EMPTY_ANSWERS, type AgeBand, type ConsultAnswers, type ConsultGoal } fr
  *   { kind: 'hunch', pattern, evidence, person } → { line }
  *   { kind: 'found', pinpointed, partly, person } → { summary }
  *   { kind: 'tell', text, candidates, person }  → { picks }
+ *   { kind: 'notes', notes, candidates, person } → { hints }
  *
  * `person` is the coarse picture only: goals, age band, comfort, and the
  * afternoon energy one question's scripted words quote. The route resolves
@@ -166,6 +173,16 @@ async function handle(req: Request) {
         if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ held: 'moderated' })
         const raw = await ask(client, 'amp_pinpoint_tell', tellSchema(ids), TELL_SYSTEM_PROMPT, buildTellPrompt(ids, text, (p) => probeText(p, person)), TELL_BUDGET_MS, 0.2)
         return NextResponse.json({ picks: validateProbePicks(raw, ids) })
+      }
+      case 'notes': {
+        // The notes, read together for what they point to (plan v5 §7).
+        const notes = cleanNotes(body.notes)
+        const ids = patternIds(body.candidates)
+        if (!notes.length || !ids.length) return NextResponse.json({ hints: [] })
+        const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: notes.join('\n') }, { timeout: 4000, maxRetries: 0 })
+        if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ hints: [] })
+        const raw = await ask(client, 'amp_pinpoint_notes', notesSchema(ids), NOTES_SYSTEM_PROMPT, buildNotesPrompt(notes, ids), TELL_BUDGET_MS, 0.2)
+        return NextResponse.json({ hints: validateHints(raw, ids, notes) })
       }
       default:
         return NextResponse.json(FALLBACK)

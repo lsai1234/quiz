@@ -2,16 +2,16 @@
 
 import { useEffect, useRef } from 'react'
 import { COPY_BUDGET_MS } from '@/lib/consult/ai/copy'
-import { validateProbeWords, pinpointContext, scriptedParts, safeLine, PINPOINT_LIMITS, validateProbePicks, type ProbePick, type ProbeWords } from '@/lib/consult/ai/pinpoint'
+import { validateHints, validateProbeWords, pinpointContext, scriptedParts, safeLine, PINPOINT_LIMITS, validateProbePicks, type ProbePick, type ProbeWords } from '@/lib/consult/ai/pinpoint'
 import { screenText } from '@/lib/consult/ai/guard'
 import { nextStep } from '@/lib/consult/pinpoint/choose'
 import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { hunchEvidence } from '@/lib/consult/pinpoint/playback'
 import { PATTERN_BY_ID, PROBE_BY_ID } from '@/lib/consult/pinpoint/library'
-import { isIn, leads, type Lead } from '@/lib/consult/pinpoint/leads'
+import { eligiblePatterns, isIn, leads, type Lead } from '@/lib/consult/pinpoint/leads'
 import { pinpointView, probeText, withStep } from '@/lib/consult/pinpoint/screen'
 import type { PatternId, PinpointStage, Probe } from '@/lib/consult/pinpoint/types'
-import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
+import type { ConsultAnswers, NoteHint, SceneId } from '@/lib/consult/types'
 
 /**
  * Pinpoint's AI in the browser (plan v5 §7).
@@ -197,4 +197,25 @@ export async function tellPinpoint(text: string, candidates: string[], a: Consul
   if (typeof data.held === 'string') return { held: data.held }
   if (data.picks !== undefined) return { picks: validateProbePicks({ picks: data.picks }, candidates) }
   return { fallback: true }
+}
+
+/* ── Notes, read together ────────────────────────────────────────────────── */
+
+/** The notes left by typed answers, in screen order. */
+export function notesOf(a: ConsultAnswers): string[] {
+  return Object.values(a.notes).filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+}
+
+/**
+ * What the notes point to, read together: known patterns this person's
+ * journey allows, each with a why built from the notes. Null when the AI
+ * isn't there to ask; an empty list when it found nothing.
+ */
+export async function readNotes(a: ConsultAnswers): Promise<NoteHint[] | null> {
+  const notes = notesOf(a).map((n) => screenText(n)).flatMap((v) => (v.ok ? [v.text] : []))
+  const candidates = eligiblePatterns(a).map((p) => p.id)
+  if (!notes.length || !candidates.length) return []
+  const data = await post({ kind: 'notes', notes, candidates, person: person(a) }, 9000)
+  if (!data || data.unavailable || !Array.isArray(data.hints)) return null
+  return validateHints({ hints: data.hints }, candidates, notes)
 }

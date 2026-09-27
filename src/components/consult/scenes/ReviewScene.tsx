@@ -7,6 +7,7 @@ import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { isOut, leads } from '@/lib/consult/pinpoint/leads'
 import { hunchEvidence } from '@/lib/consult/pinpoint/playback'
 import { needsRecheck, withStep } from '@/lib/consult/pinpoint/screen'
+import { PATTERN_BY_ID } from '@/lib/consult/pinpoint/library'
 import type { PatternId } from '@/lib/consult/pinpoint/types'
 import { Glyph } from '../Glyph'
 import { QuietLink } from '../controls'
@@ -100,6 +101,8 @@ function Pinpointed({ answers, onAnswer, onRecheck }: { answers: ConsultAnswers;
 
 /** Speed run and Deep charge: the offer to pinpoint it, keeping every answer (plan v5 §3). */
 function Upgrade({ answers, onUpgrade }: { answers: ConsultAnswers; onUpgrade: () => void }) {
+  // What the notes point to leads the offer, when there's something.
+  const hint = answers.noteHints?.[0]
   return (
     <section
       aria-labelledby="upgrade"
@@ -119,6 +122,12 @@ function Upgrade({ answers, onUpgrade }: { answers: ConsultAnswers; onUpgrade: (
       <p id="upgrade" style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-lead)' }}>
         Want me to pinpoint it?
       </p>
+      {hint && (
+        <p data-note-hint style={{ color: 'var(--amp-ink)' }}>
+          From what you told me, I’ve a hunch: <span style={{ fontWeight: 'var(--amp-weight-bold)' }}>{PATTERN_BY_ID[hint.pattern].name.charAt(0).toLowerCase() + PATTERN_BY_ID[hint.pattern].name.slice(1)}</span>
+          <span style={{ color: 'var(--amp-ink-2)' }}> ({hint.why.charAt(0).toLowerCase() + hint.why.slice(1)}).</span>
+        </p>
+      )}
       <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
         {answers.route === 'speed'
           ? 'You took the quick way. A few more minutes and I’ll work out what’s actually behind it. Every answer so far stays.'

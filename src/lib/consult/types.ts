@@ -1,6 +1,6 @@
 import type { HealthDataConsent } from '@/lib/types'
 
-import type { PinpointAnswer } from './pinpoint/types'
+import type { PatternId, PinpointAnswer } from './pinpoint/types'
 import type { TrainingAnswer } from './training'
 
 /**
@@ -120,6 +120,12 @@ export interface CircuitAnswer {
   none: boolean
 }
 
+/** A pattern the notes point to, and why: "Energy swings week to week". */
+export interface NoteHint {
+  pattern: PatternId
+  why: string
+}
+
 export interface ConsultAnswers {
   route: Route | null
   /** In priority order: goals[0] counts most. At most three. */
@@ -165,6 +171,12 @@ export interface ConsultAnswers {
   notes: Partial<Record<SceneId, string>>
   /** The Pinpoint route's follow-ups, hunches and verdicts (plan v5). Null on the other routes. */
   pinpoint: PinpointAnswer | null
+  /**
+   * What the notes from typed answers point to, read together (plan v5 §7):
+   * a pattern and why, in the member's terms. Null until read; cleared when a
+   * note changes. A nudge and a piece of evidence for Pinpoint, never a hunch.
+   */
+  noteHints: NoteHint[] | null
 }
 
 export const EMPTY_ANSWERS: ConsultAnswers = {
@@ -191,4 +203,5 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   comfortOffered: false,
   notes: {},
   pinpoint: null,
+  noteHints: null,
 }

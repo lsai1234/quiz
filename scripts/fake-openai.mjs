@@ -64,8 +64,14 @@ function picks(text) {
     if (/gym|weights/.test(part)) out.push({ kind: 'gym-sessions', value: String(days(part)), label: `Gym ${days(part)}× a week` })
     if (/football|tennis|netball|rugby/.test(part)) out.push({ kind: 'sport-sessions', value: String(days(part)), label: `Sport ${days(part)}× a week` })
   }
-  if (!out.length) out.push({ kind: 'note', value: text.slice(0, 40), label: text.slice(0, 40) })
-  return { picks: out }
+  // "some weeks loads of energy, some weeks I crash": the middle, and a note for the swing.
+  let note = ''
+  if (/energy/.test(t) && /crash/.test(t)) {
+    out.push({ kind: 'energy', value: '5', label: 'Energy 5/10' })
+    note = 'Energy swings week to week: some weeks plenty, some weeks crashing'
+  }
+  if (!out.length) return { picks: [], note: text.slice(0, 60) }
+  return { picks: out, note }
 }
 
 async function readBody(req) {
@@ -127,6 +133,13 @@ const server = http.createServer(async (req, res) => {
         case 'amp_pinpoint_found':
           if (FAIL.has('pinpoint')) return fail('pinpoint')
           return send(200, completion({ summary: 'Amp (AI): I found what drains you. Everything I suggest is built around it.' }))
+        case 'amp_pinpoint_notes': {
+          if (FAIL.has('pinpoint')) return fail('pinpoint')
+          // "…crashing" in the notes points at the 3pm crash, when it's on the list.
+          const ids = schema.properties.hints.items.properties.pattern.enum
+          const notes = body.messages.at(-1).content ?? ''
+          return send(200, completion({ hints: /crash/i.test(notes) && ids.includes('crash') ? [{ pattern: 'crash', why: 'Energy swings week to week' }] : [] }))
+        }
         case 'amp_pinpoint_tell': {
           if (FAIL.has('pinpoint')) return fail('pinpoint')
           // The first question listed, with its first answer: "- id: words — answers: key = label; …".

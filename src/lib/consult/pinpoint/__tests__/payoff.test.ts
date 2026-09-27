@@ -68,3 +68,28 @@ describe('the upgrade', () => {
     expect(flowReducer(state, { type: 'upgrade' })).toBe(state)
   })
 })
+
+describe('what the notes point to', () => {
+  const base = { ...WIRED, pinpoint: { steps: [], stopped: false } }
+  const withHint = { ...base, noteHints: [{ pattern: 'wired' as const, why: 'Wired at night after a busy day' }] }
+
+  it('nudges the pattern and adds the note as evidence', () => {
+    const before = leads(base).find((l) => l.pattern.id === 'wired')!
+    const after = leads(withHint).find((l) => l.pattern.id === 'wired')!
+    expect(after.p).toBeGreaterThan(before.p)
+    expect(after.support.map((s) => s.text)).toContain('You mentioned: wired at night after a busy day')
+  })
+
+  it('is never a hunch on its own: that still needs an answer in the round', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { nextStep } = require('../choose') as typeof import('../choose')
+    const loud = { ...withHint, noteHints: [{ pattern: 'wired' as const, why: 'Wired at night' }] }
+    expect(nextStep(loud, 'pinpoint').kind).not.toBe('hunch')
+  })
+
+  it('is cleared by a new note, to be read again', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pickToPatch } = require('../../ai/understand') as typeof import('../../ai/understand')
+    expect(pickToPatch({ kind: 'note', value: 'Night shifts', label: 'Night shifts' }, withHint, 'sleep').noteHints).toBeNull()
+  })
+})

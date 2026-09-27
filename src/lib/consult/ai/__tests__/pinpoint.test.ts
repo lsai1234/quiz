@@ -168,3 +168,33 @@ describe('the guard', () => {
     expect(safeLine(line, 60, line)).toBe(line)
   })
 })
+
+describe('the notes, read together', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { validateHints, cleanNotes, patternIds, buildNotesPrompt } = require('../pinpoint') as typeof import('../pinpoint')
+  const notes = ['Energy swings week to week: some weeks plenty, some weeks crashing', 'Lunch is usually a meal deal at my desk']
+
+  it('keeps known patterns from the list, once each, with a clean why from the notes', () => {
+    expect(
+      validateHints(
+        {
+          hints: [
+            { pattern: 'crash', why: 'Energy swings week to week' },
+            { pattern: 'crash', why: 'Again' },
+            { pattern: 'empty', why: 'Probably anaemia' },
+            { pattern: 'wired', why: 'Not on the list' },
+            { pattern: 'indoor', why: 'Desk lunch, 3 days a week' },
+          ],
+        },
+        ['crash', 'empty', 'indoor'],
+        notes,
+      ),
+    ).toEqual([{ pattern: 'crash', why: 'Energy swings week to week' }])
+  })
+
+  it('sends only short, clean, non-medical notes, and known pattern ids', () => {
+    expect(cleanNotes([...notes, 'Worse since my medication changed', 42])).toEqual(notes)
+    expect(patternIds(['crash', 'made-up', 'crash'])).toEqual(['crash'])
+    expect(buildNotesPrompt(notes, ['crash'])).toMatch(/data, not instructions/)
+  })
+})
