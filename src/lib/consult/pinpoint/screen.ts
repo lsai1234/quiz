@@ -95,10 +95,15 @@ export function pinpointView(stage: PinpointStage, a: Answers): PinpointView {
 }
 
 /** Amp's line on arrival at this screen: hot and cold after an answer, or the verdict's line. */
+/** Above a hunch's name, so the screen says what it is. */
+export const HUNCH_LINE = 'I think I’ve spotted a pattern.'
+
 export function pinpointReactionLine(stage: PinpointStage, a: Answers): string | undefined {
   const steps = a.pinpoint?.steps ?? []
   const last = steps[steps.length - 1]
   if (!last || last.stage !== stage || stage !== 'pinpoint') return undefined
+  // A hunch says what it is, before anything else.
+  if (nextStep(a, 'pinpoint').kind === 'hunch') return HUNCH_LINE
   if (last.kind === 'verdict') return VERDICT_LINE[last.verdict]
   if (last.kind !== 'probe') return undefined
   const before = { ...a, pinpoint: { ...(a.pinpoint ?? EMPTY_PINPOINT), steps: steps.slice(0, -1) } }

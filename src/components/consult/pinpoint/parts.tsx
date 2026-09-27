@@ -111,23 +111,25 @@ export function LeadBars({ p }: { p: number }) {
 
 export function HunchCard({ lead, onVerdict, comfort }: { lead: Lead; onVerdict: (v: 'yes' | 'partly' | 'no') => void; comfort: boolean }) {
   const evidence = hunchEvidence(lead)
-  const [a, b] = lead.pattern.links
   return (
-    <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
-      <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }} aria-label="What I’m going on">
-        {evidence.map((e) => (
-          <li key={e} className="flex items-start" style={{ gap: 'var(--amp-space-2)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
-            <span aria-hidden style={{ flex: 'none', width: 'var(--amp-space-2)', height: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)', borderRadius: 'var(--amp-radius-pill)', background: 'var(--amp-accent)' }} />
-            {e}
-          </li>
-        ))}
-      </ul>
-      <div aria-hidden className="flex items-center">
-        <Chip>{PROFILE_LABEL[a]}</Chip>
-        <span style={{ flex: 1, height: 'calc(var(--amp-hairline) * 2)', background: 'var(--amp-accent)', boxShadow: 'var(--amp-glow-soft)' }} />
-        <Chip>{PROFILE_LABEL[b]}</Chip>
+    <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
+      <div>
+        <p id="hunch-why" className="uppercase" style={{ ...mono, color: 'var(--amp-ink-3)', marginBottom: 'var(--amp-space-2)' }}>
+          Why I think so
+        </p>
+        <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }} aria-labelledby="hunch-why">
+          {evidence.map((e) => (
+            <li key={e} className="flex items-start" style={{ gap: 'var(--amp-space-2)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
+              <span aria-hidden style={{ flex: 'none', width: 'var(--amp-space-2)', height: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)', borderRadius: 'var(--amp-radius-pill)', background: 'var(--amp-accent)' }} />
+              {e}
+            </li>
+          ))}
+        </ul>
       </div>
-      <p style={{ fontWeight: 'var(--amp-weight-bold)' }}>Is that you?</p>
+      <p style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
+        <span style={{ display: 'block', color: 'var(--amp-ink)', fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-body)' }}>Does this sound like you?</span>
+        If it’s you, I’ll build your stack around it. If not, I’ll cross it off and keep looking.
+      </p>
       <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
         <NextButton onClick={() => onVerdict('yes')}>That’s me</NextButton>
         <div className={comfort ? 'flex flex-col' : 'grid grid-cols-2'} style={{ gap: 'var(--amp-space-2)' }}>
@@ -136,17 +138,6 @@ export function HunchCard({ lead, onVerdict, comfort }: { lead: Lead; onVerdict:
         </div>
       </div>
     </div>
-  )
-}
-
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="uppercase"
-      style={{ ...mono, padding: 'var(--amp-space-1) var(--amp-space-2)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', background: 'var(--amp-accent-fill)', color: 'var(--amp-ink)' }}
-    >
-      {children}
-    </span>
   )
 }
 

@@ -200,7 +200,7 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
                 <span className="whitespace-nowrap">Question {view.number} ·</span> <span className="whitespace-nowrap">{counterTail(questionsLeft(answers))}</span>
               </>
             ) : view.kind === 'hunch' ? (
-              'I think I’ve got something'
+              'Amp’s hunch'
             ) : view.kind === 'done' ? (
               `${asked} question${asked === 1 ? '' : 's'}`
             ) : (

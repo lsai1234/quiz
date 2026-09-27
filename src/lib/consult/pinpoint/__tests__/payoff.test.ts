@@ -24,7 +24,7 @@ describe('recheck', () => {
   })
 
   it('flags it once an answer it rested on changes', () => {
-    const changed = { ...WIRED, caffeine: { coffee: 0, tea: 0, energy: 0 }, sleep: { bed: 22 * 60, wake: 7 * 60, quality: 'great' as const } }
+    const changed = { ...WIRED, caffeine: { coffee: 0, tea: 0, energy: 0 }, sleep: { bed: 22 * 60, wake: 7 * 60, quality: 'restful' as const } }
     expect(needsRecheck(changed, 'wired')).toBe(true)
     // Still pinpointed until they say otherwise: the verdict is theirs.
     expect(leads(changed).find((l) => l.pattern.id === 'wired')!.state).toBe('yes')

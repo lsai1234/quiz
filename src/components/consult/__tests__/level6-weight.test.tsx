@@ -56,7 +56,7 @@ describe('the Weight loss goal card', () => {
 describe('weight-loss medication on the circuit check', () => {
   it('arrives already on from the goal card, and says so', () => {
     render(<Harness id="circuit" start={{ goals: ['weight'], circuit: { flags: ['weight-meds'], none: false } }} />)
-    const sw = screen.getByRole('switch', { name: /^Weight-loss medication/ })
+    const sw = screen.getByRole('checkbox', { name: /^Weight-loss medication/ })
     expect(sw).toHaveAttribute('aria-checked', 'true')
     expect(sw).toHaveTextContent('You mentioned this on the first screen.')
   })
@@ -80,7 +80,7 @@ describe('weight-loss medication on the circuit check', () => {
         start={{ healthConsent: CONSENT, circuit: { flags: ['weight-meds'], none: false }, tailorConsent: CONSENT, symptoms: ['nausea'] }}
       />,
     )
-    fireEvent.click(screen.getByRole('switch', { name: /^Weight-loss medication/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Weight-loss medication/ }))
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ tailorConsent: null, symptoms: null }))
   })
 

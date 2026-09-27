@@ -95,8 +95,8 @@ describe('the round', () => {
     render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
     const first = heading().textContent
     answerPinpoint()
-    expect(counter()).toMatch(/^Question 2 · |^I think I’ve got something$/)
-    expect(screen.getByText(/^(Thought so\.|Warmer\.|Interesting\.|Noted\.|Ah\. Not .*)$/)).toBeInTheDocument()
+    expect(counter()).toMatch(/^Question 2 · |^Amp’s hunch$/)
+    expect(screen.getByText(/^(Thought so\.|Warmer\.|Interesting\.|Noted\.|Ah\. Not .*|I think I’ve spotted a pattern\.)$/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(heading().textContent).toBe(first)
     expect(counter()).toMatch(/^Question 1 · (about \d+ more|nearly there)$/)
@@ -105,7 +105,7 @@ describe('the round', () => {
   it('puts a strong lead to you, and That’s me locks it in', () => {
     render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [{ kind: 'probe', probe: 'eleven-pm', answer: { main: 'a' }, stage: 'follow-rest' }, { kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }], stopped: false, started: true } })} />)
     expect(heading()).toHaveTextContent('Wired and tired')
-    expect(screen.getByText('Is that you?')).toBeInTheDocument()
+    expect(screen.getByText('Does this sound like you?', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('4 caffeinated drinks a day')).toBeInTheDocument()
     expect(document.querySelector('[data-reticle="locked"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'That’s me' }))
@@ -154,6 +154,14 @@ describe('the feel of it', () => {
     render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps, stopped: false, started: true } })} />)
     expect(screen.getByText('Indoor life', { selector: 'span' })).toHaveStyle({ textDecoration: 'line-through' })
     expect(screen.getByText(/^Ah\. Not indoor life, then\.$/)).toBeInTheDocument()
+  })
+
+  it('says what a hunch is: the pattern, why, and what each answer does', () => {
+    render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [{ kind: 'probe', probe: 'eleven-pm', answer: { main: 'a' }, stage: 'follow-rest' }, { kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }], stopped: false, started: true } })} />)
+    expect(screen.getByText('I think I’ve spotted a pattern.')).toBeInTheDocument()
+    expect(heading()).toHaveTextContent('Wired and tired')
+    expect(screen.getByRole('list', { name: 'Why I think so' })).toBeInTheDocument()
+    expect(screen.getByText(/If it’s you, I’ll build your stack around it/)).toBeInTheDocument()
   })
 
   it('leans in on a hunch, and lights up at That’s me', () => {
@@ -349,7 +357,7 @@ describe('the upgrade and the recheck (phase 4)', () => {
         initial={{
           ...at('review', {
             caffeine: { coffee: 0, tea: 0, energy: 0 },
-            sleep: { bed: 22 * 60, wake: 7 * 60, quality: 'great' },
+            sleep: { bed: 22 * 60, wake: 7 * 60, quality: 'restful' },
             energy: 8,
             pinpoint: { steps: [{ kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }, { kind: 'verdict', pattern: 'wired', verdict: 'yes', stage: 'pinpoint' }], stopped: true, started: true },
             circuit: { flags: [], none: true },

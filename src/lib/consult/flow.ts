@@ -302,7 +302,7 @@ export const NUDGES: Record<SceneId, string> = {
   changes: '',
   shelf: 'Pick what you take, or Nothing yet.',
   review: '',
-  circuit: 'Tick the line at the top, then any that apply, or None of these.',
+  circuit: 'Tick the line above the answers, then None of these, or tick the ones that apply.',
   'follow-move': 'Pick the one that’s more you, or tap Not sure.',
   'follow-rest': 'Pick the one that’s more you, or tap Not sure.',
   'follow-fuel': 'Pick the one that’s more you, or tap Not sure.',

@@ -141,9 +141,21 @@ describe('H2 circuit check', () => {
   it('asks for explicit consent before a single answer is collected', () => {
     const spy = jest.fn()
     render(<Harness id="circuit" spy={spy} />)
-    fireEvent.click(screen.getByRole('switch', { name: 'Blood-thinning medicine' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'None of these' }))
     expect(spy).not.toHaveBeenCalled()
-    expect(screen.getByText('Tick the line above first, then these switch on.')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Blood-thinning medicine' })).toBeNull()
+    expect(screen.getByText('Tick this, so I can use your answer.')).toBeInTheDocument()
+  })
+
+  it('holds an answer tapped before the consent, and records it only once consent is ticked', () => {
+    const spy = jest.fn()
+    render(<Harness id="circuit" spy={spy} />)
+    fireEvent.click(screen.getByRole('radio', { name: 'None of these' }))
+    expect(spy).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ healthConsent: expect.objectContaining({ accepted: true }) }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ circuit: { flags: [], none: true } }))
   })
 
   it('records consent with the health notice version, then takes answers', () => {
@@ -153,7 +165,8 @@ describe('H2 circuit check', () => {
     expect(spy).toHaveBeenLastCalledWith(
       expect.objectContaining({ healthConsent: expect.objectContaining({ accepted: true, version: HEALTH_DATA_VERSION }) }),
     )
-    fireEvent.click(screen.getByRole('switch', { name: 'Blood-thinning medicine' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Blood-thinning medicine' }))
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ circuit: { flags: ['blood-thinners'], none: false } }))
   })
 
@@ -168,6 +181,17 @@ describe('H2 circuit check', () => {
     )
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ healthConsent: null, circuit: null }))
+  })
+
+  it('asks one question: "None of these" is one tap, and only "Yes" opens the boxes to tick', () => {
+    const spy = jest.fn()
+    render(<Harness id="circuit" spy={spy} start={{ healthConsent: { accepted: true, version: HEALTH_DATA_VERSION, at: 'x' } }} />)
+    expect(screen.getByText('Does any of this apply to you?')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Heart condition or high blood pressure' })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'None of these' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ circuit: { flags: [], none: true } }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    expect(screen.getByRole('checkbox', { name: 'Heart condition or high blood pressure' })).toBeInTheDocument()
   })
 
   it('makes "None of these" exclusive', () => {

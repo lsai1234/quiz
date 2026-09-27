@@ -7,7 +7,7 @@ import type { CircuitAnswer, CircuitFlag, WeightSymptom } from '@/lib/consult/ty
 import { stateTransition } from '@/lib/consult/motion'
 import { Glyph } from '../Glyph'
 import { WhatsThis } from '../WhatsThis'
-import { Chip, Switch } from '../controls'
+import { Chip } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
@@ -129,10 +129,97 @@ function WeightMedsDetail({
   )
 }
 
+/** The list, grouped so it reads at a glance rather than as seven switches. */
+const GROUPS: { label: string; flags: CircuitFlag[] }[] = [
+  { label: 'Pregnancy', flags: ['pregnancy'] },
+  { label: 'Medicines', flags: ['blood-thinners', 'weight-meds', 'other-prescription'] },
+  { label: 'Conditions', flags: ['heart', 'kidney-liver'] },
+  { label: 'Allergy', flags: ['shellfish'] },
+]
+
+/** Shorter words for the at-a-glance list; the ticked answer keeps its full label. */
+const SHORT: Record<CircuitFlag, string> = {
+  pregnancy: 'Pregnant, breastfeeding or trying',
+  'blood-thinners': 'Blood thinners',
+  'weight-meds': 'Weight-loss medication',
+  'other-prescription': 'Other prescriptions',
+  heart: 'Heart or blood pressure',
+  'kidney-liver': 'Kidney or liver',
+  shellfish: 'Shellfish',
+}
+
+const mono = {
+  fontFamily: 'var(--amp-font-mono)',
+  fontSize: 'var(--amp-text-data)',
+  letterSpacing: 'var(--amp-tracking-data)',
+  color: 'var(--amp-ink-3)',
+} as const
+
+function Box({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="flex shrink-0 items-center justify-center"
+      style={{
+        width: 'var(--amp-space-6)',
+        height: 'var(--amp-space-6)',
+        borderRadius: 'var(--amp-space-2)',
+        border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent)' : 'var(--amp-ink-3)'}`,
+        background: on ? 'var(--amp-accent)' : 'transparent',
+        color: 'var(--amp-ink-on-accent)',
+        transition: stateTransition('background-color', 'border-color'),
+      }}
+    >
+      {on && <Glyph name="check" size={16} />}
+    </span>
+  )
+}
+
+/** One of the two answers: None of these, or Yes. */
+function Answer({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onClick}
+      className="amp-press flex items-center justify-center text-center"
+      style={{
+        gap: 'var(--amp-space-2)',
+        minHeight: 'var(--amp-target)',
+        padding: 'var(--amp-space-2) var(--amp-space-3)',
+        borderRadius: 'var(--amp-radius-tile)',
+        border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent)' : 'var(--amp-edge-strong)'}`,
+        background: on ? 'var(--amp-accent-fill)' : 'var(--amp-glass-solid)',
+        color: 'var(--amp-ink)',
+        fontWeight: 'var(--amp-weight-bold)',
+        transition: stateTransition('background-color', 'border-color'),
+      }}
+    >
+      {on && (
+        <span aria-hidden style={{ color: 'var(--amp-accent)', display: 'inline-flex' }}>
+          <Glyph name="check" size={16} />
+        </span>
+      )}
+      {label}
+    </button>
+  )
+}
+
+/**
+ * One question, two answers. Most people have none of these, so the list is
+ * shown to read, not to work through: "None of these" is one tap. Only "Yes"
+ * turns it into boxes to tick. The consent is the same words as ever, just
+ * above the answers it covers.
+ */
 export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
   const consented = Boolean(answers.healthConsent?.accepted)
   const circuit = answers.circuit
   const [asking, setAsking] = useState(false)
+  const [yes, setYes] = useState(Boolean(circuit?.flags.length))
+  const some = yes || Boolean(circuit?.flags.length)
+  /** An answer tapped before the consent tick: held here, never recorded, until they tick it. */
+  const [pending, setPending] = useState<'none' | 'yes' | null>(null)
 
   function guard(apply: () => void) {
     if (!consented) {
@@ -142,19 +229,141 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
     apply()
   }
 
+  function chooseNone() {
+    setYes(false)
+    onAnswer({ circuit: circuit?.none ? { flags: [], none: false } : { flags: [], none: true }, tailorConsent: null, symptoms: null })
+  }
+  function chooseYes() {
+    setYes(true)
+    if (circuit?.none) onAnswer({ circuit: { flags: [], none: false } })
+  }
+  function choose(which: 'none' | 'yes') {
+    if (!consented) {
+      setPending(which)
+      setAsking(true)
+      document.getElementById('circuit-consent')?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      return
+    }
+    if (which === 'none') chooseNone()
+    else chooseYes()
+  }
+
   return (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
-      {/* What the check is for — approved words only, never a question box. */}
-      <span className="self-end" style={{ marginTop: 'calc(var(--amp-space-3) * -1)' }}>
-        <WhatsThis term="circuit-check" />
-      </span>
-      {/* Consent. */}
       <div
         style={{
-          padding: 'var(--amp-space-3) var(--amp-space-4)',
+          padding: 'var(--amp-space-4)',
+          borderRadius: 'var(--amp-radius-panel)',
+          border: 'var(--amp-hairline) solid var(--amp-edge)',
+          background: 'var(--amp-glass-solid)',
+        }}
+      >
+        <div className="flex items-start justify-between" style={{ gap: 'var(--amp-space-2)', marginBottom: 'var(--amp-space-3)' }}>
+          <p id="circuit-q" style={{ fontWeight: 'var(--amp-weight-bold)' }}>
+            {some ? 'Tick the ones that apply' : 'Does any of this apply to you?'}
+          </p>
+          {/* What the check is for — approved words only, never a question box. */}
+          <WhatsThis term="circuit-check" />
+        </div>
+        {some ? (
+          <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} role="group" aria-label="Safety questions">
+            {GROUPS.map((g) => (
+              <div key={g.label} className="flex flex-col">
+                <p className="uppercase" style={mono}>
+                  {g.label}
+                </p>
+                {g.flags.map((flag) => {
+                  const on = Boolean(circuit?.flags.includes(flag))
+                  return (
+                    <div key={flag}>
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={on}
+                        aria-disabled={!consented || undefined}
+                        onClick={() =>
+                          guard(() =>
+                            onAnswer(
+                              flag === 'weight-meds' && on
+                                ? // Off: the tailoring it covered goes with it.
+                                  { circuit: toggleFlag(circuit, flag), tailorConsent: null, symptoms: null }
+                                : { circuit: toggleFlag(circuit, flag) },
+                            ),
+                          )
+                        }
+                        className="flex w-full items-center text-left"
+                        style={{ gap: 'var(--amp-space-3)', minHeight: 'var(--amp-target)', color: 'var(--amp-ink)' }}
+                      >
+                        <Box on={on} />
+                        <span className="flex min-w-0 flex-col">
+                          <span>{CIRCUIT_LABEL[flag]}</span>
+                          {flag === 'weight-meds' && on && answers.goals.includes('weight') && (
+                            <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>You mentioned this on the first screen.</span>
+                          )}
+                        </span>
+                      </button>
+                      {flag === 'weight-meds' && on && consented && (
+                        <WeightMedsDetail
+                          tailored={Boolean(answers.tailorConsent?.accepted)}
+                          symptoms={answers.symptoms}
+                          onTailor={(t) =>
+                            onAnswer(
+                              t
+                                ? { tailorConsent: { accepted: true, version: TAILOR_CONSENT_VERSION, at: new Date().toISOString() } }
+                                : { tailorConsent: null, symptoms: null },
+                            )
+                          }
+                          onSymptoms={(symptoms) => onAnswer({ symptoms })}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ul className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }} aria-label="Safety questions">
+            {GROUPS.flatMap((g) => g.flags).map((f) => (
+              <li
+                key={f}
+                style={{
+                  padding: 'var(--amp-space-1) var(--amp-space-3)',
+                  borderRadius: 'var(--amp-radius-pill)',
+                  border: 'var(--amp-hairline) solid var(--amp-edge-strong)',
+                  fontSize: 'var(--amp-text-meta)',
+                  color: 'var(--amp-ink)',
+                }}
+              >
+                {SHORT[f]}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div role="radiogroup" aria-labelledby="circuit-q" className="grid grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
+        <Answer
+          label="None of these"
+          on={Boolean(circuit?.none) || pending === 'none'}
+          onClick={() => choose('none')}
+        />
+        <Answer
+          label="Yes, some do"
+          on={some || pending === 'yes'}
+          onClick={() => choose('yes')}
+        />
+      </div>
+
+      {/* Consent: the approved words, under the answer it covers. An answer
+          tapped first waits for it, and is recorded the moment it's ticked. */}
+      <div
+        id="circuit-consent"
+        style={{
+          padding: 'var(--amp-space-2) var(--amp-space-3)',
           borderRadius: 'var(--amp-radius-tile)',
-          border: `var(--amp-hairline) solid ${asking && !consented ? 'var(--amp-accent)' : 'var(--amp-edge)'}`,
-          background: asking && !consented ? 'var(--amp-accent-fill)' : 'var(--amp-glass-solid)',
+          border: `var(--amp-hairline) solid ${asking && !consented ? 'var(--amp-accent)' : 'transparent'}`,
+          background: asking && !consented ? 'var(--amp-accent-fill)' : 'transparent',
           transition: stateTransition('border-color', 'background-color'),
         }}
       >
@@ -165,33 +374,25 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
           onClick={() => {
             if (consented) {
               // Withdrawn: the answers it covered go with it.
+              setYes(false)
               onAnswer({ healthConsent: null, circuit: null, tailorConsent: null, symptoms: null })
             } else {
               setAsking(false)
               onAnswer({ healthConsent: { accepted: true, version: HEALTH_DATA_VERSION, at: new Date().toISOString() } })
+              if (pending === 'none') onAnswer({ circuit: { flags: [], none: true }, tailorConsent: null, symptoms: null })
+              if (pending === 'yes') setYes(true)
+              setPending(null)
             }
           }}
           className="flex w-full items-start text-left"
           style={{ gap: 'var(--amp-space-3)', minHeight: 'var(--amp-target)' }}
         >
-          <span
-            aria-hidden
-            className="flex shrink-0 items-center justify-center"
-            style={{
-              marginTop: 'var(--amp-hairline)',
-              width: 'var(--amp-space-6)',
-              height: 'var(--amp-space-6)',
-              borderRadius: 'var(--amp-space-2)',
-              border: `var(--amp-hairline) solid ${consented ? 'var(--amp-accent)' : 'var(--amp-ink-3)'}`,
-              background: consented ? 'var(--amp-accent)' : 'transparent',
-              color: 'var(--amp-ink-on-accent)',
-            }}
-          >
-            {consented && <Glyph name="check" size={16} />}
-          </span>
+          <Box on={consented} />
           <span style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink)' }}>
-            Use my answers here to keep unsuitable products out. It&apos;s health information, so only with my say-so: never
-            shared, never used for marketing, never sent to AI.
+            Use my answers here to keep unsuitable products out.{' '}
+            <span style={{ color: 'var(--amp-ink-2)' }}>
+              It&apos;s health information, so only with my say-so: never shared, never used for marketing, never sent to AI.
+            </span>
           </span>
         </button>
         <p style={{ marginTop: 'var(--amp-space-1)', paddingLeft: 'calc(var(--amp-space-6) + var(--amp-space-3))', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
@@ -203,56 +404,14 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
             Privacy notice
           </a>
         </p>
+        <div aria-live="polite">
+          {asking && !consented && (
+            <p style={{ marginTop: 'var(--amp-space-1)', paddingLeft: 'calc(var(--amp-space-6) + var(--amp-space-3))', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-accent)' }}>
+              Tick this, so I can use your answer.
+            </p>
+          )}
+        </div>
       </div>
-
-      <div aria-live="polite" style={{ minHeight: asking && !consented ? undefined : 0 }}>
-        {asking && !consented && (
-          <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-accent)' }}>Tick the line above first, then these switch on.</p>
-        )}
-      </div>
-
-      <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="Safety questions">
-        {CIRCUIT_FLAGS.map((flag) => {
-          const on = Boolean(circuit?.flags.includes(flag))
-          return (
-            <li key={flag}>
-              <Switch
-                label={CIRCUIT_LABEL[flag]}
-                sub={flag === 'weight-meds' && on && answers.goals.includes('weight') ? 'You mentioned this on the first screen.' : undefined}
-                on={on}
-                inert={!consented}
-                onToggle={() =>
-                  guard(() =>
-                    onAnswer(
-                      flag === 'weight-meds' && on
-                        ? // Off: the tailoring it covered goes with it.
-                          { circuit: toggleFlag(circuit, flag), tailorConsent: null, symptoms: null }
-                        : { circuit: toggleFlag(circuit, flag) },
-                    ),
-                  )
-                }
-              />
-              {flag === 'weight-meds' && on && consented && (
-                <WeightMedsDetail
-                  tailored={Boolean(answers.tailorConsent?.accepted)}
-                  symptoms={answers.symptoms}
-                  onTailor={(yes) =>
-                    onAnswer(
-                      yes
-                        ? { tailorConsent: { accepted: true, version: TAILOR_CONSENT_VERSION, at: new Date().toISOString() } }
-                        : { tailorConsent: null, symptoms: null },
-                    )
-                  }
-                  onSymptoms={(symptoms) => onAnswer({ symptoms })}
-                />
-              )}
-            </li>
-          )
-        })}
-        <li>
-          <Switch label="None of these" on={Boolean(circuit?.none)} inert={!consented} onToggle={() => guard(() => onAnswer({ circuit: toggleNone(circuit), tailorConsent: null, symptoms: null }))} />
-        </li>
-      </ul>
 
       {onDecline && (
         <button

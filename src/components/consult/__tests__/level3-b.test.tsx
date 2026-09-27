@@ -19,7 +19,8 @@ describe('H3 stop & signpost screens', () => {
   it('pauses kindly for pregnancy and points to a midwife, GP or pharmacist', () => {
     toCircuit()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Pregnant, breastfeeding or trying' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pregnant, breastfeeding or trying' }))
     pressNext()
     expect(heading()).toHaveTextContent('Let’s pause here')
     expect(screen.getByRole('status')).toHaveTextContent(/midwife, GP or pharmacist/)
@@ -29,7 +30,8 @@ describe('H3 stop & signpost screens', () => {
   it('pauses for a kidney or liver condition and points to a GP', () => {
     toCircuit()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Kidney or liver condition' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kidney or liver condition' }))
     pressNext()
     expect(screen.getByRole('status')).toHaveTextContent(/GP/)
   })
@@ -37,7 +39,8 @@ describe('H3 stop & signpost screens', () => {
   it('lets them go back if a switch was tapped by mistake', () => {
     toCircuit()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Kidney or liver condition' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Kidney or liver condition' }))
     pressNext()
     fireEvent.click(screen.getByRole('button', { name: 'I tapped something by mistake' }))
     expect(heading()).toHaveTextContent('Circuit check')

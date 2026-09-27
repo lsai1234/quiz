@@ -43,7 +43,8 @@ describe('H9 exclusions carry into extras', () => {
     chooseRoute()
     for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Blood-thinning medicine' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Blood-thinning medicine' }))
     pressNext()
     // Then the review, which is last now.
     pressNext()

@@ -1139,7 +1139,7 @@
       "mode": "calm",
       "copy": {
         "question": "Circuit check",
-        "hint": "A few safety questions, so I only suggest things that suit you. Tick any that apply.",
+        "hint": "One safety question, so I only suggest things that suit you.",
         "next": "Continue"
       },
       "placeholder": {

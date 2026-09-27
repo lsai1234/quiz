@@ -141,11 +141,13 @@ async function answerByKeyboard(page: Page) {
   } else if (/already taking/i.test(h)) {
     await tabTo(page, /^Nothing yet$/)
     await page.keyboard.press('Space')
-  } else if (/safety|circuit|before i/i.test(h) || (await page.getByRole('switch', { name: 'None of these' }).count())) {
+  } else if (/safety|circuit|before i/i.test(h) || (await page.getByRole('radio', { name: 'None of these' }).count())) {
+    // The answer, then the consent under it, which records the answer held.
+    await tabTo(page, /None of these$/)
+    await page.keyboard.press('Space')
     await tabTo(page, /^Use my answers here/)
     await page.keyboard.press('Space')
-    await tabTo(page, /^None of these$/)
-    await page.keyboard.press('Space')
+    await expect(page.getByRole('radio', { name: /None of these$/ })).toHaveAttribute('aria-checked', 'true')
   }
   // Anything else (body map, "what's got harder", review) is fine blank.
 }
@@ -405,13 +407,13 @@ test.describe('consult accessibility (U7)', () => {
     await audit(page, 'weight loss card, open')
     await nextByKeyboard(page)
     for (let i = 0; i < 12; i++) {
-      if (await page.getByRole('switch', { name: 'None of these' }).count()) break
+      if (await page.getByRole('radio', { name: 'None of these' }).count()) break
       await answerByKeyboard(page)
       await nextByKeyboard(page)
     }
     // The circuit check: consent, then the medication switch arrives on.
     await page.getByRole('checkbox', { name: /^Use my answers here/ }).click()
-    const meds = page.getByRole('switch', { name: /^Weight-loss medication/ })
+    const meds = page.getByRole('checkbox', { name: /^Weight-loss medication/ })
     await expect(meds).toHaveAttribute('aria-checked', 'true')
     await expect(meds).toContainText('You mentioned this on the first screen.')
     await page.getByRole('checkbox', { name: /^Use this to tailor my recommendations/ }).click()
