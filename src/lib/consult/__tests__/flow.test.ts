@@ -31,10 +31,10 @@ function runToEnd(state: FlowState = start()): FlowState {
 }
 
 describe('the script', () => {
-  it('has the plan’s twelve scenes and two journeys’ own, the safety check before the review (plan v4)', () => {
+  it('has the plan’s twelve scenes, two journeys’ own and Pinpoint’s, the safety check before the review (plans v4, v5)', () => {
     expect(SCENES.map((s) => s.id)).toEqual([
-      'goals', 'about', 'training', 'aim', 'energy', 'sleep', 'daylight',
-      'caffeine', 'food', 'body', 'changes', 'shelf', 'circuit', 'review',
+      'goals', 'about', 'training', 'aim', 'energy', 'follow-move', 'sleep', 'daylight', 'follow-rest',
+      'caffeine', 'food', 'follow-fuel', 'body', 'changes', 'shelf', 'pinpoint', 'circuit', 'review',
     ])
   })
 
@@ -43,7 +43,8 @@ describe('the script', () => {
   })
 
   it('gives every collecting scene a scripted answer, so a full run needs no widget', () => {
-    for (const s of SCENES.filter((d) => d.id !== 'review')) {
+    // Pinpoint's screens ask whatever the answers call for; they have no fixed script.
+    for (const s of SCENES.filter((d) => d.id !== 'review' && d.interaction !== 'pinpoint')) {
       expect(s.placeholder?.options.length).toBeGreaterThan(0)
     }
   })

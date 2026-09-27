@@ -52,6 +52,8 @@ export interface SceneShellProps {
   /** Given to the question so focus can move to it on arrival (S7). */
   headingRef?: Ref<HTMLHeadingElement>
   headingId?: string
+  /** Where the interaction sits: centred (widgets) or from the top (Pinpoint's cards). */
+  align?: 'center' | 'start'
 }
 
 export function SceneShell({
@@ -71,6 +73,7 @@ export function SceneShell({
   footer,
   headingRef,
   headingId,
+  align = 'center',
 }: SceneShellProps) {
   const percent = chargePercent(meter)
   const moreBelow = useMoreBelow()
@@ -187,7 +190,7 @@ export function SceneShell({
 
       {/* ── The interaction ─────────────────────────────────────────────── */}
       <div
-        className="flex flex-1 flex-col justify-center"
+        className={`flex flex-1 flex-col ${align === 'start' ? 'justify-start' : 'justify-center'}`}
         style={{ paddingTop: 'var(--amp-shell-gap)', paddingBottom: 'var(--amp-shell-gap)' }}
       >
         {children}

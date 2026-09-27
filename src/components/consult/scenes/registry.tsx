@@ -1,5 +1,6 @@
 'use client'
 
+import { PinpointScene } from '../pinpoint/PinpointScene'
 import { AimTiles } from './AimTiles'
 import { ChangesPicker } from './ChangesPicker'
 import type { ComponentType } from 'react'
@@ -52,6 +53,8 @@ export interface SceneProps {
   ai?: boolean
   /** An upload is being read (U1): Amp shows it's reading. */
   onReading?: (reading: boolean) => void
+  /** Move on to the next scene: a Pinpoint follow-up does, once answered. */
+  onNext?: () => void
 }
 
 export interface SceneEntry {
@@ -59,8 +62,8 @@ export interface SceneEntry {
   writes: (keyof ConsultAnswers)[]
 }
 
-function Review({ order, answers, onEdit }: SceneProps) {
-  return <ReviewScene scenes={order} answers={answers} onEdit={onEdit} />
+function Review({ order, answers, onEdit, onAnswer }: SceneProps) {
+  return <ReviewScene scenes={order} answers={answers} onEdit={onEdit} onAnswer={onAnswer} />
 }
 
 /** What each interaction type is drawn with. Unregistered types fall back to the scripted placeholder. */
@@ -80,7 +83,9 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'body-map': { component: BodyMap, writes: ['body'] },
   'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
   'circuit-check': { component: CircuitCheck, writes: ['circuit', 'healthConsent', 'tailorConsent', 'symptoms'] },
-  review: { component: Review, writes: [] },
+  // The review writes only Pinpoint's "Not quite?" (plan v5).
+  review: { component: Review, writes: ['pinpoint'] },
+  pinpoint: { component: PinpointScene, writes: ['pinpoint'] },
 }
 
 /** Which answer fields each scene writes while it is still a placeholder. */
@@ -99,6 +104,10 @@ const PLACEHOLDER_WRITES: Record<SceneId, (keyof ConsultAnswers)[]> = {
   shelf: ['shelf'],
   review: [],
   circuit: ['circuit'],
+  'follow-move': ['pinpoint'],
+  'follow-rest': ['pinpoint'],
+  'follow-fuel': ['pinpoint'],
+  pinpoint: ['pinpoint'],
 }
 
 export function resolveScene(scene: SceneDef): SceneEntry {

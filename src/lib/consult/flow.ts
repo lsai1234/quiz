@@ -11,6 +11,8 @@
  * until the review and the circuit check are both done.
  */
 
+import { nextStep, roundDone } from './pinpoint/choose'
+import { probeSteps } from './pinpoint/leads'
 import { journeyOf, type Journey } from './journey'
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
@@ -42,6 +44,12 @@ export type Condition =
   | { not: Condition }
   /** Whose consult this is (batch 5): see journey.ts. */
   | { journey: Journey[] }
+  /**
+   * A Pinpoint follow-up (plan v5): on the Pinpoint route, when a question in
+   * that section is clearly worth asking. Once asked it stays, so position,
+   * back, review and resume don't jump.
+   */
+  | { followUp: FollowStage }
 
 export interface PlaceholderOption {
   label: string
@@ -155,6 +163,7 @@ export function holds(condition: Condition | undefined, answers: ConsultAnswers)
   if ('any' in condition) return condition.any.some((c) => holds(c, answers))
   if ('not' in condition) return !holds(condition.not, answers)
   if ('journey' in condition) return condition.journey.includes(journeyOf(answers))
+  if ('followUp' in condition) return followUpShown(condition.followUp, answers)
   const value = answers[condition.answer] as unknown
   if ('equals' in condition) return value === condition.equals
   if ('includes' in condition) return Array.isArray(value) && value.includes(condition.includes)
@@ -197,10 +206,28 @@ export function resolveSceneDef(id: SceneId, answers: ConsultAnswers): SceneDef 
  */
 export const NOTE_ANSWERS: SceneId[] = ['training', 'aim', 'energy', 'sleep', 'daylight', 'caffeine', 'food', 'body', 'changes', 'shelf']
 
+type FollowStage = 'follow-move' | 'follow-rest' | 'follow-fuel'
+
+/** Has this Pinpoint stage been asked anything yet? */
+export function stageStarted(stage: FollowStage | 'pinpoint', a: ConsultAnswers): boolean {
+  return probeSteps(a.pinpoint).some((s) => s.stage === stage)
+}
+
+function followUpShown(stage: FollowStage, a: ConsultAnswers): boolean {
+  if (a.route !== 'pinpoint') return false
+  return stageStarted(stage, a) || nextStep(a, stage).kind === 'probe'
+}
+
 /** Whether a scene has what it needs for Next. Review is always ready. */
 export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
   if (NOTE_ANSWERS.includes(id) && a.notes[id]) return true
   switch (id) {
+    case 'follow-move':
+    case 'follow-rest':
+    case 'follow-fuel':
+      return stageStarted(id, a) || nextStep(a, id).kind !== 'probe'
+    case 'pinpoint':
+      return roundDone(a)
     case 'goals':
       return a.goals.length > 0
     case 'about':
@@ -274,6 +301,10 @@ export const NUDGES: Record<SceneId, string> = {
   shelf: 'Pick what you take, or Nothing yet.',
   review: '',
   circuit: 'Tick the line at the top, then any that apply, or None of these.',
+  'follow-move': 'Pick the one that’s more you, or tap Not sure.',
+  'follow-rest': 'Pick the one that’s more you, or tap Not sure.',
+  'follow-fuel': 'Pick the one that’s more you, or tap Not sure.',
+  pinpoint: 'Answer the question on screen, or build your stack now.',
 }
 
 /* ── State ──────────────────────────────────────────────────────────────── */
@@ -400,7 +431,9 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     }
 
     case 'route': {
-      const answers = { ...state.answers, route: action.route }
+      // Pinpoint keeps its own answers (plan v5); the other routes have none.
+      const pinpoint = action.route === 'pinpoint' ? state.answers.pinpoint ?? { steps: [], stopped: false } : state.answers.pinpoint
+      const answers = { ...state.answers, route: action.route, pinpoint }
       return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
     }
 

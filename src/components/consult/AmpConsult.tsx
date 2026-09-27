@@ -1,5 +1,9 @@
 'use client'
 
+import { focus as pinpointFocus } from '@/lib/consult/pinpoint/choose'
+import { pinpointReactionLine, pinpointView, undoInRound } from '@/lib/consult/pinpoint/screen'
+import type { PinpointStage } from '@/lib/consult/pinpoint/types'
+import { Reticle } from './pinpoint/Reticle'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import {
   NUDGES,
@@ -74,6 +78,8 @@ interface Props {
    */
   ai?: boolean
 }
+
+const PINPOINT_SCENES: SceneId[] = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
 
 export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts, reopen, ai }: Props) {
   const persist = !initial
@@ -151,7 +157,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // worked out before the early returns below.
   const onScene = boot === 'ready' && state.phase === 'scenes'
   const shown = onScene ? words(resolveSceneDef(state.sceneId, state.answers)).copy : null
-  const aloud = useReadAloud(onScene ? state.sceneId : state.phase, shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : '', onScene && state.answers.comfort)
+  // Pinpoint screens word themselves, one question at a time (plan v5).
+  const pView = onScene && PINPOINT_SCENES.includes(state.sceneId) ? pinpointView(state.sceneId as PinpointStage, state.answers) : null
+  const pKey = pView ? (pView.kind === 'probe' ? pView.probe.id : pView.kind === 'hunch' ? pView.lead.pattern.id : pView.kind) : ''
+  const spoken = pView ? toSpeech(pView.heading, pView.kind === 'probe' ? [pView.text, pView.hint].filter(Boolean).join(' ') : pView.hint) : shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : ''
+  const aloud = useReadAloud(onScene ? `${state.sceneId}:${pKey}` : state.phase, spoken, onScene && state.answers.comfort)
 
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
@@ -210,7 +220,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     dispatch({ type: 'next' })
     if (after.phase === 'analysis') onComplete?.(after)
   }
-  const back = () => (state.history.length > 0 || state.answers.route ? dispatch({ type: 'back' }) : onExit?.())
+  const back = () => {
+    // Inside the round, Back takes back the last answer first (plan v5).
+    const undone = state.sceneId === 'pinpoint' ? undoInRound(state.answers) : null
+    if (undone) return dispatch({ type: 'answer', patch: { pinpoint: undone } })
+    return state.history.length > 0 || state.answers.route ? dispatch({ type: 'back' }) : onExit?.()
+  }
   const jumpToSection = (section: string) => {
     const target = firstSceneIn(section as SectionId, state.answers)
     if (target) dispatch({ type: 'jump', sceneId: target })
@@ -286,16 +301,29 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           meter={sectionProgress(state)}
           currentSectionId={scene.section}
           onJump={jumpToSection}
-          onBack={state.history.length > 0 || onExit ? back : undefined}
-          amp={<Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} />}
-          reaction={reaction}
-          question={scene.copy.question}
-          hint={hintFor(scene.copy, state.answers.comfort)}
+          onBack={state.history.length > 0 || onExit || (state.sceneId === 'pinpoint' && undoInRound(state.answers)) ? back : undefined}
+          amp={
+            pView ? (
+              <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
+                <Amp state={pView.kind === 'hunch' ? 'thinking' : ampState} lean={watching ?? 0} />
+              </Reticle>
+            ) : (
+              <Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} />
+            )
+          }
+          // Inside the round, only Pinpoint's own lines: the last core answer's reaction belongs to the intro.
+          reaction={state.sceneId === 'pinpoint' ? pinpointReactionLine('pinpoint', state.answers) ?? (pView?.kind === 'intro' ? reaction : undefined) : reaction}
+          align={pView && pView.kind !== 'intro' ? 'start' : 'center'}
+          question={pView ? pView.heading : scene.copy.question}
+          hint={pView ? pView.hint : hintFor(scene.copy, state.answers.comfort)}
           headingRef={headingRef}
           action={
-            <NextButton ready={ready} nudge={NUDGES[state.sceneId]} resetKey={state.sceneId} onClick={next}>
-              {nextLabel}
-            </NextButton>
+            // Pinpoint's questions carry their own answers; Next appears once the screen is done.
+            pView && !ready ? undefined : (
+              <NextButton ready={ready} nudge={NUDGES[state.sceneId]} resetKey={state.sceneId} onClick={next}>
+                {pView?.kind === 'done' ? 'Continue' : nextLabel}
+              </NextButton>
+            )
           }
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
@@ -338,6 +366,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             onDecline={scene.id === 'circuit' ? () => dispatch({ type: 'decline' }) : undefined}
             ai={aiOn}
             onReading={setReading}
+            onNext={next}
           />
           {tell && (!tell.lead || note) && <TellInline tell={tell} canTalk={canTalk} onOpen={() => setTelling(true)} tracker={note ? tracker : undefined} />}
         </SceneShell>
@@ -472,10 +501,12 @@ export function autoComfort(a: ConsultAnswers): boolean {
 }
 
 /**
- * Speed run or deep charge (build C13). The choice at the start: about a
- * minute with the scenes that matter most, or the full set.
+ * The route (build C13, plan v5): Pinpoint, Deep charge or Speed run.
+ * Pinpoint goes first and says why it's worth the extra minutes; the other
+ * two are the quick ways through, unchanged.
  */
 function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) => void; onBack?: () => void; headingRef: React.Ref<HTMLHeadingElement> }) {
+  const [why, setWhy] = useState(false)
   return (
     <div
       className="mx-auto flex flex-col"
@@ -500,14 +531,25 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
           className="uppercase"
           style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)', outline: 'none' }}
         >
-          How much time have you got?
+          How well should I get to know you?
         </h1>
+        <div role="radiogroup" aria-label="Route" onKeyDown={(e) => radioArrows(e, false)} className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-1)' }}>
+          <Tile kind="radio" layout="row" icon="focus" tone="accent" label="Pinpoint · Recommended" sub="About 6 min · I follow up until I know what’s really going on. Your most accurate stack." selected={false} onSelect={() => onPick('pinpoint')} />
+          <Tile kind="radio" layout="row" icon="battery" label="Deep charge" sub="3–4 min · Your whole week, one screen at a time" selected={false} onSelect={() => onPick('deep')} />
+          <Tile kind="radio" layout="row" icon="bolt" label="Speed run" sub="About a minute · The essentials" selected={false} onSelect={() => onPick('speed')} />
+        </div>
         <p style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
-          Nothing gets decided until I&apos;ve got the full picture and you&apos;ve checked it.
+          Stop Pinpoint whenever you like: I&apos;ll use what I&apos;ve got.
         </p>
-        <div role="radiogroup" aria-label="Route" onKeyDown={(e) => radioArrows(e, false)} className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-2)' }}>
-          <Tile kind="radio" layout="row" icon="bolt" label="Speed run" sub="About a minute · the essentials" selected={false} onSelect={() => onPick('speed')} />
-          <Tile kind="radio" layout="row" icon="battery" label="Deep charge" sub="A few minutes · the full picture" selected={false} onSelect={() => onPick('deep')} />
+        <div>
+          <QuietLink aria-expanded={why} onClick={() => setWhy((w) => !w)}>
+            Why Pinpoint?
+          </QuietLink>
+          {why && (
+            <p className="amp-anim-rise" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)', marginTop: 'var(--amp-space-2)' }}>
+              Two people who both say they&apos;re tired can need completely different things. One&apos;s short on sleep, one&apos;s running on coffee, one isn&apos;t eating before training. The quick routes give you a good stack for tired. Pinpoint works out which tired you are.
+            </p>
+          )}
         </div>
       </div>
     </div>

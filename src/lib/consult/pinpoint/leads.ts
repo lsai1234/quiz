@@ -157,6 +157,20 @@ export function leads(a: Answers): Lead[] {
   return out
 }
 
+/** What a probe answer said, in the member's words: the first option with a line of its own. */
+export function stepSaid(step: Extract<PinpointStep, { kind: 'probe' }>): string | null {
+  const probe = PROBE_BY_ID[step.probe]
+  if (!probe || step.unsure) return null
+  for (const item of probe.items) {
+    const option = item.options.find((o) => o.key === step.answer[item.key])
+    if (!option) continue
+    if (probe.dayLine && step.minutes !== undefined && probe.dayLine.buckets.some((b) => b.key === option.key)) return probe.dayLine.said(step.minutes)
+    if (option.said) return option.said
+  }
+  const first = probe.items[0]?.options.find((o) => o.key === step.answer[probe.items[0].key])
+  return first ? first.label : null
+}
+
 /** Answers that support it, not counting the core screens. */
 export function answerSupport(lead: Lead): number {
   return lead.support.filter((e) => e.from === 'answer').length

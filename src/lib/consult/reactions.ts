@@ -100,6 +100,11 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
     case 'review':
       return 'All checked.'
     case 'circuit':
+    case 'follow-move':
+    case 'follow-rest':
+    case 'follow-fuel':
+    case 'pinpoint':
+      // Pinpoint reacts inside its own screens (hot and cold).
       return ''
   }
 }

@@ -17,10 +17,10 @@ export function currentScene() {
   return SCENES.find((s) => s.copy.question === q || s.variants?.some((v) => v.copy?.question === q))
 }
 
-export const ROUTE_QUESTION = 'How much time have you got?'
+export const ROUTE_QUESTION = 'How well should I get to know you?'
 
 /** On the route choice, take the deep charge (every scene). */
-export function chooseRoute(route: 'Deep charge' | 'Speed run' = 'Deep charge'): void {
+export function chooseRoute(route: 'Deep charge' | 'Speed run' | 'Pinpoint' = 'Deep charge'): void {
   if (heading().textContent === ROUTE_QUESTION) fireEvent.click(screen.getByRole('radio', { name: new RegExp(`^${route}`) }))
 }
 
@@ -105,4 +105,74 @@ export function pickFirstOptionAndNext(): void {
     answerCurrentScene()
     pressNext()
   }
+}
+
+/* ── Pinpoint (plan v5) ─────────────────────────────────────────────────── */
+
+export const PINPOINT_SCENES = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
+
+/** The scene on screen, by its marker: Pinpoint's headings change with every question. */
+export function sceneOnScreen(): string | null {
+  return document.querySelector('[data-scene]')?.getAttribute('data-scene') ?? null
+}
+
+/**
+ * Answer whatever Pinpoint is showing, once: "That's me" (or its nearest) to
+ * a question, `verdict` to a hunch, Keep going at the checkpoint, Let's go
+ * at the start. Returns what it did.
+ */
+export function answerPinpoint(verdict: 'yes' | 'no' = 'yes', comfort = false): string {
+  const did = answerPinpointOnce(verdict)
+  // Comfort mode holds a single-tap answer until Next.
+  if (comfort && ['scenario', 'how-often', 'this-or-that'].includes(did)) {
+    const next = screen.queryAllByRole('button', { name: /^Next$/ }).find((b) => b.closest('[data-scene]'))
+    if (next) fireEvent.click(next)
+  }
+  return did
+}
+
+function answerPinpointOnce(verdict: 'yes' | 'no'): string {
+  const button = (name: RegExp) => screen.queryAllByRole('button', { name }).find((b) => b.getAttribute('role') !== 'radio')
+  const go = button(/^Let’s go$/)
+  if (go) return fireEvent.click(go), 'start'
+  const hunch = button(verdict === 'yes' ? /^That’s me$/ : /^Not me$/)
+  if (hunch) return fireEvent.click(hunch), 'verdict'
+  const more = button(/^Keep going$/)
+  if (more) return fireEvent.click(more), 'checkpoint'
+  const me = screen.queryByRole('radio', { name: 'That’s me' })
+  if (me) return fireEvent.click(me), 'scenario'
+  const often = screen.queryByRole('radio', { name: 'Most days' })
+  if (often) return fireEvent.click(often), 'how-often'
+  const slider = screen.queryByRole('slider')
+  if (slider) {
+    fireEvent.keyDown(slider, { key: 'ArrowRight' })
+    fireEvent.click(screen.getAllByRole('button', { name: /^Next$/ }).find((b) => b.closest('[data-scene]'))!)
+    return 'day-line'
+  }
+  const yes = screen.queryAllByRole('radio', { name: 'Yes' })
+  if (yes.length) {
+    for (const row of screen.getAllByRole('radiogroup')) {
+      const y = within(row).queryByRole('radio', { name: 'Yes' })
+      if (y && y.getAttribute('aria-checked') !== 'true') fireEvent.click(y)
+    }
+    return 'quick-fire'
+  }
+  const pair = screen.queryAllByRole('radiogroup')[0]
+  if (pair) return fireEvent.click(within(pair).getAllByRole('radio')[0]), 'this-or-that'
+  return 'nothing'
+}
+
+/** Play the round (and any follow-up on screen) through to the end, then Continue. */
+export function playPinpoint(verdict: 'yes' | 'no' = 'yes', max = 60): string[] {
+  const did: string[] = []
+  for (let i = 0; i < max && PINPOINT_SCENES.includes(sceneOnScreen() ?? ''); i++) {
+    const next = screen.queryAllByRole('button', { name: /^Continue$/ }).find((b) => b.getAttribute('role') !== 'radio')
+    if (next) {
+      fireEvent.click(next)
+      did.push('continue')
+      continue
+    }
+    did.push(answerPinpoint(verdict))
+  }
+  return did
 }

@@ -42,7 +42,8 @@ export const LIMITS = { question: 48, hint: 120, label: 40, react: 48 } as const
 export const REACT_SAFE: SceneId[] = ['goals', 'about', 'training', 'aim', 'energy', 'sleep', 'daylight', 'caffeine', 'food']
 
 /** Scenes the model never words: the review is a list of answers, the circuit check is fixed. */
-export const NEVER_AI: SceneId[] = ['review', 'circuit']
+/** Scenes the AI never words: the review, the safety check, and Pinpoint's, which word themselves per question (plan v5). */
+export const NEVER_AI: SceneId[] = ['review', 'circuit', 'follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
 
 export interface AiSceneCopy {
   question: string

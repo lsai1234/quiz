@@ -13,7 +13,7 @@ beforeEach(() => {
 describe('AmpConsult', () => {
   it('opens on the route choice, then the goals scene', () => {
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('How much time have you got?')
+    expect(heading()).toHaveTextContent('How well should I get to know you?')
     chooseRoute()
     expect(heading()).toHaveTextContent('What are you after?')
     expect(screen.getByText('1/12 · Goals')).toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('AmpConsult', () => {
     render(<AmpConsult onExit={onExit} />)
     chooseRoute()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(heading()).toHaveTextContent('How much time have you got?')
+    expect(heading()).toHaveTextContent('How well should I get to know you?')
     expect(onExit).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(onExit).toHaveBeenCalled()

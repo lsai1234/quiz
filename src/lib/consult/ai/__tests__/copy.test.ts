@@ -40,8 +40,8 @@ describe('V1 the plumbing', () => {
     expect(g.properties.labels.required).toEqual(goals.aiLabels)
   })
 
-  it('never words the review or the circuit check', () => {
-    expect(NEVER_AI).toEqual(['review', 'circuit'])
+  it('never words the review, the circuit check or Pinpoint’s screens (which word each question themselves)', () => {
+    expect(NEVER_AI).toEqual(['review', 'circuit', 'follow-move', 'follow-rest', 'follow-fuel', 'pinpoint'])
   })
 })
 

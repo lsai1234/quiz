@@ -115,10 +115,10 @@ describe('U7 keyboard: arrows move through tile radio groups', () => {
 
   it('only moves focus on the route choice, which navigates when picked', () => {
     const { getByRole } = render(<AmpConsult initial={initialFlow('a11y', 0)} />)
-    const speed = getByRole('radio', { name: /^Speed run/ })
-    speed.focus()
-    fireEvent.keyDown(speed, { key: 'ArrowDown' })
+    const pinpoint = getByRole('radio', { name: /^Pinpoint/ })
+    pinpoint.focus()
+    fireEvent.keyDown(pinpoint, { key: 'ArrowDown' })
     expect(getByRole('radio', { name: /^Deep charge/ })).toHaveFocus()
-    expect(getByRole('heading', { level: 1 })).toHaveTextContent('How much time have you got?')
+    expect(getByRole('heading', { level: 1 })).toHaveTextContent('How well should I get to know you?')
   })
 })

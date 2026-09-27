@@ -35,6 +35,9 @@ describe('the scene registry', () => {
         // The Weight loss card sets the circuit check's medication switch,
         // which the circuit check then confirms with consent (plan v4, D1).
         if (scene.id === 'goals' && key === 'circuit') continue
+        // Pinpoint's follow-ups and round share one answer, its steps, each
+        // writing its own stage; the review writes only its "Not quite?" (plan v5).
+        if (key === 'pinpoint') continue
         expect({ key, owner: owners.get(key) ?? scene.id }).toEqual({ key, owner: scene.id })
         owners.set(key, scene.id)
       }

@@ -22,6 +22,10 @@
       "label": "Body"
     },
     {
+      "id": "pinpoint",
+      "label": "Pinpoint"
+    },
+    {
       "id": "check",
       "label": "Check"
     }
@@ -489,6 +493,20 @@
       ]
     },
     {
+      "id": "follow-move",
+      "section": "move",
+      "label": "Follow-up",
+      "interaction": "pinpoint",
+      "speedRun": false,
+      "when": {
+        "followUp": "follow-move"
+      },
+      "copy": {
+        "question": "Quick follow-up",
+        "hint": "One tap, then I’ll move on."
+      }
+    },
+    {
       "id": "sleep",
       "section": "rest",
       "label": "Sleep",
@@ -625,6 +643,20 @@
             }
           }
         ]
+      }
+    },
+    {
+      "id": "follow-rest",
+      "section": "rest",
+      "label": "Follow-up",
+      "interaction": "pinpoint",
+      "speedRun": false,
+      "when": {
+        "followUp": "follow-rest"
+      },
+      "copy": {
+        "question": "Quick follow-up",
+        "hint": "One tap, then I’ll move on."
       }
     },
     {
@@ -821,6 +853,20 @@
           }
         }
       ]
+    },
+    {
+      "id": "follow-fuel",
+      "section": "fuel",
+      "label": "Follow-up",
+      "interaction": "pinpoint",
+      "speedRun": false,
+      "when": {
+        "followUp": "follow-fuel"
+      },
+      "copy": {
+        "question": "Quick follow-up",
+        "hint": "One tap, then I’ll move on."
+      }
     },
     {
       "id": "body",
@@ -1068,6 +1114,21 @@
           }
         }
       ]
+    },
+    {
+      "id": "pinpoint",
+      "section": "pinpoint",
+      "label": "Pinpoint",
+      "interaction": "pinpoint",
+      "speedRun": false,
+      "when": {
+        "answer": "route",
+        "equals": "pinpoint"
+      },
+      "copy": {
+        "question": "Let’s pin it down",
+        "hint": "Up to 20 questions. Usually far fewer. Stop whenever you like."
+      }
     },
     {
       "id": "circuit",

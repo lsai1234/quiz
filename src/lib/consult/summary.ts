@@ -3,6 +3,8 @@
  * reads an answer back. Restates what was said — no interpretation.
  */
 
+import { pinpointed } from './pinpoint/effects'
+import { probeSteps, stepSaid } from './pinpoint/leads'
 import { caffeineCount, sleepHours } from './reactions'
 import { ACTIVITIES, countsByType, sessionsLabel, sessionsPerWeek } from './training'
 import type {
@@ -218,6 +220,17 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
       return a.shelf.length === 0 ? 'Nothing yet' : list(a.shelf.map((s) => SHELF_LABEL[s]))
     case 'review':
       return ''
+    case 'follow-move':
+    case 'follow-rest':
+    case 'follow-fuel': {
+      const step = probeSteps(a.pinpoint).find((s) => s.stage === scene)
+      if (!step) return ''
+      return step.unsure ? 'Not sure' : stepSaid(step) ?? 'Answered'
+    }
+    case 'pinpoint': {
+      const found = pinpointed(a)
+      return found.length ? found.map((l) => l.pattern.name).join(', ') : ''
+    }
     case 'circuit': {
       if (!a.circuit) return ''
       if (a.circuit.none) return 'None of these apply'

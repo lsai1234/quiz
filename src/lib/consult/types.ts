@@ -27,8 +27,13 @@ export type SceneId =
   | 'shelf'
   | 'review'
   | 'circuit'
+  /** Pinpoint (plan v5): a follow-up after each core section, and the round. */
+  | 'follow-move'
+  | 'follow-rest'
+  | 'follow-fuel'
+  | 'pinpoint'
 
-export type SectionId = 'you' | 'move' | 'rest' | 'fuel' | 'body' | 'check'
+export type SectionId = 'you' | 'move' | 'rest' | 'fuel' | 'body' | 'pinpoint' | 'check'
 
 export type ConsultGoal = 'performance' | 'energy' | 'sleep' | 'focus' | 'ageing' | 'allround' | 'weight'
 

@@ -141,4 +141,6 @@ export interface PinpointAnswer {
   steps: PinpointStep[]
   /** "Build my stack now". */
   stopped: boolean
+  /** Past the round's "Here's what I've got so far". */
+  started?: boolean
 }

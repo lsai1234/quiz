@@ -119,7 +119,7 @@ describe('C12 branching', () => {
 describe('C13 speed run or deep charge', () => {
   it('offers the choice at the start', () => {
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('How much time have you got?')
+    expect(heading()).toHaveTextContent('How well should I get to know you?')
     expect(screen.getByRole('radio', { name: /^Speed run/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /^Deep charge/ })).toBeInTheDocument()
   })
