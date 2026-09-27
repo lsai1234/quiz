@@ -91,6 +91,18 @@ describe('a full run on scripts', () => {
     expect(s.returnTo).toBe('review')
   })
 
+  it('fills the battery left to right, with no cell for a section this route skips', () => {
+    for (const route of ['speed', 'deep', 'pinpoint'] as const) {
+      const base = initialFlow('c_test', 0, { route, goals: ['energy'], age: '35-44' })
+      for (const sceneId of visibleScenes(base.answers)) {
+        const fills = sectionProgress({ ...base, sceneId }).map((c) => c.fill)
+        // Never a fuller cell after an emptier one.
+        fills.forEach((f, i) => i && expect([route, sceneId, f <= fills[i - 1]]).toEqual([route, sceneId, true]))
+      }
+      if (route !== 'pinpoint') expect(sectionProgress(base).map((c) => c.id)).not.toContain('pinpoint')
+    }
+  })
+
   it('fills the battery to 100% at the end', () => {
     expect(sectionProgress(runToEnd()).every((s) => s.fill === 1)).toBe(true)
   })

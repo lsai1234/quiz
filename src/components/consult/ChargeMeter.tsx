@@ -1,6 +1,7 @@
 'use client'
 
-import { springTransition, stateTransition } from '@/lib/consult/motion'
+import { useEffect, useRef, useState } from 'react'
+import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 
 /**
  * Progress through the consult, as a battery (build S6).
@@ -13,6 +14,10 @@ import { springTransition, stateTransition } from '@/lib/consult/motion'
  *
  * The fill moves on the spring, so a jump back drains visibly rather than
  * snapping; the percentage beside it is the same number, rounded.
+ *
+ * From the original quiz's charge rail: energy drifts through the fill, and
+ * each step forward sends a bright streak across the battery with a pulse of
+ * light and a tick. Reduced motion keeps the fill and drops the rest.
  */
 
 export interface MeterSection {
@@ -41,6 +46,15 @@ export function chargePercent(sections: MeterSection[]): number {
 export function ChargeMeter({ sections, currentId, onJump, showPercent = true }: Props) {
   const percent = chargePercent(sections)
   const currentIndex = sections.findIndex((s) => s.id === currentId)
+  const [surge, setSurge] = useState(0)
+  const last = useRef(percent)
+  useEffect(() => {
+    if (percent > last.current) {
+      setSurge((n) => n + 1)
+      haptic('tick')
+    }
+    last.current = percent
+  }, [percent])
 
   return (
     <div className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
@@ -78,7 +92,19 @@ export function ChargeMeter({ sections, currentId, onJump, showPercent = true }:
                   transform: `scaleX(${fill})`,
                   transition: springTransition('transform'),
                 }}
-              />
+              >
+                {fill > 0 && (
+                  <span
+                    className="amp-anim-flow absolute inset-y-0"
+                    style={{
+                      left: 'calc(var(--amp-space-2) * -1)',
+                      right: 0,
+                      opacity: 0.3,
+                      background: 'repeating-linear-gradient(90deg, var(--amp-ink) 0 calc(var(--amp-hairline) * 2), transparent calc(var(--amp-hairline) * 2) var(--amp-space-2))',
+                    }}
+                  />
+                )}
+              </span>
             </span>
           )
           return jumpable ? (
@@ -98,6 +124,23 @@ export function ChargeMeter({ sections, currentId, onJump, showPercent = true }:
             </span>
           )
         })}
+        {/* Each step forward: a streak across the cells and a pulse of light. */}
+        {surge > 0 && (
+          <span aria-hidden key={surge} className="pointer-events-none absolute inset-0 overflow-hidden" style={{ borderRadius: 'var(--amp-radius-chip)' }}>
+            <span
+              className="amp-anim-streak absolute inset-y-0 left-0"
+              style={{ width: '45%', opacity: 0, background: 'linear-gradient(90deg, transparent, var(--amp-ink), transparent)' }}
+            />
+          </span>
+        )}
+        {surge > 0 && (
+          <span
+            aria-hidden
+            key={`surge-${surge}`}
+            className="amp-anim-surge pointer-events-none absolute"
+            style={{ inset: 'calc(var(--amp-space-2) * -1)', opacity: 0, background: 'radial-gradient(closest-side, var(--amp-accent-glow), transparent)' }}
+          />
+        )}
         {/* The battery's terminal nub. */}
         <span
           aria-hidden

@@ -301,6 +301,60 @@
   to { transform: translate3d(0, 110%, 0); }
 }
 
+/* From the original quiz: the pick mark's pop, the battery's energy, and
+   the sheen on a ready button. */
+@keyframes amp-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes amp-flow {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--amp-space-2), 0, 0); }
+}
+
+@keyframes amp-streak {
+  0% { transform: translate3d(-110%, 0, 0); opacity: 0; }
+  18% { opacity: 0.95; }
+  100% { transform: translate3d(260%, 0, 0); opacity: 0; }
+}
+
+@keyframes amp-surge {
+  0% { opacity: 0; transform: scale(0.6); }
+  35% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+@keyframes amp-sheen {
+  from { transform: translate3d(-150%, 0, 0) skewX(-20deg); }
+  to { transform: translate3d(450%, 0, 0) skewX(-20deg); }
+}
+
+.amp-anim-pop {
+  animation: amp-pop var(--amp-duration-pop) var(--amp-ease-out) both;
+}
+
+.amp-anim-flow {
+  animation: amp-flow var(--amp-duration-flow) linear infinite;
+}
+
+.amp-anim-streak {
+  animation: amp-streak var(--amp-duration-streak) var(--amp-ease-out) forwards;
+}
+
+.amp-anim-surge {
+  animation: amp-surge var(--amp-duration-streak) var(--amp-ease-out) forwards;
+}
+
+.amp-anim-sheen {
+  animation: amp-sheen var(--amp-duration-sheen) var(--amp-ease-out) both;
+}
+
+.amp-consult[data-reduced-motion='true'] :is(.amp-anim-pop, .amp-anim-flow, .amp-anim-streak, .amp-anim-surge, .amp-anim-sheen) {
+  animation: none;
+}
+
 .amp-anim-scene-forward {
   animation: amp-scene-in-forward var(--amp-duration-scene) var(--amp-spring) both;
 }
@@ -344,7 +398,12 @@
   .amp-consult .amp-anim-scene-forward,
   .amp-consult .amp-anim-scene-back,
   .amp-consult .amp-anim-rise,
-  .amp-consult .amp-anim-fade {
+  .amp-consult .amp-anim-fade,
+  .amp-consult .amp-anim-pop,
+  .amp-consult .amp-anim-flow,
+  .amp-consult .amp-anim-streak,
+  .amp-consult .amp-anim-surge,
+  .amp-consult .amp-anim-sheen {
     animation: none;
   }
 

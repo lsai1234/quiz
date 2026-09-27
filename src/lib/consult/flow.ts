@@ -555,9 +555,10 @@ export function sectionProgress(state: FlowState): SectionProgress[] {
   const order = visibleScenes(state.answers)
   const here = order.indexOf(state.sceneId)
   const finished = state.phase !== 'scenes' && state.phase !== 'intro'
-  return SECTIONS.map((section) => {
+  // A section with nothing to ask on this route (Pinpoint off the Pinpoint
+  // route, say) has no cell: counted as full, it lit up ahead of the fill.
+  return SECTIONS.filter((section) => order.some((id) => sceneDef(id).section === section.id)).map((section) => {
     const scenes = order.filter((id) => sceneDef(id).section === section.id)
-    if (scenes.length === 0) return { id: section.id, label: section.label, fill: 1 }
     const done = scenes.filter((id) => finished || order.indexOf(id) < here).length
     return { id: section.id, label: section.label, fill: done / scenes.length }
   })

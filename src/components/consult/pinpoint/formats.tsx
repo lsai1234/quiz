@@ -48,7 +48,7 @@ const PICKED = {
 
 function Tick() {
   return (
-    <span aria-hidden className="inline-flex shrink-0" style={{ color: 'var(--amp-accent)' }}>
+    <span aria-hidden className="amp-anim-pop inline-flex shrink-0" style={{ color: 'var(--amp-accent)' }}>
       <Glyph name="check" size={18} />
     </span>
   )

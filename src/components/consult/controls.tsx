@@ -28,6 +28,39 @@ const TONE: Record<Tone, { ink: string; fill: string; line: string; glow: string
   sun: { ink: 'var(--amp-sun)', fill: 'var(--amp-sun-fill)', line: 'var(--amp-sun-line)', glow: 'var(--amp-sun-glow)' },
 }
 
+/* ── Pick mark ──────────────────────────────────────────────────────────── */
+
+/**
+ * From the original quiz: every answer carries a mark, a circle for "pick
+ * one" and a square for "pick several", so how to answer reads at a glance.
+ * It fills in the tone and pops on the spring when picked.
+ */
+export function PickMark({ on, round, tone = 'accent' }: { on: boolean; round: boolean; tone?: Tone }) {
+  const t = TONE[tone]
+  return (
+    <span
+      aria-hidden
+      data-pick-mark={on ? 'on' : 'off'}
+      className="flex shrink-0 items-center justify-center"
+      style={{
+        width: 'var(--amp-space-5)',
+        height: 'var(--amp-space-5)',
+        borderRadius: round ? 'var(--amp-radius-pill)' : 'calc(var(--amp-hairline) * 6)',
+        border: `var(--amp-hairline) solid ${on ? t.ink : 'var(--amp-edge-strong)'}`,
+        background: on ? t.ink : 'transparent',
+        color: 'var(--amp-ink-on-accent)',
+        transition: stateTransition('background-color', 'border-color'),
+      }}
+    >
+      {on && (
+        <span className="amp-anim-pop inline-flex">
+          <Glyph name="check" size={12} />
+        </span>
+      )}
+    </span>
+  )
+}
+
 /* ── Tile ───────────────────────────────────────────────────────────────── */
 
 interface TileProps {
@@ -66,6 +99,8 @@ export function Tile({
   clearCorner = false,
 }: TileProps) {
   const t = TONE[tone]
+  const hasBadge = badge !== undefined && badge !== null
+  const mark = hasBadge ? null : <PickMark on={selected} round={kind === 'radio'} tone={tone} />
   const glyph = icon && (
     <span className="shrink-0" style={{ color: selected ? t.ink : 'var(--amp-ink-2)', transition: stateTransition('color') }}>
       <Glyph name={icon} size={layout === 'compact' ? 18 : 22} />
@@ -118,20 +153,34 @@ export function Tile({
     >
       {layout === 'compact' ? (
         <span className="flex min-w-0 flex-col">
-          <span className="flex items-center" style={{ gap: 'var(--amp-space-2)', paddingRight: badge !== undefined && badge !== null ? 'var(--amp-space-5)' : undefined }}>
+          <span className="flex items-center" style={{ gap: 'var(--amp-space-2)', paddingRight: 'var(--amp-space-6)' }}>
             {glyph}
             {title}
           </span>
           {subLine}
         </span>
+      ) : layout === 'row' ? (
+        <>
+          {glyph}
+          <span className="flex min-w-0 flex-1 flex-col">
+            {title}
+            {subLine}
+          </span>
+          {mark}
+        </>
       ) : (
         <>
           {glyph}
-          <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 flex-col" style={{ paddingRight: glyph ? undefined : 'var(--amp-space-6)' }}>
             {title}
             {subLine}
           </span>
         </>
+      )}
+      {layout !== 'row' && mark && (
+        <span className="absolute" style={{ top: 'var(--amp-space-3)', right: 'var(--amp-space-3)' }}>
+          {mark}
+        </span>
       )}
       {badge !== undefined && badge !== null && (
         <span
@@ -195,7 +244,11 @@ export function Chip({ label, selected, onToggle, icon, tone = 'accent', disable
       }}
     >
       {icon && <Glyph name={icon} size={16} />}
-      {selected && !icon && <Glyph name="check" size={14} />}
+      {selected && !icon && (
+        <span className="amp-anim-pop inline-flex">
+          <Glyph name="check" size={14} />
+        </span>
+      )}
       {label}
     </button>
   )
@@ -319,6 +372,11 @@ export function NextButton({ children = 'Next', ready = true, nudge, resetKey, d
   }, [resetKey, ready])
 
   const dim = disabled || !ready
+  // The sheen crosses once each time it becomes ready.
+  const [sheen, setSheen] = useState(0)
+  useEffect(() => {
+    if (!dim) setSheen((n) => n + 1)
+  }, [dim])
   return (
     <div className="flex flex-col items-stretch" style={{ gap: 'var(--amp-space-2)' }}>
       <button
@@ -334,13 +392,14 @@ export function NextButton({ children = 'Next', ready = true, nudge, resetKey, d
           }
           onClick?.(e)
         }}
-        className={`amp-press flex w-full items-center justify-center ${className ?? ''}`}
+        className={`amp-press relative flex w-full items-center justify-center overflow-hidden ${className ?? ''}`}
         style={{
           minHeight: 'calc(var(--amp-target) + var(--amp-space-1))',
           borderRadius: 'var(--amp-radius-tile)',
-          background: dim ? 'var(--amp-glass-raised)' : 'var(--amp-accent)',
+          // The original quiz's button: a solid white face, dark type.
+          background: dim ? 'var(--amp-glass-raised)' : 'var(--amp-ink)',
           color: dim ? 'var(--amp-ink-3)' : 'var(--amp-ink-on-accent)',
-          boxShadow: dim ? 'none' : 'var(--amp-glow)',
+          boxShadow: dim ? 'none' : 'var(--amp-glow-soft)',
           border: `var(--amp-hairline) solid ${dim ? 'var(--amp-edge)' : 'transparent'}`,
           fontFamily: 'var(--amp-font-body)',
           fontWeight: 'var(--amp-weight-bold)',
@@ -350,7 +409,15 @@ export function NextButton({ children = 'Next', ready = true, nudge, resetKey, d
         }}
         {...rest}
       >
-        {children}
+        {!dim && sheen > 0 && (
+          <span
+            key={sheen}
+            aria-hidden
+            className="amp-anim-sheen pointer-events-none absolute inset-y-0 left-0"
+            style={{ width: '30%', transform: 'translate3d(-150%, 0, 0)', background: 'linear-gradient(90deg, transparent, var(--amp-accent-line), transparent)' }}
+          />
+        )}
+        <span className="relative">{children}</span>
       </button>
       <p
         id={hintId}

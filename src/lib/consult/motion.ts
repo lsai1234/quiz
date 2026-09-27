@@ -36,6 +36,14 @@ export const DURATION = {
   chargeUp: 2600,
   /** How long Amp keeps watching after the last touch. */
   watch: 900,
+  /** A pick mark popping in (from the original quiz's check-pop). */
+  pop: 220,
+  /** One loop of the energy drifting through the battery's fill. */
+  flow: 1600,
+  /** The bright streak racing across the battery on each step forward. */
+  streak: 700,
+  /** The band of light crossing Next once, when it's ready. */
+  sheen: 900,
 } as const
 
 /** Everything that is not a spring: colour changes and fades. */
@@ -98,6 +106,10 @@ export function motionVars(reduced: boolean): CSSProperties {
     '--amp-duration-enter': ms(DURATION.enter),
     '--amp-duration-scene': ms(DURATION.scene),
     '--amp-duration-charge': ms(DURATION.chargeUp),
+    '--amp-duration-pop': ms(DURATION.pop),
+    '--amp-duration-flow': ms(DURATION.flow),
+    '--amp-duration-streak': ms(DURATION.streak),
+    '--amp-duration-sheen': ms(DURATION.sheen),
     '--amp-press-scale': reduced ? '1' : String(PRESS_SCALE),
   } as CSSProperties
 }
