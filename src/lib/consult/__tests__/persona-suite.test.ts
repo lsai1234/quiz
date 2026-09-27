@@ -66,9 +66,9 @@ function check(p: Persona, e: Expectation): string[] {
 }
 
 describe('the persona suite', () => {
-  it('has 33 personas: the plan’s 25, six for weight loss and two for the journeys', () => {
-    expect(PERSONAS).toHaveLength(33)
-    expect(new Set(PERSONAS.map((p) => p.id)).size).toBe(33)
+  it('has 35 personas: the plan’s 25, six for weight loss, two for the journeys and two for Pinpoint', () => {
+    expect(PERSONAS).toHaveLength(35)
+    expect(new Set(PERSONAS.map((p) => p.id)).size).toBe(35)
   })
 
   describe.each(PERSONAS.map((p) => [p.id, p.who, p] as const))('%s %s', (_id, _who, p) => {

@@ -110,7 +110,7 @@ export function validateHandoff(value: unknown): Validation {
   if (typeof v.consult_id !== 'string' || !/^c_[a-z0-9]{6,32}$/.test(v.consult_id)) errors.push('consult_id is malformed')
   if (typeof v.created_at !== 'string' || Number.isNaN(Date.parse(v.created_at))) errors.push('created_at is not a date')
   if (v.engine !== ENGINE_VERSION) errors.push(`engine must be ${ENGINE_VERSION}`)
-  if (v.route !== 'speed' && v.route !== 'deep') errors.push('route must be speed or deep')
+  if (v.route !== 'speed' && v.route !== 'deep' && v.route !== 'pinpoint') errors.push('route must be speed, deep or pinpoint')
 
   if (!isStringArray(v.goals) || v.goals.length < 1 || v.goals.length > 3 || !v.goals.every((g) => GOALS.includes(g as ConsultGoal))) {
     errors.push('goals must be one to three known goals')

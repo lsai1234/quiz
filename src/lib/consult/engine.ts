@@ -24,6 +24,7 @@
  */
 
 import { journeyOf } from './journey'
+import { pinpointEffects } from './pinpoint/effects'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
 import { claimsFor } from './claims'
@@ -46,7 +47,7 @@ import { readPlate } from './plate'
 import { GOAL_LABEL, SHELF_LABEL } from './summary'
 import type { ConsultAnswers, ConsultGoal } from './types'
 
-export const ENGINE_VERSION = 'engine-3'
+export const ENGINE_VERSION = 'engine-4'
 
 /** Caffeinated drinks a day at which nothing with caffeine goes in the stack. */
 export const CAFFEINE_CEILING = 4
@@ -211,6 +212,11 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
     if (changes.includes('sleeping-through')) add('sleep', 2, 'You’re waking in the night')
   }
 
+  // Pinpoint (plan v5): what the person confirmed, in its own words.
+  for (const { lead, factor } of pinpointEffects(a)) {
+    for (const { need, weight } of lead.pattern.effects) add(need, weight * factor, lead.pattern.because)
+  }
+
   // Weight-loss medication, with the tailoring opt-in (plan v4, A4). The
   // reasons never name the medication: they're kept with the stack.
   if (isTailored(a)) {
@@ -331,6 +337,16 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     exclude.add('caffeine')
     why.stimulant ??= 'stimulants are best avoided at 65 and over'
     why.caffeine ??= 'stimulants are best avoided at 65 and over'
+  }
+
+  // A pattern the person said was them can keep things out (plan v5): being
+  // wired and tired keeps caffeine out, whatever the goals.
+  for (const { lead } of pinpointEffects(a)) {
+    if (lead.state !== 'yes' || !lead.pattern.keepOut) continue
+    for (const i of lead.pattern.keepOut.ingredients) {
+      exclude.add(i)
+      why[i] ??= lead.pattern.keepOut.why
+    }
   }
 
   const plantBased = a.plate ? readPlate(a.plate).plantBased : false

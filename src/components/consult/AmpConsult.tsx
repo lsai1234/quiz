@@ -268,7 +268,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const aiOn = consultAi && !aiUnavailable
   // The tracker read (U2) fills the week and the sleep window, so it's offered
   // where those are asked — on the long route only; a speed run has no time for uploads.
-  const offerTracker = aiOn && state.answers.route === 'deep' && (state.sceneId === 'training' || state.sceneId === 'sleep')
+  const offerTracker = aiOn && state.answers.route !== 'speed' && state.answers.route !== null && (state.sceneId === 'training' || state.sceneId === 'sleep')
   // "Tell Amp more" lives in the scene now, in its own words (batch 4). Only
   // with the AI layer on: with it off there's nobody to read it (V6).
   const tell = mode !== 'calm' && aiOn ? scene.tell : undefined

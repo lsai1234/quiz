@@ -1,5 +1,6 @@
 import type { HealthDataConsent } from '@/lib/types'
 
+import type { PinpointAnswer } from './pinpoint/types'
 import type { TrainingAnswer } from './training'
 
 /**
@@ -80,8 +81,11 @@ export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' 
  */
 export type WeightSymptom = 'low-appetite' | 'nausea' | 'constipation' | 'tiredness'
 
-/** Speed run (fewer scenes, about a minute) or deep charge (everything). */
-export type Route = 'speed' | 'deep'
+/**
+ * Speed run (fewer scenes, about a minute), deep charge (everything), or
+ * Pinpoint (everything, then follow-ups until Amp knows what's going on; plan v5).
+ */
+export type Route = 'speed' | 'deep' | 'pinpoint'
 
 /** What a builder is training for (the builder journey's own question). */
 export type TrainingAim = 'muscle' | 'strength' | 'sport' | 'endurance'
@@ -154,6 +158,8 @@ export interface ConsultAnswers {
   comfortOffered: boolean
   /** Free text from "Tell Amp more", per scene. Optional, never required. */
   notes: Partial<Record<SceneId, string>>
+  /** The Pinpoint route's follow-ups, hunches and verdicts (plan v5). Null on the other routes. */
+  pinpoint: PinpointAnswer | null
 }
 
 export const EMPTY_ANSWERS: ConsultAnswers = {
@@ -179,4 +185,5 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   comfort: false,
   comfortOffered: false,
   notes: {},
+  pinpoint: null,
 }

@@ -221,6 +221,24 @@ export const PERSONAS: Persona[] = [
     }),
     expect: [{ safety: true }, { includesGroup: ['vitamin-d', 'collagen', 'multivitamin'] }, { excludesGroup: ['protein-mass', 'pre-workout-stim'] }],
   },
+
+  // ── Pinpoint (plan v5): what the person confirmed changes the stack ──
+  {
+    id: 'p34', who: 'Pinpoint: confirmed wired and tired, wants performance',
+    answers: base({
+      route: 'pinpoint', goals: ['performance', 'energy'], caffeine: { coffee: 3, tea: 0, energy: 0 },
+      pinpoint: { steps: [{ kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }, { kind: 'verdict', pattern: 'wired', verdict: 'yes', stage: 'pinpoint' }], stopped: false },
+    }),
+    expect: [{ safety: true, neverContains: ['caffeine', 'stimulant'] }, { includesGroup: ['magnesium', 'sleep-support'] }],
+  },
+  {
+    id: 'p35', who: 'Pinpoint: confirmed indoor life, though outside most days on the core screen',
+    answers: base({
+      route: 'pinpoint', goals: ['allround'], daylight: 'most',
+      pinpoint: { steps: [{ kind: 'probe', probe: 'whole-days-in', answer: { main: 'days' }, stage: 'pinpoint' }, { kind: 'verdict', pattern: 'indoor', verdict: 'yes', stage: 'pinpoint' }], stopped: false },
+    }),
+    expect: [{ safety: true }, { includesGroup: ['vitamin-d'] }],
+  },
 ]
 
 /**

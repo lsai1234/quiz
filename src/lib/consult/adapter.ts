@@ -190,7 +190,7 @@ export function identityFor(payload: HandoffPayload): StackIdentity {
   const top = IDENTITY[payload.goals[0] ?? 'allround']
   // A speed run never asks about daylight or food, so their scores are a
   // neutral 50, not an answer — they can't be anyone's focus area.
-  const asked = PROFILE_AREAS.filter((a) => payload.route === 'deep' || (a !== 'daylight' && a !== 'nutrition'))
+  const asked = PROFILE_AREAS.filter((a) => payload.route !== 'speed' || (a !== 'daylight' && a !== 'nutrition'))
   const areas = [...asked].sort((x, y) => payload.profile[x] - payload.profile[y] || x.localeCompare(y))
   const lowest = areas[0]
   const average = Math.round(asked.reduce((s, a) => s + payload.profile[a], 0) / asked.length)
