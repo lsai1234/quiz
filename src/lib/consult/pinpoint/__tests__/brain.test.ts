@@ -124,6 +124,8 @@ describe('what Amp asks next', () => {
     if (step.kind === 'hunch') {
       expect(step.lead.pattern.id).toBe('wired')
       expect(hunchEvidence(step.lead)).toEqual(expect.arrayContaining(['4 caffeinated drinks a day', 'Mind racing at 11pm']))
+      // Three lines at most, so the card fits a small phone.
+      expect(hunchEvidence(step.lead).length).toBeLessThanOrEqual(3)
     }
   })
 
@@ -160,7 +162,8 @@ describe('what Amp asks next', () => {
   })
 
   it('estimates what’s left and how focused Amp is', () => {
-    expect(questionsLeft(sam)).toBeGreaterThanOrEqual(2)
+    expect(questionsLeft(sam)).toBeGreaterThanOrEqual(1)
+    expect(questionsLeft(sam)).toBeLessThanOrEqual(6)
     const sure = withSteps(sam, { kind: 'verdict', pattern: 'wired', verdict: 'yes', stage: 'pinpoint' })
     expect(focus(sure)).toBeGreaterThan(focus(sam))
   })

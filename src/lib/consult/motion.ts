@@ -134,12 +134,14 @@ export function chargeTransition(...properties: string[]): string {
     .join(', ')
 }
 
-export type HapticKind = 'tick' | 'select' | 'charge'
+export type HapticKind = 'tick' | 'select' | 'charge' | 'double'
 
 const HAPTIC_PATTERN: Record<HapticKind, number | number[]> = {
   tick: 6,
   select: 12,
   charge: [12, 40, 18, 40, 30],
+  /** A hunch forming (plan v5). */
+  double: [6, 50, 6],
 }
 
 /**
@@ -158,7 +160,7 @@ export function haptic(kind: HapticKind): void {
 
 /* ── Amp's moods ────────────────────────────────────────────────────────── */
 
-export type AmpState = 'idle' | 'watching' | 'thinking' | 'reading' | 'calm' | 'charged'
+export type AmpState = 'idle' | 'watching' | 'thinking' | 'reading' | 'calm' | 'charged' | 'hunch'
 
 /**
  * The placeholder Amp's animation per state (S10). Keyframes live in
@@ -173,6 +175,8 @@ export const AMP_ANIMATION: Record<AmpState, string | undefined> = {
   reading: undefined,
   calm: undefined,
   charged: 'amp-burst var(--amp-duration-scene) var(--amp-spring) both',
+  /** Pinpoint's hunch (plan v5): leaning in, a spark coming and going. */
+  hunch: 'amp-hunch calc(var(--amp-duration-charge) / 1.5) ease-in-out infinite',
 }
 
 /**
@@ -184,13 +188,17 @@ export const AMP_ANIMATION: Record<AmpState, string | undefined> = {
  *   flex   a day set to gym: a quick flex
  *   sun    the daylight answer moves: a warm glow, as if he's caught the sun
  *   burst  the charge dial hits full: a burst of light
+ *   eureka   "That's me" to a hunch (plan v5): a burst in go-green
+ *   puzzled  "Not me" to a hunch: a small tilt of the head
  */
-export type AmpReaction = 'flex' | 'sun' | 'burst'
+export type AmpReaction = 'flex' | 'sun' | 'burst' | 'eureka' | 'puzzled'
 
 export const AMP_REACTION: Record<AmpReaction, string> = {
   flex: 'amp-flex var(--amp-duration-scene) var(--amp-spring) 1',
   sun: 'amp-sun calc(var(--amp-duration-scene) * 1.5) var(--amp-ease-out) 1',
   burst: 'amp-full var(--amp-duration-scene) var(--amp-spring) 1',
+  eureka: 'amp-eureka var(--amp-duration-scene) var(--amp-spring) 1',
+  puzzled: 'amp-puzzled var(--amp-duration-scene) var(--amp-spring) 1',
 }
 
 /** The scan line across Amp while he reads an upload. */

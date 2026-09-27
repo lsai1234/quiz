@@ -279,6 +279,23 @@
   30% { transform: scale(1.3); opacity: 1; }
 }
 
+/* Pinpoint (plan v5): the hunch, and the two answers to it. */
+@keyframes amp-hunch {
+  0%, 100% { transform: scale(1.04) rotate(-4deg); filter: brightness(1.05); }
+  50% { transform: scale(1.1) rotate(-6deg); filter: brightness(1.3); }
+}
+
+@keyframes amp-eureka {
+  0%, 100% { transform: scale(1); opacity: 0; }
+  30% { transform: scale(1.45); opacity: 1; }
+}
+
+@keyframes amp-puzzled {
+  0%, 100% { transform: rotate(0); }
+  30% { transform: rotate(-16deg); }
+  60% { transform: rotate(10deg); }
+}
+
 @keyframes amp-scan {
   from { transform: translate3d(0, -110%, 0); }
   to { transform: translate3d(0, 110%, 0); }

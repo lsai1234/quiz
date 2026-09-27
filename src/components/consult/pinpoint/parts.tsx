@@ -103,8 +103,8 @@ export function HunchCard({ lead, onVerdict, comfort }: { lead: Lead; onVerdict:
   const evidence = hunchEvidence(lead)
   const [a, b] = lead.pattern.links
   return (
-    <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
-      <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="What I’m going on">
+    <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+      <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }} aria-label="What I’m going on">
         {evidence.map((e) => (
           <li key={e} className="flex items-start" style={{ gap: 'var(--amp-space-2)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
             <span aria-hidden style={{ flex: 'none', width: 'var(--amp-space-2)', height: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)', borderRadius: 'var(--amp-radius-pill)', background: 'var(--amp-accent)' }} />

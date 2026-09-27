@@ -41,11 +41,17 @@ export const VERDICT_LINE = {
   no: 'Crossing that off.',
 } as const
 
-/** The hunch card's play-back: the evidence, core answers first, at most four. */
+/**
+ * The hunch card's play-back: at most three lines, so the card and its three
+ * answers fit a small phone. Core answers read first; what you said in the
+ * round gets two of the three when there's core evidence too, since that's
+ * what the hunch rests on.
+ */
 export function hunchEvidence(lead: Lead): string[] {
-  const core = lead.support.filter((e) => e.from === 'core').map((e) => e.text)
-  const said = lead.support.filter((e) => e.from === 'answer').map((e) => e.text)
-  return [...new Set([...core.slice(0, 2), ...said])].slice(0, 4)
+  const core = [...new Set(lead.support.filter((e) => e.from === 'core').map((e) => e.text))]
+  const said = [...new Set(lead.support.filter((e) => e.from === 'answer').map((e) => e.text))].filter((t) => !core.includes(t))
+  const keepSaid = said.slice(0, core.length ? 2 : 3)
+  return [...core.slice(0, 3 - keepSaid.length), ...keepSaid]
 }
 
 /** Why something was ruled out, in one line. */

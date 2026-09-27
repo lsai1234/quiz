@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { LIMITS } from '@/lib/consult/pinpoint/choose'
 import { EMPTY_PINPOINT, isOut, leads as allLeads } from '@/lib/consult/pinpoint/leads'
-import { pinpointView, questionsAsked, replaceFollowUp, withStep } from '@/lib/consult/pinpoint/screen'
-import type { PinpointStage } from '@/lib/consult/pinpoint/types'
+import { justRuledOut, pinpointView, questionsAsked, replaceFollowUp, withStep } from '@/lib/consult/pinpoint/screen'
+import { questionsLeft } from '@/lib/consult/pinpoint/choose'
+import { whyAsking } from '@/lib/consult/pinpoint/playback'
+import type { PatternId, PinpointStage } from '@/lib/consult/pinpoint/types'
+import { haptic } from '@/lib/consult/motion'
 import { NextButton, QuietLink } from '../controls'
 import type { SceneProps } from '../scenes/registry'
 import { ProbeFormat, type ProbeAnswer } from './formats'
@@ -30,6 +33,12 @@ const mono = {
   letterSpacing: 'var(--amp-tracking-data)',
 } as const
 
+/** "about 3 more": what Amp expects the round still needs. */
+function counterTail(left: number): string {
+  if (left <= 0) return 'nearly there'
+  return left === 1 ? 'about 1 more' : `about ${left} more`
+}
+
 export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: SceneProps) {
   const stage = scene.id as PinpointStage
   const round = stage === 'pinpoint'
@@ -37,6 +46,7 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
   const pp = answers.pinpoint ?? EMPTY_PINPOINT
   const [pending, setPending] = useState<ProbeAnswer | null>(null)
   const [sheet, setSheet] = useState(false)
+  const [why, setWhy] = useState(false)
   const leads = allLeads(answers)
   const asked = questionsAsked(answers)
   const write = (next: typeof pp) => onAnswer({ pinpoint: next })
@@ -45,12 +55,17 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
   const first = useRef(true)
   useEffect(() => {
     setPending(null)
+    setWhy(false)
     // A new question in the round: the heading takes focus, as on a new scene.
     if (first.current) {
       first.current = false
       return
     }
     if (round) document.querySelector<HTMLElement>('.amp-consult h1')?.focus({ preventScroll: true })
+    // A hunch forming gets a double tick, where the phone can.
+    if (view.kind === 'hunch') haptic('double')
+    // Only when the screen changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewKey, round])
 
   function commit(p: ProbeAnswer | { unsure: true }) {
@@ -66,6 +81,7 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
   }
 
   const buildNow = round && asked >= LIMITS.buildNowFrom ? () => write({ ...pp, stopped: true }) : undefined
+  const gone = justRuledOut(stage, answers)
   const contenders = leads.filter((l) => l.state !== 'no' && l.state !== 'out' && l.p >= 0.3)
 
   let body: React.ReactNode
@@ -108,14 +124,33 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
           )}
           <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-1) var(--amp-space-4)' }}>
             <QuietLink onClick={() => commit({ unsure: true })}>Not sure</QuietLink>
+            {view.tells.length > 0 && (
+              <QuietLink aria-expanded={why} onClick={() => setWhy((w) => !w)}>
+                Why I’m asking
+              </QuietLink>
+            )}
             {buildNow && <QuietLink onClick={buildNow}>Build my stack now</QuietLink>}
           </div>
+          {why && (
+            <p className="amp-anim-rise text-center" style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
+              {whyAsking(view.tells as PatternId[])}
+            </p>
+          )}
         </div>
       )
       break
     }
     case 'hunch':
-      body = <HunchCard lead={view.lead} comfort={comfort} onVerdict={(verdict) => write(withStep(answers, { kind: 'verdict', pattern: view.lead.pattern.id, verdict, stage: 'pinpoint' })!)} />
+      body = (
+        <HunchCard
+          lead={view.lead}
+          comfort={comfort}
+          onVerdict={(verdict) => {
+            if (verdict === 'yes') haptic('charge')
+            write(withStep(answers, { kind: 'verdict', pattern: view.lead.pattern.id, verdict, stage: 'pinpoint' })!)
+          }}
+        />
+      )
       break
     case 'checkpoint':
       body = (
@@ -158,8 +193,19 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
       {round && view.kind !== 'intro' && (
         <div className="flex items-center justify-between" style={{ gap: 'var(--amp-space-2)' }}>
-          <p className="uppercase" style={{ ...mono, color: 'var(--amp-ink-3)' }} aria-live="polite">
-            {view.kind === 'probe' ? `Question ${view.number} · up to ${LIMITS.questions}` : view.kind === 'hunch' ? 'I think I’ve got something' : view.kind === 'done' ? `${asked} question${asked === 1 ? '' : 's'}` : 'Checkpoint'}
+          <p className="uppercase" style={{ ...mono, color: 'var(--amp-ink-3)' }} aria-live="polite" data-counter>
+            {view.kind === 'probe' ? (
+              // Two halves that each keep together, so a big-text wrap breaks between them.
+              <>
+                <span className="whitespace-nowrap">Question {view.number} ·</span> <span className="whitespace-nowrap">{counterTail(questionsLeft(answers))}</span>
+              </>
+            ) : view.kind === 'hunch' ? (
+              'I think I’ve got something'
+            ) : view.kind === 'done' ? (
+              `${asked} question${asked === 1 ? '' : 's'}`
+            ) : (
+              'Checkpoint'
+            )}
           </p>
           <button
             type="button"
@@ -172,9 +218,18 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext }: Sce
           </button>
         </div>
       )}
-      {!round && view.kind === 'probe' && (
-        <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
-          Quick follow-up
+      {round && gone.length > 0 && (
+        <p className="flex flex-wrap items-center" style={{ gap: 'var(--amp-space-1)' }} aria-live="polite">
+          {gone.map((l) => (
+            <span
+              key={l.pattern.id}
+              className="amp-anim-rise uppercase"
+              style={{ ...mono, padding: 'var(--amp-space-1) var(--amp-space-2)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) solid var(--amp-edge-strong)', color: 'var(--amp-ink-3)', textDecoration: 'line-through' }}
+            >
+              <span className="sr-only">Ruled out: </span>
+              {l.pattern.name}
+            </span>
+          ))}
         </p>
       )}
       <div key={viewKey} className="amp-anim-rise">

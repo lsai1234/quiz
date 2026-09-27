@@ -30,7 +30,7 @@ export const AMP_RIVE = {
   artboard: 'Amp',
   stateMachine: 'Amp',
   inputs: { state: 'state', lean: 'lean' },
-  triggers: { flex: 'flex', sun: 'sun', burst: 'burst' },
+  triggers: { flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled' },
 } as const
 
 export type AmpRiveTriggers = Record<AmpReaction, string>
@@ -42,6 +42,7 @@ export const AMP_STATE_CODE: Record<AmpState, number> = {
   reading: 3,
   calm: 4,
   charged: 5,
+  hunch: 6,
 }
 
 /** The `.riv` file's size budget, in bytes. */

@@ -137,5 +137,12 @@ export function ampReactionTo(before: ConsultAnswers, patch: Partial<ConsultAnsw
   if (patch.training && countsByType(patch.training).gym > countsByType(before.training).gym) return 'flex'
   if (patch.energy === 10 && before.energy !== 10) return 'burst'
   if (patch.daylight && patch.daylight !== before.daylight) return 'sun'
+  // Pinpoint (plan v5): a verdict on a hunch, just given.
+  const steps = patch.pinpoint?.steps
+  if (steps && steps.length > (before.pinpoint?.steps.length ?? 0)) {
+    const last = steps[steps.length - 1]
+    if (last.kind === 'verdict' && last.verdict === 'yes') return 'eureka'
+    if (last.kind === 'verdict' && last.verdict === 'no') return 'puzzled'
+  }
   return null
 }

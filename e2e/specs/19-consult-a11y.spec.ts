@@ -150,6 +150,69 @@ async function answerByKeyboard(page: Page) {
   // Anything else (body map, "what's got harder", review) is fine blank.
 }
 
+/* ── Pinpoint (plan v5) ─────────────────────────────────────────────────── */
+
+const PINPOINT = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
+
+/** The two phone sizes a Pinpoint question has to fit, founder strip and all. */
+const PHONES = [
+  { width: 390, height: 664 },
+  { width: 375, height: 667 },
+]
+
+const sceneId = (page: Page) => page.locator('[data-scene]').getAttribute('data-scene')
+
+/** No page scroll at either phone size: the question, its answers and the way on all in frame. */
+async function fitsPhones(page: Page, where: string) {
+  for (const size of PHONES) {
+    await page.setViewportSize(size)
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
+        message: `${where} scrolls at ${size.width}×${size.height}`,
+        timeout: 3_000,
+      })
+      .toBeLessThanOrEqual(0)
+  }
+  await page.setViewportSize(PHONES[0])
+}
+
+/** What's on a Pinpoint screen, so the run knows what it is looking at. */
+async function pinpointScreen(page: Page): Promise<'intro' | 'probe' | 'hunch' | 'checkpoint' | 'done'> {
+  const has = async (name: string) => (await page.getByRole('button', { name, exact: true }).count()) > 0
+  if (await has('Let’s go')) return 'intro'
+  if (await has('That’s me')) return 'hunch'
+  if (await has('Keep going')) return 'checkpoint'
+  if (await has('Continue')) return 'done'
+  return 'probe'
+}
+
+/** Answers a Pinpoint screen as someone who recognises themselves: That's me, most days, Yes. */
+async function answerPinpointScreen(page: Page, comfort = false) {
+  const scene = page.locator('[data-scene]')
+  const kind = await pinpointScreen(page)
+  const tap = (name: string) => page.getByRole('button', { name, exact: true }).first().click()
+  if (kind === 'intro') return tap('Let’s go')
+  if (kind === 'hunch') return tap('That’s me')
+  if (kind === 'checkpoint') return tap('Keep going')
+  if (kind === 'done') return tap('Continue')
+  const slider = scene.getByRole('slider')
+  if (await slider.count()) {
+    await slider.focus()
+    await page.keyboard.press('ArrowRight')
+    return scene.getByRole('button', { name: 'Next', exact: true }).click()
+  }
+  const radio = (name: string) => scene.getByRole('radio', { name, exact: true })
+  if (await radio('Yes').count()) {
+    const n = await radio('Yes').count()
+    for (let i = 0; i < n; i++) await radio('Yes').nth(i).click()
+  } else if (await radio('That’s me').count()) await radio('That’s me').click()
+  else if (await radio('Most days').count()) await radio('Most days').click()
+  else await scene.getByRole('radiogroup').first().getByRole('radio').first().click()
+  // Comfort mode never moves on by itself; a quick-fire card has its own Next in either size.
+  const next = scene.getByRole('button', { name: 'Next', exact: true })
+  if ((comfort || (await radio('Yes').count())) && (await next.count()) && (await next.isEnabled())) await next.click()
+}
+
 test.describe('consult accessibility (U7)', () => {
   test.beforeEach(async ({ page }) => {
     // The consult is founders-only, at /quizv2.
@@ -216,6 +279,96 @@ test.describe('consult accessibility (U7)', () => {
     // Healthy ageing at 65+ is a different consult, not just bigger text.
     expect(seen).toEqual(expect.arrayContaining(['How active is a normal week?', 'Anything harder than it used to be?']))
     expect(seen).not.toContain('What are you training for?')
+  })
+
+  test('Pinpoint: axe on every screen, and every question fits a phone without scrolling', async ({ page }) => {
+    await page.setViewportSize(PHONES[0])
+    await page.getByRole('radio', { name: /^Pinpoint/ }).click()
+    await page.waitForTimeout(450)
+    const seen = new Set<string>()
+    const kinds: string[] = []
+    for (let i = 0; i < 70; i++) {
+      const h = (await heading(page).textContent()) ?? ''
+      if (/fully charged|your charge profile/i.test(h)) break
+      const scene = (await sceneId(page)) ?? ''
+      if (!PINPOINT.includes(scene)) {
+        if (!seen.has(h)) {
+          seen.add(h)
+          await audit(page, h)
+        }
+        await answerByKeyboard(page)
+        await nextByKeyboard(page)
+        continue
+      }
+      const kind = await pinpointScreen(page)
+      kinds.push(kind)
+      const key = `${scene} · ${kind} · ${h}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        await audit(page, key)
+        if (kind === 'probe' || kind === 'hunch') await fitsPhones(page, key)
+        // The leads sheet, once, over the round.
+        if (kind === 'hunch' && !seen.has('leads sheet')) {
+          seen.add('leads sheet')
+          await page.getByRole('button', { name: /^What I’m thinking/ }).click()
+          await expect(page.getByRole('dialog', { name: 'What I’m thinking' })).toBeVisible()
+          await audit(page, 'leads sheet')
+          await page.keyboard.press('Escape')
+          await expect(page.getByRole('dialog')).toHaveCount(0)
+        }
+      }
+      await answerPinpointScreen(page)
+      await page.waitForTimeout(450)
+    }
+    // A real round: an intro, questions, a hunch confirmed, and an ending.
+    expect(kinds).toEqual(expect.arrayContaining(['intro', 'probe', 'hunch', 'done']))
+    expect(seen.has('leads sheet')).toBe(true)
+    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await audit(page, 'fully charged, after Pinpoint')
+  })
+
+  test('Pinpoint in comfort mode passes axe too, and waits for Next', async ({ page }) => {
+    await page.getByRole('radio', { name: /^Pinpoint/ }).click()
+    await page.getByRole('button', { name: /^Healthy ageing/ }).click()
+    await nextByKeyboard(page)
+    await page.getByRole('listbox', { name: 'Age band' }).focus()
+    await page.keyboard.press('End')
+    await expect(page.locator('.amp-consult[data-comfort="true"]')).toHaveCount(1)
+    await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
+    await nextByKeyboard(page)
+    const seen = new Set<string>()
+    let held = false
+    for (let i = 0; i < 70; i++) {
+      const h = (await heading(page).textContent()) ?? ''
+      if (/fully charged|your charge profile/i.test(h)) break
+      const scene = (await sceneId(page)) ?? ''
+      if (!PINPOINT.includes(scene)) {
+        await answerByKeyboard(page)
+        await nextByKeyboard(page)
+        continue
+      }
+      const kind = await pinpointScreen(page)
+      const key = `${scene} · ${kind} · ${h}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        await audit(page, `${key} (comfort)`)
+      }
+      if (!held && kind === 'probe' && (await page.locator('[data-scene]').getByRole('radio', { name: 'That’s me', exact: true }).count())) {
+        // A tap picks; nothing moves until Next.
+        await page.locator('[data-scene]').getByRole('radio', { name: 'That’s me', exact: true }).click()
+        await page.waitForTimeout(600)
+        await expect(heading(page)).toHaveText(h)
+        await audit(page, `${key}, picked (comfort)`)
+        await page.locator('[data-scene]').getByRole('button', { name: 'Next', exact: true }).click()
+        await page.waitForTimeout(450)
+        held = true
+        continue
+      }
+      await answerPinpointScreen(page, true)
+      await page.waitForTimeout(450)
+    }
+    expect(held).toBe(true)
+    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
   })
 
   test('weight loss with a jab: the card opens, the safety check takes it from there, review shows it', async ({ page }) => {

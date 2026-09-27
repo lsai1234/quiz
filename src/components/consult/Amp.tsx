@@ -54,7 +54,9 @@ interface Props {
   reaction?: { name: AmpReaction; id: number } | null
 }
 
-const REACTION_NAMES = new Set(['amp-flex', 'amp-sun', 'amp-full'])
+const REACTION_NAMES = new Set(['amp-flex', 'amp-sun', 'amp-full', 'amp-eureka', 'amp-puzzled'])
+/** Reactions that move Amp, rather than glowing behind. */
+const MOVES = new Set(['flex', 'puzzled'])
 
 const SIZE = {
   sm: 'var(--amp-space-6)',
@@ -97,26 +99,26 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null }: Props) {
         transition: `${springTransition('transform')}, ${stateTransition('background-color', 'box-shadow')}`,
       }}
     >
-      {!rive && playing && playing.name !== 'flex' && (
+      {!rive && playing && !MOVES.has(playing.name) && (
         <span
           key={playing.id}
           aria-hidden
           className="absolute inset-0"
           style={{
             borderRadius: 'var(--amp-radius-pill)',
-            background: `radial-gradient(circle, ${playing.name === 'sun' ? 'var(--amp-sun-glow)' : 'var(--amp-accent-glow)'}, transparent 70%)`,
+            background: `radial-gradient(circle, ${playing.name === 'sun' ? 'var(--amp-sun-glow)' : playing.name === 'eureka' ? 'var(--amp-go-glow)' : 'var(--amp-accent-glow)'}, transparent 70%)`,
             animation: AMP_REACTION[playing.name],
           }}
         />
       )}
       <svg
-        key={playing?.name === 'flex' ? playing.id : 'still'}
+        key={playing && MOVES.has(playing.name) ? playing.id : 'still'}
         viewBox="0 0 24 24"
         width="58%"
         height="58%"
         aria-hidden
         fill="currentColor"
-        style={{ opacity: rive ? 0 : 1, transition: stateTransition('opacity'), animation: playing?.name === 'flex' ? AMP_REACTION.flex : undefined }}
+        style={{ opacity: rive ? 0 : 1, transition: stateTransition('opacity'), animation: playing && MOVES.has(playing.name) ? AMP_REACTION[playing.name] : undefined }}
       >
         <path d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z" />
       </svg>

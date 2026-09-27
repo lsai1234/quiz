@@ -75,13 +75,16 @@ describe('the route choice', () => {
   })
 })
 
+/** The round's counter line, as read. */
+const counter = () => document.querySelector('[data-counter]')?.textContent ?? ''
+
 describe('the round', () => {
   it('opens on what Amp has so far, then asks, with a counter you can trust', () => {
     render(<AmpConsult initial={at('pinpoint')} />)
     expect(heading()).toHaveTextContent('Here’s what I’ve got so far')
     expect(screen.getByRole('img', { name: /Amp’s leads so far/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Let’s go' }))
-    expect(screen.getByText(/^Question 1 · up to 20$/)).toBeInTheDocument()
+    expect(counter()).toMatch(/^Question 1 · (about \d+ more|nearly there)$/)
     expect(screen.queryByRole('button', { name: /^(Next|Continue)$/ })).toBeNull()
   })
 
@@ -89,11 +92,11 @@ describe('the round', () => {
     render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
     const first = heading().textContent
     answerPinpoint()
-    expect(screen.getByText(/^Question 2 · up to 20$|^I think I’ve got something$/)).toBeInTheDocument()
+    expect(counter()).toMatch(/^Question 2 · |^I think I’ve got something$/)
     expect(screen.getByText(/^(Thought so\.|Warmer\.|Interesting\.|Noted\.|Ah\. Not .*)$/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(heading().textContent).toBe(first)
-    expect(screen.getByText(/^Question 1 · up to 20$/)).toBeInTheDocument()
+    expect(counter()).toMatch(/^Question 1 · (about \d+ more|nearly there)$/)
   })
 
   it('puts a strong lead to you, and That’s me locks it in', () => {
@@ -133,12 +136,37 @@ describe('the round', () => {
   })
 })
 
+describe('the feel of it', () => {
+  it('says why it’s asking, in a line', () => {
+    render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Why I’m asking' }))
+    expect(screen.getByText(/^It (tells .* apart from .*|checks whether it’s .*)\.$/)).toBeInTheDocument()
+  })
+
+  it('crosses off what an answer rules out', () => {
+    const steps = [
+      { kind: 'probe' as const, probe: 'workday-daylight', answer: { main: 'not' }, stage: 'pinpoint' as const },
+      { kind: 'probe' as const, probe: 'dark-commute', answer: { main: 'not' }, stage: 'pinpoint' as const },
+    ]
+    render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps, stopped: false, started: true } })} />)
+    expect(screen.getByText('Indoor life', { selector: 'span' })).toHaveStyle({ textDecoration: 'line-through' })
+    expect(screen.getByText(/^Ah\. Not indoor life, then\.$/)).toBeInTheDocument()
+  })
+
+  it('leans in on a hunch, and lights up at That’s me', () => {
+    render(<AmpConsult initial={at('pinpoint', { pinpoint: { steps: [{ kind: 'probe', probe: 'eleven-pm', answer: { main: 'a' }, stage: 'follow-rest' }, { kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }], stopped: false, started: true } })} />)
+    expect(document.querySelector('[data-amp-state]')).toHaveAttribute('data-amp-state', 'hunch')
+    fireEvent.click(screen.getByRole('button', { name: 'That’s me' }))
+    expect(document.querySelector('[data-amp-state]')).toHaveAttribute('data-amp-reaction', 'eureka')
+  })
+})
+
 describe('follow-ups inside the core screens', () => {
   it('asks one after a section when it’s worth it, then moves on by itself', () => {
     render(<AmpConsult initial={at('daylight')} />)
     pressNext()
     expect(sceneOnScreen()).toBe('follow-rest')
-    expect(screen.getByText('Quick follow-up')).toBeInTheDocument()
+    expect(screen.getByText(/^Quick follow-up\./)).toBeInTheDocument()
     answerPinpoint()
     expect(sceneOnScreen()).toBe('caffeine')
   })

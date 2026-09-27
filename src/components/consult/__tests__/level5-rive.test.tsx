@@ -38,7 +38,7 @@ describe('U5 Amp in Rive: the contract', () => {
   it('gives every Amp state its own input value', () => {
     const codes = Object.values(AMP_STATE_CODE)
     expect(new Set(codes).size).toBe(codes.length)
-    expect(Object.keys(AMP_STATE_CODE).sort()).toEqual(['calm', 'charged', 'idle', 'reading', 'thinking', 'watching'])
+    expect(Object.keys(AMP_STATE_CODE).sort()).toEqual(['calm', 'charged', 'hunch', 'idle', 'reading', 'thinking', 'watching'])
   })
 
   it('keeps the animation file inside its budget', () => {
@@ -81,7 +81,8 @@ describe('U5 Amp in Rive: the handover', () => {
     await waitFor(() => expect(container.querySelector('[data-amp-drawn]')).toHaveAttribute('data-amp-drawn', 'rive'))
     rerender(<Amp state="idle" reaction={{ name: 'flex', id: 1 }} />)
     expect((globalThis as unknown as { lastReaction: unknown }).lastReaction).toEqual({ name: 'flex', id: 1 })
-    expect(AMP_RIVE.triggers).toEqual({ flex: 'flex', sun: 'sun', burst: 'burst' })
+    // Pinpoint added eureka (That's me) and puzzled (Not me): the .riv needs both.
+    expect(AMP_RIVE.triggers).toEqual({ flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled' })
   })
 
   it('stays with the still CSS Amp under reduced motion', async () => {

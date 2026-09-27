@@ -44,7 +44,8 @@ function probeView(probe: Probe, a: Answers, stage: PinpointStage, tells: string
   return {
     kind: 'probe',
     heading: probe.question,
-    hint: follow ? own ?? 'Quick follow-up. One tap, then I’ll move on.' : own,
+    // Comfort mode holds a tap until Next, so it doesn't promise to move on.
+    hint: follow ? own ?? (a.comfort ? 'Quick follow-up. Pick one, then Next.' : 'Quick follow-up. One tap, then I’ll move on.') : own,
     probe,
     text: probeText(probe, a),
     number,
@@ -65,7 +66,8 @@ export function pinpointView(stage: PinpointStage, a: Answers): PinpointView {
   const step: NextStep = nextStep(a, 'pinpoint')
   const inRound = pp.steps.some((s) => s.stage === 'pinpoint')
   if (!pp.started && !inRound && step.kind !== 'done') {
-    const left = questionsLeft(a)
+    // The estimate is what's left after the question on screen; here, none is yet.
+    const left = questionsLeft(a) + 1
     return { kind: 'intro', heading: 'Here’s what I’ve got so far', hint: `Let’s pin it down. Usually about ${left} question${left === 1 ? '' : 's'}, 20 at most.` }
   }
   switch (step.kind) {
@@ -101,6 +103,15 @@ export function pinpointReactionLine(stage: PinpointStage, a: Answers): string |
   if (last.kind !== 'probe') return undefined
   const before = { ...a, pinpoint: { ...(a.pinpoint ?? EMPTY_PINPOINT), steps: steps.slice(0, -1) } }
   return last.unsure ? 'No problem. Moving on.' : pinpointReaction(before, a)
+}
+
+/** Patterns the last step ruled out: the crossed-off moment. */
+export function justRuledOut(stage: PinpointStage, a: Answers): Lead[] {
+  const steps = a.pinpoint?.steps ?? []
+  const last = steps[steps.length - 1]
+  if (!last || last.stage !== stage) return []
+  const before = new Map(leads({ ...a, pinpoint: { ...(a.pinpoint ?? EMPTY_PINPOINT), steps: steps.slice(0, -1) } }).map((l) => [l.pattern.id, l]))
+  return leads(a).filter((l) => (l.state === 'out' || l.state === 'no') && before.get(l.pattern.id) && !['out', 'no'].includes(before.get(l.pattern.id)!.state))
 }
 
 /** The answers with one more step. */

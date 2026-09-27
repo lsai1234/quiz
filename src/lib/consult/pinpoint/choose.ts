@@ -12,7 +12,7 @@
 
 import { entropy, itemGain } from './model'
 import { PROBE_BY_ID } from './library'
-import { askableProbes, directSupport, eligiblePatterns, isIn, leads, probeSteps, touches, type Lead } from './leads'
+import { askableProbes, directSupport, eligiblePatterns, isIn, isPinned, leads, probeSteps, touches, type Lead } from './leads'
 import type { Answers, PatternId, PinpointArea, PinpointStage, Probe, ProbeFormat } from './types'
 
 export const LIMITS = {
@@ -157,11 +157,16 @@ export function roundDone(a: Answers): boolean {
   return nextStep(a, 'pinpoint').kind === 'done'
 }
 
-/** Roughly how many more questions the round needs, for "usually about 6". */
+/**
+ * Roughly how many more questions the round needs, for "about 3 more": one
+ * per lead still open between a maybe and a hunch. Checked against the
+ * simulated people, it's within two questions 95% of the time and near
+ * enough unbiased; two per lead, the first guess, ran seven high.
+ */
 export function questionsLeft(a: Answers): number {
   const asked = probeSteps(a.pinpoint).length
-  const unsettled = leads(a).filter((l) => isIn(l) && l.p > 0.15 && l.p < LIMITS.hunchAt).length
-  return Math.max(0, Math.min(LIMITS.questions - asked, Math.max(2, unsettled * 2)))
+  const open = leads(a).filter((l) => isIn(l) && !isPinned(l) && l.p > 0.25 && l.p < LIMITS.hunchAt).length
+  return Math.max(0, Math.min(LIMITS.questions - asked, open))
 }
 
 /** How settled Amp is, 0–1: drives the reticle. */

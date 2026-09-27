@@ -305,7 +305,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           amp={
             pView ? (
               <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
-                <Amp state={pView.kind === 'hunch' ? 'thinking' : ampState} lean={watching ?? 0} />
+                <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} />
               </Reticle>
             ) : (
               <Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} />

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 import { bucketAt, clockWords } from '@/lib/consult/pinpoint/define'
 import type { Probe } from '@/lib/consult/pinpoint/types'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
+import { Glyph } from '../Glyph'
 import { NextButton, QuietLink, radioArrows } from '../controls'
 
 /**
@@ -33,6 +34,25 @@ const eyebrow = {
   letterSpacing: 'var(--amp-tracking-data)',
   color: 'var(--amp-ink-3)',
 } as const
+
+/**
+ * A picked answer, as the core consult's selected tiles: accent fill, a glow,
+ * and a tick, so it reads at a glance and without colour. Comfort mode holds
+ * a pick until Next, so it has to be unmistakable.
+ */
+const PICKED = {
+  border: 'var(--amp-hairline) solid var(--amp-accent-line)',
+  background: 'var(--amp-accent-fill)',
+  boxShadow: 'var(--amp-glow-soft), inset 0 0 0 var(--amp-hairline) var(--amp-accent-line)',
+} as const
+
+function Tick() {
+  return (
+    <span aria-hidden className="inline-flex shrink-0" style={{ color: 'var(--amp-accent)' }}>
+      <Glyph name="check" size={18} />
+    </span>
+  )
+}
 
 /** The glass card a scenario sits on. */
 function Card({ scene, children, lean = 0, style }: { scene?: string; children: ReactNode; lean?: number; style?: React.CSSProperties }) {
@@ -72,18 +92,21 @@ function Answer({ label, on, primary, big, onClick, onKeyDown, tabIndex }: { lab
       onKeyDown={onKeyDown}
       className="amp-press flex w-full items-center justify-center text-center"
       style={{
+        gap: 'var(--amp-space-1)',
         minHeight: big ? 'calc(var(--amp-target) * 1.15)' : 'var(--amp-target)',
         padding: '0 var(--amp-space-2)',
         borderRadius: 'var(--amp-radius-tile)',
-        border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent-line)' : primary ? 'transparent' : 'var(--amp-edge-strong)'}`,
-        background: on ? 'var(--amp-accent-fill)' : primary ? 'var(--amp-accent)' : 'var(--amp-glass)',
-        color: on ? 'var(--amp-ink)' : primary ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink)',
+        border: `var(--amp-hairline) solid ${primary ? 'transparent' : 'var(--amp-edge-strong)'}`,
+        background: primary ? 'var(--amp-accent)' : 'var(--amp-glass)',
+        color: primary && !on ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink)',
         fontWeight: 'var(--amp-weight-bold)',
         fontSize: big ? 'var(--amp-text-body)' : 'var(--amp-text-meta)',
         whiteSpace: 'nowrap',
-        transition: stateTransition('background-color', 'border-color', 'color'),
+        transition: stateTransition('background-color', 'border-color', 'color', 'box-shadow'),
+        ...(on ? PICKED : {}),
       }}
     >
+      {on && <Tick />}
       {label}
     </button>
   )
@@ -206,13 +229,14 @@ export function HowOftenFormat({ probe, text, comfort, selected, pick }: FormatP
                 minHeight: comfort ? 'var(--amp-target)' : 'calc(var(--amp-target) * 1.5)',
                 padding: comfort ? '0 var(--amp-space-4)' : 'var(--amp-space-2) var(--amp-space-1)',
                 borderRadius: 'var(--amp-radius-tile)',
-                border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent-line)' : 'var(--amp-edge-strong)'}`,
-                background: on ? 'var(--amp-accent-fill)' : 'var(--amp-glass)',
+                border: 'var(--amp-hairline) solid var(--amp-edge-strong)',
+                background: 'var(--amp-glass)',
                 color: on ? 'var(--amp-ink)' : 'var(--amp-ink-2)',
                 fontSize: comfort ? 'var(--amp-text-body)' : 'var(--amp-text-data)',
                 lineHeight: 'var(--amp-leading-tight)',
                 textAlign: 'center',
-                transition: stateTransition('background-color', 'border-color', 'color'),
+                transition: stateTransition('background-color', 'border-color', 'color', 'box-shadow'),
+                ...(on ? PICKED : {}),
               }}
             >
               <span aria-hidden className="flex items-end" style={{ gap: 'calc(var(--amp-hairline) * 2)', height: 'var(--amp-space-5)' }}>
@@ -229,6 +253,11 @@ export function HowOftenFormat({ probe, text, comfort, selected, pick }: FormatP
                 ))}
               </span>
               {o.label}
+              {on && comfort && (
+                <span className="ml-auto inline-flex">
+                  <Tick />
+                </span>
+              )}
             </button>
           )
         })}
@@ -260,20 +289,27 @@ export function ThisOrThatFormat({ probe, comfort, selected, pick }: FormatProps
               role="radio"
               aria-checked={on}
               onClick={() => choose(o.key)}
-              className="amp-press w-full text-left"
+              className="amp-press flex w-full items-start justify-between text-left"
               style={{
+                gap: 'var(--amp-space-3)',
                 padding: 'var(--amp-space-4)',
                 borderRadius: 'var(--amp-radius-panel)',
-                border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent-line)' : 'var(--amp-edge-strong)'}`,
-                background: on ? 'var(--amp-accent-fill)' : 'var(--amp-glass-raised)',
-                boxShadow: on ? 'var(--amp-glow-soft)' : 'inset 0 var(--amp-hairline) 0 var(--amp-edge-top)',
+                border: 'var(--amp-hairline) solid var(--amp-edge-strong)',
+                background: 'var(--amp-glass-raised)',
+                boxShadow: 'inset 0 var(--amp-hairline) 0 var(--amp-edge-top)',
                 color: 'var(--amp-ink)',
                 fontSize: comfort ? 'var(--amp-text-lead)' : 'var(--amp-text-body)',
                 lineHeight: 'var(--amp-leading-body)',
                 transition: stateTransition('background-color', 'border-color', 'box-shadow'),
+                ...(on ? PICKED : {}),
               }}
             >
-              {o.label}
+              <span>{o.label}</span>
+              {on && (
+                <span className="inline-flex" style={{ marginTop: 'var(--amp-space-1)' }}>
+                  <Tick />
+                </span>
+              )}
             </button>
           )
         })}
