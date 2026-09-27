@@ -120,13 +120,6 @@ const server = http.createServer(async (req, res) => {
           if (FAIL.has('scan')) return fail('scan')
           return send(200, completion({ bedtime: '23:15', waketime: '06:45', quality: 'ok', weeks: 4, workouts: { gym: 8, cardio: 4, sport: 2 } }))
         // Pinpoint (plan v5 §7): each reply in the shape its schema asks for.
-        case 'amp_pinpoint_probe': {
-          if (FAIL.has('pinpoint')) return fail('pinpoint')
-          const p = schema.properties
-          if (p.text) return send(200, completion({ text: 'Amp (AI): picture a normal weekday, around the time it bites.' }))
-          if (p.a) return send(200, completion({ a: 'Amp (AI): this side sounds like you.', b: 'Amp (AI): that side sounds like you.' }))
-          return send(200, completion({ rows: Object.fromEntries(p.rows.required.map((k) => [k, `Amp (AI): ${k}, most weeks?`])) }))
-        }
         case 'amp_pinpoint_hunch':
           if (FAIL.has('pinpoint')) return fail('pinpoint')
           return send(200, completion({ line: 'Amp (AI): from what you told me, these fit together.' }))

@@ -409,22 +409,19 @@ describe('the AI (phase 5)', () => {
 
   beforeEach(() => resetPinpointAi())
 
-  it('words the question for the person when the words are in hand, never swapping them in later', async () => {
+  it('never rewords the questions: they’re always the script', async () => {
     const calls = fakeAi()
     render(<AmpConsult ai initial={at('pinpoint')} />)
     await settle()
-    // Asked ahead, on the intro: the round's first question.
-    expect(calls.some((c) => c.kind === 'probe')).toBe(true)
-    // Only the coarse picture goes: no health, no notes.
-    expect(Object.keys(calls[0].person as object).sort()).toEqual(['age', 'comfort', 'energy', 'goals'])
     fireEvent.click(screen.getByRole('button', { name: 'Let’s go' }))
-    expect(screen.getAllByText(/^Amp’s own words/).length).toBeGreaterThan(0)
+    await settle()
+    expect(calls.some((c) => c.kind === 'probe')).toBe(false)
+    expect(screen.queryByText(/^Amp’s own words/)).toBeNull()
   })
 
-  it('keeps the scripted words without the AI', () => {
+  it('offers no typing without the AI', () => {
     fakeAi()
-    render(<AmpConsult ai={false} initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
-    expect(screen.queryByText(/^Amp’s own words/)).toBeNull()
+    render(<AmpConsult ai={false} initial={at('pinpoint')} />)
     expect(screen.queryByRole('button', { name: 'Or tell me about a bad day' })).toBeNull()
   })
 

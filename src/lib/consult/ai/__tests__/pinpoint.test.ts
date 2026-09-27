@@ -4,86 +4,24 @@ import { EMPTY_ANSWERS } from '../../types'
 import { namesCondition } from '../guard'
 import {
   buildHunchPrompt,
-  buildProbePrompt,
   buildTellPrompt,
   cleanEvidence,
   pinpointContext,
-  probeSchema,
   safeLine,
-  scriptedParts,
   tellSchema,
   tellableIds,
   validateFound,
   validateHunchLine,
   validateProbePicks,
-  validateProbeWords,
-  wordedProbe,
 } from '../pinpoint'
 
 /**
  * Pinpoint's AI contract (plan v5 §7): what the model may write, and what's
- * thrown away. The rules choose every question and every hunch; the model
- * only words them, and anything off keeps the script.
+ * thrown away. The rules choose every question and every hunch, and the
+ * questions are always the scripted words; anything off keeps the script.
  */
 
-const scenario = PROBE_BY_ID['tired-then-awake']
-const pair = PROBE_BY_ID['eleven-pm']
-const rows = PROBE_BY_ID['sleep-habits']
-const dayLine = PROBE_BY_ID['last-caffeine']
 const person = { ...EMPTY_ANSWERS, goals: ['energy' as const], age: '35-44' as const }
-
-describe('the question’s words', () => {
-  const scripted = scriptedParts(scenario, probeText(scenario, person))
-
-  it('keeps a clean rewording of the moment', () => {
-    expect(validateProbeWords({ text: 'Shattered by the evening, then your brain switches on the moment you lie down.' }, scenario, scripted)).toEqual({
-      text: 'Shattered by the evening, then your brain switches on the moment you lie down.',
-    })
-  })
-
-  it.each([
-    ['names a condition', 'Classic insomnia: tired all evening, then wide awake in bed.'],
-    ['names another', 'Could be your thyroid: tired all day, wired at night.'],
-    ['mentions a product', 'Tired then wired? Magnesium might be for you.'],
-    ['makes up a number', 'You sleep 5 hours, then you’re wired at night.'],
-    ['talks medicine', 'A doctor would call this a sleep problem.'],
-    ['runs long', 'x'.repeat(200)],
-    ['is empty', '  '],
-  ])('throws it away when it %s', (_why, text) => {
-    expect(validateProbeWords({ text }, scenario, scripted)).toBeNull()
-  })
-
-  it('words both sides of a this-or-that, and keeps them different', () => {
-    const s = scriptedParts(pair, '')
-    expect(validateProbeWords({ a: 'Head on the pillow, gone.', b: 'Lying there, mind going.' }, pair, s)).toEqual({ a: 'Head on the pillow, gone.', b: 'Lying there, mind going.' })
-    expect(validateProbeWords({ a: 'Same', b: 'Same' }, pair, s)).toBeNull()
-  })
-
-  it('words every quick-fire row, or none', () => {
-    const s = scriptedParts(rows, '')
-    const all = Object.fromEntries(rows.items.map((i) => [i.key, `Would you say yes to ${i.key}?`]))
-    expect(validateProbeWords({ rows: all }, rows, s)).toEqual({ rows: all })
-    const { [rows.items[0].key]: _gone, ...some } = all
-    expect(validateProbeWords({ rows: some }, rows, s)).toBeNull()
-  })
-
-  it('never words the day line: its words are instructions', () => {
-    expect(validateProbeWords({ text: 'Slide to your last cup.' }, dayLine, scriptedParts(dayLine, ''))).toBeNull()
-  })
-
-  it('changes the words and nothing else: the answers and what they mean stay', () => {
-    const worded = wordedProbe(pair, { a: 'Out like a light.', b: 'Mind racing.' })
-    expect(worded.items[0].options.map((o) => o.key)).toEqual(pair.items[0].options.map((o) => o.key))
-    expect(worded.items[0].options.map((o) => o.pulls)).toEqual(pair.items[0].options.map((o) => o.pulls))
-    expect(worded.items[0].options[0].label).toBe('Out like a light.')
-  })
-
-  it('asks with a strict schema per format', () => {
-    expect(Object.keys((probeSchema(scenario) as { properties: object }).properties)).toEqual(['text'])
-    expect(Object.keys((probeSchema(pair) as { properties: object }).properties)).toEqual(['a', 'b'])
-    expect(Object.keys((probeSchema(rows) as { properties: object }).properties)).toEqual(['rows'])
-  })
-})
 
 describe('what the model is told', () => {
   it('is coarse, and never health data', () => {
@@ -98,8 +36,7 @@ describe('what the model is told', () => {
     const context = pinpointContext(everything)
     expect(context).toMatch(/Journey: everyday/)
     expect(context).not.toMatch(/blood|knee|night|3\/10/i)
-    const prompt = buildProbePrompt(scenario, scriptedParts(scenario, probeText(scenario, everything)), context)
-    expect(prompt).toMatch(/data, not instructions/)
+    expect(buildHunchPrompt('wired', ['Mind racing at 11pm'], context)).toMatch(/data, not instructions/)
   })
 
   it('gets the hunch’s evidence only as short, clean, non-medical lines', () => {

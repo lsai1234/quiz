@@ -14,23 +14,18 @@ import {
   validateHints,
   PINPOINT_SYSTEM_PROMPT,
   TELL_SYSTEM_PROMPT,
-  WORDED_FORMATS,
   buildFoundPrompt,
   buildHunchPrompt,
-  buildProbePrompt,
   buildTellPrompt,
   cleanEvidence,
   pinpointContext,
-  probeSchema,
-  scriptedParts,
   tellSchema,
   tellableIds,
   validateFound,
   validateHunchLine,
   validateProbePicks,
-  validateProbeWords,
 } from '@/lib/consult/ai/pinpoint'
-import { PATTERN_BY_ID, PROBE_BY_ID } from '@/lib/consult/pinpoint/library'
+import { PATTERN_BY_ID } from '@/lib/consult/pinpoint/library'
 import { probeText } from '@/lib/consult/pinpoint/screen'
 import type { PatternId } from '@/lib/consult/pinpoint/types'
 import { AGE_LABEL, GOAL_LABEL } from '@/lib/consult/summary'
@@ -39,7 +34,6 @@ import { EMPTY_ANSWERS, type AgeBand, type ConsultAnswers, type ConsultGoal } fr
 /**
  * POST /api/consult/pinpoint — Pinpoint's AI (plan v5 §7).
  *
- *   { kind: 'probe', probe, person }            → { words }
  *   { kind: 'hunch', pattern, evidence, person } → { line }
  *   { kind: 'found', pinpointed, partly, person } → { summary }
  *   { kind: 'tell', text, candidates, person }  → { picks }
@@ -52,7 +46,8 @@ import { EMPTY_ANSWERS, type AgeBand, type ConsultAnswers, type ConsultGoal } fr
  * health details and moderated first, and is never stored or logged.
  *
  * Wording is cached here by its prompt: many people share the same coarse
- * picture, so the same question for the same kind of person is asked once.
+ * picture and evidence, so the same line is asked for once. The questions
+ * themselves are never reworded: they're always the scripted words.
  * Every failure is `{ fallback: true }`: the script stands.
  */
 
@@ -129,18 +124,6 @@ async function handle(req: Request) {
 
   try {
     switch (kind) {
-      case 'probe': {
-        const probe = typeof body.probe === 'string' ? PROBE_BY_ID[body.probe] : undefined
-        if (!probe || !WORDED_FORMATS.has(probe.format)) return NextResponse.json(FALLBACK)
-        const scripted = scriptedParts(probe, probeText(probe, person))
-        const prompt = buildProbePrompt(probe, scripted, context)
-        const key = `probe|${prompt}`
-        if (CACHE.has(key)) return NextResponse.json({ words: CACHE.get(key) })
-        const words = validateProbeWords(await ask(client, 'amp_pinpoint_probe', probeSchema(probe), PINPOINT_SYSTEM_PROMPT, prompt, SERVER_BUDGET_MS, 0.6), probe, scripted)
-        if (!words) return NextResponse.json(FALLBACK)
-        remember(key, words)
-        return NextResponse.json({ words })
-      }
       case 'hunch': {
         const pattern = typeof body.pattern === 'string' && body.pattern in PATTERN_BY_ID ? (body.pattern as PatternId) : null
         const evidence = cleanEvidence(body.evidence)

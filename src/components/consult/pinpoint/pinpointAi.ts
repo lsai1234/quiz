@@ -2,27 +2,26 @@
 
 import { useEffect, useRef } from 'react'
 import { COPY_BUDGET_MS } from '@/lib/consult/ai/copy'
-import { validateHints, validateProbeWords, pinpointContext, scriptedParts, safeLine, PINPOINT_LIMITS, validateProbePicks, type ProbePick, type ProbeWords } from '@/lib/consult/ai/pinpoint'
+import { validateHints, pinpointContext, safeLine, PINPOINT_LIMITS, validateProbePicks, type ProbePick } from '@/lib/consult/ai/pinpoint'
 import { screenText } from '@/lib/consult/ai/guard'
 import { nextStep } from '@/lib/consult/pinpoint/choose'
 import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { hunchEvidence } from '@/lib/consult/pinpoint/playback'
 import { PATTERN_BY_ID, PROBE_BY_ID } from '@/lib/consult/pinpoint/library'
 import { eligiblePatterns, isIn, leads, type Lead } from '@/lib/consult/pinpoint/leads'
-import { pinpointView, probeText, withStep } from '@/lib/consult/pinpoint/screen'
-import type { PatternId, PinpointStage, Probe } from '@/lib/consult/pinpoint/types'
+import { pinpointView, withStep } from '@/lib/consult/pinpoint/screen'
+import type { PatternId, PinpointStage } from '@/lib/consult/pinpoint/types'
 import type { ConsultAnswers, NoteHint, SceneId } from '@/lib/consult/types'
 
 /**
  * Pinpoint's AI in the browser (plan v5 §7).
  *
- * Words are asked for ahead of time and used only if they're in hand when the
- * screen appears, never swapped in under someone's eyes. The round's next
- * question depends on the answer to this one, so for the answers at either
- * end the question each would lead to is worked out and its words asked for
- * now; the middle answers mostly lead to one of the same, and the server
- * caches by the coarse picture, so that costs little. Anything late, failed or rejected
- * leaves the scripted words.
+ * The questions are always the scripted words. What the AI writes here is
+ * the hunch's line and "What I found", both asked for ahead of time and used
+ * only if they're in hand when the screen appears, never swapped in under
+ * someone's eyes: for the answers at either end of the question on screen,
+ * the screen each would lead to is worked out, and if it's a hunch its line
+ * is asked for now. Anything late, failed or rejected leaves the script.
  *
  * The browser validates everything again: it doesn't trust the network.
  */
@@ -47,34 +46,20 @@ async function post(body: Record<string, unknown>, ms = COPY_BUDGET_MS): Promise
 
 /* ── The cache ───────────────────────────────────────────────────────────── */
 
-/** Per page: words by what they depend on. `null` is a miss, and isn't asked again. */
-const words = new Map<string, ProbeWords | null>()
+/** Per page: lines by what they depend on. `null` is a miss, and isn't asked again. */
 const lines = new Map<string, string | null>()
 const pending = new Set<string>()
 let off = false
 
 /** The server has no AI, or the tests want a clean slate. */
 export function resetPinpointAi(): void {
-  words.clear()
   lines.clear()
   pending.clear()
   off = false
 }
 
-const probeKey = (probe: Probe, a: ConsultAnswers) => `${probe.id}|${pinpointContext(a)}|${probeText(probe, a)}`
 const hunchKey = (pattern: PatternId, evidence: string[], a: ConsultAnswers) => `hunch|${pattern}|${evidence.join('|')}|${pinpointContext(a)}`
 const foundKey = (ids: PatternId[], partly: PatternId[], a: ConsultAnswers) => `found|${ids.join(',')}|${partly.join(',')}|${pinpointContext(a)}`
-
-function fetchProbe(probe: Probe, a: ConsultAnswers): void {
-  const k = probeKey(probe, a)
-  if (off || words.has(k) || pending.has(k)) return
-  pending.add(k)
-  void post({ kind: 'probe', probe: probe.id, person: person(a) }).then((data) => {
-    pending.delete(k)
-    if (data?.unavailable) off = true
-    words.set(k, data?.words ? validateProbeWords(data.words, probe, scriptedParts(probe, probeText(probe, a))) : null)
-  })
-}
 
 function fetchHunch(lead: Lead, a: ConsultAnswers): void {
   const evidence = hunchEvidence(lead)
@@ -105,11 +90,6 @@ function fetchFound(a: ConsultAnswers): void {
 
 /* ── Reading it ──────────────────────────────────────────────────────────── */
 
-/** A question's words, if they're in hand. */
-export function probeWords(probe: Probe, a: ConsultAnswers): ProbeWords | null {
-  return words.get(probeKey(probe, a)) ?? null
-}
-
 /** The hunch's line, if it's in hand. */
 export function hunchLine(lead: Lead, a: ConsultAnswers): string | null {
   return lines.get(hunchKey(lead.pattern.id, hunchEvidence(lead), a)) ?? null
@@ -128,15 +108,14 @@ export function foundLine(a: ConsultAnswers): string | null {
 /** Whatever a stage would show next, asked for now. */
 function ahead(stage: PinpointStage, a: ConsultAnswers): void {
   const step = nextStep(a, stage)
-  if (step.kind === 'probe') fetchProbe(step.probe, a)
-  else if (step.kind === 'hunch') fetchHunch(step.lead, a)
+  if (step.kind === 'hunch') fetchHunch(step.lead, a)
   else if (step.kind === 'done') fetchFound(a)
 }
 
 /**
- * On every change: the question on screen, and for its two end answers the
- * screen each would lead to. On a core screen, the follow-up that
- * comes next. At the end, "What I found".
+ * On every change: for the two end answers of the question on screen, the
+ * hunch each would lead to. On a hunch, the one after either verdict. At
+ * the end, "What I found".
  */
 export function usePinpointAi(a: ConsultAnswers, sceneId: SceneId, next: SceneId | null, enabled: boolean): void {
   const last = useRef('')
@@ -152,11 +131,9 @@ export function usePinpointAi(a: ConsultAnswers, sceneId: SceneId, next: SceneId
     const view = pinpointView(stage, a)
     if (view.kind === 'intro') ahead('pinpoint', a)
     if (view.kind === 'probe') {
-      fetchProbe(view.probe, a)
       if (stage === 'pinpoint' && view.probe.items.length === 1) {
         // The two ends of the answers ("That's me", "Not me") cover the
-        // branches the round usually takes; the middle ones mostly land on
-        // one of the same questions. Keeps the calls near one per question.
+        // branches the round usually takes to a hunch.
         const options = view.probe.items[0].options
         for (const o of [options[0], options[options.length - 1]]) {
           const after = { ...a, pinpoint: withStep(a, { kind: 'probe', probe: view.probe.id, answer: { [view.probe.items[0].key]: o.key }, stage }) }

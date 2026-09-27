@@ -12,8 +12,8 @@ import { NextButton, QuietLink } from '../controls'
 import type { SceneProps } from '../scenes/registry'
 import { ProbeFormat, type ProbeAnswer } from './formats'
 import { HunchCard, LeadBars, LeadsSheet, PatternMap, Plain } from './parts'
-import { wordedProbe, TELLABLE_FORMATS, type ProbePick, type ProbeWords } from '@/lib/consult/ai/pinpoint'
-import { foundLine, probeWords, tellCandidates } from './pinpointAi'
+import { TELLABLE_FORMATS, type ProbePick } from '@/lib/consult/ai/pinpoint'
+import { foundLine, tellCandidates } from './pinpointAi'
 import { TellSheet } from './TellSheet'
 import { PATTERN_BY_ID } from '@/lib/consult/pinpoint/library'
 
@@ -60,10 +60,6 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
   const write = (next: typeof pp) => onAnswer({ pinpoint: next })
 
   const viewKey = view.kind === 'probe' ? `probe:${view.probe.id}` : view.kind === 'hunch' ? `hunch:${view.lead.pattern.id}` : view.kind
-  // The AI's words for this question, only if they were in hand when it appeared.
-  const locked = useRef<{ key: string; words: ProbeWords | null }>({ key: '', words: null })
-  if (locked.current.key !== viewKey) locked.current = { key: viewKey, words: ai && view.kind === 'probe' ? probeWords(view.probe, answers) : null }
-  const aiWords = locked.current.words
   const first = useRef(true)
   useEffect(() => {
     setPending(null)
@@ -154,8 +150,8 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
         <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
           <ProbeFormat
             key={view.probe.id}
-            probe={wordedProbe(view.probe, aiWords)}
-            text={aiWords?.text ?? view.text}
+            probe={view.probe}
+            text={view.text}
             comfort={comfort}
             selected={pending ?? answered}
             pick={(p) => (holding ? setPending(p) : commit(p))}

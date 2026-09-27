@@ -18,34 +18,25 @@ beforeEach(() => {
 })
 
 describe('/api/consult/pinpoint', () => {
-  it('words a question, checked, and asks once for the same kind of person', async () => {
-    create.mockResolvedValue(reply({ text: 'Shattered by nine, then wide awake the second your head hits the pillow.' }))
-    // "nine" isn't in the script: a made-up number, so the script stands.
+  it('never rewords a question: the questions are always the script', async () => {
     expect(await (await call({ kind: 'probe', probe: 'tired-then-awake', person })).json()).toEqual({ fallback: true })
-    create.mockResolvedValue(reply({ text: 'Tired all evening, then wide awake in bed.' }))
-    expect(await (await call({ kind: 'probe', probe: 'tired-then-awake', person: { ...person, goals: ['sleep'] } })).json()).toEqual({ words: { text: 'Tired all evening, then wide awake in bed.' } })
-    const calls = create.mock.calls.length
-    await call({ kind: 'probe', probe: 'tired-then-awake', person: { ...person, goals: ['sleep'] } })
-    expect(create.mock.calls.length).toBe(calls)
-  })
-
-  it('keeps the script when the model names a condition', async () => {
-    create.mockResolvedValue(reply({ text: 'Insomnia much? Tired, then wide awake.' }))
-    expect(await (await call({ kind: 'probe', probe: 'tired-then-awake', person: { ...person, age: '45-54' } })).json()).toEqual({ fallback: true })
-  })
-
-  it('resolves every question itself: unknown ids and the day line get nothing', async () => {
-    expect(await (await call({ kind: 'probe', probe: 'made-up', person })).json()).toEqual({ fallback: true })
-    expect(await (await call({ kind: 'probe', probe: 'last-caffeine', person })).json()).toEqual({ fallback: true })
     expect(create).not.toHaveBeenCalled()
   })
 
   it('tells the model the coarse picture only', async () => {
-    create.mockResolvedValue(reply({ text: 'Tired, then wired.' }))
-    await call({ kind: 'probe', probe: 'snooze', person: { ...person, circuit: { flags: ['pregnancy'] }, notes: { sleep: 'night shifts' } } })
+    create.mockResolvedValue(reply({ line: 'Awake at midnight.' }))
+    await call({ kind: 'hunch', pattern: 'wired', evidence: ['Awake at midnight'], person: { ...person, circuit: { flags: ['pregnancy'] }, notes: { sleep: 'night shifts' } } })
     const prompt = create.mock.calls[0][0].messages[1].content as string
     expect(prompt).not.toMatch(/pregnan|night shift/i)
     expect(prompt).toMatch(/data, not instructions/)
+  })
+
+  it('asks once for the same line for the same kind of person', async () => {
+    create.mockResolvedValue(reply({ line: 'Wide awake at bedtime, most nights.' }))
+    await call({ kind: 'hunch', pattern: 'wired', evidence: ['Wide awake at bedtime'], person: { ...person, age: '55-64' } })
+    const calls = create.mock.calls.length
+    await call({ kind: 'hunch', pattern: 'wired', evidence: ['Wide awake at bedtime'], person: { ...person, age: '55-64' } })
+    expect(create.mock.calls.length).toBe(calls)
   })
 
   it('writes the hunch line from the evidence, and never a condition', async () => {
@@ -84,7 +75,7 @@ describe('/api/consult/pinpoint', () => {
 
   it('says so when there is no key', async () => {
     delete process.env.OPENAI_API_KEY
-    expect(await (await call({ kind: 'probe', probe: 'tired-then-awake', person })).json()).toEqual({ unavailable: true })
+    expect(await (await call({ kind: 'hunch', pattern: 'wired', evidence: ['Up at 11pm'], person })).json()).toEqual({ unavailable: true })
   })
 })
 
