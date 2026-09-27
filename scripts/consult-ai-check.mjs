@@ -3,9 +3,11 @@
  * Every AI feature of the Amp Consult, end to end, in a real browser.
  *
  * Drives /quizv2 as a founder: the Founder preview and its live AI test, AI
- * wording on the first scene, "Tell Amp more" typed and spoken, the tracker
- * read, "What's this?" follow-ups, the shelf scan, read aloud, a finished
- * consult, and the hub's AI log. Prints what each one did; exits non-zero on
+ * wording on the first scene, "Tell Amp more" typed (filled in, then on to the
+ * next screen), "What's this?" follow-ups, a finished consult, Pinpoint's
+ * worded questions, hunch line and "Tell me about a bad day", and the hub's
+ * AI log. Voice, the tracker read and the shelf scan are switched off for now
+ * (features.ts); the run checks they aren't offered. Prints what each one did; exits non-zero on
  * the first failure.
  *
  * Against the fake OpenAI (no key, no cost, works offline):
@@ -84,91 +86,63 @@ await p.getByRole('option', { name: '35–44' }).click()
 await p.getByRole('radio', { name: 'Male', exact: true }).click()
 await next()
 
-// 5. Training leads with "Tell Amp": typed.
-const lead = p.getByRole('button', { name: /Tell Amp how your weeks usually go/ })
-log('training lead card:', await lead.count())
+// 5. Training leads with "Tell Amp": typed, filled in, and on to the next screen.
+const lead = p.getByRole('button', { name: /Tell Amp/ }).first()
+await p.waitForTimeout(800)
+log('on:', await h1(), '| training lead card:', await lead.count(), '|', (await p.locator('[data-scene] button').first().textContent())?.slice(0, 80))
 await shot('03-training-lead')
 await lead.click()
 await p.getByRole('textbox').fill('gym monday and thursday, football tuesdays')
+const before = await h1()
 await p.getByRole('button', { name: 'Send to Amp' }).click()
-await p.getByText('Amp picked up').waitFor({ timeout: 15000 })
-log('picked up:', await p.getByRole('dialog').locator('li span.flex-1').allInnerTexts())
+await p.getByText(/^Got it: /).waitFor({ timeout: 15000 })
+log('typed, filled in:', await p.getByText(/^Got it: /).textContent())
 await shot('04-tell-more')
-await p.getByRole('button', { name: /^Add (all|it)$/ }).click()
-log('training from words:', await p.getByText(/a week ·/).textContent())
-
-// 6. Voice: hold the mic.
-await p.getByRole('button', { name: /Tell Amp how your weeks usually go/ }).click()
-const mic = p.getByRole('button', { name: /Hold to talk/ })
-const box = await mic.boundingBox()
-await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-await p.mouse.down()
-await p.waitForTimeout(1500)
-log('listening:', await p.getByRole('button', { name: /Listening/ }).count(), '| waveform bars:', await p.locator('[data-waveform] > span').count())
-await shot('05-voice-listening')
-await p.mouse.up()
-await p.waitForFunction(() => document.querySelector('textarea')?.value.length > 0, null, { timeout: 15000 })
-log('voice text in box:', await p.getByRole('textbox').inputValue())
-await shot('06-voice-text')
-await p.keyboard.press('Escape')
-
-// 7. Tracker read on training.
-await p.getByRole('button', { name: 'Fill from my tracker' }).click()
-await p.getByRole('button', { name: 'Whoop' }).click()
-await p.getByRole('checkbox').click()
-const [c1] = await Promise.all([p.waitForEvent('filechooser'), p.getByRole('button', { name: /Take or choose a photo/ }).click()])
-await c1.setFiles(PHOTO)
-await p.getByRole('button', { name: 'Use these' }).waitFor({ timeout: 20000 })
-log('tracker cards:', await p.locator('li span.flex-1').allInnerTexts())
-await p.getByRole('button', { name: 'Use these' }).click()
-log('training now:', await p.getByText(/a week ·/).textContent())
-await p.getByRole('radio', { name: 'Steady' }).click()
-await next()
-
-// energy
-await p.getByRole('slider').press('End')
-await next()
-// sleep: prefilled; What's this? follow-up
-log('sleep bedtime prefilled:', await p.getByRole('slider', { name: 'Bedtime' }).getAttribute('aria-valuetext'))
-await p.getByRole('button', { name: /What’s how you sleep/ }).click()
-await p.getByRole('textbox').fill('does a nap count?')
-await p.getByRole('button', { name: 'Ask' }).click()
-await p.getByText(/From the approved text/).waitFor({ timeout: 15000 })
-log('what’s this follow-up answered')
-await shot('06-whats-this')
-await p.getByRole('radio', { name: 'OK' }).click()
-await next()
-
-// through to the shelf
-for (let i = 0; i < 6; i++) {
-  if (await p.getByRole('button', { name: 'Scan my shelf instead' }).count()) break
-  if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
-  else if (await p.getByRole('radio', { name: /^3–5 days/ }).count()) await p.getByRole('radio', { name: /^3–5 days/ }).click()
-  else if (await p.getByRole('slider', { name: 'Daylight' }).count()) await p.getByRole('slider', { name: 'Daylight' }).press('End')
-  else if (await p.getByRole('button', { name: /^Eggs/ }).count()) await p.getByRole('button', { name: /^Eggs/ }).click()
-  await next().catch(() => {})
-  await p.waitForTimeout(400)
+// It moves on by itself only if that answered the whole question; the
+// builder's week also asks how hard sessions feel, which the words didn't say.
+const moved = await p.waitForFunction((was) => document.querySelector('h1')?.textContent !== was, before, { timeout: 4000 }).then(() => true, () => false)
+if (moved) log('moved on by itself to:', await h1())
+else {
+  log('stayed, still to answer:', await p.getByRole('radiogroup', { name: /How hard/ }).count() ? 'how hard sessions feel' : 'something on screen')
+  if (await p.getByRole('radio', { name: 'Steady' }).count()) await p.getByRole('radio', { name: 'Steady' }).click()
+  await next()
 }
 
-// 7. Shelf scan.
-await p.getByRole('button', { name: 'Scan my shelf instead' }).click()
-await p.getByRole('checkbox').click()
-const [c2] = await Promise.all([p.waitForEvent('filechooser'), p.getByRole('button', { name: /Take or choose a photo/ }).click()])
-await c2.setFiles(PHOTO)
-await p.getByRole('button', { name: 'Use these' }).waitFor({ timeout: 20000 })
-await shot('07-shelf-cards')
-await p.getByRole('button', { name: 'Use these' }).click()
-log('shelf pressed:', await p.locator('[aria-pressed="true"]').allInnerTexts())
+// 6. Switched off for now (features.ts): voice, the tracker read, the shelf scan.
+log('voice offered:', await p.getByRole('button', { name: /Hold to talk|Talk/ }).count(), '| tracker offered:', await p.getByRole('button', { name: 'Fill from my tracker' }).count())
 
-// (Read aloud needs comfort mode, which switches itself on for 65 and over;
-// it's covered by the unit tests rather than by this run, which answers as a
-// 35-year-old.)
+// Through to the circuit check, as a 35-year-old; "What's this?" on sleep on the way.
+for (let i = 0; i < 16; i++) {
+  if (await p.getByRole('radio', { name: 'None of these' }).count()) break
+  const whats = p.getByRole('button', { name: /What’s how you sleep/ })
+  if (await whats.count()) {
+    await whats.click()
+    await p.getByRole('textbox').fill('does a nap count?')
+    await p.getByRole('button', { name: 'Ask' }).click()
+    await p.getByText(/From the approved text/).waitFor({ timeout: 15000 })
+    log('what’s this follow-up answered')
+    await shot('06-whats-this')
+    await p.keyboard.press('Escape')
+  }
+  if (await p.getByRole('radio', { name: 'Steady' }).count()) await p.getByRole('radio', { name: 'Steady' }).click()
+  if (await p.getByRole('radio', { name: /^Build muscle/ }).count()) await p.getByRole('radio', { name: /^Build muscle/ }).click()
+  if (await p.getByRole('slider', { name: 'Afternoon energy' }).count()) await p.getByRole('slider', { name: 'Afternoon energy' }).press('End')
+  if (await p.getByRole('radio', { name: 'OK', exact: true }).count()) await p.getByRole('radio', { name: 'OK', exact: true }).click()
+  if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
+  if (await p.getByRole('radio', { name: /^3–5 days/ }).count()) await p.getByRole('radio', { name: /^3–5 days/ }).click()
+  if (await p.getByRole('slider', { name: 'Daylight' }).count()) await p.getByRole('slider', { name: 'Daylight' }).press('End')
+  if (await p.getByRole('button', { name: /^Eggs/ }).count()) await p.getByRole('button', { name: /^Eggs/ }).click()
+  if (await p.getByRole('button', { name: 'Nothing yet' }).count()) {
+    log('shelf scan offered:', await p.getByRole('button', { name: 'Scan my shelf instead' }).count())
+    await p.getByRole('button', { name: 'Nothing yet' }).click()
+  }
+  await next().catch(() => {})
+  await p.waitForTimeout(500)
+}
 
-// finish: circuit → review → analysis → handoff
-await next()
-await p.waitForTimeout(400)
-await p.getByRole('checkbox').first().click()
-await p.getByRole('switch', { name: 'None of these' }).click()
+// finish: circuit (the answer, then the consent under it) → review → analysis → handoff
+await p.getByRole('radio', { name: 'None of these' }).click()
+await p.getByRole('checkbox', { name: /^Use my answers here/ }).click()
 await next()
 await p.waitForTimeout(400)
 log('review shows:', await h1())
@@ -177,6 +151,70 @@ await p.getByRole('button', { name: 'See my stacks' }).waitFor({ timeout: 20000 
 log('fully charged:', await h1())
 await shot('08-charged')
 await p.waitForTimeout(1500)
+
+// 8. Pinpoint (plan v5 §7): worded questions, a hunch line, a bad day read into answers.
+const pinpointReplies = []
+p.on('response', async (r) => {
+  if (!r.url().endsWith('/api/consult/pinpoint')) return
+  try {
+    const body = await r.json()
+    pinpointReplies.push(Object.keys(body)[0])
+  } catch {}
+})
+await p.goto(BASE + '/quizv2', { waitUntil: 'networkidle' })
+await p.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
+await p.goto(BASE + '/quizv2', { waitUntil: 'networkidle' })
+await p.getByRole('radio', { name: /^Pinpoint/ }).click()
+await p.getByRole('button', { name: /^Energy/ }).click()
+await next()
+await p.getByRole('option', { name: '35–44' }).click()
+await p.getByRole('radio', { name: 'Male', exact: true }).click()
+await next()
+for (let i = 0; i < 30; i++) {
+  if (await p.getByRole('button', { name: 'Or tell me about a bad day' }).count()) break
+  const scene = await p.locator('[data-scene]').getAttribute('data-scene')
+  if (['follow-move', 'follow-rest', 'follow-fuel'].includes(scene)) {
+    await p.locator('[data-scene] [role="radio"]').first().click()
+    await p.waitForTimeout(600)
+    continue
+  }
+  if (await p.getByRole('button', { name: /^Monday:/ }).count()) {
+    await p.getByRole('button', { name: /^Monday:/ }).click()
+    await p.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
+  }
+  if (await p.getByRole('slider', { name: 'Afternoon energy' }).count()) await p.getByRole('slider', { name: 'Afternoon energy' }).press('Home')
+  if (await p.getByRole('radio', { name: 'OK', exact: true }).count()) await p.getByRole('radio', { name: 'OK', exact: true }).click()
+  if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
+  if (await p.getByRole('radio', { name: /^Rarely/ }).count()) await p.getByRole('radio', { name: /^Rarely/ }).click()
+  if (await p.getByRole('button', { name: /^Eggs/ }).count()) await p.getByRole('button', { name: /^Eggs/ }).click()
+  if (await p.getByRole('button', { name: 'Nothing yet' }).count()) await p.getByRole('button', { name: 'Nothing yet' }).click()
+  await next().catch(() => {})
+  await p.waitForTimeout(500)
+}
+await p.getByRole('button', { name: 'Or tell me about a bad day' }).click()
+await p.getByRole('textbox').fill('dragging by 3pm, a couple of coffees to get through, then wide awake at midnight')
+await p.getByRole('button', { name: 'Send to Amp' }).click()
+await p.getByText(/^From what you told me/).waitFor({ timeout: 15000 })
+log('bad day:', await p.getByText(/^From what you told me/).textContent())
+await shot('10-pinpoint-told')
+for (let i = 0; i < 14; i++) {
+  await p.waitForTimeout(1800) // about a person's pace: the words are asked for ahead
+  if (await p.getByRole('button', { name: 'Continue', exact: true }).count()) break
+  const card = p.locator('[data-swipe-card] p').last()
+  if (await card.count()) log('question card:', await card.textContent())
+  if (await p.getByRole('button', { name: 'That’s me', exact: true }).count()) {
+    log('hunch:', await h1(), '|', await p.locator('h1 ~ p, h1 + div p').first().textContent().catch(() => ''))
+    await shot('11-pinpoint-hunch')
+    await p.getByRole('button', { name: 'That’s me', exact: true }).click()
+    continue
+  }
+  if (await p.getByRole('button', { name: 'Keep going' }).count()) { await p.getByRole('button', { name: 'Keep going' }).click(); continue }
+  await p.locator('[data-scene] [role="radio"]').first().click()
+  if (await p.getByRole('slider').count()) await p.locator('[data-scene] button', { hasText: /^Next$/ }).first().click()
+  if (await p.getByRole('radio', { name: 'Yes', exact: true }).count()) await p.locator('[data-scene] button', { hasText: /^Next$/ }).first().click().catch(() => {})
+}
+await shot('12-pinpoint-found')
+log('pinpoint replies:', pinpointReplies.reduce((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {}))
 
 // 9. Hub: AI log and the saved consult.
 await p.goto(BASE + '/founderhub/monitoring#consult', { waitUntil: 'networkidle' })

@@ -39,6 +39,22 @@ export function looksMedical(text: string): boolean {
   return MEDICAL.some((re) => re.test(text))
 }
 
+/**
+ * Conditions Amp must never name in its own words (Pinpoint, plan v5 §7).
+ * A pattern is a habit or a situation — "Wired and tired" — never a label.
+ * Checked on everything the model writes for Pinpoint, on both sides.
+ */
+const CONDITIONS = [
+  /\binsomni/i, /\bapno?ea\b/i, /\banaemi/i, /\banemi/i, /\bdepress/i, /\banxi(ety|ous)/i, /\badhd\b/i, /\bdementia/i, /\balzheim/i,
+  /\bmenopaus/i, /\bperimenopaus/i, /\bthyroid/i, /\bdiabet/i, /\barthrit/i, /\bosteopor/i, /\bsarcopeni/i, /\bburn-?out\b/i,
+  /\bibs\b/i, /\bdisorder/i, /\bsyndrome/i, /\bdisease/i, /\billness/i, /\bcondition/i, /\bdiagnos/i, /\bdeficien/i, /\bsymptom/i,
+  /\bchronic/i, /\bclinical/i, /\bmedical/i, /\bdoctor\b/i, /\bgp\b/i,
+]
+
+export function namesCondition(text: string): boolean {
+  return CONDITIONS.some((re) => re.test(text))
+}
+
 /** Plain, single-spaced text: no markup, no control characters, capped. */
 export function cleanText(text: string): string {
   return text

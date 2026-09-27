@@ -18,6 +18,7 @@ import {
   sectionProgress,
   visibleScenes,
   type FlowState,
+  sceneAfter,
 } from '@/lib/consult/flow'
 import { DURATION, type AmpReaction } from '@/lib/consult/motion'
 import { ampReactionTo, reactionTo } from '@/lib/consult/reactions'
@@ -35,6 +36,7 @@ import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
 import { Hint, NextButton, QuietLink, Tile, radioArrows } from './controls'
 import { SceneRenderer, resolveScene } from './scenes/registry'
+import { hunchLine, usePinpointAi } from './pinpoint/pinpointAi'
 import { pickToPatch, type Pick } from '@/lib/consult/ai/understand'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
@@ -166,6 +168,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // Pinpoint screens word themselves, one question at a time (plan v5).
   const pView = onScene && PINPOINT_SCENES.includes(state.sceneId) ? pinpointView(state.sceneId as PinpointStage, state.answers) : null
   const pKey = pView ? (pView.kind === 'probe' ? pView.probe.id : pView.kind === 'hunch' ? pView.lead.pattern.id : pView.kind) : ''
+  // Pinpoint's AI (plan v5 §7): asked ahead, used only if in hand on arrival.
+  const pinpointAi = consultAi && !aiUnavailable
+  usePinpointAi(state.answers, state.sceneId, state.phase === 'scenes' && isAnswered(state.sceneId, state.answers) ? sceneAfter(state.sceneId, state.answers) : null, pinpointAi)
+  const hunchLock = useRef<{ key: string; line: string | null }>({ key: '', line: null })
+  if (pView?.kind === 'hunch' && hunchLock.current.key !== pKey) hunchLock.current = { key: pKey, line: pinpointAi ? hunchLine(pView.lead, state.answers) : null }
+  if (pView && pView.kind === 'hunch' && hunchLock.current.line) pView.hint = hunchLock.current.line
   const spoken = pView ? toSpeech(pView.heading, pView.kind === 'probe' ? [pView.text, pView.hint].filter(Boolean).join(' ') : pView.hint) : shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : ''
   const aloud = useReadAloud(onScene ? `${state.sceneId}:${pKey}` : state.phase, spoken, onScene && state.answers.comfort)
 

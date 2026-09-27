@@ -10,6 +10,7 @@ import type { ConsultAnswers } from '@/lib/consult/types'
 import { consultFunnel, type GotYou } from '@/lib/analytics/consult'
 import { Segmented } from '../controls'
 import { PatternMap } from './parts'
+import { foundLine } from './pinpointAi'
 
 /**
  * The profile on Fully charged (plan v5 §6): each pattern Pinpoint found, what
@@ -50,6 +51,8 @@ export function PinpointProfile({ answers, payload, titleOf }: { answers: Consul
       <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
         What I pinpointed
       </p>
+      {/* Amp's two sentences, when the AI wrote them during the round. */}
+      {foundLine(answers) && <p style={{ color: 'var(--amp-ink)' }}>{foundLine(answers)}</p>}
       {found.length > 0 && <PatternMap answers={answers} leads={found} title={`Pinpointed: ${found.map((l) => l.pattern.name).join(', ')}`} />}
       {found.map((l) => {
         const skus = Object.entries(payload.because)

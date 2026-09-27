@@ -304,7 +304,7 @@
           "detail": true,
           "tell": {
             "lead": true,
-            "prompt": "Quicker to say your split? Tell Amp.",
+            "prompt": "Quicker to type your split? Tell Amp.",
             "example": "e.g. Push, pull, legs twice a week, and five-a-side on Sundays"
           }
         },

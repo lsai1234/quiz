@@ -13,7 +13,7 @@
 
 import { kvDelete, kvGet, kvSet } from '@/lib/db/kv'
 
-export type AiRoute = 'copy' | 'understand' | 'explain' | 'scan' | 'voice' | 'health'
+export type AiRoute = 'copy' | 'understand' | 'explain' | 'scan' | 'voice' | 'health' | 'pinpoint'
 export type AiOutcome = 'ok' | 'fallback' | 'held' | 'unavailable' | 'busy' | 'error'
 
 export interface AiAuditEntry {

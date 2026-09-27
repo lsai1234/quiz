@@ -2,6 +2,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { consultFunnel } from '@/lib/analytics/consult'
 import { DURATION } from '@/lib/consult/motion'
 import { Analysis } from '../Analysis'
+import { resetPinpointAi } from '../pinpoint/pinpointAi'
+import { PROBE_BY_ID } from '@/lib/consult/pinpoint/library'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { initialFlow, type FlowState } from '@/lib/consult/flow'
 import { saveConsult } from '@/lib/consult/persist'
@@ -372,5 +374,114 @@ describe('the upgrade and the recheck (phase 4)', () => {
     expect(within(card).getByText(/changed an answer this rested on/)).toBeInTheDocument()
     fireEvent.click(within(card).getByRole('button', { name: 'Recheck' }))
     expect(sceneOnScreen()).toBe('pinpoint')
+  })
+})
+
+describe('the AI (phase 5)', () => {
+  /** A fake /api/consult/pinpoint: words every question, and answers typed text with the first candidate. */
+  function fakeAi(opts: { tell?: (body: Record<string, unknown>) => unknown } = {}) {
+    const calls: Record<string, unknown>[] = []
+    global.fetch = jest.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      if (String(url) !== '/api/consult/pinpoint') return { ok: true, json: async () => ({ fallback: true }) } as unknown as Response
+      calls.push(body)
+      // Each question worded in its own shape; typed text answers the first candidate with its first answer.
+      const probe = PROBE_BY_ID[String(body.probe)]
+      const words =
+        !probe ? null
+        : probe.format === 'this-or-that' ? { a: 'Amp’s own words, side a.', b: 'Amp’s own words, side b.' }
+        : probe.format === 'quick-fire' ? { rows: Object.fromEntries(probe.items.map((i) => [i.key, `Amp’s own words, ${i.key}?`])) }
+        : { text: `Amp’s own words for ${probe.id}.` }
+      const first = (body.candidates as string[] | undefined)?.[0]
+      const out =
+        body.kind === 'probe'
+          ? words ? { words } : { fallback: true }
+          : body.kind === 'tell'
+            ? opts.tell?.(body) ?? { picks: [{ probe: first, answer: PROBE_BY_ID[first!].items[0].options[0].key }] }
+            : { fallback: true }
+      return { ok: true, json: async () => out } as unknown as Response
+    }) as typeof fetch
+    return calls
+  }
+  const settle = () => act(async () => {
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+  })
+
+  beforeEach(() => resetPinpointAi())
+
+  it('words the question for the person when the words are in hand, never swapping them in later', async () => {
+    const calls = fakeAi()
+    render(<AmpConsult ai initial={at('pinpoint')} />)
+    await settle()
+    // Asked ahead, on the intro: the round's first question.
+    expect(calls.some((c) => c.kind === 'probe')).toBe(true)
+    // Only the coarse picture goes: no health, no notes.
+    expect(Object.keys(calls[0].person as object).sort()).toEqual(['age', 'comfort', 'energy', 'goals'])
+    fireEvent.click(screen.getByRole('button', { name: 'Let’s go' }))
+    expect(screen.getAllByText(/^Amp’s own words/).length).toBeGreaterThan(0)
+  })
+
+  it('keeps the scripted words without the AI', () => {
+    fakeAi()
+    render(<AmpConsult ai={false} initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
+    expect(screen.queryByText(/^Amp’s own words/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Or tell me about a bad day' })).toBeNull()
+  })
+
+  it('reads a bad day into answers, and says how many it filled', async () => {
+    const calls = fakeAi()
+    render(<AmpConsult ai initial={at('pinpoint')} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Or tell me about a bad day' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'dragging by 3pm, then awake at midnight' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Amp' }))
+    })
+    const tell = calls.find((c) => c.kind === 'tell')!
+    expect(tell.text).toBe('dragging by 3pm, then awake at midnight')
+    expect(screen.queryByRole('dialog', { name: 'Tell me about a bad day' })).toBeNull()
+    expect(screen.getByText('From what you told me: 1 answer filled in.')).toBeInTheDocument()
+  })
+
+  it('stops health details before anything is sent', async () => {
+    const calls = fakeAi()
+    render(<AmpConsult ai initial={at('pinpoint')} />)
+    await settle()
+    fireEvent.click(screen.getByRole('button', { name: 'Or tell me about a bad day' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'my GP thinks it’s my thyroid' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Amp' }))
+    })
+    expect(calls.some((c) => c.kind === 'tell')).toBe(false)
+    expect(screen.getByText(/sounds like health information/)).toBeInTheDocument()
+  })
+
+  it('takes "it’s more complicated" as the closest answer, and moves on', async () => {
+    fakeAi()
+    render(<AmpConsult ai initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
+    await settle()
+    const first = heading().textContent
+    const counterBefore = counter()
+    fireEvent.click(screen.getByRole('button', { name: 'It’s more complicated' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'only after a heavy session' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Amp' }))
+    })
+    expect(counter()).not.toBe(counterBefore)
+    expect(heading().textContent === first && counter() === counterBefore).toBe(false)
+  })
+
+  it('says so when nothing matched, and leaves the question as it was', async () => {
+    fakeAi({ tell: () => ({ picks: [] }) })
+    render(<AmpConsult ai initial={at('pinpoint', { pinpoint: { steps: [], stopped: false, started: true } })} />)
+    await settle()
+    const before = counter()
+    fireEvent.click(screen.getByRole('button', { name: 'It’s more complicated' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hard to say' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Amp' }))
+    })
+    expect(screen.getByText(/couldn’t match that to an answer/)).toBeInTheDocument()
+    expect(counter()).toBe(before)
   })
 })

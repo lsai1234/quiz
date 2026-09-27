@@ -101,9 +101,11 @@ export const HUNCH_LINE = 'I think I’ve spotted a pattern.'
 export function pinpointReactionLine(stage: PinpointStage, a: Answers): string | undefined {
   const steps = a.pinpoint?.steps ?? []
   const last = steps[steps.length - 1]
+  // A hunch says what it is, before anything else: even when it comes first,
+  // straight after the intro.
+  const inRound = steps.some((s) => s.stage === 'pinpoint')
+  if (stage === 'pinpoint' && (a.pinpoint?.started || inRound) && nextStep(a, 'pinpoint').kind === 'hunch') return HUNCH_LINE
   if (!last || last.stage !== stage || stage !== 'pinpoint') return undefined
-  // A hunch says what it is, before anything else.
-  if (nextStep(a, 'pinpoint').kind === 'hunch') return HUNCH_LINE
   if (last.kind === 'verdict') return VERDICT_LINE[last.verdict]
   if (last.kind !== 'probe') return undefined
   const before = { ...a, pinpoint: { ...(a.pinpoint ?? EMPTY_PINPOINT), steps: steps.slice(0, -1) } }

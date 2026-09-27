@@ -132,6 +132,8 @@ export type PinpointStep =
       /** The day line's exact time, for the evidence line. */
       minutes?: number
       unsure?: boolean
+      /** Read from something typed ("Tell me about a bad day"), not tapped. */
+      told?: boolean
       stage: PinpointStage
     }
   | { kind: 'verdict'; pattern: PatternId; verdict: Verdict; stage: 'pinpoint' }
