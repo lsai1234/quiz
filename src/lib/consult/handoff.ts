@@ -15,8 +15,14 @@
  *     "excluded": ["fish-oil", "vitamin-k"],
  *     "flags": { "pharmacist_note": true },
  *     "reasons": { "<product id>": "You hardly ever get daylight" },
- *     "notes": ["Kept out: …"]
+ *     "notes": ["Kept out: …"],
+ *     "patterns": { "pinpointed": ["wired"], "partly": [], "ruled_out": ["pm-crash"] },
+ *     "because": { "<product id>": ["wired"] }
  *   }
+ *
+ * 2.1 added `patterns` and `because` (Pinpoint, plan v5 §6): ids only, never
+ * the answers behind them. A 2.0 payload still validates, read as having
+ * found nothing.
  *
  * The SKUs are catalogue product ids — what the results page, the basket and
  * checkout all key on — and every one was live and in stock when the engine
@@ -28,16 +34,20 @@
  */
 
 import { CLAIMS } from './claims'
-import type { EngineResult } from './engine'
+import { PATTERN_BY_ID } from './pinpoint/library'
+import type { PatternId } from './pinpoint/types'
+import type { EngineResult, PinpointOutcome } from './engine'
 import { ENGINE_VERSION } from './engine'
 import type { Ingredient } from './circuit'
 import { PROFILE_AREAS, type ChargeProfile } from './profile'
 import type { ConsultGoal, Route } from './types'
 
-export const HANDOFF_VERSION = 'consult-2.0' as const
+export const HANDOFF_VERSION = 'consult-2.1' as const
+/** Still read: saved before Pinpoint. */
+export const HANDOFF_VERSIONS = ['consult-2.0', HANDOFF_VERSION] as const
 
 export interface HandoffPayload {
-  version: typeof HANDOFF_VERSION
+  version: (typeof HANDOFF_VERSIONS)[number]
   consult_id: string
   created_at: string
   engine: typeof ENGINE_VERSION
@@ -55,6 +65,10 @@ export interface HandoffPayload {
   /** Register claim IDs per SKU in Complete: the only claim wording anything may show (see `claims.ts`). */
   claims: Record<string, string[]>
   notes: string[]
+  /** What Pinpoint found. All empty off the Pinpoint route, and on a 2.0 payload. */
+  patterns: PinpointOutcome
+  /** Per SKU, the patterns it's there for. */
+  because: Record<string, PatternId[]>
 }
 
 const GOALS: ConsultGoal[] = ['performance', 'energy', 'sleep', 'focus', 'ageing', 'allround', 'weight']
@@ -89,6 +103,12 @@ export function buildHandoff(opts: {
     reasons: Object.fromEntries(engine.ranked.map((r) => [r.id, r.reason])),
     claims: Object.fromEntries(engine.ranked.map((r) => [r.id, [...r.claims]])),
     notes: [...engine.notes],
+    patterns: {
+      pinpointed: [...engine.patterns.pinpointed],
+      partly: [...engine.patterns.partly],
+      ruled_out: [...engine.patterns.ruled_out],
+    },
+    because: Object.fromEntries(Object.entries(engine.because).map(([sku, ids]) => [sku, [...ids]])),
   }
 }
 
@@ -106,7 +126,8 @@ export function validateHandoff(value: unknown): Validation {
   const v = value as Partial<HandoffPayload> | null
   if (!v || typeof v !== 'object') return { ok: false, errors: ['not an object'] }
 
-  if (v.version !== HANDOFF_VERSION) errors.push(`version must be ${HANDOFF_VERSION}`)
+  if (!HANDOFF_VERSIONS.includes(v.version as HandoffPayload['version'])) errors.push(`version must be ${HANDOFF_VERSIONS.join(' or ')}`)
+  const legacy = v.version === 'consult-2.0'
   if (typeof v.consult_id !== 'string' || !/^c_[a-z0-9]{6,32}$/.test(v.consult_id)) errors.push('consult_id is malformed')
   if (typeof v.created_at !== 'string' || Number.isNaN(Date.parse(v.created_at))) errors.push('created_at is not a date')
   if (v.engine !== ENGINE_VERSION) errors.push(`engine must be ${ENGINE_VERSION}`)
@@ -151,7 +172,27 @@ export function validateHandoff(value: unknown): Validation {
   }
   if (!isStringArray(v.notes)) errors.push('notes must be a list of strings')
 
-  return errors.length ? { ok: false, errors } : { ok: true, payload: v as HandoffPayload }
+  if (!legacy) {
+    const known = (ids: unknown) => isStringArray(ids) && ids.every((id) => id in PATTERN_BY_ID)
+    const pt = v.patterns
+    if (!pt || !known(pt.pinpointed) || !known(pt.partly) || !known(pt.ruled_out)) errors.push('patterns must list known pattern ids')
+    else if (new Set([...pt.pinpointed, ...pt.partly, ...pt.ruled_out]).size !== pt.pinpointed.length + pt.partly.length + pt.ruled_out.length) {
+      errors.push('a pattern can only be pinpointed, partly or ruled out')
+    }
+    if (!v.because || typeof v.because !== 'object') errors.push('because is missing')
+    else {
+      const complete = new Set(isStringArray(v.tiers?.complete) ? v.tiers.complete : [])
+      for (const [sku, ids] of Object.entries(v.because)) {
+        if (!complete.has(sku)) errors.push(`because names ${sku}, which isn’t in the stack`)
+        if (!known(ids) || !(ids as string[]).length) errors.push(`because for ${sku} must list known pattern ids`)
+      }
+    }
+  }
+
+  if (errors.length) return { ok: false, errors }
+  // A 2.0 payload predates Pinpoint: it found nothing.
+  const payload = legacy ? ({ ...v, patterns: { pinpointed: [], partly: [], ruled_out: [] }, because: {} } as HandoffPayload) : (v as HandoffPayload)
+  return { ok: true, payload }
 }
 
 /* ── Saved against the consult ID ───────────────────────────────────────── */

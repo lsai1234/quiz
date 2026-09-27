@@ -25,6 +25,8 @@
 
 import { journeyOf } from './journey'
 import { pinpointEffects } from './pinpoint/effects'
+import { isOut, leads } from './pinpoint/leads'
+import type { PatternId } from './pinpoint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
 import { claimsFor } from './claims'
@@ -94,6 +96,28 @@ export interface EngineResult {
   needs: Needs
   /** Goals nothing in the stack meets. */
   unmetGoals: ConsultGoal[]
+  /** What Pinpoint found (plan v5 §6): empty on the other routes. */
+  patterns: PinpointOutcome
+  /** For each product in Complete, the patterns it's there for. Only products that have one. */
+  because: Record<string, PatternId[]>
+}
+
+export interface PinpointOutcome {
+  pinpointed: PatternId[]
+  partly: PatternId[]
+  ruled_out: PatternId[]
+}
+
+/** What the round settled, in the order the person would read it. */
+export function pinpointOutcome(a: ConsultAnswers): PinpointOutcome {
+  if (a.route !== 'pinpoint' || !a.pinpoint) return { pinpointed: [], partly: [], ruled_out: [] }
+  const all = leads(a)
+  const ids = (f: (l: (typeof all)[number]) => boolean) => all.filter(f).map((l) => l.pattern.id)
+  return {
+    pinpointed: ids((l) => l.state === 'yes'),
+    partly: ids((l) => l.state === 'partly'),
+    ruled_out: ids((l) => isOut(l) && l.tested > 0),
+  }
 }
 
 /* ── 1. Needs ───────────────────────────────────────────────────────────── */
@@ -477,5 +501,18 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     flags: { pharmacistNote: outcome.pharmacistNote, tailored: isTailored(a) },
     needs,
     unmetGoals,
+    patterns: pinpointOutcome(a),
+    because: becauseOf(a, ranked),
   }
+}
+
+/** Which of the patterns that shaped the stack each product answers: the ones whose needs it meets. */
+function becauseOf(a: ConsultAnswers, ranked: RankedProduct[]): Record<string, PatternId[]> {
+  const effects = pinpointEffects(a)
+  const out: Record<string, PatternId[]> = {}
+  for (const r of ranked) {
+    const ids = effects.filter(({ lead }) => lead.pattern.effects.some((e) => e.need === r.need)).map(({ lead }) => lead.pattern.id)
+    if (ids.length) out[r.id] = ids
+  }
+  return out
 }

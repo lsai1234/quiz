@@ -3,6 +3,7 @@
  * later; these are always the fallback, and they only ever restate answers.
  */
 
+import type { Ingredient } from '../circuit'
 import { PATTERN_BY_ID } from './library'
 import { isOut, leads, type Lead } from './leads'
 import type { Answers, PatternId } from './types'
@@ -58,4 +59,20 @@ export function hunchEvidence(lead: Lead): string[] {
 export function ruledOutBecause(lead: Lead): string {
   if (lead.state === 'no') return 'You said it isn’t you.'
   return lead.against ?? 'Your answers pointed elsewhere.'
+}
+
+/** Ingredient families, as a person would say them. */
+const INGREDIENT_WORDS: Partial<Record<Ingredient, string>> = {
+  caffeine: 'caffeine',
+  stimulant: 'stimulant pre-workouts',
+  'fat-burner': 'fat burners',
+}
+
+/** "Kept out: caffeine and stimulant pre-workouts, because …", for a pattern the person said was them. */
+export function keepOutLine(lead: Lead): string | null {
+  const k = lead.pattern.keepOut
+  if (!k || lead.state !== 'yes') return null
+  const words = k.ingredients.map((i) => INGREDIENT_WORDS[i] ?? i.replace(/-/g, ' '))
+  const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words[0]
+  return `Kept out: ${list}, because ${k.why}.`
 }

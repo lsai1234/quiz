@@ -4,7 +4,8 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { planTiers } from '@/lib/stack-blueprint/tier-plan'
 import { identityFor, toBlueprint, toQuizAnswers } from '../adapter'
 import { runStackEngine } from '../engine'
-import { HANDOFF_VERSION, buildHandoff, loadHandoffLocally, saveHandoffLocally, validateHandoff } from '../handoff'
+import { HANDOFF_VERSION, buildHandoff, loadHandoffLocally, saveHandoffLocally, validateHandoff, type HandoffPayload } from '../handoff'
+import { PERSONAS } from '../personas'
 import { chargeProfile } from '../profile'
 import { prepareResults } from '../results'
 import { initialFlow } from '../flow'
@@ -45,10 +46,13 @@ describe('H7 handoff payload', () => {
     const p = payload()
     expect(p.version).toBe(HANDOFF_VERSION)
     expect(Object.keys(p).sort()).toEqual(
-      ['claims', 'consult_id', 'created_at', 'engine', 'excluded', 'flags', 'goals', 'notes', 'profile', 'reasons', 'route', 'tiers', 'version'].sort(),
+      ['because', 'claims', 'consult_id', 'created_at', 'engine', 'excluded', 'flags', 'goals', 'notes', 'patterns', 'profile', 'reasons', 'route', 'tiers', 'version'].sort(),
     )
     expect(p.flags.pharmacist_note).toBe(true)
     expect(p.excluded).toEqual(expect.arrayContaining(['fish-oil', 'vitamin-k']))
+    // Off the Pinpoint route, it found nothing.
+    expect(p.patterns).toEqual({ pinpointed: [], partly: [], ruled_out: [] })
+    expect(p.because).toEqual({})
   })
 
   it('validates against its schema on every consult', () => {
@@ -76,6 +80,15 @@ describe('H7 handoff payload', () => {
     expect(validateHandoff(breakIt(payload())).ok).toBe(false)
   })
 
+  it('still reads a 2.0 payload, as having found nothing', () => {
+    const { patterns: _p, because: _b, ...rest } = payload()
+    const old = validateHandoff({ ...rest, version: 'consult-2.0' })
+    expect(old.ok).toBe(true)
+    if (old.ok) expect(old.payload.patterns).toEqual({ pinpointed: [], partly: [], ruled_out: [] })
+    // 2.1 has to carry them.
+    expect(validateHandoff(rest).ok).toBe(false)
+  })
+
   it('holds no circuit check answers, only what they rule out', () => {
     expect(JSON.stringify(payload())).not.toMatch(/blood-thinners|healthConsent|circuit/)
   })
@@ -84,6 +97,33 @@ describe('H7 handoff payload', () => {
     localStorage.clear()
     saveHandoffLocally(payload())
     expect(loadHandoffLocally()?.consult_id).toBe('c_8f2kq0test00')
+  })
+})
+
+describe('2.1: what Pinpoint found', () => {
+  const wired = PERSONAS.find((p) => p.id === 'p34')!.answers
+  const pinpointPayload = () =>
+    buildHandoff({ consultId: 'c_pinpoint0001', route: 'pinpoint', goals: wired.goals, profile: chargeProfile(wired), engine: runStackEngine(wired, MOCK_CATALOGUE) })
+
+  it('names the patterns, and which products are there for them, by id only', () => {
+    const p = pinpointPayload()
+    expect(p.patterns.pinpointed).toEqual(['wired'])
+    expect(Object.keys(p.because).length).toBeGreaterThan(0)
+    for (const [sku, ids] of Object.entries(p.because)) {
+      expect(p.tiers.complete).toContain(sku)
+      expect(ids).toEqual(['wired'])
+    }
+    expect(validateHandoff(p).ok).toBe(true)
+    expect(JSON.stringify(p.patterns)).not.toMatch(/tired-then-awake|probe/)
+  })
+
+  it.each([
+    ['an unknown pattern', (p: HandoffPayload) => ({ ...p, patterns: { ...p.patterns, pinpointed: ['anxiety'] } })],
+    ['a pattern both found and ruled out', (p: HandoffPayload) => ({ ...p, patterns: { ...p.patterns, ruled_out: ['wired'] } })],
+    ['a because for a product not in the stack', (p: HandoffPayload) => ({ ...p, because: { ...p.because, 'not-a-sku': ['wired'] } })],
+    ['an empty because', (p: HandoffPayload) => ({ ...p, because: { [p.tiers.complete[0]]: [] } })],
+  ])('rejects %s', (_name, breakIt) => {
+    expect(validateHandoff(breakIt(pinpointPayload())).ok).toBe(false)
   })
 })
 

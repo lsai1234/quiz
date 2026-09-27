@@ -139,6 +139,9 @@ export const CONSULT_EVENTS = [
   'consult_complete',
   'consult_handoff',
   'consult_abandon',
+  // Pinpoint (plan v5 §11).
+  'consult_upgrade',
+  'consult_got_you',
 ] as const
 
 export type ConsultEvent = (typeof CONSULT_EVENTS)[number]

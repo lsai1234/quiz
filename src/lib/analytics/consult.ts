@@ -42,4 +42,14 @@ export const consultFunnel = {
   abandon(p: { lastSceneId: SceneId }) {
     track('consult_abandon', { lastSceneId: p.lastSceneId })
   },
+  /** "Want me to pinpoint it?" taken from a Speed run or Deep charge review. */
+  upgrade(p: { from: 'speed' | 'deep' }) {
+    track('consult_upgrade', { from: p.from })
+  },
+  /** "Did Amp get you?" on Fully charged, and how many patterns it had found. */
+  gotYou(p: { answer: GotYou; found: number }) {
+    track('consult_got_you', { answer: p.answer, found: p.found })
+  },
 }
+
+export type GotYou = 'spot-on' | 'mostly' | 'not-really'

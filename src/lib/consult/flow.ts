@@ -13,6 +13,8 @@
 
 import { nextStep, roundDone } from './pinpoint/choose'
 import { probeSteps } from './pinpoint/leads'
+import { withoutVerdict } from './pinpoint/screen'
+import type { PatternId } from './pinpoint/types'
 import { journeyOf, type Journey } from './journey'
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
@@ -348,6 +350,10 @@ export type FlowAction =
   | { type: 'decline' }
   /** A "Tell Amp more" card added (V3), merged into the latest answers. */
   | { type: 'pick'; pick: Pick }
+  /** "Want me to pinpoint it?" on a Speed run or Deep charge review: every answer kept (plan v5 §3). */
+  | { type: 'upgrade' }
+  /** A pinpointed pattern an edit undercut: lift its verdict and reopen the round, then back to the review. */
+  | { type: 'recheck'; pattern: PatternId }
 
 export function newConsultId(): string {
   const bytes =
@@ -435,6 +441,22 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       const pinpoint = action.route === 'pinpoint' ? state.answers.pinpoint ?? { steps: [], stopped: false } : state.answers.pinpoint
       const answers = { ...state.answers, route: action.route, pinpoint }
       return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
+    }
+
+    case 'upgrade': {
+      if (state.answers.route === 'pinpoint') return state
+      const answers = { ...state.answers, route: 'pinpoint' as const, pinpoint: state.answers.pinpoint ?? { steps: [], stopped: false } }
+      // Onwards from the first screen still to answer: the core screens a
+      // Speed run skipped, or the follow-ups. What's answered stays, and the
+      // walk passes back through the circuit check, its answers in place.
+      const target = visibleScenes(answers).find((id) => id !== 'review' && !isAnswered(id, answers)) ?? 'pinpoint'
+      return { ...state, answers, phase: 'scenes', history: [...state.history, state.sceneId], sceneId: target, returnTo: null, direction: 'forward' }
+    }
+
+    case 'recheck': {
+      if (state.answers.route !== 'pinpoint' || !state.answers.pinpoint) return state
+      const answers = { ...state.answers, pinpoint: withoutVerdict(state.answers, action.pattern) }
+      return { ...state, answers, phase: 'scenes', history: [...state.history, state.sceneId], sceneId: 'pinpoint', returnTo: 'review', direction: 'back' }
     }
 
     case 'pick':

@@ -13,6 +13,9 @@ import { Amp } from './Amp'
 import { ChargeProfileChart } from './ChargeProfileChart'
 import { Glyph } from './Glyph'
 import { NextButton, QuietLink } from './controls'
+import { pinpointed } from '@/lib/consult/pinpoint/effects'
+import { PatternMap } from './pinpoint/parts'
+import { PinpointProfile } from './pinpoint/Profile'
 
 /**
  * Analysis & charge-up (build H6), and the fully-charged handoff.
@@ -60,8 +63,12 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   const [fill, setFill] = useState(0)
 
   const answered = visibleScenes(state.answers).filter((s) => s !== 'review').length
+  // Pinpoint adds a step, in the same charge-up time: lines drawn between
+  // the areas each pattern it found connects (plan v5 §6).
+  const found = pinpointed(state.answers)
   const steps = [
     `Reading ${answered} answers`,
+    ...(found.length ? ['Joining the dots'] : []),
     'Applying your circuit check',
     'Matching against the catalogue',
     'Building three stacks',
@@ -144,8 +151,25 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
         {full ? 'Fully charged' : 'Your charge profile'}
       </h1>
 
-      {!full && <ChargeProfileChart profile={chargeProfile(state.answers)} />}
-      {!full && profileInWords(state.answers) && (
+      {!full &&
+        (found.length ? (
+          <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-2)' }}>
+            {/* The dots join once "Joining the dots" is under way: the step after reading the answers. */}
+            <PatternMap answers={state.answers} leads={found} draw={clock >= 1} title={`Your charge profile, joined up: ${found.map((l) => l.pattern.name).join(', ')}`} />
+            <p className="flex flex-wrap justify-center" style={{ gap: 'var(--amp-space-1) var(--amp-space-3)', minHeight: 'var(--amp-space-6)' }}>
+              {clock >= 1 &&
+                found.map((l) => (
+                  <span key={l.pattern.id} className="amp-anim-rise" style={{ color: 'var(--amp-go)', fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-meta)' }}>
+                    {l.pattern.name}
+                  </span>
+                ))}
+            </p>
+          </div>
+        ) : (
+          <ChargeProfileChart profile={chargeProfile(state.answers)} />
+        ))}
+      {/* With patterns found, their names are the words: one line, not two. */}
+      {!full && !found.length && profileInWords(state.answers) && (
         <p className="text-center" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-lead)' }}>
           {profileInWords(state.answers)}
         </p>
@@ -216,13 +240,13 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
         )}
       </div>
 
-      {full && bundle && <Handoff bundle={bundle} onOpen={() => onDone(bundle)} />}
+      {full && bundle && <Handoff bundle={bundle} state={state} onOpen={() => onDone(bundle)} />}
     </Frame>
   )
 }
 
-/** Fully charged: the three stacks, what was kept out, and the way through. */
-function Handoff({ bundle, onOpen }: { bundle: ResultsBundle; onOpen: () => void }) {
+/** Fully charged: on Pinpoint, the profile first; then the three stacks, what was kept out, and the way through. */
+function Handoff({ bundle, state, onOpen }: { bundle: ResultsBundle; state: FlowState; onOpen: () => void }) {
   const title = new Map(bundle.catalogue.map((p) => [p.id, p.shortName || p.title]))
   const tiers: [string, string[]][] = [
     ['Essentials', bundle.payload.tiers.essentials],
@@ -231,6 +255,7 @@ function Handoff({ bundle, onOpen }: { bundle: ResultsBundle; onOpen: () => void
   ]
   return (
     <div className="flex flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-4)' }}>
+      <PinpointProfile answers={state.answers} payload={bundle.payload} titleOf={(id) => title.get(id) ?? id} />
       <div
         style={{
           padding: 'var(--amp-space-4)',

@@ -371,6 +371,30 @@ test.describe('consult accessibility (U7)', () => {
     await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
   })
 
+  test('Deep charge review offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
+    await page.getByRole('radio', { name: /^Deep charge/ }).click()
+    await page.waitForTimeout(450)
+    for (let i = 0; i < 16; i++) {
+      if (/what I've got/i.test((await heading(page).textContent()) ?? '')) break
+      await answerByKeyboard(page)
+      await nextByKeyboard(page)
+    }
+    await expect(page.getByText('Want me to pinpoint it?')).toBeVisible()
+    await audit(page, 'review with the upgrade offer')
+    await page.getByRole('button', { name: 'Pinpoint it' }).click()
+    await page.waitForTimeout(450)
+    expect(PINPOINT).toContain(await sceneId(page))
+    // Play it through: back at the review, every answer is still there and the offer has gone.
+    for (let i = 0; i < 40 && !/what I've got/i.test((await heading(page).textContent()) ?? ''); i++) {
+      if (PINPOINT.includes((await sceneId(page)) ?? '')) await answerPinpointScreen(page)
+      else await nextByKeyboard(page)
+      await page.waitForTimeout(450)
+    }
+    await expect(page.getByText('Want me to pinpoint it?')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Training: / })).toBeVisible()
+    await audit(page, 'review after the upgrade')
+  })
+
   test('weight loss with a jab: the card opens, the safety check takes it from there, review shows it', async ({ page }) => {
     await page.getByRole('radio', { name: /^Deep charge/ }).click()
     await tabTo(page, /^Weight loss/)

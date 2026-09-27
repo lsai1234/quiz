@@ -1,4 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { consultFunnel } from '@/lib/analytics/consult'
+import { DURATION } from '@/lib/consult/motion'
+import { Analysis } from '../Analysis'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { initialFlow, type FlowState } from '@/lib/consult/flow'
 import { saveConsult } from '@/lib/consult/persist'
@@ -210,7 +213,7 @@ describe('a whole Pinpoint consult', () => {
     expect(screen.getByText('What I pinpointed')).toBeInTheDocument()
     // Not quite takes it out, and it's gone from the review.
     const first = screen.getAllByRole('button', { name: 'Not quite? Take it out' })[0]
-    const name = first.closest('div')!.querySelector('p')!.textContent!
+    const name = first.closest('[data-pattern]')!.querySelector('p')!.textContent!
     fireEvent.click(first)
     expect(screen.queryByText(name)).toBeNull()
     pressNext()
@@ -228,5 +231,138 @@ describe('a whole Pinpoint consult', () => {
     render(<AmpConsult />)
     if (screen.queryByRole('button', { name: 'Resume' })) fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
     expect(heading().textContent).toBe(shown)
+  })
+})
+
+describe('the payoff (phase 4)', () => {
+  const WIRED_STEPS = [
+    { kind: 'probe' as const, probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' as const },
+    { kind: 'verdict' as const, pattern: 'wired' as const, verdict: 'yes' as const, stage: 'pinpoint' as const },
+  ]
+  const finished = (answers: Partial<ConsultAnswers> = {}): FlowState => ({
+    ...at('review', {
+      pinpoint: { steps: WIRED_STEPS, stopped: true, started: true },
+      circuit: { flags: [], none: true },
+      healthConsent: { accepted: true, version: 'x', at: 'x' },
+      ...answers,
+    }),
+    consultId: 'c_payoff00001',
+    phase: 'analysis',
+  })
+
+  beforeEach(() => {
+    jest.useFakeTimers()
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({}) }) as unknown as Response) as typeof fetch
+  })
+  afterEach(() => jest.useRealTimers())
+
+  async function chargeUp(state: FlowState) {
+    render(<Analysis state={state} onDone={jest.fn()} onBack={jest.fn()} loadProducts={async () => MOCK_CATALOGUE} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+
+  it('joins the dots in the charge-up, in the same time', async () => {
+    await chargeUp(finished())
+    const steps = screen.getByRole('list', { name: 'Analysis steps' })
+    expect(within(steps).getByText('Joining the dots')).toBeInTheDocument()
+    expect(steps.querySelectorAll('li')).toHaveLength(5)
+    const line = () => document.querySelector('path[data-drawn]')!
+    expect(line()).toHaveAttribute('data-drawn', 'false')
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp / 5 + 1)
+    })
+    expect(line()).toHaveAttribute('data-drawn', 'true')
+    expect(screen.getByText('Wired and tired')).toBeInTheDocument()
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp)
+    })
+    expect(screen.getByRole('heading', { name: 'Fully charged' })).toBeInTheDocument()
+  })
+
+  it('shows the profile on Fully charged: the pattern, what the stack does, what it kept out', async () => {
+    await chargeUp(finished())
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp * 2)
+    })
+    const card = document.querySelector('article[data-pattern="wired"]') as HTMLElement
+    expect(card).toBeInTheDocument()
+    expect(within(card).getByText('Pinpointed')).toBeInTheDocument()
+    expect(within(card).getByText('What your stack does')).toBeInTheDocument()
+    expect(within(card).getByText(/^Kept out: caffeine and stimulant pre-workouts, because/)).toBeInTheDocument()
+    // Product wording only ever comes from the claims register.
+    const { CLAIMS } = await import('@/lib/consult/claims')
+    const wordings = new Set(Object.values(CLAIMS).map((c) => `${c.wording}.`))
+    for (const li of Array.from(card.querySelectorAll('li'))) {
+      const lines = Array.from(li.querySelectorAll('p')).slice(1)
+      for (const l of lines) expect(wordings.has(l.textContent!)).toBe(true)
+    }
+    // The stacks follow.
+    expect(screen.getByText('Essentials')).toBeInTheDocument()
+  })
+
+  it('asks "Did Amp get you?" once, and counts the answer', async () => {
+    const got = jest.spyOn(consultFunnel, 'gotYou')
+    await chargeUp(finished())
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp * 2)
+    })
+    const group = screen.getByRole('radiogroup', { name: 'Did Amp get you?' })
+    fireEvent.click(within(group).getByRole('radio', { name: 'Spot on' }))
+    expect(got).toHaveBeenCalledWith({ answer: 'spot-on', found: 1 })
+    expect(screen.getByText(/That’s what the stack is built on/)).toBeInTheDocument()
+    fireEvent.click(within(group).getByRole('radio', { name: 'Mostly' }))
+    expect(got).toHaveBeenCalledTimes(1)
+    got.mockRestore()
+  })
+
+  it('shows none of it on the other routes', async () => {
+    await chargeUp(finished({ route: 'deep' }))
+    expect(screen.queryByText('Joining the dots')).toBeNull()
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp * 2)
+    })
+    expect(screen.queryByText('What I pinpointed')).toBeNull()
+  })
+})
+
+describe('the upgrade and the recheck (phase 4)', () => {
+  it('offers Pinpoint on a Deep charge review, and keeps every answer', () => {
+    const upgrade = jest.spyOn(consultFunnel, 'upgrade')
+    render(<AmpConsult initial={{ ...at('review', { route: 'deep', pinpoint: null, circuit: { flags: [], none: true }, healthConsent: { accepted: true, version: 'x', at: 'x' } }), history: ['goals'] }} />)
+    expect(screen.getByText('Want me to pinpoint it?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Pinpoint it' }))
+    expect(upgrade).toHaveBeenCalledWith({ from: 'deep' })
+    expect(PINPOINT_SCENES).toContain(sceneOnScreen())
+    upgrade.mockRestore()
+  })
+
+  it('never offers it on the Pinpoint route', () => {
+    render(<AmpConsult initial={at('review', { circuit: { flags: [], none: true }, healthConsent: { accepted: true, version: 'x', at: 'x' } })} />)
+    expect(screen.queryByText('Want me to pinpoint it?')).toBeNull()
+  })
+
+  it('marks a pattern for a recheck after an answer it rested on changes, and asks again', () => {
+    render(
+      <AmpConsult
+        initial={{
+          ...at('review', {
+            caffeine: { coffee: 0, tea: 0, energy: 0 },
+            sleep: { bed: 22 * 60, wake: 7 * 60, quality: 'great' },
+            energy: 8,
+            pinpoint: { steps: [{ kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' }, { kind: 'verdict', pattern: 'wired', verdict: 'yes', stage: 'pinpoint' }], stopped: true, started: true },
+            circuit: { flags: [], none: true },
+            healthConsent: { accepted: true, version: 'x', at: 'x' },
+          }),
+          history: ['goals'],
+        }}
+      />,
+    )
+    const card = document.querySelector('[data-pattern="wired"]') as HTMLElement
+    expect(card).toHaveAttribute('data-recheck', 'true')
+    expect(within(card).getByText(/changed an answer this rested on/)).toBeInTheDocument()
+    fireEvent.click(within(card).getByRole('button', { name: 'Recheck' }))
+    expect(sceneOnScreen()).toBe('pinpoint')
   })
 })

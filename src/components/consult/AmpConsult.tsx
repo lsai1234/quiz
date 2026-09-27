@@ -367,6 +367,15 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             ai={aiOn}
             onReading={setReading}
             onNext={next}
+            onUpgrade={
+              scene.id === 'review' && (state.answers.route === 'speed' || state.answers.route === 'deep')
+                ? () => {
+                    consultFunnel.upgrade({ from: state.answers.route as 'speed' | 'deep' })
+                    dispatch({ type: 'upgrade' })
+                  }
+                : undefined
+            }
+            onRecheck={scene.id === 'review' ? (pattern) => dispatch({ type: 'recheck', pattern }) : undefined}
           />
           {tell && (!tell.lead || note) && <TellInline tell={tell} canTalk={canTalk} onOpen={() => setTelling(true)} tracker={note ? tracker : undefined} />}
         </SceneShell>

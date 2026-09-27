@@ -11,7 +11,7 @@ import { pinpointed } from './effects'
 import { PROBE_BY_ID } from './library'
 import { EMPTY_PINPOINT, isIn, leads, probeSteps, type Lead } from './leads'
 import { VERDICT_LINE, pinpointReaction } from './playback'
-import type { Answers, PinpointStage, PinpointStep, Probe } from './types'
+import type { Answers, PatternId, PinpointStage, PinpointStep, Probe } from './types'
 
 export type PinpointView =
   | { kind: 'intro'; heading: string; hint: string }
@@ -139,3 +139,21 @@ export function undoInRound(a: Answers): Answers['pinpoint'] | null {
 export function questionsAsked(a: Answers): number {
   return probeSteps(a.pinpoint).length
 }
+
+/** The answers with the person's verdict on a pattern lifted, and the round reopened. */
+export function withoutVerdict(a: Answers, pattern: PatternId): Answers['pinpoint'] {
+  const pp = a.pinpoint ?? EMPTY_PINPOINT
+  return { ...pp, stopped: false, steps: pp.steps.filter((s) => !(s.kind === 'verdict' && s.pattern === pattern)) }
+}
+
+/**
+ * Whether a pinpointed pattern needs rechecking (plan v5 §6): an answer it
+ * rested on has been changed since, so that without the person's verdict
+ * the lead has dropped below 0.4.
+ */
+export function needsRecheck(a: Answers, pattern: PatternId): boolean {
+  const lead = leads({ ...a, pinpoint: withoutVerdict(a, pattern) }).find((l) => l.pattern.id === pattern)
+  return !lead || lead.p < RECHECK_BELOW
+}
+
+export const RECHECK_BELOW = 0.4

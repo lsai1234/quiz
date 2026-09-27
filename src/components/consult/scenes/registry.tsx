@@ -1,6 +1,7 @@
 'use client'
 
 import { PinpointScene } from '../pinpoint/PinpointScene'
+import type { PatternId } from '@/lib/consult/pinpoint/types'
 import { AimTiles } from './AimTiles'
 import { ChangesPicker } from './ChangesPicker'
 import type { ComponentType } from 'react'
@@ -55,6 +56,10 @@ export interface SceneProps {
   onReading?: (reading: boolean) => void
   /** Move on to the next scene: a Pinpoint follow-up does, once answered. */
   onNext?: () => void
+  /** The review on Speed run or Deep charge: "Want me to pinpoint it?". */
+  onUpgrade?: () => void
+  /** The review on Pinpoint: recheck a pattern an edit undercut. */
+  onRecheck?: (pattern: PatternId) => void
 }
 
 export interface SceneEntry {
@@ -62,8 +67,8 @@ export interface SceneEntry {
   writes: (keyof ConsultAnswers)[]
 }
 
-function Review({ order, answers, onEdit, onAnswer }: SceneProps) {
-  return <ReviewScene scenes={order} answers={answers} onEdit={onEdit} onAnswer={onAnswer} />
+function Review({ order, answers, onEdit, onAnswer, onUpgrade, onRecheck }: SceneProps) {
+  return <ReviewScene scenes={order} answers={answers} onEdit={onEdit} onAnswer={onAnswer} onUpgrade={onUpgrade} onRecheck={onRecheck} />
 }
 
 /** What each interaction type is drawn with. Unregistered types fall back to the scripted placeholder. */

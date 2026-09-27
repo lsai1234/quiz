@@ -5,7 +5,7 @@ import type { Lead } from '@/lib/consult/pinpoint/leads'
 import { hunchEvidence, ruledOutBecause } from '@/lib/consult/pinpoint/playback'
 import { PROFILE_AREAS, PROFILE_LABEL, chargeProfile, type ProfileArea } from '@/lib/consult/profile'
 import type { ConsultAnswers } from '@/lib/consult/types'
-import { stateTransition } from '@/lib/consult/motion'
+import { chargeTransition, stateTransition } from '@/lib/consult/motion'
 import { Glyph } from '../Glyph'
 import { NextButton, QuietLink } from '../controls'
 
@@ -33,8 +33,11 @@ function vertex(area: ProfileArea, r = R): [number, number] {
  * The charge profile's six areas, with a line drawn between the two each lead
  * connects: dashed while Amp is still checking, solid once you've confirmed
  * it. The same hexagon the charge-up draws, so the ending is familiar.
+ *
+ * `draw` animates the lines in, for the charge-up's "Joining the dots": they
+ * stay undrawn while it's false, and draw along the charge when it turns true.
  */
-export function PatternMap({ answers, leads, title }: { answers: ConsultAnswers; leads: Lead[]; title: string }) {
+export function PatternMap({ answers, leads, title, draw }: { answers: ConsultAnswers; leads: Lead[]; title: string; draw?: boolean }) {
   const profile = chargeProfile(answers)
   const shape = PROFILE_AREAS.map((a) => vertex(a, (R * Math.max(8, profile[a])) / 100).join(',')).join(' ')
   const lit = new Set(leads.flatMap((l) => l.pattern.links))
@@ -53,9 +56,16 @@ export function PatternMap({ answers, leads, title }: { answers: ConsultAnswers;
             d={`M${x1} ${y1} Q ${CX} ${CY} ${x2} ${y2}`}
             fill="none"
             strokeWidth={confirmed ? 2.6 : 2}
-            strokeDasharray={confirmed ? undefined : '4 4'}
             strokeLinecap="round"
-            style={{ stroke: confirmed ? 'var(--amp-go)' : 'var(--amp-accent)', opacity: confirmed ? 1 : 0.35 + 0.65 * l.p }}
+            {...(draw === undefined
+              ? { strokeDasharray: confirmed ? undefined : '4 4' }
+              : { pathLength: 1, strokeDasharray: '1 1', strokeDashoffset: draw ? 0 : 1 })}
+            data-drawn={draw === undefined ? undefined : draw ? 'true' : 'false'}
+            style={{
+              stroke: confirmed ? 'var(--amp-go)' : 'var(--amp-accent)',
+              opacity: confirmed ? 1 : 0.35 + 0.65 * l.p,
+              transition: draw === undefined ? undefined : chargeTransition('stroke-dashoffset'),
+            }}
           />
         )
       })}
