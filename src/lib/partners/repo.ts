@@ -11,6 +11,7 @@
  */
 import crypto from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
+import { HOUSE_PARTNER_ID } from './house'
 import type {
   CodeStatus,
   CodeTerms,
@@ -72,17 +73,20 @@ export async function createPartner(input: {
   name: string
   kind?: PartnerKind
   data?: PartnerData
+  /** A fixed id rather than a generated one — only the house account uses it. */
+  id?: string
+  status?: PartnerStatus
 }): Promise<Partner> {
   const db = await getEngine()
   const at = now()
   const partner: Partner = {
-    id: newId('ptnr'),
+    id: input.id ?? newId('ptnr'),
     email: input.email.trim().toLowerCase(),
     name: input.name.trim(),
     kind: input.kind ?? 'influencer',
     // No password yet — they set one from an invite. `invited` is what tells
     // the hub they have never signed in.
-    status: 'invited',
+    status: input.status ?? 'invited',
     data: input.data ?? {},
     createdAt: at,
     updatedAt: at,
@@ -107,9 +111,18 @@ export async function getPartnerByEmail(email: string): Promise<Partner | null> 
   return row ? toPartner(row) : null
 }
 
+/**
+ * Every real partner, newest first.
+ *
+ * Leaves out the house account that owns the store's own discount codes (see
+ * `lib/store-codes`). It is a partner only so those codes can ride the same
+ * checkout path; it is nobody to pay, list or send a payout run to.
+ */
 export async function listPartners(): Promise<Partner[]> {
   const db = await getEngine()
-  const rows = await db.all<PartnerRow>('SELECT * FROM partners ORDER BY created_at DESC')
+  const rows = await db.all<PartnerRow>('SELECT * FROM partners WHERE id <> ? ORDER BY created_at DESC', [
+    HOUSE_PARTNER_ID,
+  ])
   return rows.map(toPartner)
 }
 
@@ -226,6 +239,12 @@ export async function updateCode(
     patch.status ?? existing.status,
     code,
   ])
+}
+
+/** Remove a code outright. Orders that used it keep the code and rate they were sold at. */
+export async function deleteCode(code: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('DELETE FROM partner_codes WHERE code = ?', [code])
 }
 
 // ─── Terms ────────────────────────────────────────────────────────────────────

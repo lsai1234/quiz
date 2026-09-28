@@ -390,7 +390,7 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
     id: 'privacy',
     title: 'Privacy notice',
     version: PRIVACY_VERSION,
-    effectiveFrom: '2026-08-30',
+    effectiveFrom: '2026-09-28',
     summary:
       'What we collect, why, who else sees it, how long we keep it, and how to get it back or have it deleted.',
     sections: [
@@ -411,8 +411,18 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
           'From the safety screen: whether you are pregnant or breastfeeding, whether you take prescription medication, and whether you have a shellfish allergy. This is health information and we treat it differently from everything else — see the next section.',
           'When you subscribe: your email address, your delivery address and phone number, and your payment details. Payment card details go straight to Stripe and never reach our systems.',
           'While you are a member: your plan and how you change it, your order history, the emails we have sent you, and any check-ins you write.',
-          'Automatically: anonymous usage events so we can see where people get stuck in the quiz. These carry a random per-visit id that is discarded when you close the tab. No cookie, no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
+          'Automatically: anonymous usage events so we can see where people get stuck in the quiz. These carry a random per-visit id that is discarded when you close the tab. They use no cookie and no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
           'You can switch that off for this device at the bottom of this page, and it stops straight away.',
+        ],
+      },
+      {
+        id: 'advertising',
+        heading: 'Advertising cookies, only if you say yes',
+        body: [
+          'We advertise on Facebook and Instagram, and we use the Meta Pixel to find out whether those ads work. We only load it if you say yes when we ask, and we do not ask at all if your browser sends Do Not Track or Global Privacy Control.',
+          'If you say yes, Meta Platforms Ireland Ltd sets cookies in your browser and receives which of our pages you visit, when you start and finish the quiz, what you add to your basket and start to buy, and the value of any order you place. Meta may link that to your Facebook or Instagram account and use it to measure and target ads, under its own privacy policy.',
+          'Meta is never sent your quiz answers, anything from the safety screen, your name, your email address or your delivery address. The Pixel does not run in your account pages.',
+          'We rely on your consent for this. You can change your answer at any time at the bottom of this page, and we stop sending anything straight away. Meta may process this information in the United States, covered by the EU-US Data Privacy Framework and its UK Extension.',
         ],
       },
       {
@@ -452,7 +462,8 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
         heading: 'Who else sees it',
         body: [
           'Stripe, for payments. PowerBody, our supplier, who receive your name, delivery address, phone and email so they can send your order — and nothing about your health. Our email provider, to deliver receipts and notices. Vercel, who host the site. OpenAI, as described above.',
-          'Each of them acts on our instructions under a contract and cannot use your information for their own purposes. We do not sell your data, and we never share it with advertisers.',
+          'Each of them acts on our instructions under a contract and cannot use your information for their own purposes. We do not sell your data.',
+          'Meta, only if you have said yes to advertising cookies — see above. Meta is not acting only on our instructions: it uses what it receives for its own advertising too, which is exactly why we ask first.',
         ],
       },
       {

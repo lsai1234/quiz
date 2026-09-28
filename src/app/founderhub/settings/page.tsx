@@ -31,7 +31,7 @@ export default function SettingsPage() {
           maxWidth: '42rem',
         }}
       >
-        Where the app reads products, stock and payments from, and the two marketing features.
+        Where the app reads products, stock and payments from, and the marketing tools.
         Each integration defaults to mock while we build.
       </p>
       <SettingsIndex />

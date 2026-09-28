@@ -72,6 +72,21 @@ interface PersistedSettings {
    *  `lib/experiments/assignment.ts`. Absent = off, everyone gets v1. */
   quizExperiment?: QuizExperimentConfig
   consultRollout?: ConsultRollout
+  /** The Meta (Facebook/Instagram) Pixel. See `lib/analytics/meta-pixel.ts`. */
+  metaPixel?: MetaPixelSettings
+}
+
+export interface MetaPixelSettings {
+  /** The Pixel's numeric id, from Meta Events Manager. Null = not connected. */
+  pixelId: string | null
+  /** Off keeps the id saved but loads nothing — a pause, not a disconnect. */
+  enabled: boolean
+}
+
+/** A Pixel id is a string of digits — 15 or 16 today; allow some room either way. */
+export function normalisePixelId(input: unknown): string | null {
+  const id = typeof input === 'string' ? input.replace(/\s+/g, '') : ''
+  return /^\d{8,20}$/.test(id) ? id : null
 }
 
 const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [], topProductIds: [] }
@@ -144,6 +159,28 @@ export async function getQuizExperiment(): Promise<QuizExperimentConfig> {
 }
 export async function setQuizExperiment(config: QuizExperimentConfig): Promise<void> {
   await saveSettings({ quizExperiment: normaliseExperiment(config) })
+}
+
+// ── Meta Pixel ──
+// Set in the Founders Hub. `NEXT_PUBLIC_META_PIXEL_ID` is the fallback for an
+// environment nobody has configured through the hub — a hub setting, once
+// saved, always wins, including one that switches the Pixel off.
+export async function getMetaPixelSettings(): Promise<MetaPixelSettings> {
+  const settings = await loadSettings()
+  if (settings.metaPixel) {
+    return { pixelId: normalisePixelId(settings.metaPixel.pixelId), enabled: settings.metaPixel.enabled === true }
+  }
+  const fromEnv = normalisePixelId(process.env.NEXT_PUBLIC_META_PIXEL_ID)
+  return { pixelId: fromEnv, enabled: fromEnv !== null }
+}
+export async function setMetaPixelSettings(next: MetaPixelSettings): Promise<void> {
+  const pixelId = normalisePixelId(next.pixelId)
+  await saveSettings({ metaPixel: { pixelId, enabled: pixelId !== null && next.enabled === true } })
+}
+/** The id the browser should load, or null when the Pixel is off or unset. */
+export async function getLiveMetaPixelId(): Promise<string | null> {
+  const s = await getMetaPixelSettings()
+  return s.enabled ? s.pixelId : null
 }
 
 // ── Amp Consult rollout (H11) ──

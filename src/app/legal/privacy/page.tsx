@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { LegalDocumentView } from '@/components/legal/LegalDocumentView'
 import { getPrivacyDocument, missingEntityDetails } from '@/lib/legal/content'
 import { AnalyticsOptOut } from '@/components/legal/AnalyticsOptOut'
+import { AdConsentControl } from '@/components/legal/AdConsentControl'
 
 export const metadata: Metadata = {
   title: 'Privacy notice · CHRGD',
@@ -31,6 +32,15 @@ export default function PrivacyPage() {
           Turn usage analytics off
         </h2>
         <AnalyticsOptOut />
+      </section>
+      <section className="mt-10">
+        <h2
+          className="text-lg font-black mb-3"
+          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+        >
+          Advertising cookies
+        </h2>
+        <AdConsentControl />
       </section>
     </LegalDocumentView>
   )

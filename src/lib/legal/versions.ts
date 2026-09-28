@@ -14,7 +14,7 @@
 /** Bump on a material change. Triggers the in-hub re-consent notice. */
 export const TERMS_VERSION = '2026-08-12'
 export const DISCLAIMER_VERSION = '2026-07-29'
-export const PRIVACY_VERSION = '2026-08-30'
+export const PRIVACY_VERSION = '2026-09-28'
 
 /**
  * The Article 9 consent notice, shown at the safety screen.

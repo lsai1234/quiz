@@ -26,6 +26,7 @@ import { commissionFor, confirmAfterFor, kindForOrder, renewalEarns, type Commis
 import { sortedHistory, termsInForce } from './terms'
 import { buildInvoice, type SelfBilledInvoice } from './invoice'
 import * as repo from './repo'
+import { isHousePartner } from './house'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import type { Order } from '@/lib/orders/types'
 import type { PartnerBalance, PartnerCommission } from './types'
@@ -59,6 +60,9 @@ export async function accrueForOrder(
 
   const partner = await repo.getPartner(resolved.partnerId)
   if (!partner) return { commission: null, reason: 'The partner no longer exists.' }
+
+  // A store code (`lib/store-codes`) belongs to us. There is nobody to pay.
+  if (isHousePartner(partner.id)) return { commission: null, reason: 'A store code — nobody earns commission on it.' }
 
   /**
    * Self-referral: a partner buying through their own code.

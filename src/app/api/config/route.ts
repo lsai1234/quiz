@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import {
-  getConsultRollout, getDataSourceSetting, getPortalPricingOverrides, getQuizExperiment, syncPortalRuntime,
+  getConsultRollout, getDataSourceSetting, getLiveMetaPixelId, getPortalPricingOverrides, getQuizExperiment,
+  syncPortalRuntime,
 } from '@/lib/portal/store'
 import { CONSULT_ARM_COOKIE, heroOfferFor, parseConsultArm } from '@/lib/experiments/consult'
 import { getPaymentSource } from '@/lib/payments'
@@ -63,5 +64,11 @@ export async function GET() {
     ),
     /** Whether the consult asks the AI layer for Amp's words (level 4). */
     consultAi: consultRollout.ai,
+    /**
+     * The Meta Pixel to load, or null. Not a secret — a Pixel id is in the page
+     * source of every site that runs one. The browser still loads nothing until
+     * the visitor has said yes to advertising cookies (`MetaPixel`).
+     */
+    metaPixelId: await getLiveMetaPixelId(),
   })
 }

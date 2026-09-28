@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { redeemPartnerCode, type RedeemChannel } from '@/lib/partners/redeem'
+import { isHousePartner } from '@/lib/partners/house'
 import { checkFounderCode } from '@/lib/founder-codes/redeem'
 import { codeAttemptAllowed, recordCodeMiss } from '@/lib/founder-codes/guess-limit'
 import { FOUNDER_CODE_LABELS } from '@/lib/founder-codes/types'
@@ -97,6 +98,7 @@ export async function POST(req: Request) {
     ok: true,
     code: result.code.code,
     discountPct: result.discountPct,
-    partnerName: result.partner.name,
+    // A store code is ours, not a person's, so the basket has no name to show.
+    partnerName: isHousePartner(result.partner.id) ? null : result.partner.name,
   })
 }

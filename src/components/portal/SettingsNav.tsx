@@ -57,6 +57,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         icon: 'credit-card',
       },
       {
+        slug: 'discount-codes',
+        title: 'Discount codes',
+        blurb:
+          'Simple percentage-off codes for customers — give it a name, pick a percentage, delete it when the campaign ends.',
+        icon: 'diamond',
+      },
+      {
         slug: 'codes',
         title: 'Founder codes',
         blurb:
@@ -104,6 +111,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         title: 'Share cards',
         blurb: 'The photograph printed behind the stack on every share card.',
         icon: 'share',
+      },
+      {
+        slug: 'meta-pixel',
+        title: 'Meta Pixel',
+        blurb: 'Connect your Meta (Facebook and Instagram) ads, so they can see who visits, does the quiz and buys.',
+        icon: 'crosshair',
       },
       {
         slug: 'shop-banners',

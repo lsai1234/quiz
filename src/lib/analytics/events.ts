@@ -12,6 +12,7 @@
  */
 
 import { getQuizArm } from '@/lib/experiments/client'
+import { forwardToPixel } from './meta-pixel'
 
 export const SHOP_EVENTS = [
   'shop_view',
@@ -284,6 +285,9 @@ export function track(event: AnalyticsEvent, props: EventProps = {}): void {
       // which the error reporter would log as a crash.
       void fetch('/api/analytics', { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {})
     }
+    // The Meta Pixel, for the few events ads care about — and only once the
+    // visitor has said yes to advertising cookies. See `meta-pixel.ts`.
+    forwardToPixel(event, props)
     if (process.env.NODE_ENV !== 'production') console.debug('[analytics]', event, props)
   } catch {
     /* analytics must never break the app */

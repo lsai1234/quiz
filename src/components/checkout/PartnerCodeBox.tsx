@@ -14,7 +14,8 @@ const REFERRAL_COOKIE = 'partner_ref'
 export interface AppliedCode {
   code: string
   discountPct: number
-  partnerName: string
+  /** Null for one of the store's own codes, which belong to nobody. */
+  partnerName: string | null
   /**
    * Set when the code is one of ours rather than a partner's.
    *
@@ -185,7 +186,8 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
               looking at the receipt, rather than by working backwards from a
               total that is less generous than they had counted on. */}
           <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
-            {applied.partnerName}’s code — takes {Math.round(applied.discountPct * 100)}% off the regular price, instead of any other discount
+            {applied.partnerName ? `${applied.partnerName}’s code — takes` : 'Takes'}{' '}
+            {Math.round(applied.discountPct * 100)}% off the regular price, instead of any other discount
           </p>
           {fromLink && (
             <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>

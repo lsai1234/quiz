@@ -5,6 +5,7 @@ import { setDataSourceOverride, type DataSourceMode } from '@/lib/data-source'
 import { setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 import { setQuizArm } from '@/lib/experiments/client'
 import { isHeroOffer } from '@/lib/experiments/consult'
+import { setMetaPixelId } from '@/lib/analytics/meta-pixel'
 import type { QuizArm, QuizExperimentConfig } from '@/lib/experiments/assignment'
 
 /**
@@ -30,7 +31,9 @@ export function PortalSync() {
         quizBudget?: QuizExperimentConfig['budget']
         heroOffer?: unknown
         consultAi?: unknown
+        metaPixelId?: string | null
       }) => {
+        setMetaPixelId(typeof data.metaPixelId === 'string' ? data.metaPixelId : null)
         if (data.dataSourceMode) setDataSourceOverride(data.dataSourceMode)
         if (data.pricingOverrides) setPricingOverrides(data.pricingOverrides)
         if (data.quizArm === 'v1' || data.quizArm === 'v2') {
