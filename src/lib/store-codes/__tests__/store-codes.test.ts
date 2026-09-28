@@ -47,10 +47,21 @@ describe('store codes', () => {
     }
   })
 
-  it('is refused on a single shop product, the same as a partner code', async () => {
+  it('works on single shop products too — unlike a partner code', async () => {
     await createStoreCode({ name: 'SHELF10', percent: 10 })
-    const result = await redeemPartnerCode('SHELF10', { subtotal: 40, channel: 'shop' }, never)
-    expect(result.ok).toBe(false)
+    for (const source of ['typed', 'referral'] as const) {
+      const result = await redeemPartnerCode('shelf10', { subtotal: 40, channel: 'shop', source }, never)
+      expect(result.ok && result.discountPct).toBe(0.1)
+      expect(result.ok && result.attributionOnly).toBeFalsy()
+    }
+  })
+
+  it('still refuses a partner code in the shop, in the same words as a made-up one', async () => {
+    await createPartner({ email: 'shopenum@example.com', name: 'Shop Enum', code: 'SHOPENUM20' })
+    const real = await redeemPartnerCode('SHOPENUM20', { subtotal: 40, channel: 'shop' }, never)
+    const fake = await redeemPartnerCode('MADEUP99', { subtotal: 40, channel: 'shop' }, never)
+    expect(real.ok).toBe(false)
+    expect(real).toEqual(fake)
   })
 
   it('replaces the bundle discount rather than adding to it', async () => {

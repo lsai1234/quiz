@@ -7,9 +7,9 @@ import { Icon } from '@/components/ui/Icon'
 /**
  * Store discount codes, in the Founders Hub.
  *
- * A name and a percentage. The code works for anyone until it is deleted — on
- * the quiz stack, the curated bundles and subscriptions, the same places a
- * partner's code works (see `lib/store-codes` for why they share a path).
+ * A name and a percentage. The code works for anyone, on anything, until it is
+ * deleted — quiz stacks, bundles, subscriptions and single products from the
+ * shop (see `lib/store-codes` for why they share the partner-code path).
  *
  * Only ever one code per order. The code's rate replaces the bundle, subscribe
  * & save or intro discount the order would otherwise get — whichever is deeper
@@ -222,8 +222,8 @@ export function StoreCodes() {
           thin product the saving can be less than the headline percentage.
         </p>
         <p style={meta}>
-          Codes work on quiz stacks, bundles and subscriptions — not on single products bought from the
-          shop, the same as partner codes. A link ending <strong>?ref=YOURCODE</strong> applies the code
+          Codes work on everything — quiz stacks, bundles, subscriptions and single products from the
+          shop. A link ending <strong>?ref=YOURCODE</strong> applies the code
           automatically, which is handy for ads.
         </p>
       </div>

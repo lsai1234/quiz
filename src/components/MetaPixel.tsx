@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Button } from '@/components/system'
+import { Icon } from '@/components/ui/Icon'
 import {
   browserSaysNo,
+  captureClickId,
   getAdConsent,
   getMetaPixelId,
   pixelAllowedOn,
@@ -14,20 +15,26 @@ import {
   subscribeMetaPixel,
 } from '@/lib/analytics/meta-pixel'
 
+/** Long enough that the landing screen is seen whole before anything appears. */
+const ASK_AFTER_MS = 6000
+
 /**
- * The Meta Pixel's page views, and the cookie question that has to come first.
+ * The Meta Pixel's page views, and the one-line cookie question it needs.
  *
- * Mounted once in the root layout. Renders nothing at all unless a Pixel is
- * connected in the Founders Hub — so until then there is no prompt, no script
- * and no change to any page.
+ * Mounted once in the root layout. Renders nothing unless a Pixel is connected
+ * in the Founders Hub.
  *
- * ── Why a prompt, when the rest of the app avoids one ───────────────────────
- * Our own analytics get away without a banner because they set no cookie and
- * load no third party (see `AnalyticsOptOut`). The Pixel does both, and PECR
- * needs a yes before it runs. So the question is asked once, at the TOP of the
- * screen — never the bottom, where every page in this app anchors the button it
- * exists to have pressed — and "No thanks" is exactly as easy as "Accept".
- * The answer can be changed at any time from the privacy notice.
+ * ── Why there is a question at all ──────────────────────────────────────────
+ * Our own analytics need no banner: no cookie, no third party (see
+ * `AnalyticsOptOut`). The Pixel sets cookies for advertising, and UK law needs a
+ * yes before it does — the 2025 relaxation covers analytics, not ads.
+ *
+ * ── Why it is this small ────────────────────────────────────────────────────
+ * It is a single-line pill, not a banner: it waits a few seconds rather than
+ * greeting someone on landing, sits at the top — never over the bottom-anchored
+ * button every page here exists to have pressed — and does not block, dim or
+ * scroll-lock anything. Nothing is lost while it waits: events are held in
+ * memory and sent on a yes (`meta-pixel.ts`). Closing it counts as no.
  */
 export function MetaPixel() {
   const pathname = usePathname() ?? '/'
@@ -35,65 +42,80 @@ export function MetaPixel() {
   // Read after mount only — localStorage and navigator do not exist on the server.
   const [consent, setConsent] = useState<'granted' | 'denied' | null | 'unknown'>('unknown')
   const [refused, setRefused] = useState(true)
+  const [due, setDue] = useState(false)
 
   useEffect(() => {
+    captureClickId()
     setConsent(getAdConsent())
     setRefused(browserSaysNo())
-    return subscribeMetaPixel(() => setConsent(getAdConsent()))
+    const timer = setTimeout(() => setDue(true), ASK_AFTER_MS)
+    const unsubscribe = subscribeMetaPixel(() => setConsent(getAdConsent()))
+    return () => {
+      clearTimeout(timer)
+      unsubscribe()
+    }
   }, [])
 
-  // One PageView per route. The App Router swaps pages without a load, so the
+  // One PageView per route — sent now if they have said yes, held if they have
+  // not been asked yet. The App Router swaps pages without a load, so the
   // Pixel's own automatic PageView would only ever see the first one.
   useEffect(() => {
-    if (pixelId && consent === 'granted') pixelPageView()
+    if (pixelId && consent !== 'unknown') pixelPageView()
   }, [pixelId, consent, pathname])
 
-  if (!pixelId || consent !== null || refused || !pixelAllowedOn(pathname)) return null
+  if (!pixelId || !due || consent !== null || refused || !pixelAllowedOn(pathname)) return null
 
   return (
     <div
-      role="dialog"
-      aria-live="polite"
-      aria-label="Cookies for advertising"
+      role="region"
+      aria-label="Advertising cookies"
+      className="flex items-center"
       style={{
         position: 'fixed',
-        top: 'var(--space-3)',
-        left: 'var(--space-3)',
-        right: 'var(--space-3)',
-        marginInline: 'auto',
-        maxWidth: '28rem',
+        top: 'var(--space-2)',
+        left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: 60,
-        padding: 'var(--space-4)',
-        borderRadius: 'var(--radius-lg)',
+        maxWidth: 'calc(100vw - var(--space-4))',
+        gap: 'var(--space-2)',
+        padding: 'var(--space-1) var(--space-1) var(--space-1) var(--space-3)',
+        borderRadius: 'var(--radius-pill)',
         background: 'var(--ground-base)',
         border: '1px solid var(--edge)',
-        boxShadow: 'var(--shadow-panel)',
-        display: 'grid',
-        gap: 'var(--space-3)',
+        fontSize: 'var(--text-meta)',
+        lineHeight: 'var(--leading-snug)',
+        color: 'var(--ink-3)',
+        whiteSpace: 'nowrap',
+        animation: 'metaPixelIn var(--duration-slow) var(--ease-spring) both',
       }}
     >
-      <p
+      <style>{'@keyframes metaPixelIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}@media (prefers-reduced-motion: reduce){[aria-label="Advertising cookies"]{animation:none!important}}'}</style>
+      <Link href="/legal/privacy#advertising" style={{ color: 'inherit', textDecoration: 'none' }}>
+        Cookies for ads?
+      </Link>
+      <button
+        type="button"
+        onClick={() => setAdConsent('granted')}
+        className="system-focus"
         style={{
-          fontSize: 'var(--text-body-sm)',
-          lineHeight: 'var(--leading-snug)',
-          color: 'var(--ink-2)',
-          margin: 0,
+          padding: 'var(--space-1) var(--space-3)',
+          borderRadius: 'var(--radius-pill)',
+          background: 'var(--surface-2)',
+          color: 'var(--ink-1)',
+          fontWeight: 'var(--weight-strong)',
         }}
       >
-        Can we use cookies to measure our ads on Facebook and Instagram? Meta would see which pages
-        you visit here and whether you buy — never your quiz answers.{' '}
-        <Link href="/legal/privacy#advertising" style={{ color: 'var(--ink-1)', textDecoration: 'underline' }}>
-          More
-        </Link>
-      </p>
-      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-        <Button size="sm" variant="primary" onClick={() => setAdConsent('granted')}>
-          Accept
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => setAdConsent('denied')}>
-          No thanks
-        </Button>
-      </div>
+        OK
+      </button>
+      <button
+        type="button"
+        onClick={() => setAdConsent('denied')}
+        aria-label="No thanks"
+        className="system-focus flex items-center justify-center"
+        style={{ padding: 'var(--space-1)', borderRadius: 'var(--radius-pill)', color: 'var(--ink-3)' }}
+      >
+        <Icon name="x" size={14} />
+      </button>
     </div>
   )
 }

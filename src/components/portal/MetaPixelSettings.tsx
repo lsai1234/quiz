@@ -137,10 +137,12 @@ export function MetaPixelSettings() {
       </Card>
 
       <Note tone="info" icon="info">
-        Visitors are asked first. A small prompt at the top of the screen asks whether Meta may use
-        cookies, and nothing is loaded or sent until they say yes. Anyone whose browser says Do Not
-        Track is never asked. Expect Meta to see fewer visitors than your own funnel numbers for that
-        reason — that is the law working, not the Pixel breaking.
+        Visitors are asked, quietly. A few seconds in, a one-line &ldquo;Cookies for ads? OK
+        &times;&rdquo; pill appears at the top of the screen — it blocks nothing and closing it counts as
+        no. Until they answer, their visit is held on the page and sent the moment they tap OK, so
+        asking late loses nothing. Anyone whose browser says Do Not Track is never asked. Expect Meta
+        to see somewhat fewer visitors than your own funnel numbers — that is the law working, not the
+        Pixel breaking.
       </Note>
 
       <section>

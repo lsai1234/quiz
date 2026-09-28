@@ -18,6 +18,12 @@
  * does not scrape buttons or page metadata on its own — the quiz has health
  * questions on screen, and nothing about them may reach an ad platform.
  *
+ * ── Held, not lost, while we wait to ask ────────────────────────────────────
+ * The question is asked quietly and a few seconds in, not on landing. Until it
+ * is answered, events are held in memory on this page — nothing stored, nothing
+ * sent — and the ad click id is read off the URL into memory too. A yes sends
+ * them on, so asking late costs Meta nothing; a no drops them.
+ *
  * ── One source of events ────────────────────────────────────────────────────
  * The Pixel is fed from `track()`, the same call every funnel event already
  * goes through. So a new `purchase` call site reports to Meta without anybody
@@ -94,10 +100,12 @@ export function setAdConsent(value: AdConsent): void {
     /* storage unavailable — the choice holds for this page load only */
   }
   if (value === 'granted') {
-    loadMetaPixel()
-  } else if (window.fbq) {
+    if (loadMetaPixel()) flushHeld()
+  } else {
+    held.length = 0
+    heldPageView = false
     // Withdrawn after the script had loaded: tell it to stop, and stop sending.
-    window.fbq('consent', 'revoke')
+    if (window.fbq) window.fbq('consent', 'revoke')
   }
   listeners.forEach((l) => l())
 }
@@ -151,7 +159,8 @@ function installStub(): void {
 /** Load and initialise the Pixel, if it is allowed to run. Idempotent. */
 export function loadMetaPixel(): boolean {
   if (!pixelActive() || !pixelId) return false
-  if (initialisedFor === pixelId) return true
+  if (initialisedFor === pixelId && window.fbq) return true
+  writeClickId()
   installStub()
   window.fbq!('consent', 'grant')
   // No automatic button or metadata scraping — see the header.
@@ -161,11 +170,70 @@ export function loadMetaPixel(): boolean {
   return true
 }
 
+// ── Holding, until the visitor has answered ──────────────────────────────────
+
+/** Enough for a whole quiz-to-checkout journey; anything past it is noise. */
+const MAX_HELD = 30
+const held: PixelCall[] = []
+let heldPageView = false
+
+/** Whether an event now would be held rather than sent or dropped. */
+function holding(): boolean {
+  if (typeof window === 'undefined' || !pixelId) return false
+  if (browserSaysNo() || getAdConsent() !== null) return false
+  return pixelAllowedOn(window.location.pathname)
+}
+
+/**
+ * Send what was held. ONE PageView for however many pages they saw first: the
+ * Pixel stamps a page view with the URL it is sent from, so replaying five of
+ * them now would report five views of the current page.
+ */
+function flushHeld(): void {
+  const calls = held.splice(0)
+  if (heldPageView) window.fbq!('track', 'PageView')
+  heldPageView = false
+  calls.forEach(send)
+}
+
+// ── The ad click id ──────────────────────────────────────────────────────────
+
+let clickId: { fbclid: string; at: number } | null = null
+
+/**
+ * Remember the `fbclid` an ad click arrived with — in memory only.
+ *
+ * It is what ties a purchase back to the ad. The Pixel reads it off the URL
+ * when it starts, but by the time a visitor answers the prompt they have
+ * usually moved on from the landing URL, so it is kept here until then.
+ */
+export function captureClickId(): void {
+  if (clickId || typeof window === 'undefined') return
+  const fbclid = new URLSearchParams(window.location.search).get('fbclid')
+  if (fbclid) clickId = { fbclid, at: Date.now() }
+}
+
+/** Set Meta's `_fbc` cookie from the held click id, once consent allows cookies. */
+function writeClickId(): void {
+  if (!clickId || document.cookie.split('; ').some((c) => c.startsWith('_fbc='))) return
+  const value = `fb.1.${clickId.at}.${clickId.fbclid}`
+  document.cookie = `_fbc=${encodeURIComponent(value)}; path=/; max-age=${90 * 24 * 60 * 60}; SameSite=Lax`
+}
+
 // ── Sending ──────────────────────────────────────────────────────────────────
 
 export function pixelPageView(): void {
+  if (holding()) {
+    heldPageView = true
+    return
+  }
   if (!loadMetaPixel()) return
   window.fbq!('track', 'PageView')
+}
+
+function send(call: PixelCall): void {
+  if (call.eventID) window.fbq!(call.kind, call.name, call.params, { eventID: call.eventID })
+  else window.fbq!(call.kind, call.name, call.params)
 }
 
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
@@ -257,9 +325,12 @@ export function pixelEventFor(event: AnalyticsEvent, props: EventProps): PixelCa
 export function forwardToPixel(event: AnalyticsEvent, props: EventProps): void {
   try {
     const call = pixelEventFor(event, props)
-    if (!call || !loadMetaPixel()) return
-    if (call.eventID) window.fbq!(call.kind, call.name, call.params, { eventID: call.eventID })
-    else window.fbq!(call.kind, call.name, call.params)
+    if (!call) return
+    if (holding()) {
+      if (held.length < MAX_HELD) held.push(call)
+      return
+    }
+    if (loadMetaPixel()) send(call)
   } catch {
     /* an ad pixel must never break the app */
   }

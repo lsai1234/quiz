@@ -93,6 +93,12 @@ describe('a basket under a founder code', () => {
     expect(priceBasket(resolved, getPricingConfig(), null)).toEqual(priceOneOffLines(lines))
   })
 
+  it('prices a store code exactly as the checkout bills it', () => {
+    const priced = priceBasket(resolved, getPricingConfig(), null, 0.15)
+    expect(priced).toEqual(priceOneOffLines(lines, getPricingConfig(), 0.15))
+    expect(priced.total).toBeLessThan(priceOneOffLines(lines).total)
+  })
+
   it('reports what we pay the supplier, ex VAT, for the delivery band to read', () => {
     // PowerBody band on the WHOLESALE value of the parcel, not on the retail
     // total — using the wrong one puts a £60 basket in a band it never reaches.

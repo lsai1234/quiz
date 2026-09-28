@@ -2,7 +2,8 @@
  * Store codes — simple percentage-off codes the founders make for campaigns.
  *
  * A name and a percentage, nothing else. `SUMMER15` takes 15% off, for anyone,
- * until it is deleted.
+ * on anything — single shop products included, which partner codes are not —
+ * until it is deleted. The shop exception lives in `redeemPartnerCode`.
  *
  * ── Why these are partner codes underneath ─────────────────────────────────
  * A partner code already does everything a store code needs to, on every

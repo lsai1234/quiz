@@ -414,7 +414,7 @@ export function ShopShell() {
    * billing £48 is the failure `priceBasket` exists to prevent.
    */
   const config = getPricingConfig()
-  const pricedBasket = priceBasket(resolved, config, appliedCode?.founderKind ?? null)
+  const pricedBasket = priceBasket(resolved, config, appliedCode?.founderKind ?? null, appliedCode?.discountPct ?? 0)
   const supplierValue = basketSupplierValue(resolved, config)
   // Counted from the RESOLVED lines, like every price on this page. Counting
   // raw persisted lines showed "2 · £0.00" for a basket of products that had

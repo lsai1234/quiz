@@ -3,7 +3,9 @@
  */
 import {
   AD_CONSENT_KEY,
+  captureClickId,
   forwardToPixel,
+  pixelPageView,
   pixelAllowedOn,
   pixelEventFor,
   setAdConsent,
@@ -69,5 +71,43 @@ describe('the Meta Pixel', () => {
     expect(pixelAllowedOn('/founderhub/settings')).toBe(false)
     expect(pixelAllowedOn('/myhub')).toBe(false)
     expect(pixelAllowedOn('/partner/login')).toBe(false)
+  })
+})
+
+describe('before the visitor has answered', () => {
+  it('holds events in memory and sends them on a yes', () => {
+    setMetaPixelId('1234567890123456')
+    pixelPageView()
+    pixelPageView()
+    forwardToPixel('quiz_start', {})
+    forwardToPixel('quiz_complete', {})
+    expect(window.fbq).toBeUndefined()
+
+    setAdConsent('granted')
+    const names = window.fbq!.queue.map((a) => (a as unknown[]).slice(0, 2).join(':'))
+    // One PageView for however many pages were seen, then the held events in order.
+    expect(names.filter((n) => n === 'track:PageView')).toHaveLength(1)
+    expect(names.indexOf('trackCustom:StartQuiz')).toBeLessThan(names.indexOf('track:Lead'))
+  })
+
+  it('drops what it held on a no', () => {
+    setMetaPixelId('1234567890123456')
+    forwardToPixel('quiz_complete', {})
+    setAdConsent('denied')
+    expect(window.fbq).toBeUndefined()
+    // Changing their mind later sends nothing from before.
+    setAdConsent('granted')
+    const names = window.fbq!.queue.map((a) => (a as unknown[])[1])
+    expect(names).not.toContain('Lead')
+  })
+
+  it('keeps the ad click id until cookies are allowed', () => {
+    window.history.replaceState(null, '', '/?fbclid=abc123')
+    captureClickId()
+    window.history.replaceState(null, '', '/quiz')
+    setMetaPixelId('1234567890123456')
+    expect(document.cookie).not.toMatch(/_fbc=/)
+    setAdConsent('granted')
+    expect(decodeURIComponent(document.cookie)).toMatch(/_fbc=fb\.1\.\d+\.abc123/)
   })
 })

@@ -293,8 +293,8 @@ export function BasketDrawer({
 
                   Named and itemised rather than a lump "you saved £x": a saving
                   a customer cannot account for reads as marketing. There is
-                  only ever one line — a shop basket earns the bundle tier and
-                  nothing else, because partner codes do not apply here. */}
+                  only ever one line — the bundle tier, or a store code if one
+                  is applied and deeper. Never both. */}
               {priced.discount > 0.01 && (
                 <>
                   <div className="flex items-center justify-between">
@@ -308,6 +308,8 @@ export function BasketDrawer({
                     <span className="text-sm" style={{ color: GREEN }}>
                       {founderKind
                         ? appliedCode?.founderLabel ?? 'Founder code'
+                        : appliedCode && priced.partnerPct > 0 && priced.partnerPct >= priced.tierPct
+                        ? `${appliedCode.code} · ${Math.round(priced.partnerPct * 100)}% off`
                         : `${priced.tierLabel ?? 'Bundle discount'} · ${Math.round(priced.tierPct * 100)}% off`}
                     </span>
                     <span className="text-sm font-medium tabular-nums" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>

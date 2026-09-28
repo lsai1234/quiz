@@ -18,6 +18,7 @@
  */
 import { checkCode, normaliseCode } from './codes'
 import * as repo from './repo'
+import { isHousePartner } from './house'
 import type { Partner, PartnerCode } from './types'
 
 /**
@@ -128,14 +129,22 @@ export async function redeemPartnerCode(
     only. That is not an enumeration surface: no code is being typed, so there
     is nothing for an answer to confirm.
   */
-  if (!eligible && (context.source ?? 'typed') === 'typed') {
+  const code = await repo.getCode(normaliseCode(typed))
+
+  /*
+    The one exception is a store code (`lib/store-codes`): the founders' own
+    campaign codes work on anything, single shop products included. Asking the
+    table first does not reopen the enumeration hole — a partner's real code and
+    a code that never existed still get the identical refusal below.
+  */
+  const storeCode = code !== null && isHousePartner(code.partnerId)
+  if (!eligible && !storeCode && (context.source ?? 'typed') === 'typed') {
     return {
       ok: false,
       reason: 'Discount codes apply to bundles and subscriptions, not single products from the shop.',
     }
   }
 
-  const code = await repo.getCode(normaliseCode(typed))
   if (!code) return { ok: false, reason: 'We don’t recognise that code.' }
 
   const partner = await repo.getPartner(code.partnerId)
@@ -164,7 +173,7 @@ export async function redeemPartnerCode(
     an undiscounted order has MORE contribution to share than a 25%-off one,
     so this is the cheapest attribution the programme pays for.
   */
-  if (!eligible) {
+  if (!eligible && !storeCode) {
     return { ok: true, code, partner, discountPct: 0, attributionOnly: true }
   }
 

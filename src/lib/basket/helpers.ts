@@ -124,6 +124,12 @@ export function priceBasket(
    * prevent, and a founder code changes prices more than any tier does.
    */
   founderKind: FounderCodeKind | null = null,
+  /**
+   * A percentage code's rate (0–1) — a store code, the only kind that works in
+   * the shop. Replaces the bundle tier rather than adding to it, exactly as
+   * `/api/cart` bills it.
+   */
+  codePct = 0,
 ): OneOffPricing {
   const lines = resolved.map(({ product, variant, quantity }) => ({
     price: variant.price,
@@ -132,7 +138,7 @@ export function priceBasket(
   }))
   return founderKind
     ? priceAtFounderTerms(founderKind, lines, config)
-    : priceOneOffLines(lines, config)
+    : priceOneOffLines(lines, config, codePct)
 }
 
 /** What we pay PowerBody for a basket, ex VAT — what their delivery bands read. */
