@@ -335,13 +335,16 @@ describe('the way back', () => {
 })
 
 describe('splitting the prize', () => {
-  it('puts everything up to the amount in the hero', () => {
+  it('is always "Win" and the amount, over the rest of the prize', () => {
     expect(splitPrize('Win £200 of supplements')).toEqual({ hero: 'Win £200', rest: 'of supplements' })
-    expect(splitPrize('Win £1,000')).toEqual({ hero: 'Win £1,000', rest: '' })
+    expect(splitPrize('£200 of free supplements')).toEqual({ hero: 'Win £200', rest: 'of free supplements' })
   })
 
-  it('supplies the verb when the founder left it off', () => {
-    expect(splitPrize('£200 of free supplements')).toEqual({ hero: 'Win £200', rest: 'of free supplements' })
+  it('keeps the template\u2019s two lines when the prize is typed as just an amount', () => {
+    // The live campaign reads "Up to £200": the hero is the template's, and the
+    // second line falls back rather than disappearing.
+    expect(splitPrize('Up to £200')).toEqual({ hero: 'Win £200', rest: 'of supplements' })
+    expect(splitPrize('Win £1,000')).toEqual({ hero: 'Win £1,000', rest: 'of supplements' })
   })
 
   it('prints a prize with no amount whole', () => {

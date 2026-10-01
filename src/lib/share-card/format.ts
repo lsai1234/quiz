@@ -312,23 +312,23 @@ export interface ShareEntry {
 export const ENTRY_PRODUCTS = 5
 
 /**
- * The prize, split so the amount can be set in the accent.
+ * The prize, as the card's two-line hero: "WIN £200" over "OF SUPPLEMENTS".
  *
- * `prize` is founder-typed — "Win £200 of supplements" — so the hero line is
- * everything up to and including the amount and the rest goes underneath.
- * A prize typed without its verb ("£200 of supplements") still reads as an
- * offer; one with no amount at all is printed whole.
+ * The wording is the template's and the amount is the campaign's. The live
+ * prize was typed "Up to £200", and taking the hero from the sentence as typed
+ * set "UP TO £200" on one line with nothing under it — a different card from
+ * the one signed off. So the verb is always "Win", and whatever the founder
+ * typed after the amount still wins over the default second line ("£500 of gym
+ * kit" keeps its own). A prize with no amount in it is printed whole.
  */
+export const PRIZE_REST = 'of supplements'
+
 export function splitPrize(prize: string): { hero: string; rest: string } {
   const text = prize.trim().replace(/\s+/g, ' ')
   const match = /[£$€]\s?\d[\d,.]*[kK]?/.exec(text)
   if (!match) return { hero: text, rest: '' }
-  const end = match.index + match[0].length
-  const lead = text.slice(0, match.index).trim()
-  return {
-    hero: `${lead || 'Win'} ${match[0]}`,
-    rest: text.slice(end).trim(),
-  }
+  const rest = text.slice(match.index + match[0].length).trim()
+  return { hero: `Win ${match[0].replace(/\s+/g, '')}`, rest: rest || PRIZE_REST }
 }
 
 /**
