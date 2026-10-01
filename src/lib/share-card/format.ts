@@ -290,8 +290,14 @@ export interface ShareEntry {
   owner: string
   /** The panel's title: the archetype, or the stack's name without one. */
   title: string
-  /** Up to five product names. No doses — this card is an advert, not a protocol. */
-  products: string[]
+  /**
+   * Up to five products: the name, and the slot it fills ("PROTEIN") for the
+   * far end of the row's leader. No doses — this card is an advert, not a
+   * protocol.
+   */
+  products: Array<{ name: string; category: string }>
+  /** "STACK REPORT — 05", the poster's stamp, in the panel's corner. */
+  stamp: string
   /** The three steps, in order. */
   steps: string[]
   /** Where the quiz is. The card's way back once it has been reshared. */
@@ -325,7 +331,15 @@ export function splitPrize(prize: string): { hero: string; rest: string } {
   }
 }
 
-function buildEntry(payload: ShareCardPayload, competition: CompetitionBand): ShareEntry {
+/**
+ * The slot, as a one-word category. "Energy / Pre-Workout" is two names for
+ * one slot, and the row only has room for the first.
+ */
+function category(slot: string): string {
+  return slot.split('/')[0].trim().toUpperCase()
+}
+
+function buildEntry(payload: ShareCardPayload, competition: CompetitionBand, stamp: string): ShareEntry {
   const name = payload.firstName?.trim()
   const { hero, rest } = splitPrize(competition.prize)
   return {
@@ -336,7 +350,10 @@ function buildEntry(payload: ShareCardPayload, competition: CompetitionBand): Sh
     invite: 'Build yours and you’re entered.',
     owner: name ? `${name.toUpperCase()}’S STACK` : 'MY STACK',
     title: payload.archetype.trim() || payload.stackName,
-    products: payload.lineup.slice(0, ENTRY_PRODUCTS).map((row) => row.product),
+    products: payload.lineup
+      .slice(0, ENTRY_PRODUCTS)
+      .map((row) => ({ name: row.product, category: category(row.slot) })),
+    stamp,
     // Fixed copy rather than the Founders Hub steps: these three are the
     // promotion's mechanic as the card advertises it. The handle is still
     // read from config, because a wrong one sends every entrant elsewhere.
@@ -421,12 +438,13 @@ export function buildShareCardView(
     : []
 
   const artIndex = ART_KEYS.indexOf(artKey) + 1
+  const stamp = `STACK REPORT — ${String(artIndex).padStart(2, '0')}`
 
   return {
     format,
     spec,
     specRows: shown.map((row) => ({ name: row.product, qty: row.dose ?? '' })),
-    stamp: `STACK REPORT — ${String(artIndex).padStart(2, '0')}`,
+    stamp,
     kicker: (payload.archetype.trim() || 'Your Stack').toUpperCase(),
     standfirst: 'MY SUPPLEMENT STACK, BUILT BY THE CHRGD QUIZ',
     // The footer is the only place that says how to get one, and "build yours"
@@ -468,7 +486,7 @@ export function buildShareCardView(
         : payload.code
           ? { kind: 'code' as const, code: payload.code, caption: 'Use this code at checkout' }
           : null,
-    entry: format === 'entry' && competition ? buildEntry(payload, competition) : null,
+    entry: format === 'entry' && competition ? buildEntry(payload, competition, stamp) : null,
     footer: 'getchrgd.co.uk',
     cta: {
       /* No exclamation mark and no "scan me": the card is quiet everywhere

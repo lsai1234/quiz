@@ -206,6 +206,43 @@ export function worstTypeGround(
 }
 
 /**
+ * The worst ground behind the type, with the type located by a mask.
+ *
+ * `worstTypeGround` takes a row's median as its ground, which holds while type
+ * covers a minority of the row. A 228px prize in Big Shoulders 800 covers most
+ * of the rows it crosses, and there the median is the type itself. So this
+ * takes a second render of the same card with only the type drawn, on bare
+ * ground: a row has type where the mask has ink, and the ground is the median
+ * of the real render over the pixels where the mask has none.
+ */
+export function worstMaskedGround(
+  image: Decoded,
+  mask: Decoded,
+  fromY: number,
+  toY: number,
+  x0 = 0,
+  x1 = image.width,
+  typeAt = 100,
+): { y: number; ground: number } {
+  let worst = { y: -1, ground: -1 }
+  for (let y = Math.max(0, fromY); y < Math.min(image.height, toY); y += 1) {
+    const ground: number[] = []
+    let hasType = false
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * image.width + x) * 4
+      const m = luminance(mask.data, i)
+      if (m >= typeAt) hasType = true
+      else if (m < 30) ground.push(luminance(image.data, i))
+    }
+    if (!hasType || ground.length === 0) continue
+    ground.sort((a, b) => a - b)
+    const median = ground[Math.floor(ground.length / 2)]
+    if (median > worst.ground) worst = { y, ground: median }
+  }
+  return worst
+}
+
+/**
  * A solid-colour PNG, as a data URI.
  *
  * Stands in for an uploaded photograph. Written by hand rather than fetched or

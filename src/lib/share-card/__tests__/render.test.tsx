@@ -8,9 +8,10 @@ import { buildShareCardView, FORMATS, type CompetitionBand, type ShareFormat } f
 import { loadShareCardFonts } from '../fonts'
 import { archetypePersonas, sharePersonas } from '../personas'
 import type { ShareCardPayload } from '../types'
-import { GIVEAWAY_SAFE_BOTTOM, GIVEAWAY_SAFE_TOP } from '@/components/share-card/GiveawayCard'
+import { GiveawayCard, GIVEAWAY_SAFE_BOTTOM, GIVEAWAY_SAFE_TOP } from '@/components/share-card/GiveawayCard'
 import {
-  decodePng, brightPixels, luminance, patchDeviation, patchMean, solidPngDataUri, worstTypeGround, type Decoded,
+  decodePng, brightPixels, luminance, patchDeviation, patchMean, solidPngDataUri, worstMaskedGround, worstTypeGround,
+  type Decoded,
 } from './png'
 import { ART_KEYS } from '../art'
 
@@ -87,8 +88,8 @@ describe('the card rasterises', () => {
     // zero, and 3 is what the tile at 7% overlay actually measures.
     expect(patchDeviation(image, 40, image.height - 120, 64)).toBeGreaterThan(1.2)
 
-    // The giveaway card has no picture and no scrim, and safe zones of its
-    // own — it is checked on its own terms below.
+    // The giveaway card has safe zones of its own and is checked on its own
+    // terms below.
     if (format === 'entry') return
 
     // The scrim. The top of the picture has to be darker than its middle, or
@@ -207,13 +208,13 @@ describe('the giveaway card', () => {
   const LONG_NAMES: ShareCardPayload = {
     ...sharePersonas().find((p) => p.id === 'long-everything')!.payload,
     lineup: [
-      'Applied Nutrition Critical Whey Protein Isolate',
-      'Creatine Monohydrate Micronised Unflavoured',
-      'Magnesium Bisglycinate Chelate Night Formula',
-      'Omega-3 Triple Strength',
-      'Vitamin D3 + K2',
-      'Never shown — the sixth product',
-    ].map((product) => ({ slot: 'Slot', product, reason: '', dose: '30 G / DAY' })),
+      ['Applied Nutrition Critical Whey Protein Isolate', 'Protein'],
+      ['Creatine Monohydrate Micronised Unflavoured', 'Performance'],
+      ['Magnesium Bisglycinate Chelate Night Formula', 'Sleep'],
+      ['Omega-3 Triple Strength', 'Health'],
+      ['Vitamin D3 + K2', 'Energy / Pre-Workout'],
+      ['Never shown — the sixth product', 'Health'],
+    ].map(([product, slot]) => ({ slot, product, reason: '', dose: '30 G / DAY' })),
   }
 
   const cards: Array<[string, ShareCardPayload]> = [
@@ -225,9 +226,9 @@ describe('the giveaway card', () => {
   ]
 
   /**
-   * Brightest pixel in a region. The ground, its blooms and the grain measure
-   * under 30 everywhere; the faintest thing drawn on the card — the panel's
-   * hairline — measures over 40.
+   * Brightest pixel in a region. On the bare ground, with the grain, nothing
+   * measures over 20; the faintest thing in the type column — the hairline
+   * between two product rows — measures over 40.
    */
   function brightest(image: Decoded, x0: number, y0: number, x1: number, y1: number): number {
     let max = 0
@@ -240,44 +241,74 @@ describe('the giveaway card', () => {
   }
   const INK = 40
 
-  async function render(payload: ShareCardPayload, art?: string) {
-    const view = buildShareCardView(payload, 'entry', BAND)
-    const res = new ImageResponse(<ShareCard view={view} art={art} />, {
-      width: 1080, height: 1920, fonts: await loadShareCardFonts(),
-    })
+  async function png(node: React.ReactElement) {
+    const res = new ImageResponse(node, { width: 1080, height: 1920, fonts: await loadShareCardFonts() })
     expect(res.status).toBe(200)
     return Buffer.from(await res.arrayBuffer())
   }
 
+  const entryOf = (payload: ShareCardPayload) => buildShareCardView(payload, 'entry', BAND).entry!
+
   it.each(cards)('%s', async (id, payload) => {
-    const png = await render(payload)
+    // As a customer gets it, over the gradient field — the card with no
+    // upload, which is also the card with no picture to hide behind.
+    const full = await png(<ShareCard view={buildShareCardView(payload, 'entry', BAND)} art={null} />)
     if (OUT) {
       mkdirSync(OUT, { recursive: true })
-      writeFileSync(`${OUT}/giveaway-${id}.png`, png)
+      writeFileSync(`${OUT}/giveaway-${id}.png`, full)
     }
-    const image = decodePng(png)
+    const card = decodePng(full)
+    expect(card.width).toBe(1080)
+    expect(card.height).toBe(1920)
+    // No near-white type in either band, on the card as drawn.
+    expect(brightPixels(card, 0, GIVEAWAY_SAFE_TOP, 180)).toBe(0)
+    expect(brightPixels(card, GIVEAWAY_SAFE_BOTTOM, 1920, 180)).toBe(0)
 
-    // Nothing at all in either safe zone — not type, not a rule, not a mark.
-    expect(brightest(image, 0, 0, 1080, GIVEAWAY_SAFE_TOP)).toBeLessThan(INK)
-    expect(brightest(image, 0, GIVEAWAY_SAFE_BOTTOM, 1080, 1920)).toBeLessThan(INK)
+    // And the type on its own, where the test can be strict: the photograph
+    // and the crop marks are allowed under both bands, type is not, so the
+    // column is drawn on the bare ground and anything at all in either band is
+    // type that has escaped.
+    const type = decodePng(await png(<GiveawayCard entry={entryOf(payload)} art={null} typeOnly />))
+    expect(brightest(type, 0, 0, 1080, GIVEAWAY_SAFE_TOP)).toBeLessThan(INK)
+    expect(brightest(type, 0, GIVEAWAY_SAFE_BOTTOM, 1080, 1920)).toBeLessThan(INK)
 
-    // And the column really does run edge to edge of the space between them:
-    // the logo starts within 30px of the top line, the small print ends
-    // within 30px of the bottom one.
-    expect(brightest(image, 0, GIVEAWAY_SAFE_TOP, 1080, GIVEAWAY_SAFE_TOP + 30)).toBeGreaterThan(120)
-    expect(brightest(image, 0, GIVEAWAY_SAFE_BOTTOM - 30, 1080, GIVEAWAY_SAFE_BOTTOM)).toBeGreaterThan(100)
+    // The column really does run edge to edge of the space between them: the
+    // logo starts within 30px of the top line, the small print ends within
+    // 30px of the bottom one.
+    expect(brightest(type, 0, GIVEAWAY_SAFE_TOP, 1080, GIVEAWAY_SAFE_TOP + 30)).toBeGreaterThan(120)
+    expect(brightest(type, 0, GIVEAWAY_SAFE_BOTTOM - 30, 1080, GIVEAWAY_SAFE_BOTTOM)).toBeGreaterThan(100)
 
     // Nothing runs off the sides. Satori does not wrap a `nowrap` line and
     // does not complain about one it has overflowed, so a name too long for
     // its row shows up here or nowhere.
-    expect(brightest(image, 0, GIVEAWAY_SAFE_TOP, 60, GIVEAWAY_SAFE_BOTTOM)).toBeLessThan(INK)
-    expect(brightest(image, 1020, GIVEAWAY_SAFE_TOP, 1080, GIVEAWAY_SAFE_BOTTOM)).toBeLessThan(INK)
+    expect(brightest(type, 0, GIVEAWAY_SAFE_TOP, 60, GIVEAWAY_SAFE_BOTTOM)).toBeLessThan(INK)
+    expect(brightest(type, 1020, GIVEAWAY_SAFE_TOP, 1080, GIVEAWAY_SAFE_BOTTOM)).toBeLessThan(INK)
   })
 
-  it('draws no photograph, even when the route hands it one', async () => {
-    // The routes resolve art for every format. The giveaway card is type on
-    // the brand ground, so a bright upload must not reach the safe zones.
-    const image = decodePng(await render(cards[0][1], solidPngDataUri(108, 121, [205, 205, 210])))
-    expect(brightest(image, 0, 0, 1080, GIVEAWAY_SAFE_TOP)).toBeLessThan(INK)
+  it('keeps type on a dark ground over a bright upload', async () => {
+    // The giveaway card sets its prize and the line under it on the
+    // photograph, so it is held to the poster's number — 110, the ground at
+    // which near-white ink still clears 5:1 — measured behind the type itself
+    // rather than across the row (see `worstMaskedGround`).
+    const entry = entryOf(sharePersonas()[0].payload)
+    const lit = decodePng(await png(<GiveawayCard entry={entry} art={solidPngDataUri(108, 121, [205, 205, 210])} />))
+    const mask = decodePng(await png(<GiveawayCard entry={entry} art={null} typeOnly />))
+    const worst = worstMaskedGround(lit, mask, GIVEAWAY_SAFE_TOP, GIVEAWAY_SAFE_BOTTOM, 84, 996)
+    expect(worst.ground).toBeGreaterThan(0)
+    expect(worst.ground).toBeLessThan(110)
+  })
+
+  it('draws the upload under the prize', async () => {
+    // The routes resolve the founder's photograph for every format, and this
+    // card sets its prize over it. Sampled right of the amount, below the
+    // rail's own scrim, where the picture is meant to show.
+    const entry = entryOf(cards[0][1])
+    const WINDOW = [890, 340, 1000, 500] as const
+    const lit = decodePng(await png(<GiveawayCard entry={entry} art={solidPngDataUri(108, 121, [205, 205, 210])} />))
+    const field = decodePng(await png(<GiveawayCard entry={entry} art={null} />))
+    expect(patchMean(lit, WINDOW[0], WINDOW[1], WINDOW[2] - WINDOW[0], WINDOW[3] - WINDOW[1])).toBeGreaterThan(60)
+    expect(patchMean(field, WINDOW[0], WINDOW[1], WINDOW[2] - WINDOW[0], WINDOW[3] - WINDOW[1])).toBeLessThan(45)
+    // And the picture still stops where the card says it does.
+    expect(patchMean(lit, 0, 1500, 60, 200)).toBeLessThan(20)
   })
 })

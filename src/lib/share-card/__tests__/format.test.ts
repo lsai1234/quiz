@@ -157,7 +157,8 @@ describe('the entry card', () => {
     // No doses and no charge index: this card is an advert, not a protocol.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
     expect(PERSONAS.complete.lineup.length).toBeGreaterThan(5)
-    expect(view.entry?.products).toEqual(PERSONAS.complete.lineup.slice(0, 5).map((r) => r.product))
+    expect(view.entry?.products.map((p) => p.name)).toEqual(PERSONAS.complete.lineup.slice(0, 5).map((r) => r.product))
+    expect(view.entry?.products.every((p) => !/\d\s*(MG|G)\b/.test(p.category))).toBe(true)
   })
 
   it('says so on the card while the draw is a rehearsal', () => {

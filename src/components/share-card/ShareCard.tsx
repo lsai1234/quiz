@@ -2,10 +2,9 @@ import type { ShareCardView } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P } from '@/lib/share-card/palette'
 import { FONT_DISPLAY } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
-import { artField } from '@/lib/share-card/art'
 import { numeralPath, DIGIT_UPEM } from '@/lib/share-card/digits'
-import { scrimLayers, typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
-import { Bolt, Grain, display, mono, widthEm, withAlpha } from './card-kit'
+import { typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
+import { Bolt, CropMarks, Grain, Picture, display, mono, widthEm, withAlpha } from './card-kit'
 import { GiveawayCard } from './GiveawayCard'
 
 /**
@@ -322,47 +321,6 @@ function SpecRow({ index, name, qty, last, pad, size }: {
 }
 
 /**
- * The picture, when there is no picture.
- *
- * Layered gradients standing in for the photography that has not been shot. Each
- * layer is its own div because Satori takes one `background-image` per element
- * reliably and a comma-separated list less so. See `art.ts` for why this beats a
- * product render.
- */
-function ArtField({ artKey, g }: { artKey: string | undefined; g: Geometry }) {
-  const field = artField(artKey as never)
-  return (
-    <div
-      style={{
-        display: 'flex',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: g.w,
-        height: g.artH,
-        backgroundImage: field.base,
-      }}
-    >
-      {field.layers.map((layer, i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: g.w,
-            height: g.artH,
-            backgroundImage: layer.image,
-            opacity: layer.opacity ?? 1,
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
-/**
  * `art` overrides the picture the card would resolve on its own.
  *
  * The routes pass the uploaded image through it — see `art-resolve.ts` — and
@@ -371,12 +329,12 @@ function ArtField({ artKey, g }: { artKey: string | undefined; g: Geometry }) {
  * gradient field"; only `undefined` falls through to the bundled art.
  */
 export function ShareCard({ view, art: override }: { view: ShareCardView; art?: string | null }) {
+  const art = override === undefined ? cardArt(view.artKey, view.heroImage) : override
   // A live draw makes the entry format the giveaway card: a different template,
   // not this poster with an advert bolted on.
-  if (view.entry) return <GiveawayCard entry={view.entry} />
+  if (view.entry) return <GiveawayCard entry={view.entry} art={art} artKey={view.artKey} />
 
   const g = geometry(view.format)
-  const art = override === undefined ? cardArt(view.artKey, view.heroImage) : override
   const { line1, line2, size: headline } = fitHeadline(view.stackName, g)
   const rowPad = g.rowPad
   const railSize = g.mono
@@ -393,78 +351,8 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
         fontFamily: FONT_DISPLAY,
       }}
     >
-      {/* ── Art: full bleed, hard crop, no radius ─────────────────────────── */}
-      {art ? (
-        <div
-          style={{
-            display: 'flex',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: g.w,
-            height: g.artH,
-            overflow: 'hidden',
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={art}
-            alt=""
-            width={g.w}
-            height={g.artH}
-            style={{ objectFit: 'cover', objectPosition: 'center top' }}
-          />
-        </div>
-      ) : (
-        <ArtField artKey={view.artKey} g={g} />
-      )}
-      {/* ── The scrim ───────────────────────────────────────────────────────
-          Four layers, each stating what it protects — the header rail, the
-          picture's exposure, the type side, the seam. They live in `scrim.ts`
-          because the Founders Hub upload slots draw the same gradients over the
-          same crop, and a preview that has typed its own copy of them is a
-          preview that quietly stops being one. */}
-      {scrimLayers({ artH: g.artH, railFloor: railFloor(g) }).map((layer, i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            position: 'absolute',
-            top: 0, left: 0, width: g.w, height: g.artH,
-            backgroundImage: layer,
-          }}
-        />
-      ))}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: g.artH - 2, left: 0, width: g.w, height: g.h - g.artH + 2,
-          background: P.groundBase,
-        }}
-      />
-
-      {/* ── Crop marks: honest to the report conceit ──────────────────────── */}
-      {(g.cropMarks ? [
-        { top: 44, left: 44, borderTopWidth: 1.5, borderLeftWidth: 1.5 },
-        { top: 44, right: 44, borderTopWidth: 1.5, borderRightWidth: 1.5 },
-        { bottom: 44, left: 44, borderBottomWidth: 1.5, borderLeftWidth: 1.5 },
-        { bottom: 44, right: 44, borderBottomWidth: 1.5, borderRightWidth: 1.5 },
-      ] : []).map((pos, i) => (
-        <div
-          key={i}
-          style={{
-            display: 'flex',
-            position: 'absolute',
-            width: 34,
-            height: 34,
-            borderStyle: 'solid',
-            borderColor: withAlpha(P.ink1, 0.34),
-            borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
-            ...pos,
-          }}
-        />
-      ))}
+      <Picture art={art} artKey={view.artKey} w={g.w} h={g.h} artH={g.artH} railFloor={railFloor(g)} />
+      {g.cropMarks ? <CropMarks w={g.w} h={g.h} /> : null}
 
       {/* ── Header rail ───────────────────────────────────────────────────── */}
       <div

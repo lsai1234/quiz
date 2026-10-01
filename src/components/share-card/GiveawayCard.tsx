@@ -1,6 +1,6 @@
 import type { ShareEntry } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P } from '@/lib/share-card/palette'
-import { Bolt, Grain, display, mono, widthEm, withAlpha } from './card-kit'
+import { Bolt, CropMarks, Grain, Picture, display, mono, widthEm, withAlpha } from './card-kit'
 
 /**
  * The giveaway card — the entry format while a draw is running.
@@ -13,15 +13,25 @@ import { Bolt, Grain, display, mono, widthEm, withAlpha } from './card-kit'
  *
  * Top to bottom: logo and label, the prize, one line saying who built this
  * and what that means for you, the stack in a bordered panel, how to enter,
- * the address, the small print. No photograph, no score, no doses. The story
- * poster carries those; this card has one job.
+ * the address, the small print. No score and no doses.
  *
- * ── The safe zones are absolute ────────────────────────────────────────────
- * Nothing is drawn in the top 250px or the bottom 190px — no type, no rule, no
- * crop mark. The column is pinned to exactly the space between them and its
- * groups are spread with `space-between`, so the first line box starts on the
- * top edge, the last ends on the bottom one, and a stack of three products
- * breathes rather than leaving a hole. `render.test.tsx` checks the raster.
+ * ── It is the poster's language, not a form ────────────────────────────────
+ * The first cut of this card set the right words in the right order on a flat
+ * ground and read as a form somebody had filled in. Everything that made the
+ * story poster look made is back: the photograph full bleed under the prize
+ * with the poster's own scrim, crop marks, the two-weight headline, a spec
+ * table with dotted leaders, letterspaced mono, and the address as a centred
+ * band. The panel gets cyan corner brackets — the crop marks' idea at the
+ * panel's scale — because it is the one container on a card that otherwise
+ * draws hairlines rather than boxes.
+ *
+ * ── The safe zones are for type ────────────────────────────────────────────
+ * No type in the top 250px or the bottom 190px. The column is pinned to exactly
+ * the space between them and its groups are spread with `space-between`, so
+ * the first line box starts on the top edge, the last ends on the bottom one,
+ * and a stack of three products breathes rather than leaving a hole. The
+ * photograph and the crop marks run under both bands, as they do on the story
+ * poster; `render.test.tsx` checks the type on its own (`typeOnly`).
  *
  * Same Satori rules as `ShareCard.tsx`: every parent with more than one child
  * says `display: flex`, every text child is a string, and nothing wraps that
@@ -35,45 +45,62 @@ export const GIVEAWAY_SAFE_BOTTOM = H - 190
 const MARGIN = 84
 const COL = W - MARGIN * 2
 
+/** How far the photograph runs down the card before the seam closes it. */
+const ART_H = 1180
+/** The foot of the header rail, which is what the rail's scrim holds to. */
+const RAIL_FLOOR = GIVEAWAY_SAFE_TOP + 66
+
 const RULE = withAlpha(P.ink1, 0.2)
 const HAIRLINE = withAlpha(P.ink1, 0.1)
+const MUTED = withAlpha(P.ink1, 0.44)
+const SECOND = withAlpha(P.ink1, 0.62)
 
 /* ── Type scale ──────────────────────────────────────────────────────────── */
 const RAIL = 28
-const HERO_MAX = 220
-const REST_MAX = 98
-const HOOK = 31
+const HERO_MAX = 228
+const REST_MAX = 150
+const HOOK = 30
 const PANEL_PAD_X = 40
-const PANEL_INNER = COL - PANEL_PAD_X * 2 - 4 // the 2px border, both sides
-const TITLE_MAX = 68
+const PANEL_INNER = COL - PANEL_PAD_X * 2 - 3 // the 1.5px border, both sides
+const TITLE_MAX = 66
 const TITLE_MIN = 40
-const INDEX_W = 66
+const INDEX_W = 58
 const ROW_H = 60
 const NAME_MAX = 46
 const NAME_MIN = 28
-const STEP = 30
-const DOMAIN = 108
+const CATEGORY = 18
+const CATEGORY_TRACK = 0.14
+/** The leader's least length, plus the gap either side of it. */
+const LEADER_ROOM = 24 + 18 * 2
+const STEP = 27
+const DOMAIN = 104
 
 /**
- * A size for one line of Big Shoulders that fits `room`, clamped.
+ * The size at which a line of Big Shoulders fills 96% of `room`.
  *
- * The estimate is a few percent either way, so it is asked to fill 96% of the
- * room rather than all of it: the cost of erring is a line a hair short of the
- * edge, where the other way it runs off the card.
+ * The estimate is a few percent either way, so it never asks for the whole
+ * room: the cost of erring is a line a hair short of the edge, where the other
+ * way it runs off the card.
  */
-function fit(text: string, room: number, max: number, min: number): number {
+function ideal(text: string, room: number): number {
   const em = widthEm(text)
-  if (em === 0) return max
-  return Math.max(min, Math.min(max, Math.floor((room * 0.96) / em)))
+  return em === 0 ? Infinity : Math.floor((room * 0.96) / em)
+}
+
+function fit(text: string, room: number, max: number, min: number): number {
+  return Math.max(min, Math.min(max, ideal(text, room)))
 }
 
 /**
  * IBM Plex Mono advances 0.6em, and the tracking is added on top, so a mono
  * line is the one width that can be computed rather than estimated.
  */
+function monoWidth(text: string, size: number, tracking: number): number {
+  return Math.ceil(text.length * size * (0.6 + tracking))
+}
+
 function fitMono(text: string, room: number, max: number, tracking: number): number {
-  const perChar = 0.6 + tracking
-  return Math.min(max, Math.floor(room / (Math.max(1, text.length) * perChar)))
+  return Math.min(max, Math.floor(room / (Math.max(1, text.length) * (0.6 + tracking))))
 }
 
 /**
@@ -95,14 +122,34 @@ function heroParts(text: string): Array<{ text: string; money: boolean }> {
   ]
 }
 
+/** "The Performance Athlete" → a light "THE" and a heavy rest, like the hero. */
+function titleParts(title: string): { lead: string; rest: string } {
+  const match = /^(the)\s+(.+)$/i.exec(title.trim())
+  return match ? { lead: match[1], rest: match[2] } : { lead: '', rest: title.trim() }
+}
+
+/**
+ * The hero's own ground, over the photograph — two layers.
+ *
+ * The poster's type block carries a full-width fade from inside itself, which
+ * suits a block that starts halfway down the picture. Here the prize starts
+ * just under the rail, and a fade deep enough to hold 228px type over a bright
+ * frame turned the whole photograph to murk. So the fade is lighter, and a
+ * pool — an ellipse of ground centred on the prize and the line under it —
+ * does the rest where the type actually is. The picture keeps the band under
+ * the rail and the right edge, which is where a frame's subject sits anyway.
+ */
+const HERO_FADE = `linear-gradient(to bottom, transparent 0px, ${withAlpha(P.groundBase, 0.22)} 330px, ${withAlpha(P.groundBase, 0.46)} 720px, ${withAlpha(P.groundBase, 0.66)} ${ART_H}px)`
+const HERO_POOL = `radial-gradient(78% 22% at 36% 26%, ${withAlpha(P.groundBase, 0.5)} 0%, ${withAlpha(P.groundBase, 0.4)} 55%, ${withAlpha(P.groundBase, 0)} 100%)`
+
 function Header({ label, test }: { label: string; test: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 40 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Bolt size={RAIL + 6} color={P.accent} />
-        <div style={{ ...mono(RAIL + 2, 600, P.ink1, 0.3), lineHeight: '40px' }}>GETCHRGD</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 40, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+        <Bolt size={RAIL + 2} color={P.accent} />
+        <div style={{ ...mono(RAIL, 600, P.ink1, 0.3), lineHeight: '40px' }}>GETCHRGD</div>
       </div>
-      <div style={{ ...mono(RAIL - 2, 600, test ? P.toneAttention : P.accent, 0.28), lineHeight: '40px' }}>
+      <div style={{ ...mono(RAIL, 600, test ? P.toneAttention : P.accent, 0.3), lineHeight: '40px' }}>
         {label}
       </div>
     </div>
@@ -110,50 +157,50 @@ function Header({ label, test }: { label: string; test: boolean }) {
 }
 
 function Prize({ entry }: { entry: ShareEntry }) {
-  const heroSize = fit(entry.prizeHero, COL, HERO_MAX, 120)
-  const restSize = entry.prizeRest ? fit(entry.prizeRest, COL, REST_MAX, 56) : 0
-  const hookSize = fitMono(entry.hook, COL, HOOK, 0)
-  const inviteSize = fitMono(entry.invite, COL, HOOK, 0)
+  const heroSize = fit(entry.prizeHero, COL + 8, HERO_MAX, 120)
+  const restSize = entry.prizeRest ? fit(entry.prizeRest, COL + 8, REST_MAX, 64) : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-      <div
-        style={{
-          display: 'flex',
-          ...display(heroSize, 800, P.ink1, -0.02),
-          lineHeight: 0.82,
-          textTransform: 'uppercase',
-          whiteSpace: 'nowrap',
-          // Big Shoulders' W carries its own side bearing; the hang lines the
-          // stem up with the column rather than the glyph box.
-          marginLeft: -Math.round(heroSize * 0.03),
-        }}
-      >
-        {heroParts(entry.prizeHero).map((part, i) => (
-          <div key={i} style={{ display: 'flex', color: part.money ? P.accent : P.ink1 }}>
-            {part.text}
-          </div>
-        ))}
-      </div>
-      {entry.prizeRest ? (
+      {/* The poster's headline: heavy over light, the same size class, the
+          optical hang buying the stems back to the margin. */}
+      <div style={{ display: 'flex', flexDirection: 'column', marginLeft: -8 }}>
         <div
           style={{
             display: 'flex',
-            ...display(restSize, 600, withAlpha(P.ink1, 0.74), -0.01),
-            lineHeight: 0.86,
+            ...display(heroSize, 800, P.ink1),
+            lineHeight: 0.79,
             textTransform: 'uppercase',
             whiteSpace: 'nowrap',
-            marginTop: Math.round(heroSize * 0.05),
-            marginLeft: -Math.round(restSize * 0.02),
           }}
         >
-          {entry.prizeRest}
+          {heroParts(entry.prizeHero).map((part, i) => (
+            <div key={i} style={{ display: 'flex', color: part.money ? P.accent : P.ink1 }}>
+              {part.text}
+            </div>
+          ))}
         </div>
-      ) : null}
+        {entry.prizeRest ? (
+          <div
+            style={{
+              display: 'flex',
+              ...display(restSize, 400, SECOND),
+              lineHeight: 0.79,
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              marginTop: 8,
+            }}
+          >
+            {entry.prizeRest}
+          </div>
+        ) : null}
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 30 }}>
-        <div style={{ ...mono(hookSize, 500, P.ink1, 0), lineHeight: '42px' }}>{entry.hook}</div>
-        <div style={{ ...mono(inviteSize, 400, withAlpha(P.ink1, 0.74), 0), lineHeight: '42px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 34 }}>
+        <div style={{ ...mono(fitMono(entry.hook, COL, HOOK, 0.02), 500, P.ink1, 0.02), lineHeight: '42px' }}>
+          {entry.hook}
+        </div>
+        <div style={{ ...mono(fitMono(entry.invite, COL, HOOK, 0.02), 400, withAlpha(P.ink1, 0.72), 0.02), lineHeight: '42px' }}>
           {entry.invite}
         </div>
       </div>
@@ -162,14 +209,24 @@ function Prize({ entry }: { entry: ShareEntry }) {
 }
 
 /**
- * One product in the panel.
+ * One row of the spec table: index, name, leader, category.
  *
  * Sized per row rather than per list: a long supplier name shrinks on its own
- * line and leaves the other four at full size. The row height is fixed either
- * way, so the list keeps its rhythm whatever the names do.
+ * line and leaves the other four at full size. If even the smallest size will
+ * not fit beside the category, the row gives the category up — the product's
+ * name is the thing the row is for. The row height is fixed either way, so the
+ * table keeps its rhythm whatever the names do.
  */
-function ProductRow({ index, name, last }: { index: number; name: string; last: boolean }) {
-  const size = fit(name, PANEL_INNER - INDEX_W, NAME_MAX, NAME_MIN)
+function SpecRow({ index, name, category, last }: {
+  index: number; name: string; category: string; last: boolean
+}) {
+  const categoryW = category ? monoWidth(category, CATEGORY, CATEGORY_TRACK) + LEADER_ROOM : 0
+  const besideCategory = ideal(name, PANEL_INNER - INDEX_W - categoryW)
+  const showCategory = !!category && besideCategory >= NAME_MIN
+  const size = showCategory
+    ? Math.min(NAME_MAX, besideCategory)
+    : fit(name, PANEL_INNER - INDEX_W, NAME_MAX, NAME_MIN)
+
   return (
     <div
       style={{
@@ -179,45 +236,102 @@ function ProductRow({ index, name, last }: { index: number; name: string; last: 
         borderBottom: last ? 'none' : `1px solid ${HAIRLINE}`,
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          width: INDEX_W,
-          flexShrink: 0,
-          ...mono(22, 600, P.accent, 0.12),
-        }}
-      >
+      <div style={{ display: 'flex', width: INDEX_W, flexShrink: 0, ...mono(20, 600, P.accent, 0.12) }}>
         {String(index + 1).padStart(2, '0')}
       </div>
       <div
         style={{
           display: 'flex',
-          ...display(size, 600, P.ink1, -0.005),
+          ...display(size, 600, P.ink1, -0.01),
           lineHeight: 1,
           textTransform: 'uppercase',
           whiteSpace: 'nowrap',
+          flexShrink: 0,
         }}
       >
         {name}
       </div>
+      {showCategory ? (
+        <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
+          {/* A dotted leader. `border-style: dotted` is rejected by Satori, so
+              this is a repeating gradient — same line, and it renders. */}
+          <div
+            style={{
+              display: 'flex',
+              flex: 1,
+              height: 1,
+              minWidth: 24,
+              marginLeft: 18,
+              marginRight: 18,
+              backgroundImage: `repeating-linear-gradient(90deg, ${withAlpha(P.ink1, 0.3)} 0 2px, transparent 2px 7px)`,
+            }}
+          />
+          <div style={{ display: 'flex', flexShrink: 0, ...mono(CATEGORY, 500, MUTED, CATEGORY_TRACK) }}>
+            {category}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** The panel's corner brackets — the crop marks' idea, at the panel's scale. */
+function Brackets() {
+  const arm = 22
+  const weight = 2.5
+  const out = -2
+  return (
+    <div style={{ display: 'flex', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+      {[
+        { top: out, left: out, borderTopWidth: weight, borderLeftWidth: weight },
+        { top: out, right: out, borderTopWidth: weight, borderRightWidth: weight },
+        { bottom: out, left: out, borderBottomWidth: weight, borderLeftWidth: weight },
+        { bottom: out, right: out, borderBottomWidth: weight, borderRightWidth: weight },
+      ].map((pos, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            width: arm,
+            height: arm,
+            borderStyle: 'solid',
+            borderColor: P.accent,
+            borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
+            ...pos,
+          }}
+        />
+      ))}
     </div>
   )
 }
 
 function StackPanel({ entry }: { entry: ShareEntry }) {
-  const titleSize = fit(entry.title, PANEL_INNER, TITLE_MAX, TITLE_MIN)
+  const { lead, rest } = titleParts(entry.title)
+  const titleSize = fit(entry.title, PANEL_INNER + 4, TITLE_MAX, TITLE_MIN)
+  // The stamp gives way to a long name rather than crowding it.
+  const ownerW = monoWidth(entry.owner, RAIL - 4, 0.3)
+  const stampW = monoWidth(entry.stamp, RAIL - 6, 0.3)
+  const showStamp = ownerW + stampW + 40 <= PANEL_INNER
+
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
-        padding: `30px ${PANEL_PAD_X}px 16px`,
-        border: `2px solid ${RULE}`,
-        background: P.surface1,
+        position: 'relative',
+        padding: `30px ${PANEL_PAD_X}px 12px`,
+        border: `1.5px solid ${RULE}`,
+        // A dark plate, so the panel reads as an object set over the
+        // photograph's last light rather than a box drawn on the ground.
+        background: withAlpha(P.groundBase, 0.64),
       }}
     >
-      <div style={{ ...mono(RAIL - 4, 600, P.accent, 0.28), lineHeight: '30px' }}>{entry.owner}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 30 }}>
+        <div style={mono(RAIL - 4, 600, P.accent, 0.3)}>{entry.owner}</div>
+        {showStamp ? <div style={mono(RAIL - 6, 600, MUTED, 0.3)}>{entry.stamp}</div> : null}
+      </div>
       <div
         style={{
           display: 'flex',
@@ -225,24 +339,32 @@ function StackPanel({ entry }: { entry: ShareEntry }) {
           lineHeight: 0.9,
           textTransform: 'uppercase',
           whiteSpace: 'nowrap',
-          marginTop: 10,
-          marginLeft: -2,
+          marginTop: 12,
+          marginLeft: -3,
         }}
       >
-        {entry.title}
+        {lead ? <div style={{ display: 'flex', fontWeight: 400, color: SECOND }}>{`${lead} `}</div> : null}
+        <div style={{ display: 'flex' }}>{rest}</div>
       </div>
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          marginTop: 22,
+          marginTop: 20,
           borderTop: `1.5px solid ${RULE}`,
         }}
       >
-        {entry.products.map((name, i) => (
-          <ProductRow key={`${i}-${name}`} index={i} name={name} last={i === entry.products.length - 1} />
+        {entry.products.map((p, i) => (
+          <SpecRow
+            key={`${i}-${p.name}`}
+            index={i}
+            name={p.name}
+            category={p.category}
+            last={i === entry.products.length - 1}
+          />
         ))}
       </div>
+      <Brackets />
     </div>
   )
 }
@@ -250,26 +372,60 @@ function StackPanel({ entry }: { entry: ShareEntry }) {
 function Steps({ steps }: { steps: string[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-      <div style={{ ...mono(RAIL - 4, 600, P.accent, 0.28), lineHeight: '30px', marginBottom: 12 }}>
-        HOW TO ENTER
+      {/* The label runs into a rule, the way a section opens in a report. */}
+      <div style={{ display: 'flex', alignItems: 'center', height: 30, marginBottom: 10 }}>
+        <div style={{ display: 'flex', flexShrink: 0, ...mono(RAIL - 2, 600, P.accent, 0.3) }}>HOW TO ENTER</div>
+        <div style={{ display: 'flex', flex: 1, height: 1, marginLeft: 22, background: withAlpha(P.ink1, 0.16) }} />
       </div>
-      {steps.map((step, i) => (
-        <div key={`${i}-${step}`} style={{ display: 'flex', alignItems: 'center', height: 52 }}>
-          <div style={{ display: 'flex', width: INDEX_W, flexShrink: 0, ...mono(STEP - 6, 600, P.accent, 0.12) }}>
-            {String(i + 1).padStart(2, '0')}
+      {steps.map((step, i) => {
+        const text = step.toUpperCase()
+        return (
+          <div key={`${i}-${step}`} style={{ display: 'flex', alignItems: 'center', height: 54 }}>
+            <div
+              style={{
+                display: 'flex',
+                width: INDEX_W + 12,
+                flexShrink: 0,
+                ...display(40, 800, P.accent, -0.01),
+                lineHeight: 1,
+              }}
+            >
+              {String(i + 1).padStart(2, '0')}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                whiteSpace: 'nowrap',
+                ...mono(fitMono(text, COL - INDEX_W - 12, STEP, 0.08), 500, P.ink1, 0.08),
+              }}
+            >
+              {text}
+            </div>
           </div>
-          <div style={{ display: 'flex', whiteSpace: 'nowrap', ...mono(fitMono(step, COL - INDEX_W, STEP, 0.02), 500, P.ink1, 0.02) }}>
-            {step}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
 
+/**
+ * Where to go, as a band: the address in the accent, centred, with the small
+ * print under it. Centred because it is addressed to the reader rather than
+ * being another field in the card's own table — the poster's CTA band.
+ */
 function Foot({ entry }: { entry: ShareEntry }) {
+  const small = entry.small.toUpperCase()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        flexShrink: 0,
+        paddingTop: 24,
+        borderTop: `1px solid ${withAlpha(P.ink1, 0.13)}`,
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -278,7 +434,6 @@ function Foot({ entry }: { entry: ShareEntry }) {
           // small print starts below them rather than under them.
           lineHeight: 1,
           whiteSpace: 'nowrap',
-          marginLeft: -3,
         }}
       >
         {entry.domain}
@@ -286,18 +441,29 @@ function Foot({ entry }: { entry: ShareEntry }) {
       <div
         style={{
           display: 'flex',
-          ...mono(fitMono(entry.small, COL, 22, 0.04), 400, withAlpha(P.ink1, 0.62), 0.04),
-          lineHeight: '30px',
-          marginTop: 18,
+          ...mono(fitMono(small, COL, 21, 0.14), 400, withAlpha(P.ink1, 0.5), 0.14),
+          lineHeight: '28px',
+          marginTop: 16,
         }}
       >
-        {entry.small}
+        {small}
       </div>
     </div>
   )
 }
 
-export function GiveawayCard({ entry }: { entry: ShareEntry }) {
+/**
+ * `art` is the resolved photograph — the founder's upload for this stack's art
+ * family — or null, which draws the family's gradient field. `typeOnly` draws
+ * the type column on the bare ground and nothing else; it exists so the render
+ * test can check where the type is without the picture in the way.
+ */
+export function GiveawayCard({ entry, art, artKey, typeOnly = false }: {
+  entry: ShareEntry
+  art: string | null
+  artKey?: string
+  typeOnly?: boolean
+}) {
   return (
     <div
       style={{
@@ -309,27 +475,23 @@ export function GiveawayCard({ entry }: { entry: ShareEntry }) {
         overflow: 'hidden',
       }}
     >
-      {/* ── Ground: the app's blooms, kept off the safe zones ──────────────
-          Two soft fields from the brand palette, centred well inside the
-          type column so their tails fall away to ground before either edge
-          band. A bloom bright enough to read in the top 250px would be the
-          one thing there, and the zone is meant to be clear. */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, width: W, height: H,
-          backgroundImage: `radial-gradient(52% 26% at 78% 30%, ${withAlpha(P.bloomAccent, P.bloom1Alpha * 1.25)} 0%, ${withAlpha(P.bloomAccent, 0)} 100%)`,
-        }}
-      />
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, width: W, height: H,
-          backgroundImage: `radial-gradient(60% 24% at 18% 64%, ${withAlpha(P.bloomViolet, P.bloom1Alpha)} 0%, ${withAlpha(P.bloomViolet, 0)} 100%)`,
-        }}
-      />
+      {typeOnly ? null : (
+        <div style={{ display: 'flex', position: 'absolute', top: 0, left: 0, width: W, height: H }}>
+          <Picture art={art} artKey={artKey} w={W} h={H} artH={ART_H} railFloor={RAIL_FLOOR} />
+          {[HERO_FADE, HERO_POOL].map((layer, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                position: 'absolute',
+                top: 0, left: 0, width: W, height: i === 0 ? ART_H : H,
+                backgroundImage: layer,
+              }}
+            />
+          ))}
+          <CropMarks w={W} h={H} />
+        </div>
+      )}
 
       <div
         style={{
@@ -350,7 +512,7 @@ export function GiveawayCard({ entry }: { entry: ShareEntry }) {
         <Foot entry={entry} />
       </div>
 
-      <Grain w={W} h={H} />
+      {typeOnly ? null : <Grain w={W} h={H} />}
     </div>
   )
 }
