@@ -250,6 +250,12 @@ export interface Order {
    * (OC-F-090).
    */
   analyticsReported?: boolean
+  /**
+   * When the founders' phones were told about this order (ISO), so they are
+   * told once. Same reasoning as `analyticsReported`: on the order, claimed
+   * before sending, because a webhook can arrive twice. See `lib/push`.
+   */
+  foundersAlertedAt?: string
 }
 
 /** What `createOrderFromCheckout` needs to raise a paid order. */

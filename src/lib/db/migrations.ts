@@ -801,6 +801,34 @@ export const MIGRATIONS: string[] = [
   UPDATE partners SET kind = 'influencer' WHERE kind IS NULL;
   CREATE INDEX partners_kind ON partners(kind);
   `,
+
+  // v24 — `push_devices`: the founders' phones that get a notification when an
+  // order comes in. See `lib/push`.
+  //
+  // One row per browser push subscription. `endpoint` is the push service URL
+  // the browser handed us (Apple's, for an iPhone), and with `p256dh` and `auth`
+  // it is everything needed to send to that device — the message is encrypted
+  // to those two keys, so the push service relays it without reading it.
+  //
+  // Columns rather than a JSON blob: the shape is fixed by the Push API and will
+  // not grow. `last_error` is kept so a phone that has stopped accepting shows
+  // up in Settings → Notifications, instead of going quiet without a word.
+  //
+  // `IF NOT EXISTS`, for the reason v18 gives.
+  `
+  CREATE TABLE IF NOT EXISTS push_devices (
+    id            TEXT PRIMARY KEY,
+    founder_email TEXT NOT NULL,
+    label         TEXT NOT NULL,
+    endpoint      TEXT NOT NULL UNIQUE,
+    p256dh        TEXT NOT NULL,
+    auth          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    last_ok_at    TEXT,
+    last_error    TEXT,
+    last_error_at TEXT
+  );
+  `,
 ]
 
 /**

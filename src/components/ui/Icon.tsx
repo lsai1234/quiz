@@ -88,6 +88,7 @@ const GLYPHS = {
   download: <><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M5 19h14" /></>,
   link: <><path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.2 1.2" /><path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.2-1.2" /></>,
   'alert-triangle': <><path d="M12 4 2.7 20h18.6z" /><path d="M12 10v4" /><path d="M12 17.2h.01" /></>,
+  bell: <><path d="M6 9.5a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15.5 6 9.5" /><path d="M10.2 20.5a2 2 0 0 0 3.6 0" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.8h.01" /></>,
   star: <path d="M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z" />,
   /** The neutral fallback for a glyph name we don't recognise. */

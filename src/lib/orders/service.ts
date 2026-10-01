@@ -134,6 +134,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
   if (status === 'paid') {
     await accrueCommission(order)
     await confirmByEmail(order)
+    await alertFounders(order)
   }
   return order
 }
@@ -157,6 +158,20 @@ async function confirmByEmail(order: Order): Promise<void> {
     await queueOrderConfirmation(order)
   } catch (err) {
     console.error('[orders] order confirmation email could not be queued:', err)
+  }
+}
+
+/**
+ * Buzz the founders' phones. Same funnel and the same promise as the email
+ * above — every paid order, never throws, never blocks — and only on the move
+ * to paid, so an abandoned checkout never notifies. See `lib/push/order-alert`.
+ */
+async function alertFounders(order: Order): Promise<void> {
+  try {
+    const { alertFoundersOfOrder } = await import('@/lib/push/order-alert')
+    await alertFoundersOfOrder(order)
+  } catch (err) {
+    console.error('[orders] founder notification failed:', err)
   }
 }
 
@@ -388,6 +403,7 @@ export async function markOrderPaid(
     // delivery address only exist on the order from this moment, which is also
     // why it cannot be sent when the order was raised.
     await confirmByEmail(order)
+    await alertFounders(order)
   }
   return order
 }

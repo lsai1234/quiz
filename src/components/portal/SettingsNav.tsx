@@ -83,6 +83,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     label: 'The app itself',
     sections: [
       {
+        slug: 'notifications',
+        title: 'Notifications',
+        blurb:
+          'A notification on your phone for every new order, and the number waiting for review on the hub’s icon.',
+        icon: 'bell',
+      },
+      {
         slug: 'speed',
         title: 'Speed',
         blurb: 'Why a screen took as long as it did — measured on the server that served it.',

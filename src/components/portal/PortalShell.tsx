@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Badge, Button, Ground } from '@/components/system'
+import { HubApp } from './HubApp'
 
 /**
  * The top bar is deliberately short. Fifteen tabs is a filing cabinet, not a
@@ -58,6 +59,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
     // been converted to `Button` yet — and a raw one added tomorrow is covered
     // the day it lands. See `founder-hub.test.ts`.
     <Ground className="founder-hub">
+      <HubApp />
       {/* One of the three surfaces allowed to blur: persistent chrome over a
           static page, which is what `backdrop-filter` is worth paying for. */}
       <header
