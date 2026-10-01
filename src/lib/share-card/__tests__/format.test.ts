@@ -1,4 +1,4 @@
-import { buildShareCardView, FORMATS, isShareFormat, type ShareFormat } from '../format'
+import { buildShareCardView, FORMATS, isShareFormat, splitPrize, type ShareFormat } from '../format'
 import { sharePersonas } from '../personas'
 
 /**
@@ -102,39 +102,68 @@ describe('the entry card', () => {
 
   it('prints the way back to the quiz', () => {
     // A story somebody reshares is a flat image — no link, no swipe-up. If the
-    // handle and the route are not printed on it, nobody who sees the repost
+    // address and the handle are not printed on it, nobody who sees the repost
     // can reach the quiz and the share is worth nothing. This is the single
     // most load-bearing assertion on the entry card.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
-    expect(view.entry?.handle).toBe('@getchrgd_')
-    expect(view.entry?.route).toBe('Take the quiz — link in our bio')
+    expect(view.entry?.domain).toBe('getchrgd.co.uk')
+    expect(view.entry?.steps[2]).toBe('Tag @getchrgd_')
   })
 
   it('carries what the CAP Code needs on the promotion itself', () => {
     // Significant conditions have to be on the advert, not only behind a link —
     // and a reshared image cannot carry a link either.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
-    expect(view.entry).toMatchObject({
-      prize: '£200 of free supplements',
-      closes: 'Closes 30 Nov',
-      terms: 'Full T&Cs at getchrgd.co.uk',
-    })
+    expect(view.entry?.small).toBe('Closes 30 Nov · No purchase needed · T&Cs apply')
     expect(view.entry?.steps).toHaveLength(3)
   })
 
-  it('keeps the personalisation — it is the hook', () => {
-    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
-    expect(view.stackName).toBe('Iron Foundations')
-    expect(view.archetype).toBe('The Strength Builder')
-    // The same five as the story card. A two-product version of somebody's
-    // stack undersells both the stack and the quiz that built it; the room for
-    // the prize block and the entry steps comes out of the type scale instead.
-    expect(view.lineup).toHaveLength(5)
+  it('prints the three steps as written, whatever the hub holds', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', { ...BAND, steps: ['a', 'b', 'c', 'd'] })
+    expect(view.entry?.steps).toEqual([
+      'Take the free 90-sec quiz',
+      'Share your result to your story',
+      'Tag @getchrgd_',
+    ])
   })
 
-  it('caps the steps at three', () => {
-    const many = { ...BAND, steps: ['a', 'b', 'c', 'd', 'e'] }
-    expect(buildShareCardView(PERSONAS.complete, 'entry', many).entry?.steps).toHaveLength(3)
+  it('sets the prize as a hero and a remainder, so the amount can be cyan', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', { ...BAND, prize: 'Win £200 of supplements' })
+    expect(view.entry).toMatchObject({ prizeHero: 'Win £200', prizeRest: 'of supplements' })
+  })
+
+  it('keeps the personalisation — it is the hook', () => {
+    const view = buildShareCardView(PERSONAS['long-everything'], 'entry', BAND)
+    expect(view.entry).toMatchObject({
+      hook: 'Alexandria built their stack.',
+      invite: 'Build yours and you’re entered.',
+      owner: 'ALEXANDRIA’S STACK',
+      title: 'The Methodical Powerbuilder',
+    })
+  })
+
+  it('speaks in the first person when no name was opted in', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry?.hook).toBe('I built my stack.')
+    expect(view.entry?.owner).toBe('MY STACK')
+  })
+
+  it('titles the panel with the stack name when there is no archetype', () => {
+    const view = buildShareCardView(PERSONAS['no-identity'], 'entry', BAND)
+    expect(view.entry?.title).toBe(PERSONAS['no-identity'].stackName)
+  })
+
+  it('lists at most five products, by name only', () => {
+    // No doses and no charge index: this card is an advert, not a protocol.
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(PERSONAS.complete.lineup.length).toBeGreaterThan(5)
+    expect(view.entry?.products).toEqual(PERSONAS.complete.lineup.slice(0, 5).map((r) => r.product))
+  })
+
+  it('says so on the card while the draw is a rehearsal', () => {
+    expect(buildShareCardView(PERSONAS.complete, 'entry', BAND).entry?.label).toBe('LAUNCH GIVEAWAY')
+    expect(buildShareCardView(PERSONAS.complete, 'entry', { ...BAND, test: true }).entry?.label)
+      .toBe('TEST — NOT A LIVE PROMOTION')
   })
 
   it('has no advert when no competition is running', () => {
@@ -301,5 +330,20 @@ describe('the way back', () => {
     // and got done as one. Tagging is how an entry is found at all.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
     expect(view.entry?.steps.some((s) => /tag/i.test(s))).toBe(true)
+  })
+})
+
+describe('splitting the prize', () => {
+  it('puts everything up to the amount in the hero', () => {
+    expect(splitPrize('Win £200 of supplements')).toEqual({ hero: 'Win £200', rest: 'of supplements' })
+    expect(splitPrize('Win £1,000')).toEqual({ hero: 'Win £1,000', rest: '' })
+  })
+
+  it('supplies the verb when the founder left it off', () => {
+    expect(splitPrize('£200 of free supplements')).toEqual({ hero: 'Win £200', rest: 'of free supplements' })
+  })
+
+  it('prints a prize with no amount whole', () => {
+    expect(splitPrize('A free stack')).toEqual({ hero: 'A free stack', rest: '' })
   })
 })

@@ -1,6 +1,12 @@
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { QuizAnswers, StackIdentity } from '@/lib/types'
+import { runStackEngine } from '@/lib/consult/engine'
+import { buildHandoff } from '@/lib/consult/handoff'
+import { chargeProfile } from '@/lib/consult/profile'
+import { identityFor, toBlueprint } from '@/lib/consult/adapter'
+import { trainingDays } from '@/lib/consult/training'
+import { EMPTY_ANSWERS, type ConsultAnswers, type ConsultGoal } from '@/lib/consult/types'
 import { buildSharePayload } from './payload'
 import type { ShareCardPayload } from './types'
 
@@ -131,4 +137,73 @@ export function sharePersonas(): SharePersona[] {
       },
     ),
   }))
+}
+
+/**
+ * One card per quiz archetype — the giveaway card's sign-off set.
+ *
+ * Built through the same path a real result takes: the consult's engine over
+ * the mock catalogue, the handoff, the results adapter, and `identityFor`,
+ * which is where the archetype comes from. So each card below is the stack and
+ * the archetype a person with that top goal actually gets, not a payload
+ * somebody typed to look tidy.
+ *
+ * Two of them leave the first name off, because the opt-in defaults to off and
+ * the card has a different sentence for that case.
+ */
+const ARCHETYPE_SPECS: Array<{ goal: ConsultGoal; name: string; showFirstName: boolean }> = [
+  { goal: 'performance', name: 'Sam Whitlock', showFirstName: true },
+  { goal: 'energy', name: 'Priya Natarajan', showFirstName: true },
+  { goal: 'sleep', name: 'Jo Harper', showFirstName: false },
+  { goal: 'focus', name: 'Marcus Lee', showFirstName: true },
+  { goal: 'ageing', name: 'Elizabeth Okonkwo', showFirstName: true },
+  { goal: 'allround', name: 'Chris Doyle', showFirstName: false },
+  { goal: 'weight', name: 'Hannah Price', showFirstName: true },
+]
+
+function consultAnswers(goal: ConsultGoal): ConsultAnswers {
+  return {
+    ...EMPTY_ANSWERS,
+    route: 'deep',
+    goals: [goal],
+    age: '25-34',
+    sex: 'unsaid',
+    training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest']),
+    intensity: 'steady',
+    energy: 6,
+    sleep: { bed: 23 * 60, wake: 7 * 60, quality: 'ok' },
+    daylight: 'some',
+    caffeine: { coffee: 1, tea: 1, energy: 0 },
+    plate: ['oily-fish', 'poultry', 'eggs', 'dairy', 'greens', 'fruit', 'wholegrains'],
+    body: [],
+    shelf: [],
+    circuit: { flags: [], none: true },
+    healthConsent: { accepted: true, version: 'persona', at: '2026-09-26T00:00:00Z' },
+  }
+}
+
+/** Every archetype, built. */
+export function archetypePersonas(): SharePersona[] {
+  const now = new Date('2026-08-17T09:00:00.000Z')
+  return ARCHETYPE_SPECS.map(({ goal, name, showFirstName }) => {
+    const answers = consultAnswers(goal)
+    const handoff = buildHandoff({
+      consultId: `c_${goal}archetype`,
+      route: 'deep',
+      goals: answers.goals,
+      profile: chargeProfile(answers),
+      engine: runStackEngine(answers, MOCK_CATALOGUE),
+      now,
+    })
+    const identity = identityFor(handoff)
+    return {
+      id: `archetype-${goal}`,
+      note: `${identity.archetype}${showFirstName ? '' : ', no first name'}.`,
+      payload: buildSharePayload(toBlueprint(handoff, MOCK_CATALOGUE), identity, MOCK_CATALOGUE, {
+        customerName: name,
+        showFirstName,
+        now: () => now,
+      }),
+    }
+  })
 }

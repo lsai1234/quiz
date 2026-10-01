@@ -179,7 +179,7 @@ export function CompetitionSettings() {
 
         <div>
           <p style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-2)', marginBottom: 'var(--space-1)' }}>
-            The three steps, as they appear on the card
+            The three steps, as the share sheet confirms them
           </p>
           {[0, 1, 2].map((i) => (
             <Input
@@ -197,7 +197,8 @@ export function CompetitionSettings() {
             />
           ))}
           <p className="text-[10px] text-[var(--ink-3)] leading-snug">
-            Short lines, not sentences. An advert that needs reading twice doesn’t get entered.
+            Short lines, not sentences. The giveaway card prints its own three — take the quiz,
+            share to your story, tag the handle above — so keep these saying the same thing.
           </p>
         </div>
 

@@ -1,11 +1,12 @@
 import type { ShareCardView } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P } from '@/lib/share-card/palette'
-import { GRAIN_DATA_URI, GRAIN_TILE_PX } from '@/lib/share-card/grain'
-import { FONT_DISPLAY, FONT_MONO } from '@/lib/share-card/fonts'
+import { FONT_DISPLAY } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
 import { artField } from '@/lib/share-card/art'
 import { numeralPath, DIGIT_UPEM } from '@/lib/share-card/digits'
 import { scrimLayers, typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
+import { Bolt, Grain, display, mono, widthEm, withAlpha } from './card-kit'
+import { GiveawayCard } from './GiveawayCard'
 
 /**
  * The share card.
@@ -38,7 +39,7 @@ import { scrimLayers, typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
  */
 
 /**
- * ── One poster, four canvases ───────────────────────────────────────────────
+ * ── One poster, three canvases ──────────────────────────────────────────────
  * The brief specifies the story frame down to the pixel, and the first build
  * took it literally: every value a constant, `W = 1080`, `H = 1920`. The square
  * and the link preview then rendered as the top-left corner of a story card,
@@ -63,24 +64,16 @@ interface Geometry {
   headlineMax: number
   headlineMin: number
   /**
-   * The outlined numeral, and how its label is set.
-   *
-   * `spine` stacks "CHARGE INDEX" upright beside the numeral, which is the
-   * signature on the cards that have a whole empty band to give it. `inline`
-   * lays the same words along the numeral's foot, for the entry card — where
-   * the numeral is small and the spine, at that height, ran straight through
-   * the header rail.
+   * The outlined numeral, with "CHARGE INDEX" stacked upright beside it.
    *
    * Null where the canvas is too small to carry a numeral at all.
    */
-  score: { size: number; left: number; top: number; label: 'spine' | 'inline' } | null
+  score: { size: number; left: number; top: number } | null
   cropMarks: boolean
   specName: number
   rowPad: number
-  /** The prize headline's ceiling. Only the entry card draws one. */
-  prizeMax: number
   /**
-   * The utility tier: the rails, the standfirst, the doses, the entry steps.
+   * The utility tier: the rails, the standfirst, the doses.
    *
    * Stated per format rather than derived from the width, because the link
    * preview is the widest canvas and the one painted smallest.
@@ -104,8 +97,8 @@ function geometry(format: string): Geometry {
       return {
         w: 1080, h: 1080, margin: 76, safeTop: 76, safeBottom: 1004, artH: 640,
         headlineMax: 124, headlineMin: 68,
-        score: { size: 240, left: -22, top: 150, label: 'spine' },
-        cropMarks: true, specName: 40, rowPad: 12, prizeMax: 64, mono: 24,
+        score: { size: 240, left: -22, top: 150 },
+        cropMarks: true, specName: 40, rowPad: 12, mono: 24,
         headlineRoom: 1080 - 76 * 2,
       }
 
@@ -119,64 +112,26 @@ function geometry(format: string): Geometry {
         w: 1200, h: 630, margin: 56, safeTop: 56, safeBottom: 574, artH: 630,
         headlineMax: 86, headlineMin: 48,
         score: null,
-        cropMarks: false, specName: 30, rowPad: 8, prizeMax: 52, mono: 20,
+        cropMarks: false, specName: 30, rowPad: 8, mono: 20,
         headlineRoom: 760,
       }
 
     /**
-     * The competition card. The story frame, carrying two extra blocks.
+     * The story frame. The brief's numbers.
      *
-     * It shows the same five products as the story card *and* a prize headline
-     * and three entry steps — about 380px of type the story card does not have
-     * to find room for. Everything else therefore comes down a step and the
-     * score moves up and in: the hierarchy is identical, the scale is not.
-     * These numbers were arrived at by rendering, not by arithmetic.
+     * Also the entry format once its draw has closed: the giveaway card is a
+     * template of its own (`GiveawayCard.tsx`), and without a live promotion
+     * an entry card is simply the stack poster.
      */
-    case 'entry':
-      return {
-        w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
-        headlineMax: 156, headlineMin: 84,
-        // The score gives up most of its size here, and that is the right thing
-        // to trade: on an advert the charge index is the least important mark on
-        // the card, and the 500px it was taking is what the prize and the entry
-        // steps needed to be read at arm's length.
-        score: { size: 196, left: -18, top: 300, label: 'inline' },
-        cropMarks: true, specName: 46, rowPad: 14, prizeMax: 96, mono: 26,
-        headlineRoom: 1080 - 84 * 2,
-      }
-
-    /** The story frame. The brief's numbers. */
     default:
       return {
         w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
         headlineMax: 172, headlineMin: 92,
-        score: { size: 430, left: -38, top: 300, label: 'spine' },
-        cropMarks: true, specName: 50, rowPad: 15, prizeMax: 88, mono: 27,
+        score: { size: 430, left: -38, top: 300 },
+        cropMarks: true, specName: 50, rowPad: 15, mono: 27,
         headlineRoom: 1080 - 84 * 2,
       }
   }
-}
-
-const display = (size: number, weight: 400 | 600 | 800, color: string, tracking = -0.022) => ({
-  fontFamily: FONT_DISPLAY,
-  fontSize: size,
-  fontWeight: weight,
-  letterSpacing: `${tracking}em`,
-  color,
-})
-
-const mono = (size: number, weight: 400 | 500 | 600, color: string, tracking: number) => ({
-  fontFamily: FONT_MONO,
-  fontSize: size,
-  fontWeight: weight,
-  letterSpacing: `${tracking}em`,
-  color,
-})
-
-function withAlpha(hex: string, alpha: number): string {
-  const h = hex.replace('#', '')
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 const RULE = withAlpha(P.ink1, 0.2)
@@ -195,21 +150,8 @@ const railFloor = (g: Geometry) => g.safeTop + Math.round(g.mono * 2.4)
  *
  * So the break is chosen to balance the two lines rather than to fall after the
  * first word, and the size is then computed from the wider of them. Widths come
- * from a per-character estimate rather than real metrics: Satori has no measuring
- * pass to borrow, and a table accurate to a few percent is enough when the result
- * is clamped anyway. `I`, `1` and the like are half the width of everything else
- * in a condensed face, which is most of the error a flat average would make.
+ * from `widthEm`'s per-character estimate rather than real metrics.
  */
-const NARROW = new Set(['I', 'J', 'L', '1', 'İ', '.', ',', ':', ';', "'", '!', '|', ' ', '-'])
-const WIDE = new Set(['M', 'W', 'Q', '@', '&'])
-
-function widthEm(text: string): number {
-  let em = 0
-  for (const ch of text.toUpperCase()) {
-    em += NARROW.has(ch) ? 0.24 : WIDE.has(ch) ? 0.58 : 0.46
-  }
-  return em
-}
 
 function fitHeadline(name: string, g: Geometry): { line1: string; line2: string; size: number } {
   const words = name.trim().split(/\s+/).filter(Boolean)
@@ -229,78 +171,7 @@ function fitHeadline(name: string, g: Geometry): { line1: string; line2: string;
   return { line1: best.line1, line2: best.line2, size }
 }
 
-/** The bolt, at rail size. */
-function Bolt({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M14 2 L6.5 13.4 H11 L9.5 22 L17.5 10.6 H13 Z" fill={color} />
-    </svg>
-  )
-}
-
 const SPINE = 'CHARGE INDEX'
-
-/** The hairline box holding the handle and the route back. */
-const HANDLE_BOX_W = 268
-
-/**
- * The prize line, split so the money can be cyan.
- *
- * "Win £200 of supplements" is typed by the founder in Founders Hub, so the
- * amount is not a field the renderer can colour on its own — it has to be found
- * in the sentence. Anything currency-shaped counts: £200, $50, £1,000, 200 free
- * products would not.
- */
-function moneySplit(text: string): Array<{ text: string; money: boolean }> {
-  const parts: Array<{ text: string; money: boolean }> = []
-  const pattern = /[£$€]\s?[\d][\d,.]*[kK]?/g
-  let at = 0
-  for (const match of text.matchAll(pattern)) {
-    const start = match.index ?? 0
-    if (start > at) parts.push({ text: text.slice(at, start), money: false })
-    parts.push({ text: match[0], money: true })
-    at = start + match[0].length
-  }
-  if (at < text.length) parts.push({ text: text.slice(at), money: false })
-  if (parts.length === 0) return [{ text, money: false }]
-  // Each part is its own flex child, and flex trims the whitespace at a child's
-  // edges — which closed the sentence up to "WIN£200OF SUPPLEMENTS". The spaces
-  // either side of the amount are load-bearing, so they are made non-breaking.
-  return parts.map((part) => ({ ...part, text: part.text.replace(/^ | $/g, ' ') }))
-}
-
-/** The prize headline, sized to the room the handle box leaves it. */
-const PRIZE_MIN = 44
-
-function fitPrize(text: string, g: Geometry): number {
-  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 + 5
-  return Math.max(PRIZE_MIN, Math.min(g.prizeMax, Math.floor(room / widthEm(text))))
-}
-
-/** The gutter the step numbers sit in, at a given step size. */
-function stepIndexW(size: number): number {
-  return Math.round(size * 2.1)
-}
-
-/**
- * The entry steps, sized so the longest one fits.
- *
- * These are typed by the founder in Founders Hub and they are the promotion's
- * significant conditions, so they cannot be allowed to run off the edge or be
- * cut with an ellipsis — a truncated entry condition is a promotion nobody can
- * enter and a compliance problem besides. Shrinking is the failure mode that
- * still says everything.
- *
- * IBM Plex Mono advances at 0.6em; the tracking is added on top, so a character
- * costs `size × 0.66`. Mono is the one face here where a width estimate is exact
- * rather than approximate.
- */
-function fitSteps(steps: string[], railSize: number, g: Geometry): number {
-  const longest = steps.reduce((n, step) => Math.max(n, step.length), 0)
-  if (longest === 0) return railSize
-  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 - stepIndexW(railSize)
-  return Math.max(19, Math.min(railSize, Math.floor(room / (longest * 0.66))))
-}
 
 /**
  * The score, outlined, bleeding off the left edge.
@@ -317,7 +188,7 @@ function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['sco
   // units, so they are flipped and dropped onto a baseline here.
   const boxW = Math.round(width * scale)
   const boxH = Math.round(at.size * 1.02)
-  const spineSize = at.label === 'spine' ? Math.max(13, Math.round(at.size * 0.044)) : 22
+  const spineSize = Math.max(13, Math.round(at.size * 0.044))
   const spineStep = Math.round(spineSize * 1.05)
 
   return (
@@ -344,8 +215,7 @@ function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['sco
           ))}
         </g>
       </svg>
-      {at.label === 'spine' ? (
-        <div
+      <div
           style={{
             display: 'flex',
             ...mono(spineSize, 600, P.accent, 0.34),
@@ -371,21 +241,6 @@ function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['sco
             </div>
           ))}
         </div>
-      ) : (
-        // Laid along the numeral's foot. At the entry card's score size a spine
-        // is only nine characters tall, which put it level with the header rail
-        // and ran "CHARGE INDEX" straight through "GETCHRGD".
-        <div
-          style={{
-            display: 'flex',
-            ...mono(spineSize, 600, P.accent, 0.3),
-            marginLeft: 16,
-            marginTop: Math.round(boxH * 0.62),
-          }}
-        >
-          {SPINE}
-        </div>
-      )}
     </div>
   )
 }
@@ -516,17 +371,15 @@ function ArtField({ artKey, g }: { artKey: string | undefined; g: Geometry }) {
  * gradient field"; only `undefined` falls through to the bundled art.
  */
 export function ShareCard({ view, art: override }: { view: ShareCardView; art?: string | null }) {
+  // A live draw makes the entry format the giveaway card: a different template,
+  // not this poster with an advert bolted on.
+  if (view.entry) return <GiveawayCard entry={view.entry} />
+
   const g = geometry(view.format)
   const art = override === undefined ? cardArt(view.artKey, view.heroImage) : override
-  const entry = view.entry
   const { line1, line2, size: headline } = fitHeadline(view.stackName, g)
-  // The table's rhythm is the format's, not a runtime squeeze. The entry card
-  // used to tighten its rows on the fly to fit the prize block; it now carries
-  // its own scale, which is the same decision made once instead of per render.
   const rowPad = g.rowPad
-  const prizeSize = entry ? fitPrize(entry.prize, g) : g.prizeMax
   const railSize = g.mono
-  const stepSize = entry ? fitSteps(entry.steps, railSize, g) : railSize
 
   return (
     <div
@@ -646,10 +499,9 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
         }}
       >
         {/* The type block's own ground.
-            Absolutely positioned inside the block, so it is sized by the block:
-            the entry card carries a prize and three steps that the story card
-            does not, its type starts ~270px higher, and neither format has to
-            state where. Full card width and run past the bottom edge, because
+            Absolutely positioned inside the block, so it is sized by the block
+            and no format has to state where its type starts. Full card width
+            and run past the bottom edge, because
             the qty column and the footer reach further than this column does.
             First child, since Satori paints in tree order and has no z-index. */}
         <div
@@ -730,96 +582,6 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
           ))}
         </div>
 
-        {/* ── Prize: a rule and a line of type. No pill, no fill. ─────────── */}
-        {entry ? (
-          <div style={{ display: 'flex', alignItems: 'flex-start', marginTop: 38 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', ...mono(railSize, 600, P.accent, 0.28), marginBottom: 9 }}>
-                {entry.test ? 'TEST — NOT A LIVE PROMOTION' : 'HOW TO ENTER'}
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  ...display(prizeSize, 800, P.ink1),
-                  lineHeight: 0.83,
-                  textTransform: 'uppercase',
-                  marginLeft: -5,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {/* The money in cyan, per the brief. Split rather than
-                    interpolated: Satori miscounts a parent's children when one of
-                    them is a number, and "£200" arrives from campaign config as
-                    part of a sentence the founder types. */}
-                {moneySplit(entry.prize).map((part, i) => (
-                  <div key={i} style={{ display: 'flex', color: part.money ? P.accent : P.ink1 }}>
-                    {part.text}
-                  </div>
-                ))}
-              </div>
-
-              {/* The steps, drawn.
-                  They have been in campaign config since the competition was
-                  built and the card never showed them, so the only instruction a
-                  reader got was a four-word summary. A promotion whose entry
-                  conditions are not on the promotion is both unenterable and, as
-                  a significant condition, a compliance problem.
-
-                  Stacked rather than run together on one line: three steps of
-                  founder-typed length do not fit across the column, and an
-                  advert that needs reading twice does not get entered. */}
-              {entry.steps.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', marginTop: 18 }}>
-                  {entry.steps.map((step, i) => (
-                    <div
-                      key={`${i}-${step}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        height: Math.round(stepSize * 1.7),
-                        ...mono(stepSize, 400, P.ink1, 0.06),
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          width: stepIndexW(stepSize),
-                          flexShrink: 0,
-                          ...mono(stepSize - 2, 600, P.accent, 0.12),
-                        }}
-                      >
-                        {String(i + 1).padStart(2, '0')}
-                      </div>
-                      <div style={{ display: 'flex', whiteSpace: 'nowrap' }}>
-                        {step.toUpperCase()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            {/* The route back, in the hairline box. Not a QR: on a story the
-                viewer is holding the phone the code is displayed on, so a handle
-                they can remember for two seconds beats a code they cannot scan. */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                flexShrink: 0,
-                width: HANDLE_BOX_W,
-                marginLeft: 26,
-                padding: '13px 18px',
-                border: `1.5px solid ${RULE}`,
-              }}
-            >
-              <div style={{ ...mono(railSize - 10, 600, P.accent, 0.22), lineHeight: '22px' }}>FIND US</div>
-              <div style={{ ...mono(railSize, 600, P.ink1, 0.04), lineHeight: '34px' }}>{entry.handle}</div>
-              <div style={{ ...mono(railSize - 9, 400, MUTED, 0.06), lineHeight: '22px' }}>{entry.route}</div>
-            </div>
-          </div>
-        ) : null}
-
         {/*
           ── Where to go ───────────────────────────────────────────────────
 
@@ -865,19 +627,7 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
         ) : null}
       </div>
 
-      {/* ── Grain, over everything ────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, width: g.w, height: g.h,
-          backgroundImage: `url(${GRAIN_DATA_URI})`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: `${GRAIN_TILE_PX}px ${GRAIN_TILE_PX}px`,
-          opacity: 0.07,
-          mixBlendMode: 'overlay',
-        }}
-      />
+      <Grain w={g.w} h={g.h} />
     </div>
   )
 }

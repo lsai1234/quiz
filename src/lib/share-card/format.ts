@@ -257,21 +257,99 @@ export interface ShareCardView {
   heroImage: string | null
   callout: ShareCallout | null
   /**
-   * The advert, on the entry card only.
+   * The giveaway card, on the entry format only.
    *
-   * Null on every other format. Kept separate from `callout` because a band is
-   * something a card carries and this is what the card *is*.
+   * Null on every other format, and on the entry format once the draw has
+   * closed — the card then renders as the plain story poster. Kept separate
+   * from `callout` because a band is something a card carries and this is what
+   * the card *is*.
    */
-  entry: {
-    prize: string
-    steps: string[]
-    handle: string
-    route: string
-    closes: string
-    terms: string
-    test: boolean
-  } | null
+  entry: ShareEntry | null
   footer: string
+}
+
+/**
+ * Everything the giveaway card prints, resolved.
+ *
+ * The card is a fixed template with four inputs — the first name, the
+ * archetype, the products, and the closing date — and every line of it is
+ * decided here, so the renderer sets type and asks no questions.
+ */
+export interface ShareEntry {
+  /** "LAUNCH GIVEAWAY", or the test marker while the draw is a rehearsal. */
+  label: string
+  /** The prize up to and including the amount: "Win £200". The amount is cyan. */
+  prizeHero: string
+  /** The rest of the prize: "of supplements". Empty when nothing follows. */
+  prizeRest: string
+  /** "Sam built their stack." — or "I built my stack." with no name. */
+  hook: string
+  /** "Build yours and you’re entered." */
+  invite: string
+  /** The panel's label: "SAM’S STACK", or "MY STACK". */
+  owner: string
+  /** The panel's title: the archetype, or the stack's name without one. */
+  title: string
+  /** Up to five product names. No doses — this card is an advert, not a protocol. */
+  products: string[]
+  /** The three steps, in order. */
+  steps: string[]
+  /** Where the quiz is. The card's way back once it has been reshared. */
+  domain: string
+  /** "Closes 30 Nov · No purchase needed · T&Cs apply" */
+  small: string
+  handle: string
+  test: boolean
+}
+
+/** The giveaway card's product list stops at five. */
+export const ENTRY_PRODUCTS = 5
+
+/**
+ * The prize, split so the amount can be set in the accent.
+ *
+ * `prize` is founder-typed — "Win £200 of supplements" — so the hero line is
+ * everything up to and including the amount and the rest goes underneath.
+ * A prize typed without its verb ("£200 of supplements") still reads as an
+ * offer; one with no amount at all is printed whole.
+ */
+export function splitPrize(prize: string): { hero: string; rest: string } {
+  const text = prize.trim().replace(/\s+/g, ' ')
+  const match = /[£$€]\s?\d[\d,.]*[kK]?/.exec(text)
+  if (!match) return { hero: text, rest: '' }
+  const end = match.index + match[0].length
+  const lead = text.slice(0, match.index).trim()
+  return {
+    hero: `${lead || 'Win'} ${match[0]}`,
+    rest: text.slice(end).trim(),
+  }
+}
+
+function buildEntry(payload: ShareCardPayload, competition: CompetitionBand): ShareEntry {
+  const name = payload.firstName?.trim()
+  const { hero, rest } = splitPrize(competition.prize)
+  return {
+    label: competition.test ? 'TEST — NOT A LIVE PROMOTION' : 'LAUNCH GIVEAWAY',
+    prizeHero: hero,
+    prizeRest: rest,
+    hook: name ? `${name} built their stack.` : 'I built my stack.',
+    invite: 'Build yours and you’re entered.',
+    owner: name ? `${name.toUpperCase()}’S STACK` : 'MY STACK',
+    title: payload.archetype.trim() || payload.stackName,
+    products: payload.lineup.slice(0, ENTRY_PRODUCTS).map((row) => row.product),
+    // Fixed copy rather than the Founders Hub steps: these three are the
+    // promotion's mechanic as the card advertises it. The handle is still
+    // read from config, because a wrong one sends every entrant elsewhere.
+    steps: [
+      'Take the free 90-sec quiz',
+      'Share your result to your story',
+      `Tag ${competition.handle}`,
+    ],
+    domain: 'getchrgd.co.uk',
+    small: `${competition.closes} · No purchase needed · T&Cs apply`,
+    handle: competition.handle,
+    test: competition.test,
+  }
 }
 
 /**
@@ -390,18 +468,7 @@ export function buildShareCardView(
         : payload.code
           ? { kind: 'code' as const, code: payload.code, caption: 'Use this code at checkout' }
           : null,
-    entry:
-      format === 'entry' && competition
-        ? {
-            prize: competition.prize,
-            steps: competition.steps.slice(0, 3),
-            handle: competition.handle,
-            route: competition.route,
-            closes: competition.closes,
-            terms: competition.terms,
-            test: competition.test,
-          }
-        : null,
+    entry: format === 'entry' && competition ? buildEntry(payload, competition) : null,
     footer: 'getchrgd.co.uk',
     cta: {
       /* No exclamation mark and no "scan me": the card is quiet everywhere
