@@ -30,6 +30,7 @@ import {
   saveOrder,
   updateOrder,
 } from './repo'
+import { neverPaid, PAYMENT_NOT_COMPLETED } from './unpaid'
 import type {
   CreateOrderInput,
   Order,
@@ -358,7 +359,11 @@ export async function markOrderPaid(
 ): Promise<Order | null> {
   let becamePaid = false
   const order = await updateOrder(id, (o) => {
-    if (o.status !== 'pending_payment') return // idempotent — already progressed
+    // Idempotent: anything already past pending has been handled — except an
+    // order WE closed as unpaid. Stripe saying it was paid outranks our sweep,
+    // which only knew it had not heard yet; ignoring a late payment here would
+    // leave money taken against an order filed as an abandoned basket.
+    if (o.status !== 'pending_payment' && !neverPaid(o)) return
     becamePaid = true
     o.status = 'paid'
     if (payment.shipping != null) {
@@ -401,9 +406,13 @@ export function reviewStateOf(order: Pick<Order, 'review'>): OrderReviewState {
 }
 
 /** True when the order is waiting on a founder in the daily queue. */
-export function awaitingReview(order: Pick<Order, 'status' | 'supplierOrderId' | 'review' | 'lines'>): boolean {
+export function awaitingReview(
+  order: Pick<Order, 'status' | 'supplierOrderId' | 'review' | 'lines' | 'events'>,
+): boolean {
   if (order.supplierOrderId) return false
   if (order.status !== 'paid' && order.status !== 'failed') return false
+  // A checkout nobody paid for is `failed` too, and there is nothing to decide.
+  if (neverPaid(order)) return false
   // Nothing to dispatch, so nothing to decide. A subscription cycle where every
   // line is a multi-month item that is not due raises a real order — it is the
   // record that this invoice was processed, and the ledger needs it — but it has
@@ -432,6 +441,9 @@ async function setReview(
 export async function approveOrderForSupplier(id: string, by?: string | null, note?: string | null) {
   const order = await getOrder(id)
   if (!order) return null
+  if (neverPaid(order)) {
+    throw new Error(`Order ${id} was never paid for — the checkout was abandoned, so there is nothing to approve.`)
+  }
   if (order.status !== 'paid' && order.status !== 'failed') {
     throw new Error(`Order ${id} is ${order.status} — only a paid order can be approved for fulfilment.`)
   }
@@ -736,6 +748,11 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   if (!SUBMITTABLE.includes(order.status)) {
     throw new Error(`Order ${id} is ${order.status} — only paid or failed orders can be submitted.`)
   }
+  // Checked apart from the approval below, which an unpaid order could only
+  // carry from before this existed — and which must not be enough to ship it.
+  if (neverPaid(order)) {
+    throw new Error(`Order ${id} was never paid for — the checkout was abandoned, so there is nothing to send.`)
+  }
   if (reviewStateOf(order) !== 'approved') {
     throw new Error(
       `Order ${id} has not been approved for fulfilment (${reviewStateOf(order)}) — review it in the fulfilment queue first.`,
@@ -920,7 +937,7 @@ export async function failOrder(id: string, detail?: string): Promise<Order | nu
   return updateOrder(id, (o) => {
     if (o.status !== 'pending_payment') return
     o.status = 'failed'
-    o.events.push(event('payment_not_completed', detail))
+    o.events.push(event(PAYMENT_NOT_COMPLETED, detail))
   })
 }
 

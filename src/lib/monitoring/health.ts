@@ -24,6 +24,8 @@ import { getEngine } from '@/lib/db/engine'
 import { kvGet, kvSet } from '@/lib/db/kv'
 import { activeStripeKeys, getPaymentSource, getStripeEnvironment } from '@/lib/payments'
 import { criticalCountSince } from './repo'
+import { neverPaid } from '@/lib/orders/unpaid'
+import type { OrderEvent } from '@/lib/orders/types'
 
 export type HealthStatus = 'ok' | 'warn' | 'fail'
 
@@ -103,12 +105,20 @@ async function checkStuckCheckouts(): Promise<HealthCheck> {
   }
 }
 
-/** Orders that failed outright in the last day. */
+/**
+ * Orders that failed outright in the last day.
+ *
+ * Not an abandoned checkout, which is closed as `failed` too: that is somebody
+ * deciding not to buy, not anything broken, and alarming on it trains the alarm
+ * to be ignored. See `@/lib/orders/unpaid`.
+ */
 async function checkFailedOrders(): Promise<HealthCheck> {
-  const failed = await count(
-    "SELECT COUNT(*) AS count FROM orders WHERE status = 'failed' AND updated_at >= ?",
+  const db = await getEngine()
+  const rows = await db.all<{ data: string }>(
+    "SELECT data FROM orders WHERE status = 'failed' AND updated_at >= ?",
     [iso(24 * HOUR)],
   )
+  const failed = rows.filter((r) => !neverPaid({ status: 'failed', events: eventsOf(r.data) })).length
   return failed === 0
     ? {
         id: 'failed-orders',
@@ -123,6 +133,15 @@ async function checkFailedOrders(): Promise<HealthCheck> {
         detail: `${failed} order${failed === 1 ? '' : 's'} failed in the last 24 hours.`,
         href: '/founderhub/commerce/orders',
       }
+}
+
+function eventsOf(data: string): OrderEvent[] {
+  try {
+    const events = (JSON.parse(data) as { events?: unknown }).events
+    return Array.isArray(events) ? (events as OrderEvent[]) : []
+  } catch {
+    return []
+  }
 }
 
 /**

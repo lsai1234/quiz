@@ -244,6 +244,21 @@ describe('deleting an order', () => {
     expect(check.reason).toMatch(/refund it first/i)
   })
 
+  it('refuses a paid one the supplier refused — failing to ship did not give the money back', async () => {
+    const order = await anOrder({ status: 'failed' })
+    await patchOrderJson(order.id, { stripePaymentIntentId: 'pi_3' })
+
+    const check = await checkOrderDeletion(order.id)
+    expect(check.ok).toBe(false)
+    expect(check.reason).toMatch(/refund it first/i)
+  })
+
+  it('allows an abandoned checkout — nothing was taken', async () => {
+    const order = await anOrder({ status: 'failed' })
+    await patchOrderJson(order.id, { events: [{ at: '2026-01-01T00:00:00.000Z', type: 'payment_not_completed' }] })
+    expect((await checkOrderDeletion(order.id)).ok).toBe(true)
+  })
+
   it('allows a refunded one — the money is already back', async () => {
     const order = await anOrder({ status: 'refunded' })
     await patchOrderJson(order.id, { stripePaymentIntentId: 'pi_2' })

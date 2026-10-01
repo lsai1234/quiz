@@ -199,6 +199,16 @@ describe('dashboard summary', () => {
     expect(d.orders.failed).toBe(1)
   })
 
+  it('does not count an abandoned checkout as an order that failed to reach the supplier', () => {
+    const abandoned = order({
+      status: 'failed',
+      events: [{ at: ago(30), type: 'payment_not_completed', detail: 'Checkout session expired without payment' }],
+    })
+    const d = buildDashboard({ ...base, orders: [abandoned], subscriptions: [] })
+    expect(d.orders.failed).toBe(0)
+    expect(d.actionRequired.some((a) => a.label.includes('failed to reach the supplier'))).toBe(false)
+  })
+
   it('is all zeroes rather than NaN on a brand-new business', () => {
     const d = buildDashboard({ ...base, orders: [], subscriptions: [] })
     expect(d.month.revenue).toBe(0)

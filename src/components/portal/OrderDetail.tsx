@@ -5,6 +5,7 @@ import { DangerZone, type DeletionCheck } from './DangerZone'
 import Link from 'next/link'
 import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
 import { Button, Card, Input, Note } from '@/components/system'
+import { displayStatus, neverPaid } from '@/lib/orders/unpaid'
 
 
 interface OrderLine {
@@ -119,9 +120,13 @@ export function OrderDetail({ id }: { id: string }) {
   if (notFound) return <p className="text-sm text-[var(--ink-3)]">Order not found. <Link href={BACK_HREF} className="underline">Back to orders</Link></p>
   if (!order) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
-  const canSubmit = order.status === 'paid' || order.status === 'failed'
+  // An abandoned checkout is stored as `failed`, like a paid order PowerBody
+  // refused — but nothing was taken, so there is nothing to send, refund or
+  // cancel. See `@/lib/orders/unpaid`.
+  const unpaid = neverPaid(order)
+  const canSubmit = (order.status === 'paid' || order.status === 'failed') && !unpaid
   const canSync = !!order.supplierOrderId
-  const terminal = ['refunded', 'cancelled'].includes(order.status)
+  const terminal = ['refunded', 'cancelled'].includes(order.status) || unpaid
   const review = order.review?.state ?? 'pending'
   const awaitingReview = !order.supplierOrderId && canSubmit
 
@@ -134,8 +139,16 @@ export function OrderDetail({ id }: { id: string }) {
           <h1 className="text-xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{order.id}</h1>
           <p className="text-[11px] text-[var(--ink-3)]">{order.channel} · {order.email ?? 'guest'} · {formatStamp(order.createdAt)}</p>
         </div>
-        <StatusBadge status={order.status} />
+        <StatusBadge status={displayStatus(order)} />
       </div>
+
+      {unpaid && (
+        <Note tone="info">
+          Not paid. This customer reached the Stripe payment page and left without paying, so
+          nothing was charged and there is nothing to send. Nothing to do here: leave it, or delete
+          it at the bottom of the page.
+        </Note>
+      )}
 
       {/* Fulfilment review — nothing reaches PowerBody until this says approved. */}
       {awaitingReview && (
@@ -173,38 +186,44 @@ export function OrderDetail({ id }: { id: string }) {
       )}
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="primary" size="sm" loading={busy === 'submit'} disabled={!canSubmit || busy !== null} onClick={() => act('submit')}>
-          {order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
-        </Button>
-        <Button size="sm" loading={busy === 'sync'} disabled={!canSync || busy !== null} onClick={() => act('sync')}>
-          Sync status
-        </Button>
-        {/* Both take money or an order back. `destructive` is what says so — they
-            used to be secondary buttons with red text, which is the same weight
-            as "Sync status" to anyone scanning the row. */}
-        <Button variant="destructive" size="sm" loading={busy === 'refund'} disabled={terminal || busy !== null} onClick={() => act('refund')}>
-          Refund
-        </Button>
-        <Button variant="destructive" size="sm" loading={busy === 'cancel'} disabled={terminal || busy !== null} onClick={() => act('cancel')}>
-          Cancel
-        </Button>
-      </div>
+      {!unpaid && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" size="sm" loading={busy === 'submit'} disabled={!canSubmit || busy !== null} onClick={() => act('submit')}>
+            {order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
+          </Button>
+          <Button size="sm" loading={busy === 'sync'} disabled={!canSync || busy !== null} onClick={() => act('sync')}>
+            Sync status
+          </Button>
+          {/* Both take money or an order back. `destructive` is what says so — they
+              used to be secondary buttons with red text, which is the same weight
+              as "Sync status" to anyone scanning the row. */}
+          <Button variant="destructive" size="sm" loading={busy === 'refund'} disabled={terminal || busy !== null} onClick={() => act('refund')}>
+            Refund
+          </Button>
+          <Button variant="destructive" size="sm" loading={busy === 'cancel'} disabled={terminal || busy !== null} onClick={() => act('cancel')}>
+            Cancel
+          </Button>
+        </div>
+      )}
       {error && (
         <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
           {error}
         </p>
       )}
 
-      {/* Delivery address — what PowerBody will actually ship against. */}
-      <AddressPanel
-        address={order.shippingAddress}
-        locked={SUPPLIER_HELD.has(order.status)}
-        withSupplier={Boolean(order.supplierOrderId)}
-        terminal={terminal}
-        fallbackEmail={order.email}
-        onSave={saveAddress}
-      />
+      {/* Delivery address — what PowerBody will actually ship against. Not on an
+          unpaid order, where "add one so PowerBody can ship it" is the opposite
+          of the right advice. */}
+      {!unpaid && (
+        <AddressPanel
+          address={order.shippingAddress}
+          locked={SUPPLIER_HELD.has(order.status)}
+          withSupplier={Boolean(order.supplierOrderId)}
+          terminal={terminal}
+          fallbackEmail={order.email}
+          onSave={saveAddress}
+        />
+      )}
 
       {/* Lines */}
       <section>
@@ -258,7 +277,7 @@ export function OrderDetail({ id }: { id: string }) {
         </div>
         <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
           <p className="font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Payment</p>
-          <p className="text-[var(--ink-3)]">Stripe session: <span className="text-[var(--ink-2)] break-all">{order.stripeSessionId ?? '— (mock)'}</span></p>
+          <p className="text-[var(--ink-3)]">Stripe session: <span className="text-[var(--ink-2)] break-all">{order.stripeSessionId ?? (unpaid ? '— (never paid)' : '— (mock)')}</span></p>
           <p className="text-[var(--ink-3)]">Payment intent: <span className="text-[var(--ink-2)] break-all">{order.stripePaymentIntentId ?? '—'}</span></p>
         </div>
       </section>

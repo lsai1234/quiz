@@ -26,13 +26,13 @@ beforeEach(async () => {
   await kvDelete(CRON_HEARTBEAT_KEY)
 })
 
-async function seedOrder(id: string, status: string, createdAt: string) {
+async function seedOrder(id: string, status: string, createdAt: string, data = '{}') {
   const db = await getEngine()
   await db.run(
     `INSERT INTO orders (id, user_id, email, channel, status, data, stripe_session_id,
        stripe_payment_id, supplier_order_id, partner_code, mode, created_at, updated_at)
-     VALUES (?, NULL, 'a@b.c', 'shop', ?, '{}', NULL, NULL, NULL, NULL, 'sandbox', ?, ?)`,
-    [id, status, createdAt, createdAt],
+     VALUES (?, NULL, 'a@b.c', 'shop', ?, ?, NULL, NULL, NULL, NULL, 'sandbox', ?, ?)`,
+    [id, status, data, createdAt, createdAt],
   )
 }
 
@@ -57,6 +57,18 @@ describe('stuck checkouts — the broken-webhook signature', () => {
   it('does not count orders that completed normally', async () => {
     for (const id of ['p1', 'p2', 'p3']) await seedOrder(id, 'paid', iso(6 * HOUR))
     expect(find(await runHealthChecks(), 'stuck-checkouts').status).toBe('ok')
+  })
+})
+
+describe('failed orders', () => {
+  it('fails on an order that did not reach the supplier', async () => {
+    await seedOrder('refused', 'failed', iso(HOUR), JSON.stringify({ events: [{ type: 'paid' }, { type: 'submit_failed' }] }))
+    expect(find(await runHealthChecks(), 'failed-orders').status).toBe('fail')
+  })
+
+  it('ignores an abandoned checkout, which is somebody not buying rather than anything broken', async () => {
+    await seedOrder('walked-away', 'failed', iso(HOUR), JSON.stringify({ events: [{ type: 'payment_not_completed' }] }))
+    expect(find(await runHealthChecks(), 'failed-orders').status).toBe('ok')
   })
 })
 

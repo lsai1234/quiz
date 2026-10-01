@@ -185,7 +185,8 @@ export async function listStalePendingOrders(cutoffIso: string): Promise<Order[]
  * document and is applied by the caller (`buildFulfilmentQueue`), which also
  * lets orders written before the queue existed default to "needs review".
  * `failed` is included on purpose: a submit that errored is exactly the kind of
- * order a founder needs to see again.
+ * order a founder needs to see again. So is an abandoned checkout, which is
+ * also `failed` and lives only in the JSON — the caller drops those.
  */
 export async function listAwaitingFulfilment(limit = 500): Promise<Order[]> {
   const db = await getEngine()

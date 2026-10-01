@@ -11,6 +11,7 @@
  * dashboard reuse the same summary the queue page shows.
  */
 import { reviewStateOf } from './service'
+import { neverPaid } from './unpaid'
 import { deliverability } from '@/lib/pricing/zones'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import type { Order, OrderReviewState } from './types'
@@ -327,6 +328,10 @@ export function buildFulfilmentQueue(orders: Order[], kind?: QueueKind): Fulfilm
     // queue work. Dropped here rather than in the SQL because "has lines" is a
     // domain fact, not a storage one.
     .filter((o) => o.lines.length > 0)
+    // A checkout nobody paid for shares `failed` with a paid order PowerBody
+    // refused, and arrives with it from `listAwaitingFulfilment`. It is not work:
+    // nothing was taken and nothing should ship. See `./unpaid`.
+    .filter((o) => !neverPaid(o))
     .map(toQueueOrder)
     .filter((o) => (kind ? o.kind === kind : true))
 

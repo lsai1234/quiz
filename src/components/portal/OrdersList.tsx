@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Badge, Card, Input, Select } from '@/components/system'
+import { displayStatus, neverPaid } from '@/lib/orders/unpaid'
 
 
 interface OrderRow {
@@ -16,6 +17,7 @@ interface OrderRow {
   review?: { state: string } | null
   supplierOrderId: string | null
   supplierStatus: string | null
+  events: { at: string; type: string; detail?: string }[]
   createdAt: string
 }
 
@@ -29,6 +31,9 @@ export const STATUS_COLOR: Record<string, string> = {
   cancelled: 'var(--tone-critical)',
   refunded: 'var(--tone-critical)',
   failed: 'var(--tone-critical)',
+  // Shown, never stored: an abandoned checkout, which is `failed` in the data.
+  // Grey like pending payment — nothing went wrong, nobody bought.
+  not_paid: 'var(--ink-3)',
 }
 
 /**
@@ -61,6 +66,7 @@ const money = (n: number, ccy: string) => `${ccy === 'GBP' ? '£' : ''}${n.toFix
 function needsReview(o: OrderRow): boolean {
   if (o.supplierOrderId) return false
   if (o.status !== 'paid' && o.status !== 'failed') return false
+  if (neverPaid(o)) return false
   return (o.review?.state ?? 'pending') === 'pending'
 }
 
@@ -154,7 +160,7 @@ export function OrdersList({ defaultChannel = 'all' }: { defaultChannel?: string
                   <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontVariantNumeric: 'tabular-nums', color: 'var(--ink-1)' }}>
                     {money(o.total, o.currency)}
                   </span>
-                  <StatusBadge status={o.status} />
+                  <StatusBadge status={displayStatus(o)} />
                 </div>
               </div>
             </Link>

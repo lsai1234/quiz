@@ -13,6 +13,7 @@
  *     is worse than no margin at all.
  */
 import type { Order } from '@/lib/orders/types'
+import { neverPaid } from '@/lib/orders/unpaid'
 import type { SubscriptionSummary } from '@/lib/changes/health'
 import { blendedDeliveryCost } from '@/lib/pricing/delivery'
 import { revenueFromShelfPrice, costFromSupplierPrice } from '@/lib/pricing/vat'
@@ -188,6 +189,7 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
   const { orders, subscriptions, config } = input
   const mrr = round(subscriptions.reduce((s, x) => s + x.flatMonthly, 0))
   const requiresAction = subscriptions.filter((s) => s.health === 'requires-action').length
+  const failedAtSupplier = orders.filter((o) => o.status === 'failed' && !neverPaid(o)).length
 
   const actionRequired = [
     { label: 'Orders PowerBody will not ship to', count: input.undeliverable ?? 0, href: '/founderhub/commerce/queue' },
@@ -196,7 +198,8 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
     { label: 'Product changes on live subscriptions', count: input.openChanges, href: '/founderhub/actions' },
     { label: 'Subscriptions needing attention', count: requiresAction, href: '/founderhub/commerce/subscriptions' },
     { label: 'Products not launch-ready', count: input.productsNeedingAttention, href: '/founderhub/products/readiness' },
-    { label: 'Orders that failed to reach the supplier', count: orders.filter((o) => o.status === 'failed').length, href: '/founderhub/commerce/orders' },
+    // Not an abandoned checkout, which is `failed` too — see `@/lib/orders/unpaid`.
+    { label: 'Orders that failed to reach the supplier', count: failedAtSupplier, href: '/founderhub/commerce/orders' },
   ]
     .filter((a) => a.count > 0)
     .sort((a, b) => b.count - a.count)
@@ -210,7 +213,7 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
       awaitingReview: input.awaitingReview,
       readyToSend: input.readyToSend,
       inFlight: orders.filter((o) => ['submitted_to_supplier', 'supplier_confirmed', 'shipped'].includes(o.status)).length,
-      failed: orders.filter((o) => o.status === 'failed').length,
+      failed: failedAtSupplier,
     },
     subscriptions: {
       active: subscriptions.length,

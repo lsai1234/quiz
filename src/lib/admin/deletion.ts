@@ -201,7 +201,9 @@ export async function checkOrderDeletion(id: string): Promise<DeletionCheck> {
     }
   }
 
-  if (order.stripePaymentIntentId && order.status === 'paid') {
+  // `failed` as well: a paid order PowerBody refused is still money taken. An
+  // abandoned checkout is `failed` too, but never carries a payment intent.
+  if (order.stripePaymentIntentId && (order.status === 'paid' || order.status === 'failed')) {
     return {
       ok: false,
       summary,
