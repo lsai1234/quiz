@@ -58,6 +58,14 @@ export async function checkFounderCode(
   const typed = normaliseFounderCode(input ?? '')
   if (!typed || !looksLikeFounderCode(typed)) return null
 
+  const standing = standingCodeFor(typed)
+  if (standing) {
+    if (!founderCodeWorksOn(context.channel)) {
+      return { ok: false, reason: 'That code works on a one-off order, not on a subscription.' }
+    }
+    return { ok: true, code: standing, kind: standing.kind }
+  }
+
   const code = await repo.getFounderCode(typed)
   // Shaped like ours but unknown: still not ours. Falling through lets the
   // partner path give the ordinary "we don't recognise that code", which is the
@@ -98,9 +106,77 @@ export async function claimFounderCodeForCheckout(
   if (check === null) return null
   if (!check.ok) return check
 
+  // Nothing to lock: a standing code is meant to be spent again and again.
+  if (isStandingCode(check.code.code)) return { ok: true, code: check.code, kind: check.kind, token: STANDING_TOKEN }
+
   const token = await repo.claimFounderCode(check.code.code)
   if (!token) return { ok: false, reason: 'That code is being used right now.' }
   return { ok: true, code: check.code, kind: check.kind, token }
 }
 
-export { markFounderCodeUsed, releaseFounderCode } from './repo'
+/** Turn a claim into a redemption. A standing code has nothing to record. */
+export async function markFounderCodeUsed(code: string, token: string, orderId: string): Promise<void> {
+  if (isStandingCode(code)) return
+  await repo.markFounderCodeUsed(code, token, orderId)
+}
+
+/** Hand a claimed code back. A standing code was never taken. */
+export async function releaseFounderCode(code: string, token: string): Promise<void> {
+  if (isStandingCode(code)) return
+  await repo.releaseFounderCode(code, token)
+}
+
+// ─── Standing codes ──────────────────────────────────────────────────────────
+
+/**
+ * Codes that always work: no 24-hour life, no single use, no database row
+ * needed. Each one is a free (or cost, or unlock) one-off order every time it
+ * is typed, on the shop and after the quiz alike.
+ *
+ * That is safe ONLY because of the review queue. Every order a code raises
+ * lands there as "Free order to review", and nothing reaches PowerBody until a
+ * founder approves it — so a standing code can be used a hundred times and the
+ * worst outcome is a hundred orders to reject. It still never touches a
+ * subscription (`founderCodeWorksOn`), for the reason at the top of this file.
+ *
+ * To retire one, delete its line here and deploy. Revoking it in the hub does
+ * not: the hub's row for it is not consulted.
+ */
+const STANDING_CODES: Record<string, FounderCodeKind> = {
+  // Given out by hand on 2 Oct 2026, to be honoured on every order.
+  'FH-FREE-C13A7P0X': 'free',
+}
+
+const STANDING_TOKEN = 'standing'
+
+/**
+ * The standing code a typed string means, if any.
+ *
+ * Read forgivingly in the random part: our alphabet has no O, I or L, so one
+ * of those arriving means a 0 or a 1 was misread off a screen or a message —
+ * and a hand-given code is exactly the one most likely to be retyped by eye.
+ */
+function standingCodeFor(typed: string): FounderCode | null {
+  const match = /^(FH-(?:FREE|COST|MIN)-)([0-9A-Z]{8})$/.exec(typed)
+  if (!match) return null
+  const code = match[1] + match[2].replace(/O/g, '0').replace(/[IL]/g, '1')
+  const kind = STANDING_CODES[code]
+  if (!kind) return null
+  return {
+    code,
+    kind,
+    note: 'Standing code — always works',
+    createdBy: null,
+    createdAt: '2026-10-02T00:00:00.000Z',
+    expiresAt: '9999-12-31T23:59:59.000Z',
+    claimToken: null,
+    claimedAt: null,
+    usedAt: null,
+    orderId: null,
+    revokedAt: null,
+  }
+}
+
+export function isStandingCode(code: string): boolean {
+  return standingCodeFor(normaliseFounderCode(code)) !== null
+}

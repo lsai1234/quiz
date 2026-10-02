@@ -387,8 +387,23 @@ export function StackReviewPage() {
     }
   }, [])
 
-  /** A starter buys one box, never a plan. */
-  const starterPlanType = claiming ? ('oneoff' as const) : null
+  /**
+   * A founder code, once the box has accepted one.
+   *
+   * Founder codes are one-off only by design (`founderCodeWorksOn`): the
+   * subscription checkout never sees them, so one left on the monthly tab would
+   * be dropped and the plan charged in full. A `free` one also behaves like a
+   * starter from here on — £0.00 on the receipt, an address asked for in the
+   * page, since there is no Stripe form to give one on.
+   */
+  const founderKind = partnerCode?.founderKind ?? null
+  const freeCode = founderKind === 'free'
+
+  /** A starter buys one box, never a plan — and so does a founder code. */
+  const starterPlanType = claiming || founderKind ? ('oneoff' as const) : null
+  useEffect(() => {
+    if (founderKind && planType === 'subscription') setPlanType('oneoff')
+  }, [founderKind, planType, setPlanType])
 
   // Everything the price depends on EXCEPT the depth — the depth is what the
   // tier planner is deciding, so it can't be an input to it.
@@ -510,12 +525,12 @@ export function StackReviewPage() {
     address to Stripe on the next screen.
   */
   const handleCheckout = useCallback(() => {
-    if (claiming) {
+    if (claiming || freeCode) {
       setAddressOpen(true)
       return
     }
     void placeOrder()
-  }, [claiming, placeOrder])
+  }, [claiming, freeCode, placeOrder])
 
   // Shared top-trumps axes for the deck — the user's own goals, so every card
   // compares on the same footing.
@@ -561,7 +576,11 @@ export function StackReviewPage() {
     the button; leaving the list price on it would put the two screens in
     disagreement at exactly the moment that matters.
   */
-  const starterStack = claiming ? { label: 'Your free starter stack' } : null
+  const starterStack = claiming
+    ? { label: 'Your free starter stack' }
+    : freeCode
+      ? { label: `Free with ${partnerCode?.code}` }
+      : null
   const stickyTotal = starterStack ? 0 : stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
 
   /*
@@ -786,7 +805,7 @@ export function StackReviewPage() {
               tiers={tierPlans}
               current={activeLevel}
               minMonthly={getPricingConfig().minSubscriptionMonthly}
-              oneOffOnly={claiming}
+              oneOffOnly={claiming || founderKind != null}
               onChange={setStackLevel}
             />
           </div>
@@ -872,13 +891,14 @@ export function StackReviewPage() {
             onCheckout={handleCheckout}
           partnerCode={partnerCode?.code ?? null}
             starterStack={starterStack}
+            oneOffOnly={founderKind ? 'Your code is for a one-off order, so subscribing isn’t available with it.' : null}
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
             onCtaRef={setCtaEl}
           />
 
-          {/* The one form in the whole claim journey, and only for a claim. */}
-          {claiming && addressOpen && (
+          {/* The one form in the journey: a claim, or a free founder code. */}
+          {(claiming || freeCode) && addressOpen && (
             <StarterDeliveryForm
               busy={checkoutState.status === 'loading'}
               error={checkoutState.status === 'error' ? checkoutState.messages[0] : null}

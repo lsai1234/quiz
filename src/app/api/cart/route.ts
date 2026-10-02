@@ -251,6 +251,28 @@ export async function POST(req: Request) {
   }
 
   /*
+    Where a founder-code order goes, when the buyer typed it in.
+
+    A free order never reaches Stripe, which is where everybody else gives an
+    address — so after the quiz the page asks for one, as it does for a
+    starter. Optional here because the shop's basket does not ask: a founder
+    buying for themselves adds it in the hub. When it IS given it goes through
+    the same check as every other typed address, for the reasons above.
+  */
+  let founderAddress: SupplierAddress | null = null
+  if (founder && body.shippingAddress) {
+    try {
+      founderAddress = normaliseShippingAddress(body.shippingAddress as SupplierAddress)
+    } catch (err) {
+      await releaseClaim()
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'That delivery address will not work.' },
+        { status: 400 },
+      )
+    }
+  }
+
+  /*
     A starter suppresses the partner path entirely, and that is a term of the
     programme rather than a shortcut: a partner's own purchases earn them no
     commission. Running the redemption anyway would attribute this order to the
@@ -385,7 +407,16 @@ export async function POST(req: Request) {
 
   /** Written onto the order so a £0.00 row is explained where it is read. */
   const founderFields = founder
-    ? { founderCode: founder.code.code, founderCodeKind: founder.kind }
+    ? {
+        founderCode: founder.code.code,
+        founderCodeKind: founder.kind,
+        // The recipient's email too, for the same reason a starter's goes on:
+        // a guest after the quiz has no account, and this is where the
+        // confirmation is sent.
+        ...(founderAddress
+          ? { shippingAddress: founderAddress, email: user?.email ?? founderAddress.email ?? null }
+          : {}),
+      }
     : {}
 
   /**

@@ -272,11 +272,23 @@ export function useStackCheckout() {
             shippingAddress: subOpts.deliveryAddress ?? null,
           }),
         })
-        const data: { checkoutUrl?: string; mock?: boolean; error?: string } | null =
+        const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string } | null =
           await res.json().catch(() => null)
         if (!res.ok || !data?.checkoutUrl) {
           console.error(`[checkout] cart failed (${res.status})`, data)
           setState({ status: 'error', messages: [serverErrorMessage(res.status, data?.error)] })
+          return
+        }
+        /*
+          A free founder code raised a real order that cost nothing, so it goes
+          to the real confirmation — its reference, £0.00 — the same screen the
+          shop sends one to. The in-page receipt below is a demo: it stamps
+          itself NOT CHARGED and prints the list price, which is true of a mock
+          payment and false of this.
+        */
+        if (data.checkoutUrl === '#founder-code' && data.orderId) {
+          setState({ status: 'redirecting', plan: 'oneoff' })
+          window.location.href = `/order/confirmation?order=${encodeURIComponent(data.orderId)}`
           return
         }
         if (data.checkoutUrl.startsWith('#')) {

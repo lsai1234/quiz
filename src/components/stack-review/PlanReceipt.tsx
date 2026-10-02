@@ -52,6 +52,12 @@ interface Props {
    */
   starterStack?: { label: string } | null
   /**
+   * Set when only a one-off can be bought, with the sentence that says why —
+   * a founder code, which the subscription checkout cannot honour. The monthly
+   * tab is shut and this replaces the minimum-order note under it.
+   */
+  oneOffOnly?: string | null
+  /**
    * Handed the checkout button as it mounts, so the page can watch whether it
    * is on screen and retire the sticky bar that would otherwise sit on top of
    * it. A callback ref rather than a `querySelector`: the receipt does not
@@ -182,7 +188,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, starterStack = null, onCtaRef,
+  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, starterStack = null, oneOffOnly = null, onCtaRef,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -199,7 +205,7 @@ export function PlanReceipt({
     refuse is a worse experience than not offering it, and this is the screen
     where the choice is made.
   */
-  const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet && !starterStack
+  const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet && !starterStack && !oneOffOnly
   const isSub = planType === 'subscription' && canSubscribe
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
   const oneOffSaving = Math.round((oneOffSubtotal - oneOffTotal) * 100) / 100
@@ -310,7 +316,9 @@ export function PlanReceipt({
 
         {!canSubscribe && (
           <div className="-mt-2 mb-4 rounded-xl px-3 py-2.5 text-[11px] leading-snug text-[var(--color-muted)]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            {subscriptionItemCount === 0
+            {oneOffOnly
+              ? oneOffOnly
+              : subscriptionItemCount === 0
               ? 'None of the products in this stack can be subscribed to monthly yet.'
               : `Monthly subscription unlocks at ${formatGBP(config.minSubscriptionMonthly)}/mo. Your monthly plan works out to ${formatGBP(subscriptionTotal)} — add a product to enable Subscribe & Save.`}
           </div>
@@ -434,7 +442,9 @@ export function PlanReceipt({
                   Delivery is on us too. Nothing is taken from a card — there is nothing to take.
                 </p>
               )}
-              {hasOneOffSaving && (
+              {/* Not on a free order: "you save £6.56" under a £0.00 total
+                  undersells it by everything else the code took off. */}
+              {hasOneOffSaving && !starterStack && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-emerald-400">You save</span>
                   <span className="text-xs font-semibold text-emerald-400">−{formatGBP(oneOffSaving)}</span>
@@ -466,7 +476,9 @@ export function PlanReceipt({
           thing in the card. The free-delivery case keeps its accent, because
           that one is good news and worth seeing; the shortfall stays muted.
         */}
-        {config.freeDeliveryThreshold > 0 && (
+        {/* Not on a free order either, where delivery is already on us and a
+            "+£2.95 delivery" line would contradict the line above it. */}
+        {config.freeDeliveryThreshold > 0 && !starterStack && (
           <div
             className="mt-2.5 mb-3.5 flex items-center justify-center gap-2 text-xs font-semibold"
             style={

@@ -13,7 +13,13 @@ import {
   releaseFounderCode,
   revokeFounderCode,
 } from '@/lib/founder-codes/repo'
-import { checkFounderCode, claimFounderCodeForCheckout, founderCodeWorksOn } from '@/lib/founder-codes/redeem'
+import {
+  checkFounderCode,
+  claimFounderCodeForCheckout,
+  founderCodeWorksOn,
+  markFounderCodeUsed as spendFounderCode,
+} from '@/lib/founder-codes/redeem'
+import { getEngine } from '@/lib/db/engine'
 import { founderCodeState } from '@/lib/founder-codes/codes'
 
 describe('issuing', () => {
@@ -138,5 +144,61 @@ describe('where a founder code applies', () => {
     // don't recognise that code" comes back rather than a confirmation of the
     // shape to somebody guessing.
     expect(await checkFounderCode('FH-FREE-2345ABCD', { channel: 'shop' })).toBeNull()
+  })
+})
+
+/**
+ * FH-FREE-C13A7P0X was handed to somebody to use on the quiz, and has to work
+ * every time — not once, not for 24 hours. The review queue is what makes that
+ * safe: every order it raises waits for a founder before anything ships.
+ */
+describe('the standing code', () => {
+  const STANDING = 'FH-FREE-C13A7P0X'
+
+  it('is a free code on the quiz and the shop, with no row in the database', async () => {
+    for (const channel of ['quiz', 'shop'] as const) {
+      const check = await checkFounderCode(STANDING, { channel })
+      expect(check).toMatchObject({ ok: true, kind: 'free' })
+    }
+  })
+
+  it('works every time, not once', async () => {
+    for (let i = 0; i < 3; i++) {
+      const claim = await claimFounderCodeForCheckout(STANDING, { channel: 'quiz' })
+      expect(claim?.ok).toBe(true)
+      if (claim?.ok) await spendFounderCode(claim.code.code, claim.token, `ord_${i}`)
+    }
+  })
+
+  it('never expires', async () => {
+    const check = await checkFounderCode(STANDING, { channel: 'quiz', now: new Date('2030-01-01') })
+    expect(check?.ok).toBe(true)
+  })
+
+  it('still works when it was also issued in the hub and that copy has been spent', async () => {
+    const db = await getEngine()
+    await db.run('DELETE FROM founder_codes WHERE code = ?', [STANDING])
+    await db.run(
+      `INSERT INTO founder_codes (code, kind, note, created_by, created_at, expires_at, claim_token, claimed_at, used_at, order_id, revoked_at)
+       VALUES (?, 'free', NULL, NULL, ?, ?, 'tok', ?, ?, 'ord_x', NULL)`,
+      [STANDING, '2026-10-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z', '2026-10-01T01:00:00.000Z', '2026-10-01T01:00:00.000Z'],
+    )
+    expect((await claimFounderCodeForCheckout(STANDING, { channel: 'quiz' }))?.ok).toBe(true)
+  })
+
+  it('forgives an O for the zero and an I or L for the one', async () => {
+    for (const typed of ['fh-free-c13a7pox', 'FH-FREE-CI3A7P0X', 'FH-FREE-CL3A7POX']) {
+      const check = await checkFounderCode(typed, { channel: 'quiz' })
+      expect(check).toMatchObject({ ok: true, code: { code: STANDING } })
+    }
+  })
+
+  it('still cannot make a subscription free', async () => {
+    const check = await checkFounderCode(STANDING, { channel: 'subscription' })
+    expect(check?.ok).toBe(false)
+  })
+
+  it('does not make other codes standing', async () => {
+    expect(await checkFounderCode('FH-FREE-C13A7P0Y', { channel: 'quiz' })).toBeNull()
   })
 })
