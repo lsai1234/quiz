@@ -118,6 +118,21 @@ describe('quiz funnel', () => {
     ])
   })
 
+  it('does not count a shop-only purchase as a quiz conversion', () => {
+    // `checkout_start` and `purchase` are shop events too. A visitor who never
+    // opened the quiz and bought from the shop used to count as "Bought" here.
+    const events = [
+      ...journey('quiz', STEPS, { complete: true }),
+      ev('shopper', 'checkout_start'),
+      ev('shopper', 'purchase'),
+    ]
+    const f = buildQuizFunnel(events)
+    expect(f.started).toBe(1)
+    expect(f.startedCheckout).toBe(0)
+    expect(f.purchased).toBe(0)
+    expect(f.conversionPct).toBe(0)
+  })
+
   it('is empty rather than broken with no events at all', () => {
     const f = buildQuizFunnel([])
     expect(f.started).toBe(0)

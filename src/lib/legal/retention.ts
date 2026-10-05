@@ -169,6 +169,9 @@ async function sweepAnalytics(): Promise<number> {
     [before],
   )
   await db.run('DELETE FROM analytics_events WHERE created_at < ?', [before])
+  // The visit rows built from those events go on the same clock: a summary of
+  // events we no longer keep is the events by another name.
+  await db.run('DELETE FROM analytics_sessions WHERE last_seen < ?', [before])
   return Number(row?.count ?? 0)
 }
 

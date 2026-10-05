@@ -61,6 +61,13 @@ describe('funnel', () => {
     expect('checkoutSuccess' in funnel).toBe(false)
   })
 
+  it('reports the age band and sex, and says "unspecified" rather than nothing', () => {
+    funnel.profile({ ageBracket: '35-44', gender: null })
+    expect(mockTrack).toHaveBeenLastCalledWith('quiz_profile', { ageBracket: '35-44', gender: 'unspecified' })
+    funnel.profile({ ageBracket: null, gender: 'male' })
+    expect(mockTrack).toHaveBeenLastCalledWith('quiz_profile', { ageBracket: 'unspecified', gender: 'male' })
+  })
+
   it('every wrapper emits a registered event, and every quiz event is covered', () => {
     const known = new Set<string>([...QUIZ_EVENTS, ...SHOP_EVENTS])
     funnel.start({ track: null })
@@ -82,6 +89,7 @@ describe('funnel', () => {
     funnel.driverResolved({ driverId: 'sleep-debt', confidence: 0.8 })
     funnel.earlyExit({ askedCount: 7, budget: 10 })
     funnel.proteinCheck({ door: 'described', verdict: 'big-gap', gapBand: '25-50', portions: 'bigger', msOnStep: 18_000 })
+    funnel.profile({ ageBracket: '25-34', gender: 'female' })
 
     const emitted = new Set(mockTrack.mock.calls.map((c) => c[0] as string))
     // All emitted names are registered (guards typos + missing route registration).

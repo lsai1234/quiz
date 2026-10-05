@@ -4,6 +4,7 @@ import './globals.css'
 import { PortalSync } from '@/components/portal/PortalSync'
 import { ErrorReporter } from '@/components/monitoring/ErrorReporter'
 import { MetaPixel } from '@/components/MetaPixel'
+import { PageViews } from '@/components/analytics/PageViews'
 import { ViewportHeight, VIEWPORT_HEIGHT_SNIPPET } from '@/components/ViewportHeight'
 
 const spaceGrotesk = Space_Grotesk({
@@ -62,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Sizes the app shells before the first paint — see ViewportHeight. */}
         <script dangerouslySetInnerHTML={{ __html: VIEWPORT_HEIGHT_SNIPPET }} />
       </head>
-      <body className="min-h-full antialiased"><ViewportHeight /><PortalSync /><ErrorReporter /><MetaPixel />{children}</body>
+      <body className="min-h-full antialiased"><ViewportHeight /><PortalSync /><ErrorReporter /><MetaPixel /><PageViews />{children}</body>
     </html>
   )
 }

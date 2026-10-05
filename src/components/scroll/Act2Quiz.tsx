@@ -612,6 +612,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
     setAnswer('gender', (localGender || null) as Gender)
     setAnswer('weightBand', (localWeight || null) as WeightBand | null)
+    funnel.profile({ ageBracket: (localAge || null) as AgeBracket | null, gender: (localGender || null) as Gender | null })
   }
 
   function advance() {

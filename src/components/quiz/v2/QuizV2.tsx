@@ -498,6 +498,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       gender: (localGender || null) as Gender | null,
       weightBand: (localWeight || null) as WeightBand | null,
     })
+    funnel.profile({ ageBracket: (localAge || null) as AgeBracket | null, gender: (localGender || null) as Gender | null })
     if (editingId) {
       clearPending()
       setDirection('back')

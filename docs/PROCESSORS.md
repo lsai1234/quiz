@@ -65,8 +65,12 @@ tables have no window. Recommend 6 years after the last payout, matching orders.
 
 ### D. Telemetry
 
-**Categories:** anonymous per-visit id, event name, path; error reports which may
-carry a user id when raised in an authenticated request.
+**Categories:** anonymous per-visit id, event name, path; per visit, coarse
+buckets for device type, OS and browser (from the user agent, which is not
+kept), country (from the host's IP geolocation header — the IP is not kept),
+referring site or campaign tags, and the quiz's age band and sex once answered;
+error reports which may carry a user id when raised in an authenticated
+request.
 **Lawful basis:** 6(1)(f) legitimate interests. PECR reg 6 for the storage —
 disclosed, with an opt-out, and DNT/GPC honoured.
 **Retention:** analytics 400 days, error events 30 days.

@@ -45,6 +45,11 @@ describe('the Meta Pixel', () => {
     expect(JSON.stringify(call)).not.toMatch(/fat-loss|budget|primaryGoal/)
   })
 
+  it('never forwards the age band and sex, or page views it already counts itself', () => {
+    expect(pixelEventFor('quiz_profile', { ageBracket: '25-34', gender: 'female' })).toBeNull()
+    expect(pixelEventFor('page_view', {})).toBeNull()
+  })
+
   it('loads nothing until the visitor says yes', () => {
     setMetaPixelId('1234567890123456')
     forwardToPixel('purchase', { value: 10 })

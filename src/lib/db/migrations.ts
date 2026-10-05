@@ -829,6 +829,64 @@ export const MIGRATIONS: string[] = [
     last_error_at TEXT
   );
   `,
+
+  // v25 — `analytics_sessions`: one row per visit, kept up to date as its
+  // events arrive. See `lib/analytics/sessions.ts`.
+  //
+  // `analytics_events` answers "what happened, in order"; it cannot cheaply
+  // answer "how many visits came from Instagram on a phone, and how many of
+  // those finished the quiz?" — that is a group-by over a JSON column, which is
+  // where SQLite and Postgres stop agreeing, and over every event in the window,
+  // which is what made the hub's funnel slow. So each event also folds into its
+  // visit's row as it is written: when each stage was first reached, the coarse
+  // device and source buckets, and the quiz's age band and sex. Reading a year
+  // of analytics becomes reading one narrow row per visit.
+  //
+  // Same anonymity as the events: `session_id` is the per-tab id, and nothing
+  // here identifies anybody — no IP, no user agent string, no account.
+  // `internal` marks visits from a browser signed in to the Founders Hub, so a
+  // founder testing the quiz can be left out of the numbers.
+  //
+  // `IF NOT EXISTS`, for the reason v18 gives.
+  `
+  CREATE TABLE IF NOT EXISTS analytics_sessions (
+    session_id     TEXT PRIMARY KEY,
+    first_seen     TEXT NOT NULL,
+    last_seen      TEXT NOT NULL,
+    events         INTEGER NOT NULL,
+    internal       INTEGER NOT NULL,
+    landing_path   TEXT,
+    source         TEXT,
+    channel        TEXT,
+    campaign       TEXT,
+    device         TEXT,
+    os             TEXT,
+    browser        TEXT,
+    country        TEXT,
+    arm            TEXT,
+    door           TEXT,
+    landing_at     TEXT,
+    shop_at        TEXT,
+    quiz_start_at  TEXT,
+    quiz_done_at   TEXT,
+    results_at     TEXT,
+    basket_at      TEXT,
+    checkout_at    TEXT,
+    purchase_at    TEXT,
+    purchase_pence INTEGER,
+    subscribed     INTEGER,
+    quiz_ms        INTEGER,
+    abandon_ms     INTEGER,
+    last_step      TEXT,
+    steps_seen     INTEGER,
+    age_bracket    TEXT,
+    gender         TEXT,
+    track          TEXT,
+    primary_goal   TEXT
+  );
+  CREATE INDEX IF NOT EXISTS analytics_sessions_first_seen ON analytics_sessions(first_seen);
+  CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen ON analytics_sessions(last_seen);
+  `,
 ]
 
 /**

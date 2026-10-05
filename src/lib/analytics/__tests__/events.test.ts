@@ -1,4 +1,4 @@
-import { track, SHOP_EVENTS, QUIZ_EVENTS } from '../events'
+import { track, SHOP_EVENTS, QUIZ_EVENTS, SHARE_EVENTS, CONSULT_EVENTS, SITE_EVENTS, ALL_EVENTS } from '../events'
 
 function setNav(props: Record<string, unknown>) {
   for (const [k, v] of Object.entries(props)) {
@@ -96,6 +96,42 @@ describe('SHOP_EVENTS', () => {
     }
     walk(join(process.cwd(), 'src'))
     expect(offenders).toEqual([])
+  })
+})
+
+describe('the visit context', () => {
+  it('rides on every beacon, captured from the page the visit began on', () => {
+    const fetchMock = jest.fn((_url: string, _init?: RequestInit) => Promise.resolve({} as Response))
+    setNav({ sendBeacon: undefined })
+    const origFetch = global.fetch
+    global.fetch = fetchMock as unknown as typeof fetch
+    window.sessionStorage.clear()
+    window.history.replaceState(null, '', '/?utm_source=instagram&utm_campaign=launch')
+    try {
+      // A fresh page-load: the module's memory starts empty, as it does in a new tab.
+      jest.isolateModules(() => {
+        const fresh = jest.requireActual<typeof import('../events')>('../events')
+        fresh.track('page_view')
+        // A later page: the tags are gone from the URL, the context is not.
+        window.history.replaceState(null, '', '/shop')
+        fresh.track('shop_view')
+      })
+    } finally {
+      global.fetch = origFetch
+      window.history.replaceState(null, '', '/')
+    }
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(bodies[0].ctx).toMatchObject({ land: '/', utm_source: 'instagram', utm_campaign: 'launch' })
+    expect(bodies[1].ctx).toEqual(bodies[0].ctx)
+    expect(bodies[1].path).toBe('/shop')
+  })
+})
+
+describe('ALL_EVENTS', () => {
+  it('is every family the client can emit, so the server cannot drop one', () => {
+    for (const e of [...SHOP_EVENTS, ...QUIZ_EVENTS, ...SHARE_EVENTS, ...CONSULT_EVENTS, ...SITE_EVENTS]) {
+      expect(ALL_EVENTS).toContain(e)
+    }
   })
 })
 

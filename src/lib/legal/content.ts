@@ -390,7 +390,7 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
     id: 'privacy',
     title: 'Privacy notice',
     version: PRIVACY_VERSION,
-    effectiveFrom: '2026-09-28',
+    effectiveFrom: '2026-10-05',
     summary:
       'What we collect, why, who else sees it, how long we keep it, and how to get it back or have it deleted.',
     sections: [
@@ -411,7 +411,8 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
           'From the safety screen: whether you are pregnant or breastfeeding, whether you take prescription medication, and whether you have a shellfish allergy. This is health information and we treat it differently from everything else — see the next section.',
           'When you subscribe: your email address, your delivery address and phone number, and your payment details. Payment card details go straight to Stripe and never reach our systems.',
           'While you are a member: your plan and how you change it, your order history, the emails we have sent you, and any check-ins you write.',
-          'Automatically: anonymous usage events so we can see where people get stuck in the quiz. These carry a random per-visit id that is discarded when you close the tab. They use no cookie and no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
+          'Automatically: anonymous usage events so we can see how many people visit, where they get stuck in the quiz and how long it takes them. These carry a random per-visit id that is discarded when you close the tab. They use no cookie and no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
+          'Alongside those events we note the kind of device and browser you are using (for example "phone, iOS, Instagram app"), the country you are visiting from, worked out from your connection without keeping your IP address, the site or campaign link that brought you here, and — once you answer them in the quiz — your age band and sex. These are broad groups that many visitors share, used only to see which groups the site works less well for. Your name, weight and health answers are never part of them.',
           'You can switch that off for this device at the bottom of this page, and it stops straight away.',
         ],
       },

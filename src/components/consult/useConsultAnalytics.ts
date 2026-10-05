@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { consultFunnel } from '@/lib/analytics/consult'
+import { funnel } from '@/lib/analytics/quiz'
+import { AGE_TO_QUIZ, SEX_TO_QUIZ } from '@/lib/consult/bands'
 import { stopReason } from '@/lib/consult/circuit'
 import { visibleScenes, type FlowState } from '@/lib/consult/flow'
 import type { SceneId } from '@/lib/consult/types'
@@ -60,6 +62,19 @@ export function useConsultAnalytics(state: FlowState, enabled: boolean) {
     }
     last.current = { phase: state.phase, sceneId: state.sceneId, at: now, interactions: 0 }
   }, [enabled, state.phase, state.sceneId, state.direction, state.returnTo, state.answers, state.startedAt])
+
+  // Age band and sex, in the quiz's buckets, once both are answered — so the
+  // hub's demographic breakdowns cover both front doors with one set of bands.
+  const profiled = useRef<string | null>(null)
+  const { age, sex } = state.answers
+  useEffect(() => {
+    if (!enabled || !age || !sex) return
+    const p = { ageBracket: AGE_TO_QUIZ[age], gender: SEX_TO_QUIZ[sex] }
+    const key = `${p.ageBracket}|${p.gender}`
+    if (profiled.current === key) return
+    profiled.current = key
+    funnel.profile(p)
+  }, [enabled, age, sex])
 
   // Leaving mid-consult: the last scene seen is where they dropped.
   useEffect(() => {

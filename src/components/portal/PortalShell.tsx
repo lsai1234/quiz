@@ -25,6 +25,7 @@ import { HubApp } from './HubApp'
 
 const NAV = [
   { href: '/founderhub', label: 'Dashboard' },
+  { href: '/founderhub/analytics', label: 'Analytics' },
   { href: '/founderhub/commerce', label: 'Commerce' },
   { href: '/founderhub/products', label: 'Products' },
   { href: '/founderhub/pricing', label: 'Pricing' },

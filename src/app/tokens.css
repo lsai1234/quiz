@@ -343,4 +343,16 @@
 
   /* One value for one state. Four are currently in use. */
   --disabled-opacity: 0.38;
+
+  /* ── Charts ──────────────────────────────────────────────────────────
+     The Founders Hub's Analytics page is the first place the system draws
+     data. Thin marks, so the data is the only loud thing on a card: a bar
+     never wider than 24px however much room its slot has, a 4px rounded end
+     on the data side only, 2px lines, and a 2px gap in the surface colour
+     wherever two marks touch. Colour comes from the tone tokens — one series
+     is the accent; axes and gridlines are `--edge`. */
+  --chart-bar-max: 24px;
+  --chart-mark-radius: 4px;
+  --chart-line: 2px;
+  --chart-gap: 2px;
 }

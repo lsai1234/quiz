@@ -207,7 +207,7 @@ export default function HubDashboard() {
 
       {/* ── Quiz funnel ───────────────────────────────────────────────────── */}
       <section>
-        <SectionTitle>Where people fall off</SectionTitle>
+        <SectionTitle href="/founderhub/analytics">Where people fall off</SectionTitle>
         {/* The funnel is the one figure on this page that is not read fresh —
             it is computed from every event in the window, which is the most
             expensive read in the hub, so it stands for a few minutes. A number

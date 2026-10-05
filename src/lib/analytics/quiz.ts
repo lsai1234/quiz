@@ -10,7 +10,7 @@
  */
 import { track } from './events'
 import type { StepId } from '@/lib/quiz-flow'
-import type { QuizTrack, Goal, Budget } from '@/lib/types'
+import type { QuizTrack, Goal, Budget, AgeBracket, Gender } from '@/lib/types'
 
 /**
  * A step's id in an event.
@@ -53,6 +53,16 @@ export const funnel = {
 
   subAnswer(p: { subId: string; parentStepId: StepRef; optionId: string }) {
     track('quiz_subquestion_answer', { subId: p.subId, parentStepId: p.parentStepId, optionId: p.optionId })
+  },
+
+  /**
+   * The "about you" screen was answered: age band and sex, for segmenting the
+   * funnel. Fired on every commit of that screen (an edit from review included)
+   * — the hub keeps the latest. Unanswered is sent as `unspecified` so "chose
+   * not to say" and "never reached the screen" stay distinguishable.
+   */
+  profile(p: { ageBracket: AgeBracket | null; gender: Gender | null }) {
+    track('quiz_profile', { ageBracket: p.ageBracket ?? 'unspecified', gender: p.gender ?? 'unspecified' })
   },
 
   deepDiveOffer() {

@@ -24,10 +24,8 @@ import { calculateStackPrice, calculateSubscriptionPrice } from '@/lib/stack-blu
 import type { StackBlueprint, StackSlotEntry } from '@/lib/stack-blueprint/types'
 import { defaultAnswers } from '@/lib/quiz-answers'
 import type {
-  AgeBracket,
   CaffeineLevel,
   DietLevel,
-  Gender,
   Goal,
   QuizAnswers,
   StackIdentity,
@@ -38,8 +36,9 @@ import type { HandoffPayload } from './handoff'
 import { PROFILE_AREAS, PROFILE_LABEL } from './profile'
 import { caffeineCount, sessionsPerWeek } from './reactions'
 import { SHELF_LABEL } from './summary'
+import { AGE_TO_QUIZ, SEX_TO_QUIZ } from './bands'
 import { countsByType } from './training'
-import type { AgeBand, ConsultAnswers, ConsultGoal, Sex } from './types'
+import type { ConsultAnswers, ConsultGoal } from './types'
 
 /* ── Answers ────────────────────────────────────────────────────────────── */
 
@@ -53,17 +52,7 @@ export const GOAL_TO_QUIZ: Record<ConsultGoal, Goal> = {
   weight: 'cutting',
 }
 
-const AGE_TO_QUIZ: Record<AgeBand, AgeBracket> = {
-  'under-18': '16-24',
-  '18-24': '16-24',
-  '25-34': '25-34',
-  '35-44': '35-44',
-  '45-54': '45+',
-  '55-64': '45+',
-  '65-plus': '45+',
-}
 
-const SEX_TO_QUIZ: Record<Sex, Gender> = { female: 'female', male: 'male', unsaid: 'not-specified' }
 
 function frequency(sessions: number): TrainingFrequency | null {
   if (sessions === 0) return null

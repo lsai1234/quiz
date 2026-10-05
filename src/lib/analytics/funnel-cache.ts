@@ -1,6 +1,6 @@
 import { kvGet, kvSet } from '@/lib/db/kv'
 import { listEventsSince } from './repo'
-import { buildQuizFunnel, type QuizFunnel } from './funnel'
+import { buildQuizFunnel, QUIZ_FUNNEL_EVENTS, type QuizFunnel } from './funnel'
 
 /**
  * The quiz funnel, computed at most every few minutes.
@@ -9,8 +9,8 @@ import { buildQuizFunnel, type QuizFunnel } from './funnel'
  * `buildQuizFunnel` is a pure function over the events themselves, which is the
  * right shape — the branching quiz has no fixed step ladder, so the steps have
  * to come from what the events report — but it means the dashboard was reading
- * every event in the window to draw a dozen numbers. The read is capped at
- * 20,000 rows, and a busy month reaches that cap: measured on an in-memory
+ * every event in the window to draw a dozen numbers. The read was capped at
+ * 20,000 rows, and a busy month reached that cap: measured on an in-memory
  * database, the dashboard route pulled 20,000 rows and spent 190ms doing it,
  * and every one of those rows carries a JSON `props` column that crosses the
  * database connection and is parsed again on arrival. On a hosted Postgres that
@@ -58,7 +58,7 @@ export async function quizFunnel(days: number, options: { fresh?: boolean } = {}
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
   const computed: CachedFunnel = {
     asOf: new Date().toISOString(),
-    funnel: buildQuizFunnel(await listEventsSince(since)),
+    funnel: buildQuizFunnel(await listEventsSince(since, 50_000, { events: QUIZ_FUNNEL_EVENTS })),
   }
 
   try {

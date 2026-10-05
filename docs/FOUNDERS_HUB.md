@@ -356,6 +356,46 @@ the confusing question look popular. Step order comes from the events themselves
 track, drinks mode and the deep dive, and a fixed ladder would show phantom
 drop-off wherever a cohort legitimately skipped a step.
 
+The funnel's bottom half (checkout, purchase) only counts sessions that started
+the quiz — `checkout_start` and `purchase` are shop events too, and a shop-only
+sale used to be reported as a quiz conversion. Event reads keep the **newest**
+rows under their cap; they used to keep the oldest, so a busy window described
+its first few days and ignored the rest.
+
+### Analytics (`/founderhub/analytics`)
+
+The full picture behind the dashboard's funnel: visits, landing-page views,
+quiz starts and finishes, purchases and revenue over 24 hours / 7 / 30 / 90
+days / all time, each against the period before; the funnel from landing page
+to purchase; the quiz question by question, per quiz version; time to finish;
+and breakdowns by age band, sex, track, goal, device, OS, browser (in-app
+browsers named), channel, source, campaign or partner code, country, first page,
+day of week and hour. A "Show only" filter narrows every figure on the page to
+one group; the founders' own visits are left out unless ticked in.
+
+How it is kept:
+
+- **`page_view`** (`components/analytics/PageViews.tsx`, root layout) is the top
+  of every funnel. Hubs, `/quizv2` and `/styleguide` are not tracked.
+- **Visit context** (`lib/analytics/visit.ts`): the first page of a visit
+  records the referring host, `utm_*`, a partner `?ref=` and which ad platform
+  tagged the link, and every beacon carries it. The server adds device/OS/
+  browser buckets from the user agent and the country from
+  `x-vercel-ip-country`; neither the user agent nor the IP is stored. Crawlers
+  and headless browsers are dropped. A browser signed in to the hub marks its
+  visit `internal`.
+- **`quiz_profile`** carries the age band and sex from the "about you" screen
+  (both quiz arms and the consult). Never weight, never health answers.
+- **`analytics_sessions`** (migration v25, `lib/analytics/sessions.ts`): each
+  event folds into one row per visit as it is written, so the page reads one
+  narrow row per visit instead of every event. Visits from before the table
+  existed are rebuilt from their events on first load (resumable, leased so two
+  tabs cannot double-count); their device and source show as "Not recorded".
+- **`lib/analytics/report.ts`** builds every figure from those rows. A visit
+  belongs to the period it began in and counts at the furthest stage it reached,
+  so the trend adds up to the totals and the funnel only ever narrows. Days are
+  London days.
+
 ---
 
 ## 5. The Top 25

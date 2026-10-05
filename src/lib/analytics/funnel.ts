@@ -62,14 +62,37 @@ function median(values: number[]): number | null {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
-/** Sessions that fired a given event at least once. */
-function sessionsWith(events: StoredEvent[], name: string): Set<string> {
+/**
+ * Sessions that fired a given event at least once — optionally only among
+ * `within`.
+ *
+ * `within` is what keeps the bottom of the funnel honest. `checkout_start` and
+ * `purchase` are shop events too, and without it a visitor who never opened the
+ * quiz and bought a tub of protein from the shop counted as a quiz conversion.
+ */
+function sessionsWith(events: StoredEvent[], name: string, within?: Set<string>): Set<string> {
   const out = new Set<string>()
   for (const e of events) {
-    if (e.event === name && e.sessionId) out.add(e.sessionId)
+    if (e.event === name && e.sessionId && (!within || within.has(e.sessionId))) out.add(e.sessionId)
   }
   return out
 }
+
+/**
+ * The events `buildQuizFunnel` reads. A caller fetching events for it can ask
+ * the database for only these, which on a shop-heavy month is most of the rows
+ * left behind.
+ */
+export const QUIZ_FUNNEL_EVENTS = [
+  'quiz_start',
+  'quiz_step_view',
+  'quiz_step_complete',
+  'quiz_abandon',
+  'quiz_complete',
+  'stack_reveal_view',
+  'checkout_start',
+  'purchase',
+] as const
 
 /**
  * The arm each session was in.
@@ -105,10 +128,10 @@ export function filterByArm(events: StoredEvent[], arm: QuizArm): StoredEvent[] 
 export function buildQuizFunnel(events: StoredEvent[], arm?: QuizArm): QuizFunnel {
   if (arm) events = filterByArm(events, arm)
   const started = sessionsWith(events, 'quiz_start')
-  const completed = sessionsWith(events, 'quiz_complete')
-  const reveal = sessionsWith(events, 'stack_reveal_view')
-  const checkout = sessionsWith(events, 'checkout_start')
-  const purchased = sessionsWith(events, 'purchase')
+  const completed = sessionsWith(events, 'quiz_complete', started)
+  const reveal = sessionsWith(events, 'stack_reveal_view', started)
+  const checkout = sessionsWith(events, 'checkout_start', started)
+  const purchased = sessionsWith(events, 'purchase', started)
 
   // Per step: which sessions saw it, and where it sits in the sequence.
   const seen = new Map<string, Set<string>>()

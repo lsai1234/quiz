@@ -13,6 +13,7 @@
 
 import { getQuizArm } from '@/lib/experiments/client'
 import { forwardToPixel } from './meta-pixel'
+import { buildVisitContext, type VisitContext } from './visit'
 
 export const SHOP_EVENTS = [
   'shop_view',
@@ -119,6 +120,16 @@ export const QUIZ_EVENTS = [
   'quiz_driver_resolved',
   'quiz_early_exit',
   'quiz_protein_check',
+  /**
+   * The age band and sex from the "about you" screen, once it is answered.
+   *
+   * The quiz asks both on its third screen, which is early enough that most of
+   * the people who leave have already answered — so drop-off, completion and
+   * conversion can be read per age band and per sex, not only for finishers.
+   * Bands, never an age; and weight is deliberately left out: it is
+   * health-adjacent and analytics is not where it belongs.
+   */
+  'quiz_profile',
 ] as const
 
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]
@@ -166,8 +177,29 @@ export const SHARE_EVENTS = [
 
 export type ShareEvent = (typeof SHARE_EVENTS)[number]
 
+/**
+ * Site-wide events — the top of every funnel.
+ *
+ * `page_view` is what makes "how many people opened the landing page?" an
+ * answerable question at all. Every funnel event above fires only once somebody
+ * has DONE something, so before this the hub could count quiz starts but had no
+ * idea how many visitors were looking at the button and not pressing it.
+ */
+export const SITE_EVENTS = ['page_view'] as const
+
+export type SiteEvent = (typeof SITE_EVENTS)[number]
+
 /** Every event the client may emit. */
-export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent | ConsultEvent
+export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent | ConsultEvent | SiteEvent
+
+/** Every event the server accepts — one list, so a new family cannot be emitted and silently dropped. */
+export const ALL_EVENTS: readonly AnalyticsEvent[] = [
+  ...SHOP_EVENTS,
+  ...QUIZ_EVENTS,
+  ...SHARE_EVENTS,
+  ...CONSULT_EVENTS,
+  ...SITE_EVENTS,
+]
 
 export type EventProps = Record<string, string | number | boolean | undefined>
 
@@ -176,6 +208,11 @@ export type EventProps = Record<string, string | number | boolean | undefined>
 // hops — without any cross-session/persistent identifier.
 const SESSION_KEY = 'chrgd_analytics_sid'
 let sessionId: string | null = null
+
+// How the visit began, captured on its first page and kept beside the id with
+// the same lifetime. See `visit.ts` for what it holds and what it refuses to.
+const CONTEXT_KEY = 'chrgd_analytics_ctx'
+let visitContext: VisitContext | null = null
 
 function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -208,6 +245,35 @@ export function getSessionId(): string {
   return sessionId
 }
 
+/**
+ * How this visit began: referrer, campaign tags, landing page.
+ *
+ * Read on the first event of the visit and remembered, because by the second
+ * page the referrer is our own site and the campaign tags are gone from the
+ * URL. Sent on every beacon rather than only the first, so a first beacon lost
+ * on a flaky connection does not lose where the visit came from.
+ */
+export function getVisitContext(): VisitContext {
+  if (visitContext) return visitContext
+  try {
+    const stored = window.sessionStorage.getItem(CONTEXT_KEY)
+    if (stored) return (visitContext = JSON.parse(stored) as VisitContext)
+  } catch {
+    /* unavailable or unreadable — rebuild it */
+  }
+  visitContext = buildVisitContext({
+    href: window.location.href,
+    referrer: document.referrer,
+    maxTouchPoints: navigator.maxTouchPoints,
+  })
+  try {
+    window.sessionStorage.setItem(CONTEXT_KEY, JSON.stringify(visitContext))
+  } catch {
+    /* the in-memory copy still describes this page-load */
+  }
+  return visitContext
+}
+
 /** Where an explicit "no thanks" from the storage notice is remembered. */
 export const OPT_OUT_KEY = 'chrgd_analytics_off'
 
@@ -235,7 +301,9 @@ export function setAnalyticsOptOut(off: boolean): void {
       // Drop the id we already minted, rather than leaving it to expire with
       // the tab — opting out should take effect now, not at the next visit.
       window.sessionStorage.removeItem(SESSION_KEY)
+      window.sessionStorage.removeItem(CONTEXT_KEY)
       sessionId = null
+      visitContext = null
     } else {
       window.localStorage.removeItem(OPT_OUT_KEY)
     }
@@ -277,6 +345,7 @@ export function track(event: AnalyticsEvent, props: EventProps = {}): void {
       session: getSessionId(),
       path: window.location.pathname,
       ts: Date.now(),
+      ctx: getVisitContext(),
     })
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics', new Blob([body], { type: 'application/json' }))

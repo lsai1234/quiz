@@ -255,6 +255,7 @@ Read them the way the app already does:
 | Controls | `--control-sm/md/lg`, `--focus-ring`, `--focus-ring-critical`, `--modal-sm/md/lg` |
 | Shadow | `--shadow-none/card/raised/panel`, `--glow-accent`, `--glow-accent-strong`, `--glow-critical`, `--inset-highlight/hairline/well` |
 | Motion | `--ease-settle/spring/exit`, `--duration-fast/base/slow/drift`, `--disabled-opacity` |
+| Charts | `--chart-bar-max`, `--chart-mark-radius`, `--chart-line`, `--chart-gap` — thin marks for the Analytics page; one series is the accent, axes and grid are `--edge` |
 
 ### The system owns shapes; components pass colours
 

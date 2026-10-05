@@ -84,19 +84,46 @@ export async function recordEvent(input: {
  *
  * Capped: the funnel is a shape, not a census, and an uncapped read on a busy
  * month would pull the whole table into memory to compute a handful of counts.
+ *
+ * ── Which end of the window the cap keeps ───────────────────────────────────
+ * The NEWEST events. This used to read oldest-first and stop at the cap, so on
+ * a window with more events than the cap the funnel described its first few
+ * days and silently ignored everything since — the busier the site got, the
+ * less of the present it showed, and every session cut off mid-quiz at the far
+ * end read as a drop-off. Rows are fetched newest-first and handed back in
+ * time order, so callers are unchanged.
+ *
+ * @param options.events Only these event names — far fewer rows when the caller
+ *                       needs one funnel's events and not the shop's.
+ * @param options.until  Exclusive upper bound, ISO. Defaults to now.
  */
-export async function listEventsSince(sinceIso: string, limit = 20_000): Promise<StoredEvent[]> {
+export async function listEventsSince(
+  sinceIso: string,
+  limit = 20_000,
+  options: { events?: readonly string[]; until?: string } = {},
+): Promise<StoredEvent[]> {
   try {
     const db = await getEngine()
+    const names = options.events ?? []
+    const params: unknown[] = [sinceIso]
+    let where = 'created_at >= ?'
+    if (options.until) {
+      where += ' AND created_at < ?'
+      params.push(options.until)
+    }
+    if (names.length > 0) {
+      where += ` AND event IN (${names.map(() => '?').join(', ')})`
+      params.push(...names)
+    }
     const rows = await db.all<Row>(
       `SELECT id, session_id, event, props, path, created_at
          FROM analytics_events
-        WHERE created_at >= ?
-        ORDER BY created_at ASC
-        LIMIT ${Math.min(Math.max(1, limit), 50_000)}`,
-      [sinceIso],
+        WHERE ${where}
+        ORDER BY created_at DESC
+        LIMIT ${Math.min(Math.max(1, limit), 100_000)}`,
+      params,
     )
-    return rows.map(parse)
+    return rows.reverse().map(parse)
   } catch {
     return []
   }
