@@ -443,6 +443,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   /** Set when somebody taps a health option before ticking, so the tick can say
    *  so rather than the tap doing nothing at all. */
   const [needsTick, setNeedsTick] = useState(false)
+  /** "None of these" on the safety screen, as actually tapped. Flags of `[]`
+   *  also mean nothing to factor in, but that is the starting state too — so it
+   *  can't be what lights the option, or the screen opens with an answer the
+   *  reader never gave. */
+  const [safetyNone, setSafetyNone] = useState(false)
 
   // ── Funnel instrumentation (Phase 0) ──────────────────────────────────────
   // Timing + guards for the analytics events. `stepEnterRef` clocks time-on-step,
@@ -1093,14 +1098,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                       // silence is the one response worse than a dimmed option.
                       if (!answers.healthDataConsent?.accepted) { setNeedsTick(true); return }
                       const c = answers.safetyFlags ?? []
+                      setSafetyNone(false)
                       setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
                     }}
                   />
                 ))}
                 <AnswerOption
                   key="safety-none" label="None of these" multi
-                  selected={(answers.safetyFlags ?? []).length === 0}
-                  onClick={() => setAnswer('safetyFlags', [])}
+                  selected={safetyNone && (answers.safetyFlags ?? []).length === 0}
+                  onClick={() => {
+                    setSafetyNone((on) => !on)
+                    setAnswer('safetyFlags', [])
+                  }}
                 />
               </div>
               <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">

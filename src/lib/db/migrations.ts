@@ -887,6 +887,24 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS analytics_sessions_first_seen ON analytics_sessions(first_seen);
   CREATE INDEX IF NOT EXISTS analytics_sessions_last_seen ON analytics_sessions(last_seen);
   `,
+
+  // v26 — the competition enters by email, with a bonus for sharing.
+  //
+  // Finishing the quiz and leaving an email is one entry; sharing the card on
+  // top is ten more. An email entry is a `competition_entries` row on the
+  // `email` channel with the address in `handle`, so the one-entry-per-person
+  // index, the test flag, the states and the draw all carry over unchanged.
+  //
+  // `bonus_entries` is what the draw weights by (1 + bonus tickets), and
+  // `shared_at` is when the share that earned it happened. `marketing_opt_in`
+  // records the separate, unticked-by-default "send me offers" box: entering a
+  // prize draw is not consent to marketing, so the list in the Founders Hub has
+  // to say who actually said yes.
+  `
+  ALTER TABLE competition_entries ADD COLUMN bonus_entries INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE competition_entries ADD COLUMN shared_at TEXT;
+  ALTER TABLE competition_entries ADD COLUMN marketing_opt_in INTEGER NOT NULL DEFAULT 0;
+  `,
 ]
 
 /**

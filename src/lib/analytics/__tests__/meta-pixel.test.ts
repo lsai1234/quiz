@@ -116,3 +116,37 @@ describe('before the visitor has answered', () => {
     expect(decodeURIComponent(document.cookie)).toMatch(/_fbc=fb\.1\.\d+\.abc123/)
   })
 })
+
+describe('before the Pixel id has arrived', () => {
+  /**
+   * The id comes from `/api/config`, fetched after the page mounts. A page that
+   * fires an event on load — the order confirmation's Purchase, above all —
+   * can get there first. Those events used to be dropped on the floor, so the
+   * one conversion ads most need was the one most likely to go missing.
+   */
+  function freshModule(): typeof import('@/lib/analytics/meta-pixel') {
+    let mod!: typeof import('@/lib/analytics/meta-pixel')
+    jest.isolateModules(() => { mod = require('@/lib/analytics/meta-pixel') })
+    return mod
+  }
+
+  it('holds a Purchase fired before the config lands, and sends it once it does', () => {
+    window.localStorage.setItem(AD_CONSENT_KEY, 'granted')
+    const pixel = freshModule()
+
+    pixel.forwardToPixel('purchase', { value: 42, currency: 'GBP', transaction_id: 'order-1' })
+    expect(window.fbq).toBeUndefined()
+
+    pixel.setMetaPixelId('1234567890123456')
+    const calls = window.fbq!.queue.map((a) => (a as unknown[]).slice(0, 2).join(':'))
+    expect(calls).toContain('track:Purchase')
+  })
+
+  it('drops what it held when the config says there is no Pixel', () => {
+    window.localStorage.setItem(AD_CONSENT_KEY, 'granted')
+    const pixel = freshModule()
+    pixel.forwardToPixel('purchase', { value: 42 })
+    pixel.setMetaPixelId(null)
+    expect(window.fbq).toBeUndefined()
+  })
+})

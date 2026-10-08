@@ -107,7 +107,7 @@ describe('the entry card', () => {
     // most load-bearing assertion on the entry card.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
     expect(view.entry?.domain).toBe('getchrgd.co.uk')
-    expect(view.entry?.steps[2]).toBe('Tag @getchrgd_')
+    expect(view.entry?.handle).toBe('@getchrgd_')
   })
 
   it('carries what the CAP Code needs on the promotion itself', () => {
@@ -122,8 +122,8 @@ describe('the entry card', () => {
     const view = buildShareCardView(PERSONAS.complete, 'entry', { ...BAND, steps: ['a', 'b', 'c', 'd'] })
     expect(view.entry?.steps).toEqual([
       'Take the free 90-sec quiz',
-      'Share your result to your story',
-      'Tag @getchrgd_',
+      'Pop your email in at the end',
+      'Share for 10 bonus entries',
     ])
   })
 
@@ -326,11 +326,13 @@ describe('the way back', () => {
     expect(view.entry?.handle).toBe('@getchrgd_')
   })
 
-  it('tells people to tag us, as its own step', () => {
-    // Bundled into "post this to your story and tag us" it read as one action
-    // and got done as one. Tagging is how an entry is found at all.
+  it('tells people the email is the entry and the share is the bonus', () => {
+    // The email at the end of the quiz is what enters somebody; a share on top
+    // is ten more tickets. The card is the only instruction a reshared story
+    // carries, so it has to say both.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
-    expect(view.entry?.steps.some((s) => /tag/i.test(s))).toBe(true)
+    expect(view.entry?.steps.some((s) => /email/i.test(s))).toBe(true)
+    expect(view.entry?.steps.some((s) => /10 bonus/i.test(s))).toBe(true)
   })
 })
 

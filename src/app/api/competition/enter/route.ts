@@ -1,9 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getCampaign, competitionState, isTestRun } from '@/lib/competition/campaign'
-import { enterCompetition, type EntryChannel, type EntryRoute } from '@/lib/competition/entries'
+import {
+  enterCompetition, enterWithEmail, ticketsFor, SHARE_BONUS,
+  type EntryChannel, type EntryRoute,
+} from '@/lib/competition/entries'
 
 /**
  * Enter the competition.
+ *
+ * ── By email, now ───────────────────────────────────────────────────────────
+ * `{ email, route: 'quiz' | 'free', marketingOptIn? }` is the entry: one ticket
+ * for finishing the quiz and leaving an address, and `/api/competition/bonus`
+ * adds ten more for sharing the card. The response carries the entry id, which
+ * is what the browser hands back to claim that bonus. The handle body below is
+ * the older share-and-tag route, kept so nothing already in flight breaks.
  *
  * Two routes come through here and they are equals, which is not a design
  * preference — the CAP Code requires a no-purchase-necessary route of equal
@@ -34,11 +44,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'closed', closedAt: campaign.closesAt }, { status: 409 })
   }
 
-  let body: { handle?: unknown; channel?: unknown; route?: unknown; shareToken?: unknown }
+  let body: {
+    handle?: unknown; channel?: unknown; route?: unknown; shareToken?: unknown
+    email?: unknown; marketingOptIn?: unknown
+  }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'invalid body' }, { status: 400 })
+  }
+
+  if (typeof body.email === 'string') {
+    const result = await enterWithEmail({
+      campaign: campaign.name || 'untitled',
+      email: body.email,
+      route: body.route === 'free' ? 'free' : 'quiz',
+      marketingOptIn: body.marketingOptIn === true,
+      isTest: isTestRun(campaign),
+    })
+    if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 })
+    return NextResponse.json({
+      ok: true,
+      id: result.entry.id,
+      already: result.already,
+      tickets: ticketsFor(result.entry),
+      shared: result.entry.bonusEntries > 0,
+      test: result.entry.isTest,
+    })
   }
 
   const channel = CHANNELS.includes(body.channel as EntryChannel) ? (body.channel as EntryChannel) : null
@@ -92,5 +124,6 @@ export async function GET() {
     freeEntryRoute: campaign.freeEntryRoute,
     platformDisclaimer: campaign.platformDisclaimer,
     promoterName: campaign.promoterName,
+    shareBonus: SHARE_BONUS,
   })
 }

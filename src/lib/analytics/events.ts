@@ -173,6 +173,10 @@ export const SHARE_EVENTS = [
   'share_error',
   'share_format',
   'share_dismiss',
+  // The giveaway: an email went in at the foot of the results page, and the
+  // share bonus was claimed on top of it.
+  'competition_enter',
+  'competition_bonus',
 ] as const
 
 export type ShareEvent = (typeof SHARE_EVENTS)[number]

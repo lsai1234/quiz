@@ -359,8 +359,8 @@ function buildEntry(payload: ShareCardPayload, competition: CompetitionBand, sta
     // read from config, because a wrong one sends every entrant elsewhere.
     steps: [
       'Take the free 90-sec quiz',
-      'Share your result to your story',
-      `Tag ${competition.handle}`,
+      'Pop your email in at the end',
+      'Share for 10 bonus entries',
     ],
     domain: 'getchrgd.co.uk',
     small: `${competition.closes} · No purchase needed · T&Cs apply`,

@@ -53,6 +53,16 @@ export const share = {
     track('share_error', { at: p.at, format: p.format, message: p.message?.slice(0, 120) })
   },
 
+  /** Entered the giveaway with an email. Never the address itself. */
+  competitionEnter(p: { already: boolean; marketingOptIn: boolean }) {
+    track('competition_enter', { already: p.already, marketingOptIn: p.marketingOptIn })
+  },
+
+  /** The share bonus was credited to an entry. */
+  competitionBonus() {
+    track('competition_bonus')
+  },
+
   /** Closed without sharing. `share_open` minus this minus `share_method` is
    *  the population still sitting on the sheet, which should be ~0. */
   dismiss(p: { format: ShareFormat; shared: boolean }) {

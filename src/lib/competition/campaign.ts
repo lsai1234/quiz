@@ -86,9 +86,9 @@ export const EMPTY_CAMPAIGN: Campaign = {
   instagramHandle: '@getchrgd_',
   quizRoute: 'Quiz link in our bio',
   entrySteps: [
-    'Follow @getchrgd_',
     'Take the quiz',
-    'Share it to your story tagging us',
+    'Enter your email at the end',
+    'Share your card to your story for 10 bonus entries',
   ],
   platformDisclaimer:
     'This promotion is in no way sponsored, endorsed or administered by, or associated with, Instagram or TikTok.',

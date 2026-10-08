@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Icon } from '@/components/ui/Icon'
 import {
   browserSaysNo,
@@ -59,8 +59,15 @@ export function MetaPixel() {
   // One PageView per route — sent now if they have said yes, held if they have
   // not been asked yet. The App Router swaps pages without a load, so the
   // Pixel's own automatic PageView would only ever see the first one.
+  //
+  // Once per path, not once per render of this effect: tapping OK flushes the
+  // held view AND changes `consent`, which re-runs this — and that used to send
+  // a second PageView for the same page to Meta every time somebody said yes.
+  const viewed = useRef<string | null>(null)
   useEffect(() => {
-    if (pixelId && consent !== 'unknown') pixelPageView()
+    if (!pixelId || consent === 'unknown' || viewed.current === pathname) return
+    viewed.current = pathname
+    pixelPageView()
   }, [pixelId, consent, pathname])
 
   if (!pixelId || !due || consent !== null || refused || !pixelAllowedOn(pathname)) return null

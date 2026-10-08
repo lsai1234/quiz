@@ -318,21 +318,29 @@ describe('which card it opens on', () => {
  * what that entry was.
  */
 describe('after a successful share', () => {
-  function shareable(open: boolean, entrySteps: string[] = []) {
+  function shareable(open: boolean) {
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('/api/competition/enter')) {
         return Promise.resolve({
           ok: true,
           json: async () => (open
-            ? { state: 'open', prize: 'Win £200', test: false, entrySteps }
+            ? { state: 'open', name: 'Launch', prize: 'Win £200', test: false, shareBonus: 10 }
             : { state: 'off' }),
         })
+      }
+      if (String(url).includes('/api/competition/bonus')) {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, tickets: 11, shared: true }) })
       }
       return Promise.resolve({ ok: true, blob: async () => new Blob(['png'], { type: 'image/png' }) })
     }) as unknown as typeof fetch
   }
 
-  it('confirms the entry without asking for anything', async () => {
+  afterEach(() => window.localStorage.clear())
+
+  it('credits the bonus to the entry this browser made, without asking for anything', async () => {
+    window.localStorage.setItem('chrgd_competition_entry', JSON.stringify({
+      campaign: 'Launch', id: 'entry-1', email: 'sam@example.com', tickets: 1, shared: false,
+    }))
     shareable(true)
     setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
 
@@ -340,25 +348,24 @@ describe('after a successful share', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
     await userEvent.click(primary())
 
-    expect(await screen.findByText(/nothing else to do/i)).toBeInTheDocument()
-    // The step this whole change exists to delete.
+    expect(await screen.findByText('Entered as sam@example.com')).toBeInTheDocument()
+    expect(await screen.findByText('11 entries in the draw')).toBeInTheDocument()
+    const bonus = (global.fetch as jest.Mock).mock.calls.find(([u]) => String(u).includes('/api/competition/bonus'))
+    expect(JSON.parse(bonus![1].body)).toEqual({ id: 'entry-1' })
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/handle/i)).not.toBeInTheDocument()
   })
 
-  it('lists the conditions in the campaign’s own words', async () => {
-    // Read from config rather than written into the component, so this screen
-    // and the card can never disagree about what enters somebody.
-    shareable(true, ['Follow @getchrgd_', 'Take the quiz', 'Share it to your story tagging us'])
+  it('holds the bonus, and says where the email box is, when they have not entered yet', async () => {
+    shareable(true)
     setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
     await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
     await userEvent.click(primary())
 
-    expect(await screen.findByText('Share it to your story tagging us')).toBeInTheDocument()
-    expect(screen.getByText('Take the quiz')).toBeInTheDocument()
-    expect(screen.getByText(/the tag is what enters you/i)).toBeInTheDocument()
+    expect(await screen.findByText(/one more step/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem('chrgd_competition_shared')).toBe('"Launch"')
+    expect((global.fetch as jest.Mock).mock.calls.some(([u]) => String(u).includes('/api/competition/bonus'))).toBe(false)
   })
 
   it('does not ask for a handle when no draw is running', async () => {

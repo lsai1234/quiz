@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/Icon'
 import { CardBuilding } from './CardBuilding'
 import { FormatTabs } from './FormatTabs'
 import { EnteredPanel } from './CompetitionEntry'
+import { noteCardShared } from '@/lib/competition/client'
 
 /**
  * The share sheet.
@@ -81,7 +82,7 @@ export const FORMAT_LABEL: Record<ShareFormat, string> = {
 
 /** What each card is for, said once, under the tabs. */
 const FORMAT_NOTE: Record<ShareFormat, string> = {
-  entry: 'Your stack, how to enter, and where to find us. Post this one to enter.',
+  entry: 'Your stack, how to enter, and where to find us. Post this one for your bonus entries.',
   story: 'Full height, for an Instagram or TikTok story.',
   square: 'Square, for a feed post or a carousel.',
   og: 'The preview a pasted link unfurls as.',
@@ -125,9 +126,9 @@ const ACTION: Record<ShareCapability, { label: string; icon: 'share' | 'download
  * there is nothing to win is a brand asking for a favour.
  */
 function actionNote(base: string, comp: Live | null): string {
-  const handle = comp?.instagramHandle?.trim()
-  if (!comp || comp.state !== 'open' || !handle) return base
-  return `${base} Tag ${handle} in the story — without the tag your entry won’t count.`
+  if (!comp || comp.state !== 'open') return base
+  const handle = comp.instagramHandle?.trim()
+  return `${base} Post it to your story for ${comp.shareBonus ?? 10} bonus giveaway entries${handle ? ` — and tag ${handle}` : ''}.`
 }
 
 type Step =
@@ -137,7 +138,15 @@ type Step =
   /** It went. What happens next depends on whether a draw is running. */
   | { kind: 'shared'; message: string }
 
-interface Live { state: string; prize: string; test: boolean; entrySteps?: string[]; instagramHandle?: string }
+interface Live {
+  state: string
+  name: string
+  prize: string
+  test: boolean
+  entrySteps?: string[]
+  instagramHandle?: string
+  shareBonus?: number
+}
 
 export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; onClose: () => void }) {
   const [format, setFormat] = useState<ShareFormat>('story')
@@ -282,6 +291,9 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     if (outcome.ok && outcome.method) {
       shareEvents.method({ method: outcome.method, format })
       shared.current = true
+      // The card itself went out — to the OS sheet, or saved to post. That is
+      // what earns the giveaway bonus; a copied link is not the card.
+      if (comp && outcome.method !== 'native-link') void noteCardShared(comp.name)
       setStep({
         kind: 'shared',
         message: outcome.method === 'download' ? 'Saved to your device' : 'Sent to your share sheet',
@@ -335,14 +347,14 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     return (
       <Sheet onClose={close} label="Shared">
         <SheetHeader
-          eyebrow={comp ? 'Entered' : 'Done'}
-          title={comp ? 'You’re in' : 'That’s away'}
+          eyebrow={comp ? 'Bonus entries' : 'Done'}
+          title={comp ? `+${comp.shareBonus ?? 10} entries` : 'That’s away'}
         />
         <SheetBody>
           <Confirmation message={step.message} />
 
           {comp ? (
-            <EnteredPanel prize={comp.prize} test={comp.test} steps={comp.entrySteps ?? []} />
+            <EnteredPanel campaign={comp.name} prize={comp.prize} test={comp.test} bonus={comp.shareBonus ?? 10} />
           ) : (
             <p className="text-sm leading-relaxed text-center" style={{ color: 'var(--color-text-2)' }}>
               Thanks for sharing it. Anyone who opens your link lands on your stack

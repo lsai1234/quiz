@@ -5,8 +5,8 @@ import {
   type Campaign, type CampaignStatus,
 } from '@/lib/competition/campaign'
 import {
-  entryCounts, listEntries, setEntryState, drawWinner, importTaggedHandles,
-  type EntryState,
+  entryCounts, listEntries, setEntryState, drawWinner, importTaggedHandles, setBonusEntries, ticketsFor,
+  type CompetitionEntry, type EntryState,
 } from '@/lib/competition/entries'
 
 /**
@@ -36,8 +36,44 @@ async function payload() {
   }
 }
 
-export async function GET() {
+/** One CSV cell, quoted, with a leading formula character defused for spreadsheets. */
+function cell(value: string | number): string {
+  const text = String(value)
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text
+  return `"${safe.replace(/"/g, '""')}"`
+}
+
+/**
+ * The email entrants, as a spreadsheet.
+ *
+ * Real entries only — a rehearsal address in the export is how a test inbox
+ * ends up on a mailing list. `marketing_opt_in` is its own column because it is
+ * the only thing that says who may be emailed about anything but the draw.
+ */
+function entriesCsv(entries: CompetitionEntry[]): string {
+  const header = ['email', 'entered_at', 'route', 'tickets', 'shared', 'marketing_opt_in', 'state']
+  const rows = entries
+    .filter((e) => e.channel === 'email' && !e.isTest)
+    .map((e) => [
+      e.handle, e.createdAt, e.route, ticketsFor(e),
+      e.bonusEntries > 0 ? 'yes' : 'no', e.marketingOptIn ? 'yes' : 'no', e.state,
+    ].map(cell).join(','))
+  return [header.join(','), ...rows].join('\r\n') + '\r\n'
+}
+
+export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (new URL(req.url).searchParams.get('format') === 'csv') {
+    const campaign = await getCampaign()
+    const name = (campaign.name || 'competition').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    return new NextResponse(entriesCsv(await listEntries(campaign.name || 'untitled')), {
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${name || 'competition'}-entries.csv"`,
+        'cache-control': 'no-store',
+      },
+    })
+  }
   return NextResponse.json(await payload())
 }
 
@@ -80,6 +116,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'id and a valid state are required' }, { status: 400 })
     }
     await setEntryState(id, state, typeof body.note === 'string' ? body.note : null)
+    return NextResponse.json(await payload())
+  }
+
+  if (action === 'set-bonus') {
+    // Taking a share bonus away — somebody who plainly never posted. The entry
+    // itself stays; only the ten extra tickets go.
+    const id = String(body.id ?? '')
+    const bonus = Number(body.bonus)
+    if (!id || !Number.isFinite(bonus) || bonus < 0) {
+      return NextResponse.json({ error: 'id and a bonus of 0 or more are required' }, { status: 400 })
+    }
+    await setBonusEntries(id, bonus)
     return NextResponse.json(await payload())
   }
 

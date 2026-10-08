@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import type { Campaign, CampaignStatus, CompetitionState } from '@/lib/competition/campaign'
-import type { CompetitionEntry, EntryState, ImportResult } from '@/lib/competition/entries'
-import { Button, Input, Textarea } from '@/components/system'
+import type { CompetitionEntry, ImportResult } from '@/lib/competition/entries'
+import { Button, Input, Textarea, buttonSurface } from '@/components/system'
 
 /**
  * The competition, in the Founders Hub.
@@ -43,7 +43,7 @@ const STATUS_COPY: Record<CampaignStatus, { label: string; desc: string }> = {
 const FIELDS: Array<{ key: keyof Campaign; label: string; hint: string; long?: boolean }> = [
   { key: 'name', label: 'Name', hint: 'Internal and on the entry screen — e.g. “£200 Stack Giveaway”.' },
   { key: 'prize', label: 'Prize', hint: 'As advertised. “Up to £200” needs a defined structure before this can go live.' },
-  { key: 'mechanic', label: 'How to enter', hint: 'Follow, repost, share to your story — in the words it appears in.' },
+  { key: 'mechanic', label: 'How to enter', hint: 'Take the quiz and enter your email at the end for one entry; share your card to your story for 10 bonus entries — in the words it appears in.' },
   { key: 'promoterName', label: 'Promoter name', hint: 'Required: the promoter has to be identifiable on the promotion.' },
   { key: 'promoterAddress', label: 'Promoter address', hint: 'Required, and it has to be a real one.', long: true },
   { key: 'winnerSelection', label: 'How winners are picked', hint: 'When, how, how they are told, and what happens if they cannot be reached.', long: true },
@@ -62,6 +62,7 @@ export function CompetitionSettings() {
   const [winner, setWinner] = useState<CompetitionEntry | null>(null)
   const [paste, setPaste] = useState('')
   const [imported, setImported] = useState<ImportResult | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetch('/api/portal/competition')
@@ -179,7 +180,7 @@ export function CompetitionSettings() {
 
         <div>
           <p style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-2)', marginBottom: 'var(--space-1)' }}>
-            The three steps, as the share sheet confirms them
+            The three steps, in short
           </p>
           {[0, 1, 2].map((i) => (
             <Input
@@ -198,7 +199,7 @@ export function CompetitionSettings() {
           ))}
           <p className="text-[10px] text-[var(--ink-3)] leading-snug">
             Short lines, not sentences. The giveaway card prints its own three — take the quiz,
-            share to your story, tag the handle above — so keep these saying the same thing.
+            enter your email at the end, share for 10 bonus entries — so keep these saying the same thing.
           </p>
         </div>
 
@@ -207,94 +208,105 @@ export function CompetitionSettings() {
         </Button>
       </div>
 
-      {/* Where entrants come from */}
-      <div className="rounded-2xl p-4" style={surface}>
-        <p className="text-xs font-bold text-[var(--ink-1)] mb-1">Who tagged us</p>
-        <p className="text-[11px] text-[var(--ink-3)] mb-2 leading-snug">
-          The tag is the entry — nobody types anything on the site. Check your Instagram
-          mentions, paste the handles here, and they go straight in as verified. Pasting
-          the same list twice is safe: anything already entered is counted as a duplicate
-          rather than added again.
-        </p>
-        <Textarea
-          label="Handles to add, one per line"
-          hideLabel
-          className="w-full font-mono"
-          value={paste}
-          onChange={(e) => setPaste(e.target.value)}
-          rows={4}
-          placeholder={'@jamie\n@alex.lifts\nsam_trains'}
-        />
-        <div className="mt-2">
-          <Button
-            variant="primary"
-            fullWidth
-            loading={saving}
-            disabled={paste.trim().length === 0}
-            onClick={() => post({ action: 'import-tags', handles: paste })}
-          >
-            Add these entrants
-          </Button>
-        </div>
-        {imported && (
-          <p className="text-[11px] mt-2 leading-snug text-[var(--ink-2)]">
-            Added <strong className="text-[var(--ink-1)]">{imported.added.length}</strong>
-            {imported.duplicates.length > 0 && <> · {imported.duplicates.length} already in</>}
-            {imported.rejected.length > 0 && (
-              <> · <span style={{ color: 'var(--tone-attention)' }}>
-                couldn’t read: {imported.rejected.join(', ')}
-              </span></>
-            )}
-          </p>
-        )}
-      </div>
-
       {/* Entries */}
       <div className="rounded-2xl p-4" style={surface}>
-        <p className="text-xs font-bold text-[var(--ink-1)] mb-2">Entries</p>
+        <p className="text-xs font-bold text-[var(--ink-1)] mb-1">Entries</p>
+        <p className="text-[11px] text-[var(--ink-3)] mb-2 leading-snug">
+          Everyone who finished the quiz and left their email. One ticket each, plus 10 for
+          sharing their card. The share is what the browser reported, not a checked story —
+          take the bonus off anyone who plainly didn’t post.
+        </p>
         <div className="grid grid-cols-5 gap-2 mb-3">
-          {(['pending', 'verified', 'rejected', 'won', 'test'] as const).map((k) => (
+          {([
+            ['emails', 'Emails'],
+            ['shared', 'Shared'],
+            ['tickets', 'Tickets'],
+            ['won', 'Won'],
+            ['test', 'Test'],
+          ] as const).map(([k, label]) => (
             <div key={k} className="rounded-xl px-2 py-2" style={{ background: 'var(--surface-2)' }}>
-              <p className="text-[9px] uppercase tracking-wide text-[var(--ink-3)]">{k}</p>
+              <p className="text-[9px] uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
               <p className="text-base font-black text-[var(--ink-1)]">{data.counts[k] ?? 0}</p>
             </div>
           ))}
         </div>
 
+        <div className="flex gap-2 mb-3">
+          {/* A link, not a button: the CSV is a download the browser should own. */}
+          <a
+            href="/api/portal/competition?format=csv"
+            download
+            {...buttonSurface('secondary', 'sm')}
+            className={`${buttonSurface('secondary', 'sm').className} flex-1`}
+          >
+            Download CSV
+          </a>
+          <Button
+            size="sm"
+            className="flex-1"
+            disabled={emailsOf(data.entries).length === 0}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(emailsOf(data.entries).join('\n'))
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              } catch {
+                setError('Couldn’t copy — use Download CSV instead.')
+              }
+            }}
+          >
+            {copied ? 'Copied' : 'Copy all emails'}
+          </Button>
+        </div>
+        <p className="text-[10px] text-[var(--ink-3)] mb-3 leading-snug">
+          Only email people who ticked <strong>offers</strong> about anything other than the draw —
+          entering a competition is not a yes to marketing. The CSV has a column for it.
+        </p>
+
         {data.entries.length === 0 ? (
           <p className="text-[11px] text-[var(--ink-3)]">No entries yet.</p>
         ) : (
-          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+          <div className="space-y-1.5 max-h-96 overflow-y-auto">
             {data.entries.map((e) => (
               <div key={e.id} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)' }}>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-[var(--ink-1)] truncate">
-                    @{e.handle}
+                    {e.channel === 'email' ? e.handle : `@${e.handle}`}
                     {e.isTest && <span className="ml-2 text-[9px] font-bold text-[var(--tone-attention)]">TEST</span>}
                   </p>
                   <p className="text-[10px] text-[var(--ink-3)]">
-                    {e.channel} · {e.route === 'free' ? 'free entry' : e.route === 'tag' ? 'tagged us' : 'shared'} · {e.state}
+                    {describe(e)} · {new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
+                {e.bonusEntries > 0 && e.state !== 'won' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove share bonus from ${e.handle}`}
+                    onClick={() => post({ action: 'set-bonus', id: e.id, bonus: 0 })}
+                  >
+                    Remove bonus
+                  </Button>
+                )}
                 {e.state === 'pending' && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      aria-label={`Verify ${e.handle}`}
-                      onClick={() => post({ action: 'set-state', id: e.id, state: 'verified' })}
-                    >
-                      Verify
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      aria-label={`Reject ${e.handle}`}
-                      onClick={() => post({ action: 'set-state', id: e.id, state: 'rejected' })}
-                    >
-                      Reject
-                    </Button>
-                  </>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    aria-label={`Verify ${e.handle}`}
+                    onClick={() => post({ action: 'set-state', id: e.id, state: 'verified' })}
+                  >
+                    Verify
+                  </Button>
+                )}
+                {(e.state === 'pending' || e.state === 'verified') && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    aria-label={`Reject ${e.handle}`}
+                    onClick={() => post({ action: 'set-state', id: e.id, state: 'rejected' })}
+                  >
+                    Reject
+                  </Button>
                 )}
               </div>
             ))}
@@ -316,12 +328,76 @@ export function CompetitionSettings() {
           number — “we used a properly random draw” is a claim that has to survive
           somebody asking how. Test entries can never win.
         </p>
+        <p className="text-[10px] text-[var(--ink-3)] mt-1.5 leading-snug">
+          Somebody with the share bonus has 11 chances; without it, 1.
+        </p>
         {winner && (
           <p className="text-xs font-bold mt-2" style={{ color: 'var(--tone-positive)' }}>
-            Winner: @{winner.handle} ({winner.channel})
+            Winner: {winner.channel === 'email' ? winner.handle : `@${winner.handle} (${winner.channel})`}
+          </p>
+        )}
+      </div>
+
+      {/* The older route, kept for anyone entered by tagging before the switch. */}
+      <div className="rounded-2xl p-4" style={surface}>
+        <p className="text-xs font-bold text-[var(--ink-1)] mb-1">Add Instagram handles by hand</p>
+        <p className="text-[11px] text-[var(--ink-3)] mb-2 leading-snug">
+          Not needed for email entries. Use this only to add people who entered by tagging us
+          before the competition moved to email — they go in as verified, one ticket each.
+          Pasting the same list twice is safe.
+        </p>
+        <Textarea
+          label="Handles to add, one per line"
+          hideLabel
+          className="w-full font-mono"
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          rows={3}
+          placeholder={'@jamie\n@alex.lifts\nsam_trains'}
+        />
+        <div className="mt-2">
+          <Button
+            variant="secondary"
+            fullWidth
+            loading={saving}
+            disabled={paste.trim().length === 0}
+            onClick={() => post({ action: 'import-tags', handles: paste })}
+          >
+            Add these entrants
+          </Button>
+        </div>
+        {imported && (
+          <p className="text-[11px] mt-2 leading-snug text-[var(--ink-2)]">
+            Added <strong className="text-[var(--ink-1)]">{imported.added.length}</strong>
+            {imported.duplicates.length > 0 && <> · {imported.duplicates.length} already in</>}
+            {imported.rejected.length > 0 && (
+              <> · <span style={{ color: 'var(--tone-attention)' }}>
+                couldn’t read: {imported.rejected.join(', ')}
+              </span></>
+            )}
           </p>
         )}
       </div>
     </div>
   )
+}
+
+/** The real email entrants, newest first — what "Copy all emails" copies. */
+function emailsOf(entries: CompetitionEntry[]): string[] {
+  return entries.filter((e) => e.channel === 'email' && !e.isTest).map((e) => e.handle)
+}
+
+/** One line under an entrant: how they got in and what they hold. */
+function describe(e: CompetitionEntry): string {
+  const tickets = 1 + e.bonusEntries
+  const how = e.channel === 'email'
+    ? (e.route === 'free' ? 'free entry' : 'quiz')
+    : `${e.channel} · ${e.route === 'tag' ? 'tagged us' : e.route === 'free' ? 'free entry' : 'shared'}`
+  return [
+    how,
+    `${tickets} ${tickets === 1 ? 'ticket' : 'tickets'}`,
+    e.bonusEntries > 0 ? 'shared' : null,
+    e.marketingOptIn ? 'offers ✓' : null,
+    e.state,
+  ].filter(Boolean).join(' · ')
 }

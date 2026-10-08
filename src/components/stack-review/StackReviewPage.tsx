@@ -46,6 +46,7 @@ import { UpgradesCard } from './UpgradesCard'
 import { defaultVariantId } from '@/lib/catalogue/variants'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ShareSheet } from '@/components/share-card/ShareSheet'
+import { GiveawayEntry } from '@/components/share-card/GiveawayEntry'
 import { ShareStackButton } from '@/components/share-card/ShareStackButton'
 import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
@@ -989,6 +990,11 @@ export function StackReviewPage() {
           <div className="mt-5 -mx-5 [&>div]:mt-0">
             <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
           </div>
+
+          {/* The giveaway: an email at the end of the quiz is the entry, and
+              sharing the card above is the bonus. Renders nothing unless a
+              competition is open. */}
+          <GiveawayEntry onShare={() => setShareOpen(true)} />
         </div>
       </div>
 

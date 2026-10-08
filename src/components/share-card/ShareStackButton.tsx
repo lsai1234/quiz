@@ -149,7 +149,7 @@ export function ShareStackButton({ payload, onOpen }: {
             Share your stack
           </p>
           <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            {comp ? 'Post it to your story to enter the giveaway' : 'A poster of your stack, built to post'}
+            {comp ? 'Post it to your story for 10 bonus giveaway entries' : 'A poster of your stack, built to post'}
           </p>
         </div>
 
@@ -163,10 +163,10 @@ export function ShareStackButton({ payload, onOpen }: {
       {comp && (
         <p className="text-xs leading-relaxed mt-2 text-center" style={{ color: 'var(--color-muted)' }}>
           {comp.test ? (
-            'Test run — sharing won’t enter you into a real draw.'
+            'Test run — sharing won’t earn entries in a real draw.'
           ) : (
             <>
-              Follow, post the card, tag us{closes ? ` · ${closes}` : ''} ·{' '}
+              Enter with your email below · share for bonus entries{closes ? ` · ${closes}` : ''} ·{' '}
               {/* Opens in a new tab on purpose. The significant conditions have to
                   be reachable from the claim, and navigating away from a page
                   with a stack on it is how a basket gets abandoned. */}

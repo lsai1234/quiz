@@ -118,8 +118,8 @@ describe('with a competition running', () => {
     respond(OPEN)
     render(<ShareStackButton onOpen={() => {}} />)
 
-    // The three steps in the order they happen, matching the card itself.
-    await waitFor(() => expect(screen.getByText(/follow, post the card, tag us/i)).toBeInTheDocument())
+    // Email is the entry, the share is the bonus — matching the card itself.
+    await waitFor(() => expect(screen.getByText(/enter with your email below · share for bonus entries/i)).toBeInTheDocument())
     expect(screen.getByText(/closes 30 nov/i)).toBeInTheDocument()
 
     // Significant conditions have to be reachable from the claim — but not at
@@ -146,7 +146,7 @@ describe('during a test run', () => {
     render(<ShareStackButton onOpen={() => {}} />)
 
     await waitFor(() => expect(screen.getByText(/test draw/i)).toBeInTheDocument())
-    expect(screen.getByText(/won’t enter you into a real draw/i)).toBeInTheDocument()
+    expect(screen.getByText(/won’t earn entries in a real draw/i)).toBeInTheDocument()
     expect(screen.queryByText(/£200/)).not.toBeInTheDocument()
   })
 })

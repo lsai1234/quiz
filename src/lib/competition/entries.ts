@@ -20,9 +20,13 @@ import { getEngine, now } from '@/lib/db/engine'
  * Server-only.
  */
 
-export type EntryChannel = 'instagram' | 'tiktok' | 'other'
-export type EntryRoute = 'share' | 'free' | 'tag'
+export type EntryChannel = 'instagram' | 'tiktok' | 'other' | 'email'
+/** `quiz` is the email box at the end of the quiz; `free` the same box on the terms page. */
+export type EntryRoute = 'share' | 'free' | 'tag' | 'quiz'
 export type EntryState = 'pending' | 'verified' | 'rejected' | 'won'
+
+/** Extra tickets for sharing the card, on top of the one for entering. */
+export const SHARE_BONUS = 10
 
 export interface CompetitionEntry {
   id: string
@@ -35,6 +39,11 @@ export interface CompetitionEntry {
   isTest: boolean
   note: string | null
   createdAt: string
+  /** Tickets on top of the entry itself — `SHARE_BONUS` once they have shared. */
+  bonusEntries: number
+  sharedAt: string | null
+  /** Said yes to marketing emails. Never implied by entering. */
+  marketingOptIn: boolean
 }
 
 interface Row {
@@ -48,6 +57,9 @@ interface Row {
   is_test: number
   note: string | null
   created_at: string
+  bonus_entries: number | null
+  shared_at: string | null
+  marketing_opt_in: number | null
 }
 
 const toEntry = (r: Row): CompetitionEntry => ({
@@ -61,7 +73,15 @@ const toEntry = (r: Row): CompetitionEntry => ({
   isTest: Number(r.is_test) === 1,
   note: r.note,
   createdAt: r.created_at,
+  bonusEntries: Number(r.bonus_entries ?? 0),
+  sharedAt: r.shared_at ?? null,
+  marketingOptIn: Number(r.marketing_opt_in ?? 0) === 1,
 })
+
+/** How many chances in the draw an entry has. */
+export function ticketsFor(entry: Pick<CompetitionEntry, 'bonusEntries'>): number {
+  return 1 + Math.max(0, entry.bonusEntries)
+}
 
 /**
  * Normalise a social handle.
@@ -114,6 +134,9 @@ export async function enterCompetition(input: {
     isTest: input.isTest ?? false,
     note: input.note ?? null,
     createdAt: now(),
+    bonusEntries: 0,
+    sharedAt: null,
+    marketingOptIn: false,
   }
 
   await db.run(
@@ -125,6 +148,131 @@ export async function enterCompetition(input: {
   )
 
   return { ok: true, entry }
+}
+
+/**
+ * Normalise an email address, or null if it is not one.
+ *
+ * Lowercased so `Jamie@x.com` and `jamie@x.com` are one person entering once
+ * — the unique index is what enforces that. Deliberately loose beyond "has an
+ * @ and a dot after it": a stricter pattern only ever turns real people away.
+ */
+export function normaliseEmail(input: string): string | null {
+  const email = input.trim().toLowerCase()
+  if (email.length > 254) return null
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return null
+  return email
+}
+
+export type EmailEnterResult =
+  | { ok: true; entry: CompetitionEntry; already: boolean }
+  | { ok: false; reason: 'invalid-email' }
+
+/**
+ * Enter with an email address — the end of the quiz, or the free route.
+ *
+ * ── Verified on arrival ─────────────────────────────────────────────────────
+ * A shared card is a claim somebody has to check; an email address is the entry
+ * itself. There is nothing for a person to look at, so it goes straight into the
+ * draw. A founder can still reject one from the Founders Hub.
+ *
+ * ── Entering twice is not an error ──────────────────────────────────────────
+ * The same address again returns the entry that exists, so somebody who comes
+ * back on another device still gets "you're in" and can still claim the share
+ * bonus. A yes to marketing on the second visit is kept; a missing tick does
+ * not take an earlier yes away (that is what unsubscribing is for).
+ */
+export async function enterWithEmail(input: {
+  campaign: string
+  email: string
+  route: 'quiz' | 'free'
+  marketingOptIn?: boolean
+  isTest?: boolean
+}): Promise<EmailEnterResult> {
+  const email = normaliseEmail(input.email)
+  if (!email) return { ok: false, reason: 'invalid-email' }
+
+  const db = await getEngine()
+  const existing = await db.get<Row>(
+    "SELECT * FROM competition_entries WHERE campaign = ? AND channel = 'email' AND handle = ?",
+    [input.campaign, email],
+  )
+  if (existing) {
+    if (input.marketingOptIn && Number(existing.marketing_opt_in ?? 0) !== 1) {
+      await db.run('UPDATE competition_entries SET marketing_opt_in = 1 WHERE id = ?', [existing.id])
+      existing.marketing_opt_in = 1
+    }
+    return { ok: true, entry: toEntry(existing), already: true }
+  }
+
+  const entry: CompetitionEntry = {
+    id: crypto.randomUUID(),
+    campaign: input.campaign,
+    shareToken: null,
+    handle: email,
+    channel: 'email',
+    route: input.route,
+    state: 'verified',
+    isTest: input.isTest ?? false,
+    note: null,
+    createdAt: now(),
+    bonusEntries: 0,
+    sharedAt: null,
+    marketingOptIn: input.marketingOptIn === true,
+  }
+
+  await db.run(
+    `INSERT INTO competition_entries
+       (id, campaign, share_token, handle, channel, route, state, is_test, note, created_at,
+        bonus_entries, shared_at, marketing_opt_in)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [entry.id, entry.campaign, entry.shareToken, entry.handle, entry.channel,
+     entry.route, entry.state, entry.isTest ? 1 : 0, entry.note, entry.createdAt,
+     0, null, entry.marketingOptIn ? 1 : 0],
+  )
+
+  return { ok: true, entry, already: false }
+}
+
+/**
+ * Add the share bonus to an entry.
+ *
+ * Once per entry, however many times somebody shares: the bonus is set, never
+ * added to, so pressing share five times is still ten extra tickets. The id is
+ * the one handed back when they entered — a random UUID nobody else has.
+ *
+ * Like a shared card before it, this is a claim: the browser can tell us the
+ * share sheet completed, not that a story went up. The Founders Hub shows who
+ * claimed it and can take it away.
+ */
+export async function claimShareBonus(
+  id: string,
+  campaign: string,
+): Promise<CompetitionEntry | null> {
+  const db = await getEngine()
+  const row = await db.get<Row>(
+    'SELECT * FROM competition_entries WHERE id = ? AND campaign = ?',
+    [id, campaign],
+  )
+  if (!row) return null
+  if (Number(row.bonus_entries ?? 0) >= SHARE_BONUS) return toEntry(row)
+
+  const sharedAt = now()
+  await db.run(
+    'UPDATE competition_entries SET bonus_entries = ?, shared_at = ? WHERE id = ?',
+    [SHARE_BONUS, sharedAt, id],
+  )
+  return toEntry({ ...row, bonus_entries: SHARE_BONUS, shared_at: sharedAt })
+}
+
+/** Set an entry's bonus outright — the Founders Hub's "remove bonus". */
+export async function setBonusEntries(id: string, bonus: number): Promise<void> {
+  const db = await getEngine()
+  const value = Math.max(0, Math.floor(bonus))
+  await db.run(
+    'UPDATE competition_entries SET bonus_entries = ?, shared_at = CASE WHEN ? = 0 THEN NULL ELSE shared_at END WHERE id = ?',
+    [value, value, id],
+  )
 }
 
 /**
@@ -222,6 +370,9 @@ export async function setEntryState(id: string, state: EntryState, note?: string
  * The randomness is `crypto.randomInt`, not `Math.random`: this picks who gets
  * £200, and "we used a properly random draw" is a claim that has to survive
  * somebody asking how.
+ *
+ * Weighted by tickets: an entry with the share bonus is eleven tickets in the
+ * hat, one without it is one. `pick` chooses a ticket, not a row.
  */
 export async function drawWinner(
   campaign: string,
@@ -234,15 +385,30 @@ export async function drawWinner(
   )
   if (rows.length === 0) return null
 
-  const winner = toEntry(rows[pick(rows.length)])
+  const entries = rows.map(toEntry)
+  const total = entries.reduce((sum, e) => sum + ticketsFor(e), 0)
+  let ticket = pick(total)
+  let winner = entries[entries.length - 1]
+  for (const e of entries) {
+    if (ticket < ticketsFor(e)) { winner = e; break }
+    ticket -= ticketsFor(e)
+  }
   await setEntryState(winner.id, 'won')
   return { ...winner, state: 'won' }
 }
 
 /** Counts for the Founders Hub, so it never has to tally in the browser. */
-export async function entryCounts(campaign: string): Promise<Record<EntryState | 'test', number>> {
+export async function entryCounts(
+  campaign: string,
+): Promise<Record<EntryState | 'test' | 'emails' | 'shared' | 'tickets', number>> {
   const entries = await listEntries(campaign)
+  const real = entries.filter((e) => !e.isTest)
   return {
+    emails: real.filter((e) => e.channel === 'email').length,
+    shared: real.filter((e) => e.bonusEntries > 0).length,
+    tickets: real
+      .filter((e) => e.state === 'verified')
+      .reduce((sum, e) => sum + ticketsFor(e), 0),
     pending: entries.filter((e) => e.state === 'pending' && !e.isTest).length,
     verified: entries.filter((e) => e.state === 'verified' && !e.isTest).length,
     rejected: entries.filter((e) => e.state === 'rejected' && !e.isTest).length,

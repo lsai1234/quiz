@@ -62,14 +62,30 @@ export function pixelAllowedOn(pathname: string): boolean {
 // ── Which Pixel, from the hub ────────────────────────────────────────────────
 
 let pixelId: string | null = null
+/**
+ * Whether `/api/config` has answered yet. Until it has, nobody knows whether a
+ * Pixel is connected — so events are held, not dropped. See `holding`.
+ */
+let configKnown = false
 const listeners = new Set<() => void>()
 
 /** Set from `/api/config` by `PortalSync`. Null = the Pixel is off. */
 export function setMetaPixelId(id: string | null): void {
   const next = id && /^\d{8,20}$/.test(id) ? id : null
-  if (next === pixelId) return
+  const firstAnswer = !configKnown
+  const changed = next !== pixelId
+  configKnown = true
   pixelId = next
-  listeners.forEach((l) => l())
+  if (next === null) {
+    // No Pixel connected: whatever was held while we waited has nowhere to go.
+    held.length = 0
+    heldPageView = false
+  } else if (firstAnswer && getAdConsent() === 'granted' && loadMetaPixel()) {
+    // A returning visitor who already said yes, and events that fired before
+    // the config landed — on the order confirmation that is the Purchase.
+    flushHeld({ pageView: false })
+  }
+  if (changed) listeners.forEach((l) => l())
 }
 
 export function getMetaPixelId(): string | null {
@@ -177,10 +193,19 @@ const MAX_HELD = 30
 const held: PixelCall[] = []
 let heldPageView = false
 
-/** Whether an event now would be held rather than sent or dropped. */
+/**
+ * Whether an event now would be held rather than sent or dropped.
+ *
+ * Two reasons to hold: the visitor has not answered the cookie question yet,
+ * or the config has not said whether a Pixel is connected yet. The second is
+ * a few hundred milliseconds on every page load, and it is exactly when the
+ * order confirmation fires its Purchase.
+ */
 function holding(): boolean {
-  if (typeof window === 'undefined' || !pixelId) return false
-  if (browserSaysNo() || getAdConsent() !== null) return false
+  if (typeof window === 'undefined') return false
+  if (configKnown && !pixelId) return false
+  if (browserSaysNo() || getAdConsent() === 'denied') return false
+  if (configKnown && getAdConsent() !== null) return false
   return pixelAllowedOn(window.location.pathname)
 }
 
@@ -188,10 +213,14 @@ function holding(): boolean {
  * Send what was held. ONE PageView for however many pages they saw first: the
  * Pixel stamps a page view with the URL it is sent from, so replaying five of
  * them now would report five views of the current page.
+ *
+ * `pageView: false` when the caller is about to send this page's own view —
+ * the config arriving for somebody who already said yes, where `MetaPixel`
+ * sends it.
  */
-function flushHeld(): void {
+function flushHeld({ pageView = true }: { pageView?: boolean } = {}): void {
   const calls = held.splice(0)
-  if (heldPageView) window.fbq!('track', 'PageView')
+  if (heldPageView && pageView) window.fbq!('track', 'PageView')
   heldPageView = false
   calls.forEach(send)
 }
@@ -268,6 +297,10 @@ export function pixelEventFor(event: AnalyticsEvent, props: EventProps): PixelCa
         name: 'Lead',
         params: { content_name: event === 'quiz_complete' ? 'Quiz completed' : 'Consult completed' },
       }
+    case 'competition_enter':
+      // A sign-up, as far as ads are concerned. Never the address — Meta gets
+      // that an entry happened and nothing about who made it.
+      return { kind: 'track', name: 'CompleteRegistration', params: { content_name: 'Giveaway entry' } }
     case 'stack_reveal_view':
       return { kind: 'track', name: 'ViewContent', params: { content_type: 'product_group', content_name: 'Stack' } }
     case 'product_open': {

@@ -3,7 +3,8 @@ import {
 } from '../campaign'
 import {
   enterCompetition, listEntries, setEntryState, drawWinner, entryCounts, normaliseHandle,
-  importTaggedHandles,
+  importTaggedHandles, enterWithEmail, claimShareBonus, setBonusEntries, normaliseEmail, ticketsFor,
+  SHARE_BONUS,
 } from '../entries'
 
 /**
@@ -246,5 +247,92 @@ describe('importTaggedHandles', () => {
   it('keeps a rehearsal out of the draw', async () => {
     await importTaggedHandles({ campaign: 'rehearsal', raw: '@jamie @alex', isTest: true })
     expect(await drawWinner('rehearsal')).toBeNull()
+  })
+})
+
+describe('entering by email', () => {
+  it('reads an address loosely and lowercases it', () => {
+    expect(normaliseEmail('  Sam@Example.COM ')).toBe('sam@example.com')
+    expect(normaliseEmail('sam.o+draw@mail.co.uk')).toBe('sam.o+draw@mail.co.uk')
+    expect(normaliseEmail('not an email')).toBeNull()
+    expect(normaliseEmail('sam@nodot')).toBeNull()
+  })
+
+  it('is one ticket, verified on arrival, and not a yes to marketing', async () => {
+    const res = await enterWithEmail({ campaign: 'mail1', email: 'sam@example.com', route: 'quiz' })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.already).toBe(false)
+    expect(res.entry).toMatchObject({ channel: 'email', handle: 'sam@example.com', state: 'verified', marketingOptIn: false })
+    expect(ticketsFor(res.entry)).toBe(1)
+  })
+
+  it('refuses something that is not an address', async () => {
+    expect(await enterWithEmail({ campaign: 'mail2', email: 'nope', route: 'quiz' })).toEqual({ ok: false, reason: 'invalid-email' })
+  })
+
+  it('enters an address once, and hands back the same entry the second time', async () => {
+    const first = await enterWithEmail({ campaign: 'mail3', email: 'sam@example.com', route: 'quiz' })
+    const again = await enterWithEmail({ campaign: 'mail3', email: 'SAM@example.com', route: 'free', marketingOptIn: true })
+    expect(again.ok && first.ok && again.entry.id === first.entry.id).toBe(true)
+    expect(again.ok && again.already).toBe(true)
+    // A later yes to offers is kept; it never takes an earlier one away.
+    expect(again.ok && again.entry.marketingOptIn).toBe(true)
+    expect(await listEntries('mail3')).toHaveLength(1)
+  })
+
+  it('adds ten tickets for a share, once, however many times they share', async () => {
+    const res = await enterWithEmail({ campaign: 'mail4', email: 'alex@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    const once = await claimShareBonus(res.entry.id, 'mail4')
+    const twice = await claimShareBonus(res.entry.id, 'mail4')
+    expect(once?.bonusEntries).toBe(SHARE_BONUS)
+    expect(twice && ticketsFor(twice)).toBe(1 + SHARE_BONUS)
+    expect(twice?.sharedAt).toBe(once?.sharedAt)
+  })
+
+  it('will not credit an entry from another campaign', async () => {
+    const res = await enterWithEmail({ campaign: 'mail5', email: 'jo@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    expect(await claimShareBonus(res.entry.id, 'some-other-campaign')).toBeNull()
+  })
+
+  it('lets a founder take the bonus away', async () => {
+    const res = await enterWithEmail({ campaign: 'mail6', email: 'kai@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    await claimShareBonus(res.entry.id, 'mail6')
+    await setBonusEntries(res.entry.id, 0)
+    const [entry] = await listEntries('mail6')
+    expect(entry).toMatchObject({ bonusEntries: 0, sharedAt: null })
+  })
+
+  it('weights the draw by tickets', async () => {
+    const a = await enterWithEmail({ campaign: 'weighted', email: 'a@example.com', route: 'quiz' })
+    const b = await enterWithEmail({ campaign: 'weighted', email: 'b@example.com', route: 'quiz' })
+    if (!a.ok || !b.ok) throw new Error('entry failed')
+    await claimShareBonus(b.entry.id, 'weighted')
+
+    // Twelve tickets in the hat: one for `a`, eleven for `b`. Every ticket the
+    // draw can pick lands on somebody, and `b` holds eleven of them.
+    const picks: string[] = []
+    for (let t = 0; t < 12; t++) {
+      await setEntryState(a.entry.id, 'verified')
+      await setEntryState(b.entry.id, 'verified')
+      let max = 0
+      const w = await drawWinner('weighted', (m) => { max = m; return t })
+      expect(max).toBe(12)
+      picks.push(w!.handle)
+    }
+    expect(picks.filter((h) => h === 'b@example.com')).toHaveLength(11)
+    expect(picks.filter((h) => h === 'a@example.com')).toHaveLength(1)
+  })
+
+  it('counts emails, shares and tickets for the hub, leaving rehearsals out', async () => {
+    const a = await enterWithEmail({ campaign: 'counted', email: 'a@example.com', route: 'quiz' })
+    await enterWithEmail({ campaign: 'counted', email: 'b@example.com', route: 'quiz' })
+    await enterWithEmail({ campaign: 'counted', email: 't@example.com', route: 'quiz', isTest: true })
+    if (!a.ok) throw new Error('entry failed')
+    await claimShareBonus(a.entry.id, 'counted')
+    expect(await entryCounts('counted')).toMatchObject({ emails: 2, shared: 1, tickets: 12, test: 1 })
   })
 })
