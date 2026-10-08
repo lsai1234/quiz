@@ -994,7 +994,7 @@ export function StackReviewPage() {
           {/* The giveaway: an email at the end of the quiz is the entry, and
               sharing the card above is the bonus. Renders nothing unless a
               competition is open. */}
-          <GiveawayEntry onShare={() => setShareOpen(true)} />
+          <GiveawayEntry payload={sharePayload} onShare={() => setShareOpen(true)} />
         </div>
       </div>
 
