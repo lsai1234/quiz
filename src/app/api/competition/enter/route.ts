@@ -9,7 +9,7 @@ import {
  * Enter the competition.
  *
  * ── By email, now ───────────────────────────────────────────────────────────
- * `{ email, route: 'quiz' | 'free', marketingOptIn? }` is the entry: one ticket
+ * `{ email, route: 'quiz' | 'free', agreedToTerms }` is the entry: one ticket
  * for finishing the quiz and leaving an address, and `/api/competition/bonus`
  * adds ten more for sharing the card. The response carries the entry id, which
  * is what the browser hands back to claim that bonus. The handle body below is
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     handle?: unknown; channel?: unknown; route?: unknown; shareToken?: unknown
-    email?: unknown; marketingOptIn?: unknown
+    email?: unknown; agreedToTerms?: unknown
   }
   try {
     body = await req.json()
@@ -59,7 +59,11 @@ export async function POST(req: NextRequest) {
       campaign: campaign.name || 'untitled',
       email: body.email,
       route: body.route === 'free' ? 'free' : 'quiz',
-      marketingOptIn: body.marketingOptIn === true,
+      // Both entry forms say "by entering you agree to the T&Cs, including
+      // offers and news", and the terms page says it again. Recorded from the
+      // flag the form sends rather than assumed, so an entry that did not see
+      // that sentence is never counted as agreeing to it.
+      marketingOptIn: body.agreedToTerms === true,
       isTest: isTestRun(campaign),
     })
     if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 })

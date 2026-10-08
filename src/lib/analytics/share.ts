@@ -54,8 +54,8 @@ export const share = {
   },
 
   /** Entered the giveaway with an email. Never the address itself. */
-  competitionEnter(p: { already: boolean; marketingOptIn: boolean }) {
-    track('competition_enter', { already: p.already, marketingOptIn: p.marketingOptIn })
+  competitionEnter(p: { already: boolean }) {
+    track('competition_enter', { already: p.already })
   },
 
   /** The share bonus was credited to an entry. */

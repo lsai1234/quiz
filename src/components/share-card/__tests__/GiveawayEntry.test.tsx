@@ -37,19 +37,22 @@ it('asks for nothing until somebody chooses to enter', async () => {
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
 })
 
-it('enters with an email, leaves marketing unticked, then offers the share bonus', async () => {
+it('says entering is agreeing to the terms, offers included, then offers the share bonus', async () => {
   server(OPEN)
   const onShare = jest.fn()
   render(<GiveawayEntry onShare={onShare} />)
 
   await userEvent.click(await screen.findByRole('button', { name: /enter the competition/i }))
-  expect(screen.getByRole('checkbox')).not.toBeChecked()
+  // No separate tick: the agreement is the sentence beside the button.
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  expect(screen.getByText(/by entering you agree to the/i)).toHaveTextContent(/offers and news/i)
+  expect(screen.getByRole('link', { name: /competition t&cs/i })).toHaveAttribute('href', '/legal/competition')
   await userEvent.type(screen.getByLabelText(/your email/i), 'Sam@Example.com')
   await userEvent.click(screen.getByRole('button', { name: /^enter$/i }))
 
   expect(await screen.findByText(/you’re in — 1 entry/i)).toBeInTheDocument()
   const post = (global.fetch as jest.Mock).mock.calls.find(([, init]) => init?.method === 'POST')
-  expect(JSON.parse(post![1].body)).toEqual({ email: 'Sam@Example.com', marketingOptIn: false, route: 'quiz' })
+  expect(JSON.parse(post![1].body)).toEqual({ email: 'Sam@Example.com', agreedToTerms: true, route: 'quiz' })
 
   await userEvent.click(screen.getByRole('button', { name: /share your card for \+10 entries/i }))
   expect(onShare).toHaveBeenCalled()

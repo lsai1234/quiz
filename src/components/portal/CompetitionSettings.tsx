@@ -52,6 +52,7 @@ const FIELDS: Array<{ key: keyof Campaign; label: string; hint: string; long?: b
   { key: 'instagramHandle', label: 'Instagram handle', hint: 'Printed on the entry card. A reshared story has no link on it — this is the only way someone who sees it can find us.' },
   { key: 'quizRoute', label: 'How to reach the quiz', hint: 'What it says under the handle — “Quiz link in our bio”.' },
   { key: 'platformDisclaimer', label: 'Platform disclaimer', hint: 'Instagram requires the promotion to disclaim their involvement.', long: true },
+  { key: 'emailUse', label: 'Your email (offers and news)', hint: 'Shown on the terms page. The entry form says “by entering you agree to the T&Cs, including that we can email you offers and news” — this is the term it points at.', long: true },
 ]
 
 export function CompetitionSettings() {
@@ -259,8 +260,10 @@ export function CompetitionSettings() {
           </Button>
         </div>
         <p className="text-[10px] text-[var(--ink-3)] mb-3 leading-snug">
-          Only email people who ticked <strong>offers</strong> about anything other than the draw —
-          entering a competition is not a yes to marketing. The CSV has a column for it.
+          Entering means agreeing to the T&amp;Cs, which include offers and news — the CSV’s
+          <strong> marketing_opt_in</strong> column says yes for everyone who entered that way.
+          Anyone marked <strong>no</strong> entered before that wording, so leave them off
+          marketing. Every email you send needs an unsubscribe link.
         </p>
 
         {data.entries.length === 0 ? (
@@ -397,7 +400,7 @@ function describe(e: CompetitionEntry): string {
     how,
     `${tickets} ${tickets === 1 ? 'ticket' : 'tickets'}`,
     e.bonusEntries > 0 ? 'shared' : null,
-    e.marketingOptIn ? 'offers ✓' : null,
+    e.marketingOptIn ? 'offers ✓' : (e.channel === 'email' ? 'no offers' : null),
     e.state,
   ].filter(Boolean).join(' · ')
 }

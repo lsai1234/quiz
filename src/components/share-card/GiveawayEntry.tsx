@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type FormEvent } from 'react'
-import { Button, Checkbox, Input } from '@/components/system'
+import { Button, Input } from '@/components/system'
 import { prizeChip, prizeInline, closesLabel } from '@/lib/competition/prize'
 import {
   COMPETITION_EVENT, enterByEmail, hasPendingShare, rememberedEntry, type RememberedEntry,
@@ -43,7 +43,6 @@ export function GiveawayEntry({ onShare }: {
   const [pendingShare, setPendingShare] = useState(false)
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
-  const [marketing, setMarketing] = useState(false)
   const [status, setStatus] = useState<'idle' | 'sending' | 'invalid' | 'closed' | 'error'>('idle')
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function GiveawayEntry({ onShare }: {
     e.preventDefault()
     if (!comp || status === 'sending') return
     setStatus('sending')
-    const result = await enterByEmail({ campaign: comp.name, email, marketingOptIn: marketing })
+    const result = await enterByEmail({ campaign: comp.name, email })
     if (result.ok) {
       setEntry(result.entry)
       setStatus('idle')
@@ -178,12 +177,6 @@ export function GiveawayEntry({ onShare }: {
                 onChange={(e) => { setEmail(e.target.value); if (status === 'invalid') setStatus('idle') }}
                 error={status === 'invalid' ? 'That doesn’t look like an email address.' : undefined}
               />
-              <Checkbox
-                label="Also send me offers and news from getCHRGD"
-                hint="Optional — you’re entered either way."
-                checked={marketing}
-                onChange={(e) => setMarketing(e.target.checked)}
-              />
               <Button
                 type="submit"
                 variant="primary"
@@ -194,6 +187,22 @@ export function GiveawayEntry({ onShare }: {
               >
                 {status === 'sending' ? 'Entering…' : 'Enter'}
               </Button>
+              {/* Said before the press, beside the button, not in the small
+                  print after it: agreeing to be emailed is part of the deal,
+                  so it has to be read before somebody takes it. */}
+              <p className="text-[11px] leading-snug text-center" style={{ color: 'var(--color-text-2)' }}>
+                By entering you agree to the{' '}
+                <a
+                  href="/legal/competition"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                  style={{ color: 'var(--color-text-2)' }}
+                >
+                  competition T&amp;Cs
+                </a>
+                , including that getCHRGD can email you offers and news. Unsubscribe any time.
+              </p>
               {status === 'error' && (
                 <p className="text-[11px] text-center" style={{ color: 'var(--tone-critical)' }} role="alert">
                   That didn’t go through — try again in a moment.

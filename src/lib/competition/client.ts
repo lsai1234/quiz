@@ -110,7 +110,6 @@ export function hasPendingShare(campaign: string): boolean {
 export async function enterByEmail(input: {
   campaign: string
   email: string
-  marketingOptIn: boolean
 }): Promise<
   | { ok: true; entry: RememberedEntry; already: boolean }
   | { ok: false; reason: 'invalid-email' | 'closed' | 'error' }
@@ -119,7 +118,9 @@ export async function enterByEmail(input: {
     const res = await fetch('/api/competition/enter', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: input.email, marketingOptIn: input.marketingOptIn, route: 'quiz' }),
+      // The form says entering is agreeing to the terms, offers and news
+      // included — so there is no separate yes to send, only this one.
+      body: JSON.stringify({ email: input.email, agreedToTerms: true, route: 'quiz' }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -135,7 +136,7 @@ export async function enterByEmail(input: {
       shared: json.shared === true,
     }
     rememberEntry(entry)
-    shareEvents.competitionEnter({ already: json.already === true, marketingOptIn: input.marketingOptIn })
+    shareEvents.competitionEnter({ already: json.already === true })
     if (!entry.shared && sharedBeforeEntering(input.campaign)) await postBonus(entry)
     return { ok: true, entry: rememberedEntry(input.campaign) ?? entry, already: json.already === true }
   } catch {

@@ -70,6 +70,13 @@ export interface Campaign {
   entrySteps: string[]
   /** Instagram requires the promotion to disclaim their involvement. */
   platformDisclaimer: string
+  /**
+   * What entering lets us do with the email address — offers and news among
+   * it. The entry forms say "by entering you agree to the T&Cs, including
+   * offers and news", so this is the term that sentence points at, printed on
+   * the terms page under "Your email".
+   */
+  emailUse: string
 }
 
 export const EMPTY_CAMPAIGN: Campaign = {
@@ -92,6 +99,8 @@ export const EMPTY_CAMPAIGN: Campaign = {
   ],
   platformDisclaimer:
     'This promotion is in no way sponsored, endorsed or administered by, or associated with, Instagram or TikTok.',
+  emailUse:
+    'By entering, you agree that getCHRGD can use your email address to run this draw and contact the winner, and to send you offers and news about getCHRGD. You can unsubscribe at any time using the link in any email, and unsubscribing does not affect your entry.',
 }
 
 export async function getCampaign(): Promise<Campaign> {
@@ -124,6 +133,7 @@ export const REQUIRED_FOR_LIVE: Array<{ field: keyof Campaign; label: string }> 
   { field: 'termsUrl', label: 'A link to the full terms' },
   { field: 'instagramHandle', label: 'The Instagram handle to print on the card' },
   { field: 'quizRoute', label: 'How someone reaches the quiz from that handle' },
+  { field: 'emailUse', label: 'What entering lets us do with the email (offers and news)' },
 ]
 
 /** What is still missing before this may be set to `live`. Empty = ready. */

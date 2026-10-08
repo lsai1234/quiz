@@ -11,7 +11,8 @@ import { useState } from 'react'
  * email address to find and a message to compose, it would not be.
  *
  * The only difference in the row is `route: 'free'`, which exists so the draw
- * can be shown to have included both.
+ * can be shown to have included both. The terms — offers and news included —
+ * are agreed the same way on both: by entering, said beside the button.
  */
 
 const ACCENT = '#00D4FF'
@@ -27,7 +28,7 @@ export function FreeEntryForm({ test }: { test: boolean }) {
       const res = await fetch('/api/competition/enter', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, route: 'free' }),
+        body: JSON.stringify({ email, route: 'free', agreedToTerms: true }),
       })
       const json = await res.json().catch(() => ({}))
       if (res.ok) return setState(json.already ? 'already' : 'done')
@@ -74,6 +75,13 @@ export function FreeEntryForm({ test }: { test: boolean }) {
       >
         {state === 'sending' ? 'Entering…' : 'Enter for free'}
       </button>
+
+      {/* The same sentence as the quiz's form — equal standing means the same
+          deal, not just the same number of taps. */}
+      <p className="text-[11px] mt-2 leading-snug" style={{ color: 'var(--color-text-2)' }}>
+        By entering you agree to these terms, including that getCHRGD can email you offers
+        and news. Unsubscribe any time.
+      </p>
 
       {(state === 'error' || state === 'invalid') && (
         <p className="text-[11px] mt-2" style={{ color: '#f87171' }}>

@@ -103,6 +103,11 @@ export default async function CompetitionPage() {
             </div>
 
             <div className={section}>
+              <h2 className={h2} style={{ color: 'var(--color-text)' }}>Your email</h2>
+              <p>{campaign.emailUse}</p>
+            </div>
+
+            <div className={section}>
               <h2 className={h2} style={{ color: 'var(--color-text)' }}>Promoter</h2>
               <p>{campaign.promoterName}</p>
               <p className="whitespace-pre-line">{campaign.promoterAddress}</p>

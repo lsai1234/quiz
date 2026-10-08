@@ -897,9 +897,9 @@ export const MIGRATIONS: string[] = [
   //
   // `bonus_entries` is what the draw weights by (1 + bonus tickets), and
   // `shared_at` is when the share that earned it happened. `marketing_opt_in`
-  // records the separate, unticked-by-default "send me offers" box: entering a
-  // prize draw is not consent to marketing, so the list in the Founders Hub has
-  // to say who actually said yes.
+  // records that the entrant agreed to the terms that include offers and news
+  // ("by entering you agree…", said beside the button). It is a column, not an
+  // assumption, so entries made before that wording read as no.
   `
   ALTER TABLE competition_entries ADD COLUMN bonus_entries INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE competition_entries ADD COLUMN shared_at TEXT;
