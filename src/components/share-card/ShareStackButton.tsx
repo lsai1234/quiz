@@ -48,13 +48,21 @@ interface Live {
   closesAt: string | null
 }
 
-export function ShareStackButton({ payload, onOpen }: {
+export function ShareStackButton({ payload, onOpen, giveawayElsewhere = false }: {
   /** Absent only where the caller has no stack yet — the tile then has no card
    *  to show and falls back to the plain button it used to be. */
   payload?: ShareCardPayload
   onOpen: () => void
+  /**
+   * The page shows the giveaway ticket (`GiveawayEntry`), which carries the
+   * card and the share step itself — so while a draw is open this tile stands
+   * down rather than pitching the same +10 a second time. It waits for the
+   * answer before drawing, so it never appears and then vanishes.
+   */
+  giveawayElsewhere?: boolean
 }) {
   const [comp, setComp] = useState<Live | null>(null)
+  const [known, setKnown] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -63,6 +71,7 @@ export function ShareStackButton({ payload, onOpen }: {
       .then((r) => (r.ok ? r.json() : null))
       .then((d: Live | null) => { if (live && d?.state === 'open') setComp(d) })
       .catch(() => {})
+      .finally(() => { if (live) setKnown(true) })
     return () => { live = false }
   }, [])
 
@@ -73,6 +82,8 @@ export function ShareStackButton({ payload, onOpen }: {
   )
 
   const closes = comp ? closesLabel(comp.closesAt) : ''
+
+  if (giveawayElsewhere && (!known || comp)) return null
 
   return (
     <div className="px-5 max-w-lg mx-auto -mt-2 mb-5">

@@ -988,7 +988,7 @@ export function StackReviewPage() {
               fine print is zero while the gap above is 20px, and the paragraph
               reads as belonging to the share card rather than to the plan. */}
           <div className="mt-5 -mx-5 [&>div]:mt-0">
-            <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
+            <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} giveawayElsewhere />
           </div>
 
           {/* The giveaway: an email at the end of the quiz is the entry, and

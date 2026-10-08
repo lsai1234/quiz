@@ -150,3 +150,19 @@ describe('during a test run', () => {
     expect(screen.queryByText(/£200/)).not.toBeInTheDocument()
   })
 })
+
+describe('beside the giveaway ticket', () => {
+  it('stands down while a draw is open, so +10 is pitched once', async () => {
+    respond(OPEN)
+    const { container } = render(<ShareStackButton onOpen={() => {}} giveawayElsewhere />)
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 0))
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('is the plain share tile when no draw is running', async () => {
+    respond({ state: 'off' })
+    render(<ShareStackButton onOpen={() => {}} giveawayElsewhere />)
+    expect(await screen.findByRole('button', { name: /share your stack/i })).toBeInTheDocument()
+  })
+})

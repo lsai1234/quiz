@@ -1,13 +1,11 @@
 'use client'
 
-import type { ComponentType } from 'react'
-import { ShareStackButton } from '@/components/share-card/ShareStackButton'
-import type { GiveawayViewProps } from './types'
+import { GiveawayEntryView, type GiveawayViewProps } from '@/components/share-card/GiveawayEntryView'
 
 /**
- * Every state of one giveaway design, each in its own phone-width frame, so a
- * design can be screenshotted and judged without finishing a quiz.
- * `[data-state]` is what the screenshot script captures.
+ * Every state of the giveaway ticket, each in its own phone-width frame, so it
+ * can be reviewed without finishing a quiz or switching a real draw on.
+ * `[data-state]` marks each frame for screenshots.
  */
 
 const noop = () => {}
@@ -42,35 +40,24 @@ const STATES: Array<[string, Partial<GiveawayViewProps>]> = [
   ['entered-shared', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 11, shared: true } }],
 ]
 
-export function Board({ View, thumb, replacesShareTile = false, sharePayload }: {
-  View: ComponentType<GiveawayViewProps>
-  thumb: string
-  /** True for a design that is the single giveaway module, with no share tile above it. */
-  replacesShareTile?: boolean
-  sharePayload?: Parameters<typeof ShareStackButton>[0]['payload']
-}) {
+export function Board({ thumb }: { thumb: string }) {
   return (
     <main style={{ background: 'var(--color-bg)', minHeight: '100vh', padding: '24px 0 80px' }}>
       {/* The bottom of the results page as it really reads: the safety small
-          print, the share tile (unless this design replaces it), then the module. */}
+          print, then the ticket (the share tile stands down while a draw is open). */}
       <div data-state="context" style={{ width: 390, margin: '0 auto 48px', background: 'var(--color-bg)', padding: '20px 20px 32px' }}>
         <p className="text-[11px] leading-relaxed text-center" style={{ color: 'var(--color-muted)' }}>
           Food supplements are not a substitute for a varied diet or medical care. Consult your GP
           before use if you are pregnant, breastfeeding, or taking prescribed medication (including HRT).
         </p>
-        {!replacesShareTile && (
-          <div className="mt-5 -mx-5 [&>div]:mt-0">
-            <ShareStackButton payload={sharePayload} onOpen={noop} />
-          </div>
-        )}
-        <View {...BASE} cardImageUrl={thumb} />
+        <GiveawayEntryView {...BASE} cardImageUrl={thumb} />
       </div>
 
       {STATES.map(([name, patch]) => (
         <div key={name} style={{ width: 390, margin: '0 auto 40px' }}>
           <p style={{ color: 'var(--color-muted)', fontSize: 11, fontFamily: 'monospace', padding: '0 20px 6px' }}>{name}</p>
           <div data-state={name} style={{ background: 'var(--color-bg)', padding: '12px 20px 20px' }}>
-            <View {...BASE} cardImageUrl={thumb} {...patch} />
+            <GiveawayEntryView {...BASE} cardImageUrl={thumb} {...patch} />
           </div>
         </div>
       ))}
