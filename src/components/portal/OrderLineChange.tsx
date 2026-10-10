@@ -45,9 +45,17 @@ const gbp = (n: number) => `£${n.toFixed(2)}`
 
 const meta = { fontSize: 'var(--text-meta)', color: 'var(--ink-3)', lineHeight: 'var(--leading-snug)' } as const
 
-function differenceLabel(r: { difference: number }): string {
+function differenceLabel(r: { difference: number }, refundGap = true): string {
   if (Math.abs(r.difference) < 0.005) return 'same price'
-  return r.difference < 0 ? `${gbp(-r.difference)} cheaper — we refund the gap` : `${gbp(r.difference)} dearer — on us`
+  if (r.difference < 0) return `${gbp(-r.difference)} cheaper — ${refundGap ? 'we refund the gap' : 'no refund'}`
+  return `${gbp(r.difference)} dearer — on us`
+}
+
+/** The swap button, with the money on it — the amount is what is being agreed to. */
+function swapLabel(confirming: boolean, refund: number, warned: boolean): string {
+  const money = refund > 0 ? ` — refund ${gbp(refund)}` : ''
+  if (!confirming) return `Swap${money}`
+  return warned ? `Swap anyway${money}` : `Confirm${money}`
 }
 
 const refundNote = (amount: number) => `This puts ${gbp(amount)} back on their card straight away. Press again to confirm.`
@@ -75,6 +83,8 @@ export function OrderLineChange({
   /** What pressing again will do, said next to the button that will do it. */
   const [confirmText, setConfirmText] = useState<string | null>(null)
   const [notify, setNotify] = useState(true)
+  /** Give back the gap when a swap costs less. Off: update the order, move no money. */
+  const [refundGap, setRefundGap] = useState(true)
 
   // Picking any product by hand, not only the like-for-like suggestions.
   const [query, setQuery] = useState('')
@@ -139,7 +149,7 @@ export function OrderLineChange({
     setBusy(key)
     setError(null)
     try {
-      const d = await post({ ...body, notify })
+      const d = await post({ ...body, notify, ...(body.action === 'line-swap' ? { refundDifference: refundGap } : {}) })
       onChanged(d.order)
       onClose()
     } catch (err) {
@@ -191,7 +201,7 @@ export function OrderLineChange({
             ) : (
               options.replacements.map((r) => {
                 const key = `swap:${r.variantId}`
-                const refunds = r.difference < -0.005
+                const refund = refundGap && r.difference < -0.005 ? -r.difference : 0
                 return (
                   <div key={r.variantId} className="flex items-center justify-between flex-wrap" style={{ gap: 'var(--space-2)' }}>
                     <div className="min-w-0">
@@ -200,7 +210,7 @@ export function OrderLineChange({
                         {r.variantTitle ? ` · ${r.variantTitle}` : ''}
                       </p>
                       <p style={meta}>
-                        {gbp(r.price)} · {differenceLabel(r)}
+                        {gbp(r.price)} · {differenceLabel(r, refundGap)}
                         {r.stock != null ? ` · ${r.stock} in stock${r.confirmed ? '' : ' (catalogue)'}` : ''}
                       </p>
                     </div>
@@ -212,11 +222,11 @@ export function OrderLineChange({
                         void act(
                           key,
                           { action: 'line-swap', productId: r.productId, variantId: r.variantId },
-                          refunds ? refundNote(-r.difference) : null,
+                          refund > 0 ? refundNote(refund) : null,
                         )
                       }
                     >
-                      {confirming === key ? `Confirm — refund ${gbp(-r.difference)}` : 'Swap'}
+                      {swapLabel(confirming === key, refund, false)}
                     </Button>
                   </div>
                 )
@@ -239,7 +249,7 @@ export function OrderLineChange({
             {picks?.map((p) => {
               const variant = p.variants.find((v) => v.variantId === chosen[p.productId]) ?? p.variants[0]
               const key = `pick:${variant.variantId}`
-              const refund = variant.difference < -0.005 ? -variant.difference : 0
+              const refund = refundGap && variant.difference < -0.005 ? -variant.difference : 0
               const warned = p.warnings.length > 0
               const confirm = warned
                 ? `${p.title} does not keep everything the original promised (above). Press again to send it anyway${refund > 0 ? ` and refund ${gbp(refund)}` : ''}.`
@@ -255,7 +265,7 @@ export function OrderLineChange({
                         {p.title}
                       </p>
                       <p style={meta}>
-                        {p.category} · {gbp(variant.price)} · {differenceLabel(variant)}
+                        {p.category} · {gbp(variant.price)} · {differenceLabel(variant, refundGap)}
                         {variant.stock != null ? ` · ${variant.stock} in stock` : ''} · {variant.sku}
                       </p>
                     </div>
@@ -271,7 +281,7 @@ export function OrderLineChange({
                         )
                       }
                     >
-                      {confirming === key ? (warned ? 'Swap anyway' : `Confirm — refund ${gbp(refund)}`) : 'Swap'}
+                      {swapLabel(confirming === key, refund, warned)}
                     </Button>
                   </div>
                   {p.variants.length > 1 && (
@@ -326,6 +336,11 @@ export function OrderLineChange({
 
           {confirming && confirmText && <p style={{ ...meta, color: 'var(--tone-attention)' }}>{confirmText}</p>}
 
+          <Checkbox
+            checked={refundGap}
+            onChange={(e) => setRefundGap(e.target.checked)}
+            label="Refund the difference when a swap costs less"
+          />
           <Checkbox checked={notify} onChange={(e) => setNotify(e.target.checked)} label={`Email ${who} about it`} />
           <p style={meta}>
             {options.onlyLine

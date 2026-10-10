@@ -55,6 +55,12 @@ export interface ChangeOptions {
    * keep from the original. Without it, a swap that breaks a promise is refused.
    */
   acceptWarnings?: boolean
+  /**
+   * Swap: give back the gap when the replacement costs less. Default true; off
+   * updates the order and moves no money — the founder's call, e.g. when the
+   * swap is a goodwill upgrade in disguise or the customer agreed by phone.
+   */
+  refundDifference?: boolean
 }
 
 async function catalogueFor(deps: LineChangeDeps): Promise<CatalogueProduct[]> {
@@ -424,7 +430,7 @@ export async function swapLine(
   if (check.shortfalls.length > 0) throw new Error(`${product.title} is out of stock at PowerBody too — pick another.`)
 
   // They never pay more for our stock problem; a cheaper swap gives the gap back.
-  const unitPrice = Math.min(variant.price, line.unitPrice)
+  const unitPrice = options.refundDifference === false ? line.unitPrice : Math.min(variant.price, line.unitPrice)
   const refund = round((line.unitPrice - unitPrice) * line.quantity)
   const replacementTitle = variant.flavour || variant.size ? `${product.title} (${variant.flavour || variant.size})` : product.title
   const how = await refundPart(order, refund, `line-swap:${order.id}:${index}:${variant.sku}`, `Swapped ${line.sku} for ${variant.sku}`)

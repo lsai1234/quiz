@@ -146,6 +146,19 @@ describe('swapping', () => {
     expect(email?.rendered.text).toMatch(/we've refunded £0\.77/)
   })
 
+  it('can update the order without refunding the gap, when the founder says so', async () => {
+    mockPaymentSource = 'stripe'
+    const order = await paidOrder()
+    const after = await swapLine(
+      order.id, 1, D3_SKU, { productId: 'd3-cheaper', variantId: 'v-P60001' },
+      { refundDifference: false, notify: false }, deps(),
+    )
+    expect(mockRefund).not.toHaveBeenCalled()
+    expect(after.lines[1]).toMatchObject({ sku: 'P60001', unitPrice: 8.27 })
+    expect(after.total).toBe(order.total)
+    expect(after.refundedAmount ?? 0).toBe(0)
+  })
+
   it('absorbs a dearer match — the customer never pays for our stock problem', async () => {
     mockPaymentSource = 'stripe'
     const order = await paidOrder()

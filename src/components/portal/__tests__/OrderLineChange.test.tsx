@@ -71,9 +71,25 @@ describe('OrderLineChange', () => {
 
   it('swaps a dearer match in one press — no money moves', async () => {
     const { calls } = setup()
-    const swaps = await screen.findAllByRole('button', { name: 'Swap' })
-    await userEvent.click(swaps[1])
+    await userEvent.click(await screen.findByRole('button', { name: 'Swap' }))
     expect(calls.at(-1)).toMatchObject({ action: 'line-swap', productId: 'd3-dearer', variantId: 'v-2' })
+  })
+
+  it('puts the swap refund on the swap button, and asks twice for it', async () => {
+    const { calls } = setup()
+    await userEvent.click(await screen.findByRole('button', { name: 'Swap — refund £0.77' }))
+    expect(calls.at(-1)?.action).toBe('line-options')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm — refund £0.77' }))
+    expect(calls.at(-1)).toMatchObject({ action: 'line-swap', productId: 'd3-cheaper', refundDifference: true })
+  })
+
+  it('can swap a cheaper product without refunding — one press, no money moves', async () => {
+    const { calls } = setup()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Refund the difference when a swap costs less' }))
+    expect(screen.getByText(/£0\.77 cheaper — no refund/)).toBeInTheDocument()
+    const swaps = screen.getAllByRole('button', { name: 'Swap' })
+    await userEvent.click(swaps[0])
+    expect(calls.at(-1)).toMatchObject({ action: 'line-swap', productId: 'd3-cheaper', refundDifference: false })
   })
 
   it('finds any product by search, lets a flavour be chosen, and asks twice when it breaks a promise', async () => {

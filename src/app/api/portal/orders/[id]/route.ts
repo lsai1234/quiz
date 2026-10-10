@@ -69,6 +69,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     query?: string
     /** `line-swap`: the founder has seen what a hand-picked product does not keep. */
     acceptWarnings?: boolean
+    /** `line-swap`: refund the gap on a cheaper replacement. Default true. */
+    refundDifference?: boolean
   }
   try {
     body = await req.json()
@@ -189,7 +191,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           Number(body.line),
           body.sku ?? null,
           { productId: body.productId, variantId: body.variantId },
-          { by, notify: body.notify !== false, acceptWarnings: body.acceptWarnings === true },
+          { by, notify: body.notify !== false, acceptWarnings: body.acceptWarnings === true, refundDifference: body.refundDifference !== false },
         )
         return NextResponse.json({ ok: true, order })
       }
