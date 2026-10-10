@@ -14,6 +14,8 @@ import {
   refundAmountFor,
   removeLine,
   replacementCandidates,
+  safetyWarnings,
+  searchReplacements,
   swapLine,
 } from '@/lib/orders/line-changes'
 import { getOrder, updateOrder } from '@/lib/orders/repo'
@@ -162,6 +164,41 @@ describe('swapping', () => {
       swapLine(order.id, 1, D3_SKU, { productId: 'd3-not-vegan', variantId: 'v-P60003' }, {}, deps()),
     ).rejects.toThrow(/does not keep everything/)
     expect((await getOrder(order.id))?.lines[1].sku).toBe(D3_SKU)
+  })
+})
+
+describe('picking any product by hand', () => {
+  it('searches the whole sendable catalogue by name, brand, flavour or code — not only like-for-like', async () => {
+    const order = await paidOrder()
+    const found = await searchReplacements(order.id, 1, 'p6000', deps())
+    expect(found.map((p) => p.productId).sort()).toEqual(['d3-caffeinated', 'd3-cheaper', 'd3-dearer', 'd3-not-vegan'])
+    // A different kind of product entirely is fair game too.
+    expect((await searchReplacements(order.id, 1, 'omega', deps())).map((p) => p.productId)).toEqual(['omega'])
+    // Never the item being replaced, and nothing for an empty search.
+    expect((await searchReplacements(order.id, 1, 'd3', deps())).map((p) => p.productId)).not.toContain('d3')
+    expect(await searchReplacements(order.id, 1, '  ', deps())).toEqual([])
+  })
+
+  it('says, in words, what a hand-picked product does not keep', async () => {
+    const order = await paidOrder()
+    const [notVegan] = await searchReplacements(order.id, 1, 'd3-not-vegan', deps())
+    expect(notVegan.warnings).toEqual(['Not vegan — the original was'])
+    expect(safetyWarnings(CATALOGUE[0], CATALOGUE[4])).toEqual(['Contains stimulants — the original did not'])
+    expect(notVegan.variants[0]).toMatchObject({ sku: 'P60003', price: 8.2, difference: -0.07 })
+  })
+
+  it('sends it anyway once the founder has confirmed, and writes down what they accepted', async () => {
+    const order = await paidOrder()
+    const after = await swapLine(
+      order.id,
+      1,
+      D3_SKU,
+      { productId: 'd3-not-vegan', variantId: 'v-P60003' },
+      { acceptWarnings: true, notify: false },
+      deps(),
+    )
+    expect(after.lines[1].sku).toBe('P60003')
+    expect(after.events.at(-1)?.detail).toMatch(/chosen despite: Not vegan — the original was/)
   })
 })
 

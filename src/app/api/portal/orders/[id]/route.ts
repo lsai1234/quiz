@@ -40,7 +40,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  * POST /api/portal/orders/[id]  Body: { action, note? }
  *
  * action ∈ approve | hold | reject | return | submit | sync | refund | cancel |
- * address | diagnose | line-options | line-swap | line-remove | line-backorder |
+ * address | diagnose | line-options | line-search | line-swap | line-remove | line-backorder |
  * delete-check | delete.
  *
  * The first four are the fulfilment review; `submit` is the only one that talks
@@ -65,6 +65,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     variantId?: string
     /** Line actions: email the customer. Default true. */
     notify?: boolean
+    /** `line-search`: what to look for. */
+    query?: string
+    /** `line-swap`: the founder has seen what a hand-picked product does not keep. */
+    acceptWarnings?: boolean
   }
   try {
     body = await req.json()
@@ -168,6 +172,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const { lineOptions } = await import('@/lib/orders/line-changes')
         return NextResponse.json({ ok: true, options: await lineOptions(id, Number(body.line)) })
       }
+      case 'line-search': {
+        const { searchReplacements } = await import('@/lib/orders/line-changes')
+        return NextResponse.json({
+          ok: true,
+          products: await searchReplacements(id, Number(body.line), String(body.query ?? '')),
+        })
+      }
       case 'line-swap': {
         if (!body.productId || !body.variantId) {
           return NextResponse.json({ error: 'productId and variantId are required' }, { status: 400 })
@@ -178,7 +189,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           Number(body.line),
           body.sku ?? null,
           { productId: body.productId, variantId: body.variantId },
-          { by, notify: body.notify !== false },
+          { by, notify: body.notify !== false, acceptWarnings: body.acceptWarnings === true },
         )
         return NextResponse.json({ ok: true, order })
       }
@@ -229,7 +240,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json(
           {
             error:
-              'action must be approve | hold | reject | return | submit | sync | refund | cancel | address | diagnose | line-options | line-swap | line-remove | line-backorder',
+              'action must be approve | hold | reject | return | submit | sync | refund | cancel | address | diagnose | line-options | line-search | line-swap | line-remove | line-backorder',
           },
           { status: 400 },
         )

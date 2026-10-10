@@ -13,6 +13,20 @@ const OPTIONS = {
   ],
 }
 
+const PICKS = [
+  {
+    productId: 'whey',
+    title: 'Whey Isolate',
+    brand: 'PowerBody',
+    category: 'Protein',
+    variants: [
+      { variantId: 'w-choc', sku: 'P1', label: 'Chocolate', price: 29.99, difference: 21.72, stock: 9 },
+      { variantId: 'w-van', sku: 'P2', label: 'Vanilla', price: 29.99, difference: 21.72, stock: 3 },
+    ],
+    warnings: ['Not vegan — the original was'],
+  },
+]
+
 const reply = (body: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 400, json: async () => body } as Response)
 
 const originalFetch = global.fetch
@@ -26,6 +40,7 @@ function setup() {
     const body = JSON.parse(String(init?.body))
     calls.push(body)
     if (body.action === 'line-options') return reply({ ok: true, options: OPTIONS })
+    if (body.action === 'line-search') return reply({ ok: true, products: PICKS })
     return reply({ ok: true, order: { id: 'ord_1' } })
   }) as unknown as typeof fetch
   const onChanged = jest.fn()
@@ -59,6 +74,22 @@ describe('OrderLineChange', () => {
     const swaps = await screen.findAllByRole('button', { name: 'Swap' })
     await userEvent.click(swaps[1])
     expect(calls.at(-1)).toMatchObject({ action: 'line-swap', productId: 'd3-dearer', variantId: 'v-2' })
+  })
+
+  it('finds any product by search, lets a flavour be chosen, and asks twice when it breaks a promise', async () => {
+    const { calls } = setup()
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Or pick any product' }), 'whey')
+    expect(await screen.findByText('PowerBody · Whey Isolate')).toBeInTheDocument()
+    expect(screen.getByText('Not vegan — the original was.')).toBeInTheDocument()
+    expect(calls.find((c) => c.action === 'line-search')).toMatchObject({ query: 'whey', line: 1 })
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Which Whey Isolate' }), 'w-van')
+    const swaps = screen.getAllByRole('button', { name: 'Swap' })
+    await userEvent.click(swaps[swaps.length - 1])
+    expect(calls.at(-1)?.action).toBe('line-search')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Swap anyway' }))
+    expect(calls.at(-1)).toMatchObject({ action: 'line-swap', productId: 'whey', variantId: 'w-van', acceptWarnings: true })
   })
 
   it('can leave the customer un-emailed', async () => {

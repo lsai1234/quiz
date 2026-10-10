@@ -67,7 +67,7 @@ and offers three answers:
 
 | | What happens | Money | Customer email |
 |---|---|---|---|
-| **Swap** | The closest like-for-like product goes instead | Cheaper → the gap is refunded. Dearer → we absorb it | "We've sent X in its place… reply for a refund" |
+| **Swap** | The closest like-for-like product goes instead — or **any product picked by searching the catalogue** | Cheaper → the gap is refunded. Dearer → we absorb it | "We've sent X in its place… reply for a refund" |
 | **Send the rest now, this later** | The item moves into its own linked order, held until it's back; the rest can go now | None. Second parcel's postage is on us | "X will follow separately… reply for a refund" |
 | **Remove and refund** | The item comes off; the rest ships | That line, refunded to their card | "We've taken it off and refunded £X" |
 
@@ -78,6 +78,11 @@ Why these, and why a founder chooses:
   stimulant-free stays stimulant-free, no new contraindication (pregnancy,
   medication). Without the customer's quiz answers on a one-off order, the
   original product is the best statement of what suits them.
+- **Picking by hand is allowed, and honest.** "Or pick any product" searches
+  everything in stock by name, brand, flavour or code, any category, with a
+  flavour/size picker. Whatever the pick drops from the original ("Not vegan — the
+  original was", "Contains stimulants") is shown on it, a swap like that needs a
+  second press ("Swap anyway"), and what was accepted is written on the timeline.
 - **A one-off customer never agreed to substitutes in advance**, unlike a
   subscriber (who chose a change policy at checkout — `lib/changes/policy`). So
   every email offers a refund by reply, and a person decides rather than an

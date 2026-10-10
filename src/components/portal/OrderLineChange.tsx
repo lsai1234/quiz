@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Checkbox, Note } from '@/components/system'
+import { Button, Checkbox, Input, Note, Select } from '@/components/system'
 
 /**
  * Change one item on an order that has not gone to PowerBody yet — the answer
@@ -24,6 +24,16 @@ interface Replacement {
   confirmed: boolean
 }
 
+/** A product found by searching the whole catalogue — see `searchReplacements`. */
+interface Pick {
+  productId: string
+  title: string
+  brand: string | null
+  category: string
+  variants: { variantId: string; sku: string; label: string | null; price: number; difference: number; stock: number | null }[]
+  warnings: string[]
+}
+
 interface Options {
   value: number
   live: { stock: number; inStock: boolean } | null
@@ -35,10 +45,12 @@ const gbp = (n: number) => `£${n.toFixed(2)}`
 
 const meta = { fontSize: 'var(--text-meta)', color: 'var(--ink-3)', lineHeight: 'var(--leading-snug)' } as const
 
-function differenceLabel(r: Replacement): string {
+function differenceLabel(r: { difference: number }): string {
   if (Math.abs(r.difference) < 0.005) return 'same price'
   return r.difference < 0 ? `${gbp(-r.difference)} cheaper — we refund the gap` : `${gbp(r.difference)} dearer — on us`
 }
+
+const refundNote = (amount: number) => `This puts ${gbp(amount)} back on their card straight away. Press again to confirm.`
 
 export function OrderLineChange({
   orderId,
@@ -60,7 +72,16 @@ export function OrderLineChange({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  /** What pressing again will do, said next to the button that will do it. */
+  const [confirmText, setConfirmText] = useState<string | null>(null)
   const [notify, setNotify] = useState(true)
+
+  // Picking any product by hand, not only the like-for-like suggestions.
+  const [query, setQuery] = useState('')
+  const [picks, setPicks] = useState<Pick[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  /** The variant chosen for each found product, by product id. */
+  const [chosen, setChosen] = useState<Record<string, string>>({})
 
   const post = useCallback(
     async (body: Record<string, unknown>) => {
@@ -86,9 +107,33 @@ export function OrderLineChange({
     }
   }, [post])
 
-  async function act(key: string, body: Record<string, unknown>, needsConfirm: boolean) {
-    if (needsConfirm && confirming !== key) {
+  // Search as they type, once they pause. Each answer replaces the last; one
+  // that arrives after a newer query is dropped.
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setPicks(null)
+      return
+    }
+    let current = true
+    const timer = setTimeout(() => {
+      setSearching(true)
+      post({ action: 'line-search', query: q })
+        .then((d) => current && setPicks(d.products as Pick[]))
+        .catch((err: Error) => current && setError(err.message))
+        .finally(() => current && setSearching(false))
+    }, 300)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [query, post])
+
+  /** `confirm`: the sentence that asks for a second press, or null for none. */
+  async function act(key: string, body: Record<string, unknown>, confirm: string | null) {
+    if (confirm && confirming !== key) {
       setConfirming(key)
+      setConfirmText(confirm)
       return
     }
     setBusy(key)
@@ -102,6 +147,7 @@ export function OrderLineChange({
     } finally {
       setBusy(null)
       setConfirming(null)
+      setConfirmText(null)
     }
   }
 
@@ -163,7 +209,11 @@ export function OrderLineChange({
                       loading={busy === key}
                       disabled={busy !== null}
                       onClick={() =>
-                        void act(key, { action: 'line-swap', productId: r.productId, variantId: r.variantId }, refunds)
+                        void act(
+                          key,
+                          { action: 'line-swap', productId: r.productId, variantId: r.variantId },
+                          refunds ? refundNote(-r.difference) : null,
+                        )
                       }
                     >
                       {confirming === key ? `Confirm — refund ${gbp(-r.difference)}` : 'Swap'}
@@ -174,12 +224,87 @@ export function OrderLineChange({
             )}
           </div>
 
+          <div className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+            <Input
+              label="Or pick any product"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name, brand, flavour or code"
+              hint="Searches everything in stock in the catalogue. Anything that drops what the original promised is flagged."
+              compact
+            />
+            {searching && <p style={meta}>Searching…</p>}
+            {picks && picks.length === 0 && !searching && <p style={meta}>Nothing in stock matches that.</p>}
+            {picks?.map((p) => {
+              const variant = p.variants.find((v) => v.variantId === chosen[p.productId]) ?? p.variants[0]
+              const key = `pick:${variant.variantId}`
+              const refund = variant.difference < -0.005 ? -variant.difference : 0
+              const warned = p.warnings.length > 0
+              const confirm = warned
+                ? `${p.title} does not keep everything the original promised (above). Press again to send it anyway${refund > 0 ? ` and refund ${gbp(refund)}` : ''}.`
+                : refund > 0
+                  ? refundNote(refund)
+                  : null
+              return (
+                <div key={p.productId} className="flex flex-col" style={{ gap: 'var(--space-2)', paddingTop: 'var(--space-2)' }}>
+                  <div className="flex items-center justify-between flex-wrap" style={{ gap: 'var(--space-2)' }}>
+                    <div className="min-w-0">
+                      <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)', overflowWrap: 'anywhere' }}>
+                        {p.brand ? `${p.brand} · ` : ''}
+                        {p.title}
+                      </p>
+                      <p style={meta}>
+                        {p.category} · {gbp(variant.price)} · {differenceLabel(variant)}
+                        {variant.stock != null ? ` · ${variant.stock} in stock` : ''} · {variant.sku}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      loading={busy === key}
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void act(
+                          key,
+                          { action: 'line-swap', productId: p.productId, variantId: variant.variantId, acceptWarnings: warned },
+                          confirm,
+                        )
+                      }
+                    >
+                      {confirming === key ? (warned ? 'Swap anyway' : `Confirm — refund ${gbp(refund)}`) : 'Swap'}
+                    </Button>
+                  </div>
+                  {p.variants.length > 1 && (
+                    <Select
+                      label={`Which ${p.title}`}
+                      hideLabel
+                      compact
+                      value={variant.variantId}
+                      onChange={(e) => setChosen((c) => ({ ...c, [p.productId]: e.target.value }))}
+                    >
+                      {p.variants.map((v) => (
+                        <option key={v.variantId} value={v.variantId}>
+                          {(v.label ?? v.sku) + ` — ${gbp(v.price)}`}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  {warned && (
+                    <Note tone="attention" icon="alert-triangle">
+                      {p.warnings.join('. ')}.
+                    </Note>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
           <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>
             <Button
               size="sm"
               loading={busy === 'backorder'}
               disabled={busy !== null}
-              onClick={() => void act('backorder', { action: 'line-backorder' }, false)}
+              onClick={() => void act('backorder', { action: 'line-backorder' }, null)}
             >
               {options.onlyLine ? 'Wait for it to come back' : 'Send the rest now, this later'}
             </Button>
@@ -189,7 +314,7 @@ export function OrderLineChange({
                 size="sm"
                 loading={busy === 'remove'}
                 disabled={busy !== null}
-                onClick={() => void act('remove', { action: 'line-remove' }, true)}
+                onClick={() => void act('remove', { action: 'line-remove' }, refundNote(options.value))}
               >
                 {confirming === 'remove' ? `Confirm — refund ${gbp(options.value)}` : `Remove and refund ${gbp(options.value)}`}
               </Button>
@@ -199,11 +324,7 @@ export function OrderLineChange({
             </Button>
           </div>
 
-          {confirming && (
-            <p style={{ ...meta, color: 'var(--tone-attention)' }}>
-              This puts money back on their card straight away. Press the button again to confirm.
-            </p>
-          )}
+          {confirming && confirmText && <p style={{ ...meta, color: 'var(--tone-attention)' }}>{confirmText}</p>}
 
           <Checkbox checked={notify} onChange={(e) => setNotify(e.target.checked)} label={`Email ${who} about it`} />
           <p style={meta}>

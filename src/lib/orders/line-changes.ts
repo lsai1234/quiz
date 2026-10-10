@@ -50,6 +50,11 @@ export interface ChangeOptions {
   by?: string | null
   /** Email the customer about it. Default true. */
   notify?: boolean
+  /**
+   * Swap: the founder picked this product by hand and has seen what it does not
+   * keep from the original. Without it, a swap that breaks a promise is refused.
+   */
+  acceptWarnings?: boolean
 }
 
 async function catalogueFor(deps: LineChangeDeps): Promise<CatalogueProduct[]> {
@@ -205,14 +210,33 @@ export interface LineOptions {
  * too.
  */
 export function isSafeReplacement(original: CatalogueProduct, candidate: CatalogueProduct): boolean {
+  return safetyWarnings(original, candidate).length === 0
+}
+
+const CONTRAINDICATION_WORDS: Record<string, string> = {
+  pregnancy: 'pregnancy or breastfeeding',
+  medication: 'prescription medication',
+  shellfish: 'a shellfish allergy',
+}
+
+/**
+ * Every promise the original made that this candidate breaks, in words.
+ *
+ * Empty means like-for-like on safety. The suggested swaps only ever offer
+ * those; a founder picking by hand sees these instead, and has to confirm.
+ */
+export function safetyWarnings(original: CatalogueProduct, candidate: CatalogueProduct): string[] {
+  const warnings: string[] = []
   for (const tag of original.dietaryTags ?? []) {
     const has = candidate.dietaryTags?.includes(tag) || (tag === 'vegetarian' && candidate.dietaryTags?.includes('vegan'))
-    if (!has) return false
+    if (!has) warnings.push(`Not ${tag} — the original was`)
   }
-  if (!original.hasStimulants && candidate.hasStimulants) return false
+  if (!original.hasStimulants && candidate.hasStimulants) warnings.push('Contains stimulants — the original did not')
   const allowed = new Set(original.contraindications ?? [])
-  if ((candidate.contraindications ?? []).some((c) => !allowed.has(c))) return false
-  return true
+  for (const flag of candidate.contraindications ?? []) {
+    if (!allowed.has(flag)) warnings.push(`Not suitable with ${CONTRAINDICATION_WORDS[flag] ?? flag} — the original was`)
+  }
+  return warnings
 }
 
 /** The variant to offer: in stock, coded, and priced nearest what they paid. */
@@ -251,6 +275,82 @@ export function replacementCandidates(
       stock: variant.inventory ?? null,
       confirmed: false,
     }))
+}
+
+export interface ProductPick {
+  productId: string
+  title: string
+  brand: string | null
+  category: string
+  /** Variants that can be sent: in stock in the catalogue and coded. */
+  variants: { variantId: string; sku: string; label: string | null; price: number; difference: number; stock: number | null }[]
+  /** What it does not keep from the original — see `safetyWarnings`. */
+  warnings: string[]
+}
+
+/**
+ * Any product in the catalogue, for a founder who knows what they want to send.
+ *
+ * The suggested swaps are deliberately narrow: same kind of product, every
+ * promise kept. Sometimes the right replacement is none of them — a different
+ * brand the customer mentioned, a bigger tub as an apology — so this searches
+ * the whole sendable catalogue by name, brand, category, flavour or code. What
+ * it does not keep from the original is shown, not hidden, and the swap asks
+ * for a second press when there is anything to show.
+ */
+export async function searchReplacements(
+  id: string,
+  index: number,
+  query: string,
+  deps: LineChangeDeps = {},
+): Promise<ProductPick[]> {
+  const order = await editable(id)
+  const line = order.lines[index]
+  if (!line) throw new Error('That item is no longer on the order — reload the page.')
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+
+  const catalogue = await catalogueFor(deps)
+  const original = catalogue.find((p) => p.id === line.productId)
+  const matches = (product: CatalogueProduct) => {
+    const haystack = [
+      product.title,
+      product.brand ?? '',
+      product.category,
+      ...product.variants.flatMap((v) => [v.sku ?? '', v.flavour ?? '', v.size ?? '', v.title]),
+    ]
+      .join(' ')
+      .toLowerCase()
+    return tokens.every((t) => haystack.includes(t))
+  }
+
+  return catalogue
+    .filter((p) => p.id !== line.productId && matches(p))
+    .map((product): ProductPick => ({
+      productId: product.id,
+      title: product.title,
+      brand: product.brand ?? null,
+      category: product.category,
+      variants: product.variants
+        .filter((v) => v.available && v.sku)
+        .map((v) => ({
+          variantId: v.id,
+          sku: v.sku!,
+          label: v.flavour || v.size || null,
+          price: v.price,
+          difference: round(v.price - line.unitPrice),
+          stock: v.inventory ?? null,
+        })),
+      warnings: original ? safetyWarnings(original, product) : [],
+    }))
+    .filter((p) => p.variants.length > 0)
+    // Exact title matches first, then the nearest price to what they paid.
+    .sort((a, b) => {
+      const exact = Number(b.title.toLowerCase().includes(query.toLowerCase())) - Number(a.title.toLowerCase().includes(query.toLowerCase()))
+      if (exact !== 0) return exact
+      return Math.abs(a.variants[0].difference) - Math.abs(b.variants[0].difference)
+    })
+    .slice(0, 20)
 }
 
 /**
@@ -309,8 +409,11 @@ export async function swapLine(
   if (!product || !variant || !variant.sku) throw new Error('That replacement is not in the catalogue any more.')
   if (!variant.available) throw new Error(`${product.title} is out of stock too — pick another.`)
   const original = catalogue.find((p) => p.id === line.productId)
-  if (original && !isSafeReplacement(original, product)) {
-    throw new Error(`${product.title} does not keep everything ${original.title} promised (diet, stimulants or a safety warning) — pick another.`)
+  const warnings = original ? safetyWarnings(original, product) : []
+  if (warnings.length > 0 && !options.acceptWarnings) {
+    throw new Error(
+      `${product.title} does not keep everything ${original!.title} promised: ${warnings.join('; ')}. Confirm to send it anyway.`,
+    )
   }
 
   // Asked live: the whole point is to send something that IS there.
@@ -347,6 +450,7 @@ export async function swapLine(
       detail:
         `${titleOf(line)} (${line.sku}) → ${replacementTitle} (${variant.sku})` +
         (refund > 0 ? ` · refunded £${refund.toFixed(2)}${how === 'mock' ? ' (mock payments — no money moved)' : ''}` : '') +
+        (warnings.length > 0 ? ` · chosen despite: ${warnings.join('; ')}` : '') +
         (options.by ? ` · by ${options.by}` : ''),
     })
   })
