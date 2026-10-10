@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
 import { Button, Card, Input, Note } from '@/components/system'
 import { displayStatus, neverPaid } from '@/lib/orders/unpaid'
+import { OrderSendDiagnosis } from './OrderSendDiagnosis'
 
 
 interface OrderLine {
@@ -45,6 +46,7 @@ interface Order {
   supplierOrderId: string | null
   supplierStatus: string | null
   supplierSimulated?: boolean
+  lastSupplierAttempt?: { ok: boolean; error: string | null } | null
   trackingNumber: string | null
   shippingAddress: ShippingAddress | null
   partnerCode?: string | null
@@ -97,9 +99,15 @@ export function OrderDetail({ id }: { id: string }) {
     })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.order) setOrder(d.order)
-    else setError(d.error ?? 'Action failed')
+    else {
+      setError(d.error ?? 'Action failed')
+      // A failed send still changes the order — its status, its timeline, the
+      // record of what PowerBody said — so the page re-reads it rather than
+      // showing the state from before the press.
+      load()
+    }
     setBusy(null)
-  }, [id])
+  }, [id, load])
 
   const saveAddress = useCallback(async (address: ShippingAddress): Promise<string | null> => {
     const res = await fetch(`/api/portal/orders/${id}`, {
@@ -129,6 +137,7 @@ export function OrderDetail({ id }: { id: string }) {
   const terminal = ['refunded', 'cancelled'].includes(order.status) || unpaid
   const review = order.review?.state ?? 'pending'
   const awaitingReview = !order.supplierOrderId && canSubmit
+  const sendFailure = order.status === 'failed' && !unpaid ? lastSendFailure(order) : null
 
   return (
     <div className="space-y-5">
@@ -148,6 +157,40 @@ export function OrderDetail({ id }: { id: string }) {
           nothing was charged and there is nothing to send. Nothing to do here: leave it, or delete
           it at the bottom of the page.
         </Note>
+      )}
+
+      {/* Why the last send failed, and the means to find out more. */}
+      {sendFailure && (
+        <Card padding="tight" tone="critical">
+          <div className="flex flex-col" style={{ gap: 'var(--space-3)' }}>
+            <div>
+              <p
+                style={{
+                  fontSize: 'var(--text-body-sm)',
+                  fontWeight: 'var(--weight-display)',
+                  fontFamily: 'var(--font-display)',
+                  color: 'var(--tone-critical)',
+                }}
+              >
+                PowerBody did not take this order
+              </p>
+              <p
+                style={{
+                  fontSize: 'var(--text-body-sm)',
+                  lineHeight: 'var(--leading-loose)',
+                  color: 'var(--ink-2)',
+                  marginTop: 'var(--space-1)',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {sendFailure}
+              </p>
+            </div>
+            {/* Keyed on the order's last change, so a retry clears a diagnosis
+                of the attempt before it rather than leaving it on screen. */}
+            <OrderSendDiagnosis key={order.updatedAt} orderId={order.id} />
+          </div>
+        </Card>
       )}
 
       {/* Fulfilment review — nothing reaches PowerBody until this says approved. */}
@@ -287,10 +330,12 @@ export function OrderDetail({ id }: { id: string }) {
         <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Timeline</h2>
         <div className="space-y-1.5">
           {order.events.slice().reverse().map((e, i) => (
-            <div key={i} className="text-[11px] text-[var(--ink-3)] flex gap-2">
+            <div key={i} className="text-[11px] text-[var(--ink-3)] flex flex-wrap gap-x-2">
               <span className="text-[var(--ink-2)] font-semibold whitespace-nowrap">{statusLabel(e.type)}</span>
               <span>{formatStamp(e.at)}</span>
-              {e.detail && <span className="truncate">· {e.detail}</span>}
+              {/* Wrapped, not truncated: the end of a line is where a refusal
+                  says why, and truncating it kept exactly the wrong half. */}
+              {e.detail && <span style={{ overflowWrap: 'anywhere' }}>· {e.detail}</span>}
             </div>
           ))}
         </div>
@@ -330,6 +375,17 @@ export function OrderDetail({ id }: { id: string }) {
       />
     </div>
   )
+}
+
+/**
+ * The whole of the last refusal, not the first forty characters of it. The
+ * timeline cut it off, and the cut-off part was the only part that said why.
+ * Orders refused before attempts were recorded still have the timeline line.
+ */
+function lastSendFailure(order: Order): string | null {
+  const attempt = order.lastSupplierAttempt
+  if (attempt && !attempt.ok && attempt.error) return attempt.error
+  return [...order.events].reverse().find((e) => e.type === 'submit_failed')?.detail ?? null
 }
 
 /**

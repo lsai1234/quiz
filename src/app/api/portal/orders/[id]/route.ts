@@ -20,6 +20,13 @@ import { syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * `submit` and `diagnose` both talk to PowerBody, whose calls are throttled at
+ * their end — a diagnosis is several of them back to back. Same room the
+ * supplier diagnostics get.
+ */
+export const maxDuration = 60
+
 /** GET /api/portal/orders/[id] — one order. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,7 +40,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  * POST /api/portal/orders/[id]  Body: { action, note? }
  *
  * action ∈ approve | hold | reject | return | submit | sync | refund | cancel |
- * address | delete-check | delete.
+ * address | diagnose | delete-check | delete.
  *
  * The first four are the fulfilment review; `submit` is the only one that talks
  * to PowerBody and it requires an approval first (enforced in the orders domain,
@@ -83,6 +90,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const order = await submitOrderToSupplier(id)
         if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
         return NextResponse.json({ ok: true, order })
+      }
+      /*
+        Why it will not send — read-only. Asks PowerBody about each item and
+        whether they already hold the order, and reads back what they said last
+        time. Places nothing. See `lib/orders/send-diagnostics`.
+      */
+      case 'diagnose': {
+        const { diagnoseSupplierSend } = await import('@/lib/orders/send-diagnostics')
+        const diagnosis = await diagnoseSupplierSend(id)
+        if (!diagnosis) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+        return NextResponse.json({ ok: true, diagnosis })
       }
       case 'sync': {
         const order = await syncSupplierStatus(id)
@@ -142,7 +160,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       default:
         return NextResponse.json(
-          { error: 'action must be approve | hold | reject | return | submit | sync | refund | cancel | address' },
+          { error: 'action must be approve | hold | reject | return | submit | sync | refund | cancel | address | diagnose' },
           { status: 400 },
         )
     }

@@ -192,6 +192,179 @@ function extractTag(xml: string, name: string): string | null {
   return cdata ? cdata[1] : decodeXml(raw)
 }
 
+// ─── SOAP-encoded return values ────────────────────────────────────────────────
+
+/**
+ * Magento's SOAP v1 can hand a result back in two shapes, and PowerBody's own
+ * reference integration (`advox/powerbodybridge`, `Dropshipping_Api::_makeRequest`)
+ * accepts both: a JSON string, or a PHP array that the SOAP server encoded as
+ * structure — a `Map` of `<item><key/><value/></item>` for an associative
+ * array, a SOAP `Array` of `<item/>` for a list.
+ *
+ * This client only ever understood the first. A structured reply came through
+ * as a string of markup, `api_response` read as missing, and an order PowerBody
+ * had answered — possibly accepted — was reported as rejected. So both shapes
+ * are read now, and the JSON path below is untouched for the replies that are
+ * strings.
+ *
+ * Deliberately narrow, like everything else here: elements, attributes, text,
+ * CDATA and entities. Anything malformed returns null and the caller falls back
+ * to treating the reply as text, so a parse failure can only ever cost the
+ * readable error message, never a misread value.
+ */
+interface XmlNode {
+  /** Local name — any namespace prefix is dropped. */
+  name: string
+  /** Attributes by local name (`type`, `nil`, `arrayType`). */
+  attrs: Record<string, string>
+  children: XmlNode[]
+  text: string
+}
+
+const localName = (qualified: string) => qualified.slice(qualified.indexOf(':') + 1)
+
+function parseAttrs(source: string): Record<string, string> {
+  const attrs: Record<string, string> = {}
+  const pattern = /([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
+    attrs[localName(match[1])] = decodeXml(match[2] ?? match[3] ?? '')
+  }
+  return attrs
+}
+
+function parseXmlFragment(xml: string): XmlNode[] | null {
+  const root: XmlNode = { name: '#root', attrs: {}, children: [], text: '' }
+  const stack: XmlNode[] = [root]
+  let i = 0
+  while (i < xml.length) {
+    const top = stack[stack.length - 1]
+    const lt = xml.indexOf('<', i)
+    if (lt === -1) {
+      top.text += decodeXml(xml.slice(i))
+      break
+    }
+    if (lt > i) top.text += decodeXml(xml.slice(i, lt))
+
+    if (xml.startsWith('<![CDATA[', lt)) {
+      const end = xml.indexOf(']]>', lt + 9)
+      if (end === -1) return null
+      top.text += xml.slice(lt + 9, end)
+      i = end + 3
+      continue
+    }
+    if (xml.startsWith('<!--', lt) || xml.startsWith('<?', lt)) {
+      const closer = xml.startsWith('<!--', lt) ? '-->' : '?>'
+      const end = xml.indexOf(closer, lt)
+      if (end === -1) return null
+      i = end + closer.length
+      continue
+    }
+
+    const gt = xml.indexOf('>', lt)
+    if (gt === -1) return null
+    const tag = xml.slice(lt + 1, gt).trim()
+    i = gt + 1
+
+    if (tag.startsWith('/')) {
+      const open = stack.pop()
+      if (!open || open === root || open.name !== localName(tag.slice(1).trim())) return null
+      continue
+    }
+    const selfClosing = tag.endsWith('/')
+    const match = /^([A-Za-z_][\w.:-]*)([\s\S]*)$/.exec(selfClosing ? tag.slice(0, -1) : tag)
+    if (!match) return null
+    const node: XmlNode = { name: localName(match[1]), attrs: parseAttrs(match[2]), children: [], text: '' }
+    top.children.push(node)
+    if (!selfClosing) stack.push(node)
+  }
+  return stack.length === 1 ? root.children : null
+}
+
+const NUMERIC_TYPES = new Set(['int', 'integer', 'long', 'short', 'byte', 'decimal', 'float', 'double'])
+
+function soapScalar(node: XmlNode): unknown {
+  const type = localName(node.attrs.type ?? '').toLowerCase()
+  const text = node.text
+  if (type === 'boolean') return /^(true|1)$/i.test(text.trim())
+  if (NUMERIC_TYPES.has(type)) {
+    const trimmed = text.trim()
+    // Same rule as the JSON path: an integer too big for a number stays a
+    // string, because order numbers are Snowflake ids.
+    if (/^-?\d+$/.test(trimmed) && !Number.isSafeInteger(Number(trimmed))) return trimmed
+    const parsed = Number(trimmed)
+    return trimmed !== '' && Number.isFinite(parsed) ? parsed : trimmed
+  }
+  return text
+}
+
+function soapValue(node: XmlNode): unknown {
+  if (/^(true|1)$/i.test(node.attrs.nil ?? '')) return null
+  const type = localName(node.attrs.type ?? '')
+  const elements = node.children
+  if (elements.length === 0) {
+    if (/^Map$/i.test(type)) return {}
+    if (/Array$/i.test(type)) return []
+    return soapScalar(node)
+  }
+
+  const items = elements.filter((child) => child.name === 'item')
+  if (items.length === elements.length) {
+    const isEntry = (item: XmlNode) =>
+      item.children.length === 2 &&
+      item.children.some((c) => c.name === 'key') &&
+      item.children.some((c) => c.name === 'value')
+    if (items.every(isEntry)) {
+      const map: Record<string, unknown> = {}
+      for (const item of items) {
+        const key = item.children.find((c) => c.name === 'key')!
+        map[key.text.trim()] = soapValue(item.children.find((c) => c.name === 'value')!)
+      }
+      return map
+    }
+    return items.map(soapValue)
+  }
+
+  // A struct: named children rather than items.
+  const struct: Record<string, unknown> = {}
+  for (const child of elements) struct[child.name] = soapValue(child)
+  return struct
+}
+
+/**
+ * The return value, when the server encoded it as SOAP structure.
+ *
+ * `undefined` means "this is a plain string" — the JSON path reads it. A typed
+ * `Map`/`Array` or element children is what marks the structured shape; a
+ * CDATA section or entity-encoded text never starts with an element.
+ */
+function readStructuredReturn(xml: string): unknown | undefined {
+  for (const name of ['callReturn', 'result']) {
+    const open = new RegExp(`<(?:[A-Za-z0-9_.-]+:)?${name}\\b([^>]*?)(/?)>`).exec(xml)
+    if (!open) continue
+    const attrs = parseAttrs(open[1])
+    const type = localName(attrs.type ?? '')
+    const typedStructure = /^Map$|Array$/i.test(type)
+
+    if (open[2] === '/') {
+      // Self-closing: an empty map or list when typed as one, else nothing.
+      return typedStructure ? soapValue({ name, attrs, children: [], text: '' }) : undefined
+    }
+
+    const close = new RegExp(`</(?:[A-Za-z0-9_.-]+:)?${name}>`)
+    const rest = xml.slice(open.index + open[0].length)
+    const end = close.exec(rest)
+    if (!end) return undefined
+    const inner = rest.slice(0, end.index).trim()
+    const startsWithElement = inner.startsWith('<') && !inner.startsWith('<![CDATA[')
+    if (!typedStructure && !startsWithElement) return undefined
+
+    const children = parseXmlFragment(inner)
+    if (!children) return undefined
+    return soapValue({ name, attrs, children: children, text: '' })
+  }
+  return undefined
+}
+
 // ─── JSON ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -421,6 +594,9 @@ export function createSoapClient(config: PowerBodySoapConfig): PowerBodySoapClie
         '</urn:call>',
     )
 
+    const structured = readStructuredReturn(xml)
+    if (structured !== undefined) return structured as T
+
     const raw = extractTag(xml, 'callReturn') ?? extractTag(xml, 'result')
     if (raw === null) return null as T
     const trimmed = raw.trim()
@@ -467,4 +643,13 @@ export function createSoapClient(config: PowerBodySoapConfig): PowerBodySoapClie
 }
 
 /** Exposed for tests — the XML helpers are the fiddly part worth pinning down. */
-export const __soapInternals = { escapeXml, decodeXml, extractTag, readFault, envelope, createLimiter, parseJsonKeepingBigInts }
+export const __soapInternals = {
+  escapeXml,
+  decodeXml,
+  extractTag,
+  readFault,
+  envelope,
+  createLimiter,
+  parseJsonKeepingBigInts,
+  readStructuredReturn,
+}

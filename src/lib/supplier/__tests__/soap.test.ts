@@ -195,6 +195,75 @@ describe('PowerBody SOAP client', () => {
     expect(body).toContain('<args xsi:type="xsd:string"></args>')
   })
 
+  /*
+   * Magento's SOAP v1 can return a PHP array as SOAP structure instead of a JSON
+   * string, and PowerBody's own reference integration accepts both. This client
+   * read only JSON, so a structured reply arrived as a string of markup and an
+   * answered order was reported as rejected.
+   */
+  describe('structured (Map / Array) replies', () => {
+    const structured = (inner: string, type = 'ns2:Map') => `<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns2="http://xml.apache.org/xml-soap" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/">
+<SOAP-ENV:Body><ns1:callResponse><callReturn xsi:type="${type}">${inner}</callReturn></ns1:callResponse></SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`
+    const entry = (key: string, value: string, type = 'xsd:string') =>
+      `<item><key xsi:type="xsd:string">${key}</key><value xsi:type="${type}">${value}</value></item>`
+
+    it('reads a Map reply as a record', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(
+          ok(structured(entry('api_response', 'FAIL') + entry('message', 'Demo account &amp; orders disabled'))),
+        )
+      expect(await client().call('dropshipping.createOrder', {})).toEqual({
+        api_response: 'FAIL',
+        message: 'Demo account & orders disabled',
+      })
+    })
+
+    it('reads a list of Maps, numbers, booleans, nulls and Snowflake ids', async () => {
+      const row = (id: string) =>
+        `<item xsi:type="ns2:Map">${entry('order_id', id)}${entry('powerbody_order_id', '1617903166077829123', 'xsd:long')}` +
+        `${entry('qty', '2', 'xsd:int')}${entry('paid', 'true', 'xsd:boolean')}` +
+        `<item><key xsi:type="xsd:string">tracking_number</key><value xsi:nil="true"/></item></item>`
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(ok(structured(row('ord_1') + row('ord_2'), 'SOAP-ENC:Array')))
+      expect(await client().call('dropshipping.getOrders', {})).toEqual([
+        { order_id: 'ord_1', powerbody_order_id: '1617903166077829123', qty: 2, paid: true, tracking_number: null },
+        { order_id: 'ord_2', powerbody_order_id: '1617903166077829123', qty: 2, paid: true, tracking_number: null },
+      ])
+    })
+
+    it('reads nested Maps and empty structures', async () => {
+      const soap = client()
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(
+          ok(structured(`<item><key>errors</key><value xsi:type="ns2:Map">${entry('postcode', 'required')}</value></item>`)),
+        )
+      expect(await soap.call('dropshipping.createOrder', {})).toEqual({ errors: { postcode: 'required' } })
+
+      fetchMock.mockResolvedValueOnce(
+        ok(callResponse('').replace(/<callReturn[\s\S]*<\/callReturn>/, '<callReturn xsi:type="ns2:Map"/>')),
+      )
+      expect(await soap.call('dropshipping.createOrder', {})).toEqual({})
+    })
+
+    it('leaves JSON replies, CDATA and entity-encoded, on the JSON path', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(ok(callResponse({ api_response: 'SUCCESS' })))
+      expect(await client().call('dropshipping.createOrder', {})).toEqual({ api_response: 'SUCCESS' })
+    })
+
+    it('falls back to the text it saw when the structure is malformed', () => {
+      const { readStructuredReturn } = __soapInternals
+      expect(readStructuredReturn('<callReturn xsi:type="ns2:Map"><item><key>a</key></callReturn>')).toBeUndefined()
+      expect(readStructuredReturn('<callReturn xsi:type="xsd:string">plain</callReturn>')).toBeUndefined()
+    })
+  })
+
   describe('Snowflake order numbers', () => {
     // PowerBody's order numbers are becoming 18–20 digit Snowflake IDs, past
     // the 16 digits a JS number holds exactly.

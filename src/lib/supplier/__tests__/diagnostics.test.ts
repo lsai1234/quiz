@@ -7,6 +7,7 @@
 import { runSupplierDiagnostics, summarise } from '../diagnostics'
 import { createMockSupplier } from '../powerbody/mock'
 import type { SupplierProduct, SupplierProvider } from '../types'
+import { SupplierSendError } from '../errors'
 
 const check = (report: Awaited<ReturnType<typeof runSupplierDiagnostics>>, id: string) => {
   const found = report.checks.find((c) => c.id === id)
@@ -222,16 +223,60 @@ describe('the test order', () => {
        decline means the payload reached them and was understood — which is what
        this check is for. */
     const placeOrder = jest.fn(async () => {
-      throw new Error('PowerBody rejected order CHRGD-TEST-X: FAIL. Nothing has shipped.')
+      throw new SupplierSendError('PowerBody rejected order CHRGD-TEST-X: FAIL (they gave no reason). Nothing has shipped.', {
+        outcome: 'rejected',
+        code: 'FAIL',
+        reason: null,
+        reply: '{"api_response":"FAIL"}',
+        request: {},
+      })
     })
     const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
     const order = check(report, 'place-order')
     expect(order.status).toBe('pass')
     expect(order.detail).toMatch(/DEMO/)
+    expect(order.evidence).toContain('"api_response":"FAIL"')
+  })
+
+  /*
+   * The regression: this check used to match /FAIL|rejected/ against the
+   * message, and every failure the adapter writes says "rejected" — so a reply
+   * nobody could read passed as proof the payload was understood.
+   */
+  it('does not take our own wording as proof they read the order', async () => {
+    const placeOrder = jest.fn(async () => {
+      throw new Error('PowerBody rejected order CHRGD-TEST-X: UNKNOWN. Nothing has shipped.')
+    })
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    expect(check(report, 'place-order').status).toBe('fail')
+  })
+
+  it('fails a reply the hub could not read, and says that is what happened', async () => {
+    const placeOrder = jest.fn(async () => {
+      throw new SupplierSendError('PowerBody answered order CHRGD-TEST-X with a reply the hub could not read.', {
+        outcome: 'unreadable',
+        code: null,
+        reason: null,
+        reply: '<item/>',
+        request: {},
+      })
+    })
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    const order = check(report, 'place-order')
+    expect(order.status).toBe('fail')
+    expect(order.detail).toMatch(/could not read/)
   })
 
   it('reads a duplicate reference as a pass too', async () => {
-    const placeOrder = jest.fn(async () => { throw new Error('ALREADY_EXISTS') })
+    const placeOrder = jest.fn(async () => {
+      throw new SupplierSendError('ALREADY_EXISTS', {
+        outcome: 'rejected',
+        code: 'ALREADY_EXISTS',
+        reason: null,
+        reply: null,
+        request: {},
+      })
+    })
     const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
     expect(check(report, 'place-order').status).toBe('pass')
   })

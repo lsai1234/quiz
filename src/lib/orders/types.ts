@@ -43,6 +43,30 @@ export interface OrderLine {
   weightGrams?: number | null
 }
 
+/**
+ * One send to the supplier, as it happened. See `Order.lastSupplierAttempt`.
+ *
+ * `outcome` is the supplier's `SupplierSendOutcome` on a failure, `accepted` on
+ * a success, and `error` for a failure that never reached the adapter (our own
+ * code, a catalogue read).
+ */
+export interface SupplierAttempt {
+  at: string
+  ok: boolean
+  simulated: boolean
+  outcome: 'accepted' | 'rejected' | 'unreadable' | 'fault' | 'unreachable' | 'error'
+  /** Their `api_response`, or the fault/HTTP code. */
+  code: string | null
+  /** Their own explanation, when they gave one. */
+  reason: string | null
+  /** The whole reply, compact and bounded. */
+  reply: string | null
+  /** Exactly what was sent — the `createOrder` payload. */
+  request: unknown
+  /** The error as the hub reported it. */
+  error: string | null
+}
+
 /** An audit entry appended on every meaningful transition. */
 export interface OrderEvent {
   at: string
@@ -166,6 +190,16 @@ export interface Order {
    * simulated last week is still simulated after the switch is flipped to live.
    */
   supplierSimulated?: boolean
+  /**
+   * The last time this order was sent, and exactly what happened.
+   *
+   * The timeline keeps one sentence per attempt. That was all there was, and
+   * for a refusal it ended in the single word PowerBody put in `api_response`:
+   * what we sent and the rest of what they said were gone, so "why won't this
+   * send?" could only be guessed at. This keeps both, and the order page's
+   * diagnosis reads it. Absent until the first send after it existed.
+   */
+  lastSupplierAttempt?: SupplierAttempt | null
   trackingNumber: string | null
   /**
    * The partner code this order came in on, normalised (`SARAH20`), or absent.

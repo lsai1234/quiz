@@ -727,6 +727,36 @@ Orders arrive at PowerBody **unpaid**, resting at `holded`. They ship once paid 
 powerbody.eu with the same credentials, select the orders and check out (Sage Pay). There
 are no credit accounts.
 
+### When an order will not send
+
+A refusal used to reach the hub as one timeline line ending in the single word PowerBody put
+in `api_response` — usually `FAIL` — cut off mid-sentence on a phone. Three things change that:
+
+- **Their whole answer is kept.** `readOrderAck` reads the reason they give alongside the code
+  (`message`, which is where PowerBody's own reference integration,
+  [`advox/powerbodybridge`](https://github.com/advox/powerbodybridge), reads it — plus the
+  other names a PHP API files an explanation under). The reason goes into the error, and the
+  code, reason, raw reply and the exact `createOrder` payload are stored on the order as
+  `lastSupplierAttempt`.
+- **Both reply shapes are read.** Magento's SOAP v1 can return a PHP array as SOAP structure
+  (`Map` / `Array` of `<item>`s) rather than a JSON string, and the reference integration
+  accepts both. `soap.ts` used to read only JSON, so a structured reply looked like a
+  missing `api_response`.
+- **An unreadable reply is not a refusal.** When the reply carries no code we can read,
+  `placeOrder` asks `getOrders` whether the order landed before calling it failed. A message
+  with no code (`"Order created"`) is treated the same way rather than as a refusal — calling
+  an accepted order failed is how it gets sent twice.
+
+**Order page → Find out why** (`lib/orders/send-diagnostics.ts`) runs the read-only checks
+that separate the causes: what PowerBody said last time, whether sends are live, our own send
+gate (`sendBlocker`, shared with the send), the address as their form receives it, each item
+live at PowerBody (by the catalogue's `supplierProductId` first, SKU search second), whether
+they already hold the order, and the two fields we send empty (`weight`, `transport_code`).
+It shows their raw reply and the payload, which is what PowerBody's support will ask for.
+
+`FAIL` with no reason, while every check passes, is what a DEMO account does with every
+order: ask the account manager to switch on live ordering for the API account.
+
 ### Delivery exclusions
 
 PowerBody will not dropship to Northern Ireland, Guernsey, Jersey, Switzerland or Norway,
@@ -872,5 +902,7 @@ Available in their API, no caller yet — add when there is a reason:
 | `src/lib/supplier/powerbody/mock.ts` | The mock, also used as the order simulator |
 | `src/lib/supplier/sku-input.ts` | Parsing a pasted list of SKUs |
 | `src/lib/orders/service.ts` | Approval gate + the ordering gate |
+| `src/lib/orders/send-diagnostics.ts` | "Why won't this order send?" — the order page's read-only checks |
+| `src/lib/supplier/errors.ts` | `SupplierSendError`: a failed send's evidence (what was sent, what came back) |
 | `src/app/api/portal/ordering-mode/route.ts` | Read/set the ordering switch |
 | `src/app/api/portal/supplier-sync/route.ts` | "Sync now" |

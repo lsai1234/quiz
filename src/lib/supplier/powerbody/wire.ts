@@ -69,6 +69,15 @@ export interface PbOrder {
 export interface PbOrderResponse extends PbOrder {
   api_response?: string
   id?: string | number
+  /**
+   * Their explanation, alongside a `FAIL`. Not in our copy of their guide, but
+   * PowerBody's own reference integration reads it (`advox/powerbodybridge`,
+   * `_getStatusAndInfoAfterResponseApi`) — and it is the only place a refusal
+   * says WHY.
+   */
+  message?: string
+  /** Their order number, as the reference integration reads it. */
+  magento_order_increment_id?: string | number
 }
 
 // ─── Coercion ──────────────────────────────────────────────────────────────────
@@ -363,21 +372,125 @@ const OK_RESPONSES = new Set(['SUCCESS', 'UPDATE_SUCCESS'])
 
 export interface OrderAck {
   ok: boolean
-  /** Their raw `api_response`, for the audit trail. */
+  /**
+   * Their `api_response` code, upper-cased — or `UNKNOWN` when the reply
+   * carried none we could read. `UNKNOWN` is not a refusal: it means we cannot
+   * tell what they did, which is why `placeOrder` looks the order up before
+   * calling it failed.
+   */
   response: string
   /** True when the order was already there — safe to treat as success. */
   alreadyExists: boolean
+  /** Their own explanation, when the reply carried one. */
+  reason: string | null
+  /** The whole reply, compact — what to quote back to PowerBody. */
+  raw: string
 }
 
 /**
- * Read the `api_response` field every order call answers with.
+ * Where an explanation turns up, first non-empty wins. `message` is the one
+ * their reference integration reads; the rest are the names an explanation is
+ * filed under by every PHP API there is, and cost nothing to look for.
+ */
+const REASON_KEYS = [
+  'message',
+  'msg',
+  'error_message',
+  'errorMessage',
+  'error',
+  'errors',
+  'reason',
+  'description',
+  'details',
+  'info',
+  'response_info',
+]
+
+/** A value as one line of text: lists joined, records as `key: value`. */
+function flatten(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return ''
+  if (typeof value === 'string') return value.trim()
+  // `error: 0` is PHP for "no error", never an explanation.
+  if (typeof value === 'number') return value === 0 ? '' : String(value)
+  if (Array.isArray(value)) return value.map(flatten).filter(Boolean).join('; ')
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, inner]) => {
+        const text = flatten(inner)
+        return text ? `${key}: ${text}` : ''
+      })
+      .filter(Boolean)
+      .join('; ')
+  }
+  return ''
+}
+
+/**
+ * Any reply, as one line someone can paste into an email to PowerBody.
+ * Bounded, because it is kept on the order and shown on a phone.
+ */
+export function compactReply(reply: unknown, max = 2000): string {
+  let text: string
+  if (reply === undefined) text = '(no reply)'
+  else if (typeof reply === 'string') text = reply
+  else {
+    try {
+      text = JSON.stringify(reply) ?? String(reply)
+    } catch {
+      text = String(reply)
+    }
+  }
+  return text.length > max ? `${text.slice(0, max)}… (${text.length - max} more characters)` : text
+}
+
+/**
+ * The record an order call answered with, when it answered with one.
+ * PHP hands a single result back bare or as a one-element list, equally often.
+ */
+export function orderReplyRecord(reply: unknown): PbOrderResponse | null {
+  const value = Array.isArray(reply) && reply.length === 1 ? reply[0] : reply
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as PbOrderResponse) : null
+}
+
+/**
+ * Read the answer to an order call.
  *
  * `ALREADY_EXISTS` is deliberately not a failure: it means a previous attempt
  * got through and the retry is a duplicate, so treating it as success is what
  * makes re-sending a timed-out order safe instead of double-shipping it.
+ *
+ * This used to read `api_response` and nothing else, so every refusal reached
+ * the hub as the single word `FAIL`, and the reason PowerBody gave with it was
+ * thrown away. The reason is kept now, along with the whole reply: a refusal is
+ * only fixable by someone who can see what was said.
  */
-export function readOrderAck(response: PbOrderResponse | null | undefined): OrderAck {
-  const raw = str(response?.api_response).trim().toUpperCase()
-  const alreadyExists = raw === 'ALREADY_EXISTS'
-  return { ok: OK_RESPONSES.has(raw) || alreadyExists, response: raw || 'UNKNOWN', alreadyExists }
+export function readOrderAck(response: unknown): OrderAck {
+  const raw = compactReply(response)
+  const record = orderReplyRecord(response)
+  let code = ''
+  let reason: string | null = null
+
+  // With no code, a message is NOT read as a refusal. "Order created" in a
+  // `message` field is as likely as "Invalid SKU", and calling an accepted order
+  // failed is how it gets sent twice. Such a reply stays UNKNOWN — the caller
+  // asks PowerBody whether the order is there — and the words are kept to show.
+  if (record) {
+    const said = str(record.api_response).trim()
+    // A code is one word. A sentence in the code field is still their answer:
+    // it is kept as the reason rather than shouted back in capitals.
+    if (/^[A-Za-z0-9_]+$/.test(said)) code = said.toUpperCase()
+    else if (said) reason = said
+    for (const key of REASON_KEYS) {
+      if (reason) break
+      reason = flatten((record as Record<string, unknown>)[key]) || null
+    }
+  } else if (typeof response === 'string' && response.trim() !== '') {
+    const said = response.trim()
+    if (/^[A-Za-z0-9_]+$/.test(said)) code = said.toUpperCase()
+    else reason = said
+  }
+
+  if (reason && reason.length > 500) reason = `${reason.slice(0, 500)}…`
+  const alreadyExists = code === 'ALREADY_EXISTS'
+  return { ok: OK_RESPONSES.has(code) || alreadyExists, response: code || 'UNKNOWN', alreadyExists, reason, raw }
 }

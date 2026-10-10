@@ -38,19 +38,21 @@ import type {
   SupplierStockLevel,
   SupplierProductStub,
 } from '../types'
-import { createSoapClient, type PowerBodySoapClient } from './soap'
+import { createSoapClient, PowerBodySoapError, type PowerBodySoapClient } from './soap'
+import { SupplierSendError } from '../errors'
 import { partitionBySkuMap } from '../product-id-map'
 import { createKvDetailStore, isStale, type DetailStore } from './detail-cache'
 import {
+  orderReplyRecord,
   readOrderAck,
   toCreateOrderPayload,
   toStockLevel,
   toSupplierOrder,
+  toSupplierOrderStatus,
   toSupplierProduct,
   num,
   type CreateOrderContext,
   type PbOrder,
-  type PbOrderResponse,
   type PbProductInfo,
   type PbProductListItem,
 } from './wire'
@@ -732,6 +734,20 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       .slice(0, wanted)
   }
 
+  /**
+   * One order, by our reference or their number.
+   *
+   * `ids` matches on our reference, which is what we sent as `id`. An order we
+   * only know by their increment id is found by scanning the same reply.
+   */
+  async function getOrder(supplierOrderId: string): Promise<SupplierOrder | null> {
+    const reply = await client.call<unknown>('dropshipping.getOrders', { ids: [supplierOrderId] })
+    const found = orderRows(reply).find(
+      (r) => String(r.order_id) === supplierOrderId || String(r.powerbody_order_id) === supplierOrderId,
+    )
+    return found ? toSupplierOrder(found) : null
+  }
+
   return {
     name: 'powerbody',
 
@@ -843,22 +859,56 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     async placeOrder(order: SupplierOrderInput): Promise<SupplierOrderResult> {
       const payload = toCreateOrderPayload(order, options.orderContext?.(order) ?? {})
-      const response = await client.call<PbOrderResponse | null>('dropshipping.createOrder', payload)
+
+      let response: unknown
+      try {
+        response = await client.call<unknown>('dropshipping.createOrder', payload)
+      } catch (err) {
+        // No decision was reached — their server refused the call, or we never
+        // got an answer. The message is unchanged; what we sent rides with it.
+        const message = err instanceof Error ? err.message : String(err)
+        const fault =
+          err instanceof PowerBodySoapError && !err.retryable && !!err.code && !/^\d{3}$/.test(err.code)
+        throw new SupplierSendError(message, {
+          outcome: fault ? 'fault' : 'unreachable',
+          code: err instanceof PowerBodySoapError ? (err.code ?? null) : null,
+          reason: message,
+          reply: null,
+          request: payload,
+        })
+      }
+
       const ack = readOrderAck(response)
-      if (!ack.ok) {
-        throw new Error(
-          `PowerBody rejected order ${order.reference}: ${ack.response}. ` +
-            'Nothing has shipped — fix the order and send it again.',
+      if (ack.ok) return acceptedResult(response, order.reference)
+
+      if (ack.response === 'UNKNOWN') {
+        /* Not a refusal — a reply we could not read. Before calling the order
+           failed, ask whether it is there: an accepted order marked failed is
+           one somebody sends again. Their `getOrders` matches on our reference,
+           so this is one call, and it only happens on the confusing path. */
+        let lookupFailed: string | null = null
+        const landed = await getOrder(order.reference).catch((err: unknown) => {
+          lookupFailed = err instanceof Error ? err.message : String(err)
+          return null
+        })
+        if (landed) return { supplierOrderId: landed.supplierOrderId || order.reference, status: landed.status }
+
+        throw new SupplierSendError(
+          `PowerBody answered order ${order.reference} with a reply the hub could not read` +
+            `${ack.reason ? ` (“${ack.reason}”)` : ''}` +
+            (lookupFailed
+              ? `, and asking whether it landed failed too (${lookupFailed}). Check their portal before sending it again.`
+              : ', and the order is not on their account when we look it up — so it has been treated as not sent. Nothing has shipped.'),
+          { outcome: 'unreadable', code: null, reason: ack.reason, reply: ack.raw, request: payload },
         )
       }
-      // They answer with a status but not always their own order id; our
-      // reference is the durable handle either way, and `getOrder` resolves the
-      // rest on the next status sync.
-      const supplierOrderId =
-        response?.powerbody_order_id != null && String(response.powerbody_order_id) !== ''
-          ? String(response.powerbody_order_id)
-          : order.reference
-      return { supplierOrderId, status: toSupplierOrder({ ...response, status: response?.status }).status }
+
+      throw new SupplierSendError(
+        `PowerBody rejected order ${order.reference}: ${ack.response}` +
+          `${ack.reason ? ` — “${ack.reason}”` : ' (they gave no reason)'}. ` +
+          'Nothing has shipped — fix the order and send it again.',
+        { outcome: 'rejected', code: ack.response, reason: ack.reason, reply: ack.raw, request: payload },
+      )
     },
 
     /**
@@ -874,39 +924,64 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
      */
     async updateOrder(order: SupplierOrderInput): Promise<SupplierOrderResult> {
       const payload = toCreateOrderPayload(order, options.orderContext?.(order) ?? {})
-      const response = await client.call<PbOrderResponse | null>('dropshipping.updateOrder', payload)
+      const response = await client.call<unknown>('dropshipping.updateOrder', payload)
       const ack = readOrderAck(response)
       if (!ack.ok) {
         throw new Error(
-          `PowerBody would not update order ${order.reference}: ${ack.response}. ` +
+          `PowerBody would not update order ${order.reference}: ${ack.response}` +
+            `${ack.reason ? ` — “${ack.reason}”` : ''}. ` +
             'They may already have picked it — the order still stands as it was.',
         )
       }
-      const supplierOrderId =
-        response?.powerbody_order_id != null && String(response.powerbody_order_id) !== ''
-          ? String(response.powerbody_order_id)
-          : order.reference
-      return { supplierOrderId, status: toSupplierOrder({ ...response, status: response?.status }).status }
+      return acceptedResult(response, order.reference)
     },
 
-    async getOrder(supplierOrderId: string): Promise<SupplierOrder | null> {
-      // `ids` matches on our reference, which is what we sent as `id`. An order
-      // we only know by their increment id is found by scanning the same reply.
-      const rows = await client.call<PbOrder[] | null>('dropshipping.getOrders', { ids: [supplierOrderId] })
-      const found = Array.isArray(rows)
-        ? rows.find(
-            (r) => String(r.order_id) === supplierOrderId || String(r.powerbody_order_id) === supplierOrderId,
-          )
-        : null
-      return found ? toSupplierOrder(found) : null
-    },
+    getOrder,
 
     async listOrders(): Promise<SupplierOrder[]> {
       // No parameters = the current day's orders plus anything they removed,
       // which is exactly the window a status sync cares about.
-      const rows = await client.call<PbOrder[] | null>('dropshipping.getOrders', {})
-      return Array.isArray(rows) ? rows.map((r) => toSupplierOrder(r)) : []
+      const reply = await client.call<unknown>('dropshipping.getOrders', {})
+      return orderRows(reply).map((r) => toSupplierOrder(r))
     },
+  }
+}
+
+/**
+ * The rows of a `getOrders` reply.
+ *
+ * A list, normally. PHP sends an array whose keys are not 0…n as an object
+ * keyed by number instead, and a single result may come back bare — and the
+ * lookup that decides whether an ambiguous send actually landed must not miss
+ * an order over either.
+ */
+function orderRows(reply: unknown): PbOrder[] {
+  const single =
+    !!reply && typeof reply === 'object' && !Array.isArray(reply) && ('order_id' in reply || 'powerbody_order_id' in reply)
+  const rows = Array.isArray(reply)
+    ? reply
+    : single
+      ? [reply]
+      : reply && typeof reply === 'object'
+        ? Object.values(reply as Record<string, unknown>)
+        : []
+  return rows.filter((row): row is PbOrder => !!row && typeof row === 'object' && !Array.isArray(row))
+}
+
+/**
+ * What an accepted `createOrder` / `updateOrder` hands back.
+ *
+ * They answer with a status but not always their own order number; our
+ * reference is the durable handle either way, and `getOrder` resolves the rest
+ * on the next status sync. `magento_order_increment_id` is where their
+ * reference integration reads the number from, so it is read here too.
+ */
+function acceptedResult(reply: unknown, reference: string): SupplierOrderResult {
+  const record = orderReplyRecord(reply)
+  const theirs = record?.powerbody_order_id ?? record?.magento_order_increment_id
+  return {
+    supplierOrderId: theirs != null && String(theirs) !== '' ? String(theirs) : reference,
+    status: toSupplierOrderStatus(record?.status),
   }
 }
 

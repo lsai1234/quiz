@@ -328,13 +328,83 @@ describe('PowerBody wire mapping', () => {
         ok: true,
         response: 'ALREADY_EXISTS',
         alreadyExists: true,
+        reason: null,
+        raw: '{"api_response":"ALREADY_EXISTS"}',
       })
     })
 
     it('rejects failures and anything it does not recognise', () => {
       expect(readOrderAck({ api_response: 'FAIL' }).ok).toBe(false)
       expect(readOrderAck({ api_response: 'UPDATE_FAIL' }).ok).toBe(false)
-      expect(readOrderAck(null)).toEqual({ ok: false, response: 'UNKNOWN', alreadyExists: false })
+      expect(readOrderAck(null)).toEqual({
+        ok: false,
+        response: 'UNKNOWN',
+        alreadyExists: false,
+        reason: null,
+        raw: 'null',
+      })
+    })
+
+    /*
+     * The reason is the whole point. Their reference integration reads a
+     * `message` next to a FAIL; this used to keep only the FAIL, so every
+     * refusal reached the hub as one word nobody could act on.
+     */
+    it('keeps the reason they give with a refusal', () => {
+      const ack = readOrderAck({ api_response: 'FAIL', message: 'Product P53878 is out of stock' })
+      expect(ack).toMatchObject({ ok: false, response: 'FAIL', reason: 'Product P53878 is out of stock' })
+      expect(ack.raw).toContain('out of stock')
+    })
+
+    it('finds a reason wherever a PHP API files it, lists included', () => {
+      expect(readOrderAck({ api_response: 'FAIL', error: 'Invalid postcode' }).reason).toBe('Invalid postcode')
+      expect(readOrderAck({ api_response: 'FAIL', errors: ['No weight', 'No transport_code'] }).reason).toBe(
+        'No weight; No transport_code',
+      )
+      expect(readOrderAck({ api_response: 'FAIL', errors: { postcode: 'required' } }).reason).toBe('postcode: required')
+      // PHP's "no error" is not an explanation.
+      expect(readOrderAck({ api_response: 'FAIL', error: 0, success: false }).reason).toBeNull()
+    })
+
+    it('keeps a sentence in the code field as the reason, not as a code', () => {
+      expect(readOrderAck({ api_response: 'Order contains unavailable products' })).toMatchObject({
+        ok: false,
+        response: 'UNKNOWN',
+        reason: 'Order contains unavailable products',
+      })
+    })
+
+    /*
+     * With no code, a message could as easily be "Order created" as a refusal.
+     * Reading it as a failure is how an accepted order gets sent twice, so it
+     * stays UNKNOWN and the caller asks PowerBody whether the order is there.
+     */
+    it('does not read a message without a code as a refusal', () => {
+      expect(readOrderAck({ message: 'Order created' })).toMatchObject({
+        ok: false,
+        response: 'UNKNOWN',
+        reason: 'Order created',
+      })
+    })
+
+    it('reads a bare code, a one-element list, and a bare sentence', () => {
+      expect(readOrderAck('SUCCESS')).toMatchObject({ ok: true, response: 'SUCCESS' })
+      expect(readOrderAck([{ api_response: 'FAIL', message: 'Demo account' }])).toMatchObject({
+        response: 'FAIL',
+        reason: 'Demo account',
+      })
+      expect(readOrderAck('Something went wrong')).toMatchObject({
+        ok: false,
+        response: 'UNKNOWN',
+        reason: 'Something went wrong',
+      })
+    })
+
+    it('keeps the raw reply bounded, because it is stored on the order', () => {
+      const ack = readOrderAck({ api_response: 'FAIL', message: 'x'.repeat(5000) })
+      expect(ack.raw.length).toBeLessThan(2100)
+      expect(ack.raw).toMatch(/more characters\)$/)
+      expect(ack.reason!.length).toBeLessThanOrEqual(501)
     })
   })
 })

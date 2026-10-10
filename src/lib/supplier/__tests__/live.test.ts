@@ -1,5 +1,6 @@
 import { createPowerBodyProvider, __resetPowerBodyCache } from '@/lib/supplier/powerbody/live'
-import type { PowerBodySoapClient } from '@/lib/supplier/powerbody/soap'
+import { PowerBodySoapError, type PowerBodySoapClient } from '@/lib/supplier/powerbody/soap'
+import { sendEvidenceOf } from '@/lib/supplier/errors'
 import { createMemoryDetailStore, DETAIL_TTL_MS } from '@/lib/supplier/powerbody/detail-cache'
 
 /** A fake SOAP client driven by a per-method handler map. */
@@ -400,6 +401,124 @@ describe('live PowerBody adapter', () => {
       await expect(createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)).rejects.toThrow(
         /rejected order ord_1: FAIL[\s\S]*Nothing has shipped/,
       )
+    })
+
+    /*
+     * The bug behind "this order won't send and I can't tell why": their reason
+     * came back next to the FAIL and was dropped, leaving one word.
+     */
+    it('puts their reason in the error, and keeps what was sent and said', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => ({ api_response: 'FAIL', message: 'Product PB-1 is not available' }),
+      })
+      const err = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] })
+        .placeOrder(order)
+        .catch((e: unknown) => e)
+
+      expect((err as Error).message).toMatch(/rejected order ord_1: FAIL — “Product PB-1 is not available”/)
+      const evidence = sendEvidenceOf(err)
+      expect(evidence).toMatchObject({ outcome: 'rejected', code: 'FAIL', reason: 'Product PB-1 is not available' })
+      expect(evidence?.reply).toContain('not available')
+      expect(evidence?.request).toMatchObject({ id: 'ord_1', products: [{ sku: 'PB-1', qty: 2 }] })
+    })
+
+    it('says plainly when they gave no reason at all', async () => {
+      const { client } = fakeClient({ 'dropshipping.createOrder': () => ({ api_response: 'FAIL' }) })
+      await expect(createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)).rejects.toThrow(
+        'FAIL (they gave no reason)',
+      )
+    })
+
+    /*
+     * A reply we cannot read is not a refusal. Before calling it failed the
+     * order is looked up: if it landed, it is a success — marking it failed is
+     * how it would be sent a second time.
+     */
+    it('looks the order up when the reply is unreadable, and takes it if it landed', async () => {
+      const { client, calls } = fakeClient({
+        'dropshipping.createOrder': () => '<item><key>api_response</key></item>',
+        'dropshipping.getOrders': () => [{ order_id: 'ord_1', powerbody_order_id: '777', status: 'holded' }],
+      })
+      const result = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)
+
+      expect(result).toEqual({ supplierOrderId: '777', status: 'received' })
+      expect(calls.map((c) => c.path)).toEqual(['dropshipping.createOrder', 'dropshipping.getOrders'])
+    })
+
+    it('reports an unreadable reply as such when the order is not there either', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => ({ message: 'Order created' }),
+        'dropshipping.getOrders': () => [],
+      })
+      const err = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] })
+        .placeOrder(order)
+        .catch((e: unknown) => e)
+
+      expect((err as Error).message).toMatch(/could not read \(“Order created”\)[\s\S]*not on their account/)
+      expect(sendEvidenceOf(err)).toMatchObject({ outcome: 'unreadable', reason: 'Order created' })
+    })
+
+    it('finds the order when their lookup answers with one bare record', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => null,
+        'dropshipping.getOrders': () => ({ order_id: 'ord_1', powerbody_order_id: '778', status: 'processing' }),
+      })
+      const result = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)
+      expect(result).toEqual({ supplierOrderId: '778', status: 'processing' })
+    })
+
+    it('does not claim the order is absent when the lookup itself failed', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => null,
+        'dropshipping.getOrders': () => {
+          throw new Error('PowerBody is rate limiting us (HTTP 429).')
+        },
+      })
+      const err = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] })
+        .placeOrder(order)
+        .catch((e: unknown) => e)
+      expect((err as Error).message).toMatch(/asking whether it landed failed too \(PowerBody is rate limiting us/)
+      expect((err as Error).message).not.toMatch(/not on their account/)
+    })
+
+    it('does not look anything up after a plain refusal', async () => {
+      const { client, calls } = fakeClient({ 'dropshipping.createOrder': () => ({ api_response: 'FAIL' }) })
+      await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order).catch(() => null)
+      expect(calls.map((c) => c.path)).toEqual(['dropshipping.createOrder'])
+    })
+
+    it('carries what was sent on a SOAP fault, with the message unchanged', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => {
+          throw new PowerBodySoapError('Invalid product data', 'Server')
+        },
+      })
+      const err = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] })
+        .placeOrder(order)
+        .catch((e: unknown) => e)
+
+      expect((err as Error).message).toBe('Invalid product data')
+      expect(sendEvidenceOf(err)).toMatchObject({ outcome: 'fault', code: 'Server', reason: 'Invalid product data' })
+    })
+
+    it('calls a timeout unreachable, not a refusal', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => {
+          throw new PowerBodySoapError('PowerBody did not respond within 30000ms.', undefined, false, true)
+        },
+      })
+      const err = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] })
+        .placeOrder(order)
+        .catch((e: unknown) => e)
+      expect(sendEvidenceOf(err)?.outcome).toBe('unreachable')
+    })
+
+    it('reads their order number where their reference integration does', async () => {
+      const { client } = fakeClient({
+        'dropshipping.createOrder': () => ({ api_response: 'SUCCESS', magento_order_increment_id: '100099' }),
+      })
+      const result = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)
+      expect(result.supplierOrderId).toBe('100099')
     })
 
     it('passes caller-supplied weight and prices through to their payload', async () => {

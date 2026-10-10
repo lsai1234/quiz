@@ -14,6 +14,7 @@
 import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
+import { sendEvidenceOf } from '@/lib/supplier/errors'
 import { deliverability } from '@/lib/pricing/zones'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { shipsAtCycle } from '@/lib/recharge/clock'
@@ -705,7 +706,7 @@ export function orderWeightKg(
  * comes off the order itself; the catalogue is consulted only for the two facts
  * an order line doesn't carry (VAT rate and shipped weight).
  */
-async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<SupplierOrderInput> {
+export async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<SupplierOrderInput> {
   const address = order.shippingAddress!
   let catalogue: CatalogueProduct[] = []
   try {
@@ -749,34 +750,31 @@ async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<
 }
 
 /**
- * Send the order to PowerBody for dropship fulfilment. Requires approval.
+ * Why this order cannot be sent right now, or null when it can.
  *
- * Whether this actually reaches PowerBody depends on the ordering mode
- * (`SUPPLIER_ORDERING`, or Settings → Supplier → Order sending in the hub). In `simulate`
- * — the default — the order walks the exact same states and writes the same
- * audit trail against the mock supplier, but nothing reaches PowerBody and
- * nothing ships. The gate lives HERE rather than in the route so that a cron, a
- * webhook or a future caller cannot bypass it.
+ * The send's own gate, as a sentence rather than a throw, so the order page's
+ * diagnosis asks exactly the questions the send does. Two copies of these rules
+ * would drift, and a diagnosis that passes an order the send then refuses is
+ * worse than none.
+ *
+ * `assumeApproved` is for that diagnosis: pressing send on the order page IS
+ * the approval, so an order not yet approved is not something to report there.
  */
-export async function submitOrderToSupplier(id: string): Promise<Order | null> {
-  const order = await getOrder(id)
-  if (!order) return null
+export function sendBlocker(order: Order, options: { assumeApproved?: boolean } = {}): string | null {
+  const id = order.id
   if (!SUBMITTABLE.includes(order.status)) {
-    throw new Error(`Order ${id} is ${order.status} — only paid or failed orders can be submitted.`)
+    return `Order ${id} is ${order.status} — only paid or failed orders can be submitted.`
   }
   // Checked apart from the approval below, which an unpaid order could only
   // carry from before this existed — and which must not be enough to ship it.
   if (neverPaid(order)) {
-    throw new Error(`Order ${id} was never paid for — the checkout was abandoned, so there is nothing to send.`)
+    return `Order ${id} was never paid for — the checkout was abandoned, so there is nothing to send.`
   }
-  if (reviewStateOf(order) !== 'approved') {
-    throw new Error(
-      `Order ${id} has not been approved for fulfilment (${reviewStateOf(order)}) — review it in the fulfilment queue first.`,
-    )
+  if (!options.assumeApproved && reviewStateOf(order) !== 'approved') {
+    return `Order ${id} has not been approved for fulfilment (${reviewStateOf(order)}) — review it in the fulfilment queue first.`
   }
-  const fulfilable = order.lines.filter((l) => l.sku)
-  if (fulfilable.length === 0) {
-    throw new Error(`Order ${id} has no lines with a supplier SKU to fulfil.`)
+  if (!order.lines.some((l) => l.sku)) {
+    return `Order ${id} has no lines with a supplier SKU to fulfil.`
   }
 
   /**
@@ -790,14 +788,30 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
    * past it by not having looked at the UI.
    */
   if (!order.shippingAddress?.line1 || !order.shippingAddress.postcode) {
-    throw new Error(
-      `Order ${id} has no delivery address — nothing can be dropshipped until one is on the order.`,
-    )
+    return `Order ${id} has no delivery address — nothing can be dropshipped until one is on the order.`
   }
   const reach = deliverability(order.shippingAddress)
-  if (reach.excluded) {
-    throw new Error(`Order ${id} cannot be dropshipped: ${reach.reason}`)
-  }
+  if (reach.excluded) return `Order ${id} cannot be dropshipped: ${reach.reason}`
+  return null
+}
+
+/**
+ * Send the order to PowerBody for dropship fulfilment. Requires approval.
+ *
+ * Whether this actually reaches PowerBody depends on the ordering mode
+ * (`SUPPLIER_ORDERING`, or Settings → Supplier → Order sending in the hub). In `simulate`
+ * — the default — the order walks the exact same states and writes the same
+ * audit trail against the mock supplier, but nothing reaches PowerBody and
+ * nothing ships. The gate lives HERE rather than in the route so that a cron, a
+ * webhook or a future caller cannot bypass it.
+ */
+export async function submitOrderToSupplier(id: string): Promise<Order | null> {
+  const order = await getOrder(id)
+  if (!order) return null
+  const blocked = sendBlocker(order)
+  if (blocked) throw new Error(blocked)
+  const fulfilable = order.lines.filter((l) => l.sku)
+  const address = order.shippingAddress!
 
   // Resolved once, before the call, and then recorded on the order — so an order
   // sent as a simulation stays a simulation even after the switch is flipped.
@@ -809,7 +823,7 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   // evidence of what we actually put on the wire. Reconstructing it afterwards
   // is impossible: the order's address is editable, so today's value is not
   // proof of what was sent last Tuesday.
-  const sentAddress = oneLineAddress(order.shippingAddress)
+  const sentAddress = oneLineAddress(address)
   try {
     const result = await supplier.placeOrder(await supplierOrderInputFor(order, fulfilable))
     return updateOrder(id, (o) => {
@@ -817,6 +831,17 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
       o.supplierStatus = result.status
       o.supplierSimulated = simulated
       o.status = 'submitted_to_supplier'
+      o.lastSupplierAttempt = {
+        at: now(),
+        ok: true,
+        simulated,
+        outcome: 'accepted',
+        code: null,
+        reason: null,
+        reply: null,
+        request: null,
+        error: null,
+      }
       o.events.push(
         event(
           'submitted_to_supplier',
@@ -826,9 +851,24 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
       )
     })
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // What was sent and what came back, when the adapter could say. The event
+    // keeps the sentence; this keeps the evidence the sentence is about.
+    const evidence = sendEvidenceOf(err)
     await updateOrder(id, (o) => {
       o.status = 'failed'
-      o.events.push(event('submit_failed', err instanceof Error ? err.message : String(err)))
+      o.lastSupplierAttempt = {
+        at: now(),
+        ok: false,
+        simulated,
+        outcome: evidence?.outcome ?? 'error',
+        code: evidence?.code ?? null,
+        reason: evidence?.reason ?? null,
+        reply: evidence?.reply ?? null,
+        request: evidence?.request ?? null,
+        error: message,
+      }
+      o.events.push(event('submit_failed', message))
     })
     throw err
   }

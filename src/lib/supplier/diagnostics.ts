@@ -26,6 +26,7 @@
 import { getSupplier, getSupplierMode, getSupplierSource, hasPowerBodyCredentials } from './index'
 import { buildDeadlineMs } from './powerbody/live'
 import type { SupplierProduct, SupplierProvider } from './types'
+import { sendEvidenceOf } from './errors'
 
 export type CheckStatus =
   /** The call worked and the answer looks right. */
@@ -64,12 +65,12 @@ export interface SupplierDiagnosticsReport {
 /** Money, printed the way every other screen prints it. */
 const money = (n: number) => `£${n.toFixed(2)}`
 
-async function timed<T>(fn: () => Promise<T>): Promise<{ value?: T; error?: string; ms: number }> {
+async function timed<T>(fn: () => Promise<T>): Promise<{ value?: T; error?: string; cause?: unknown; ms: number }> {
   const started = Date.now()
   try {
     return { value: await fn(), ms: Date.now() - started }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err), ms: Date.now() - started }
+    return { error: err instanceof Error ? err.message : String(err), cause: err, ms: Date.now() - started }
   }
 }
 
@@ -412,21 +413,29 @@ async function testOrderCheck(
   }
 
   const message = attempt.error ?? 'no answer'
-  const declined = /\bFAIL\b|rejected/i.test(message)
-  const duplicate = /ALREADY_EXISTS/i.test(message)
+  const evidence = attempt.cause ? sendEvidenceOf(attempt.cause) : null
+  const duplicate = evidence?.code === 'ALREADY_EXISTS'
+  /* Read from the recorded outcome, not the wording. This used to match
+     /FAIL|rejected/ against the message — and every send failure the adapter
+     writes says "rejected", including a reply nobody could read. That made this
+     check pass on exactly the failure it exists to catch. */
+  const declined = evidence?.outcome === 'rejected'
 
   return {
     id: 'place-order',
     title: 'Place a test order',
     // A declined order on a DEMO account is the documented behaviour and is the
-    // result this check is looking for; a transport error is not.
+    // result this check is looking for; a transport error is not, and neither is
+    // a reply we could not read.
     status: declined || duplicate ? 'pass' : 'fail',
     detail: duplicate
       ? `They answered ALREADY_EXISTS — our reference collided with an order already on the account. The call reached them and was understood, which is what this check is for.`
       : declined
         ? `They received the order and declined it: ${message} — which is exactly what a DEMO account does, and means the payload reached them in a shape they could read. Ask your account manager to take the account out of DEMO once they have seen it.`
-        : `The order never got a decision out of them: ${message}`,
-    evidence: reference,
+        : evidence?.outcome === 'unreadable'
+          ? `They answered, but in a shape the hub could not read: ${message}`
+          : `The order never got a decision out of them: ${message}`,
+    evidence: evidence?.reply ? `${reference} · they said: ${evidence.reply}` : reference,
     ms: attempt.ms,
   }
 }

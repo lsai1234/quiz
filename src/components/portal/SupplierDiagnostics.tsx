@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge, Button, Card, Checkbox, Note } from '@/components/system'
-import { Icon, type IconName } from '@/components/ui/Icon'
+import { Button, Card, Checkbox, Note } from '@/components/system'
+import { CheckList, noteToneFor, type CheckItem, type CheckStatus } from './CheckList'
 
 /**
  * Does the supplier integration actually work on this account?
@@ -18,34 +18,15 @@ import { Icon, type IconName } from '@/components/ui/Icon'
  * confirmation and the Order sending switch — not to a diagnostics button.
  */
 
-type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip'
-
-interface Check {
-  id: string
-  title: string
-  status: CheckStatus
-  detail: string
-  evidence?: string
-  ms: number
-}
-
 interface Report {
   source: 'mock' | 'powerbody'
   mode: string
   credentials: boolean
   looksLikeSandbox: boolean
   placedTestOrder: boolean
-  checks: Check[]
+  checks: CheckItem[]
   ranAt: string
   ms: number
-}
-
-/** Tone and glyph per outcome. `skip` stays neutral — it is not a result. */
-const TONE: Record<CheckStatus, { tone: 'positive' | 'attention' | 'critical' | 'neutral'; icon: IconName; label: string }> = {
-  pass: { tone: 'positive', icon: 'check', label: 'Pass' },
-  warn: { tone: 'attention', icon: 'alert-triangle', label: 'Read this' },
-  fail: { tone: 'critical', icon: 'x', label: 'Failed' },
-  skip: { tone: 'neutral', icon: 'minus', label: 'Not run' },
 }
 
 export function SupplierDiagnostics() {
@@ -104,9 +85,7 @@ export function SupplierDiagnostics() {
 
       {report && summary && (
         <>
-          <Note tone={summary.status === 'pass' ? 'positive' : summary.status === 'fail' ? 'critical' : 'attention'}>
-            {summary.sentence}
-          </Note>
+          <Note tone={noteToneFor(summary.status)}>{summary.sentence}</Note>
 
           {report.source !== 'powerbody' && (
             <Note tone="info">
@@ -125,40 +104,7 @@ export function SupplierDiagnostics() {
             </Note>
           )}
 
-          <ul className="space-y-2">
-            {report.checks.map((check) => {
-              const tone = TONE[check.status]
-              return (
-                <li key={check.id}>
-                  <Card elevation={1} padding="tight">
-                    <div className="flex items-start gap-3">
-                      <Icon name={tone.icon} size={16} className="shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span
-                            className="text-sm font-bold"
-                            style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}
-                          >
-                            {check.title}
-                          </span>
-                          <Badge tone={tone.tone}>{tone.label}</Badge>
-                          {check.ms > 0 && (
-                            <span className="text-[11px] text-[var(--ink-3)]">{check.ms}ms</span>
-                          )}
-                        </div>
-                        <p className="text-xs leading-relaxed text-[var(--ink-2)]">{check.detail}</p>
-                        {check.evidence && (
-                          <p className="text-[11px] mt-1 break-words text-[var(--ink-3)]">
-                            {check.evidence}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                </li>
-              )
-            })}
-          </ul>
+          <CheckList checks={report.checks} />
 
           {/*
             The write path, kept apart from the list above and gated on a
