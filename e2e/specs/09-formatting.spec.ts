@@ -17,7 +17,7 @@ import { sellBundle } from '../support/bundles'
 
 /** Routes anybody can reach. */
 const PUBLIC_ROUTES: Array<{ path: string; name: string; ready?: string }> = [
-  { path: '/', name: 'the quiz hero', ready: 'Build your stack' },
+  { path: '/', name: 'the quiz hero', ready: 'what to take' },
   { path: '/shop', name: 'the shop', ready: 'Everything, à la carte' },
   { path: '/myhub', name: 'the My Hub gate', ready: 'Manage your stack' },
   { path: '/founderhub', name: 'the Founders Hub gate', ready: 'Founder sign-in' },

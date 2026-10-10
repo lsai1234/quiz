@@ -1,0 +1,572 @@
+/* ── Act 1 — the hero ──────────────────────────────────────────────────────────
+   `src/components/scroll/Act1Hero.tsx`. The front page, whose one job is to get
+   a visitor to tap the first answer. `docs/HERO.md` has the reasoning.
+
+   Built on the token set rather than the old palette, so it reads as the same
+   room as the hubs: the lit ground, solid controls with a specular top edge,
+   spring easing. Colour comes from tokens throughout; the only literal lengths
+   are the stage art's geometry, which is drawing rather than layout. */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--app-height, 100dvh);
+  background: var(--ground-base);
+  color: var(--ink-1);
+  font-family: var(--font-body);
+}
+
+/* The ground, scoped to the hero: the system's three blooms, vignette and
+   grain, plus one spotlight behind the bottle so the product is where the
+   light is. Absolute rather than fixed — the hero is one screen, and a fixed
+   layer would follow the visitor into the quiz's slide transition. */
+.hero-ground {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-spotlight {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: min(120vw, 760px);
+  aspect-ratio: 1.4;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    transparent 100%
+  );
+}
+
+/* ── Bar ─────────────────────────────────────────────────────────────────── */
+
+.hero-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--space-4) var(--gutter) 0;
+}
+
+.hero-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-weight: var(--weight-strong);
+  font-size: var(--text-lead);
+  letter-spacing: var(--tracking-title);
+}
+
+.hero-shop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--edge);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font-size: var(--text-body-sm);
+  font-weight: var(--weight-strong);
+  transition: color var(--duration-fast) var(--ease-settle), border-color var(--duration-fast) var(--ease-settle);
+}
+
+.hero-shop:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (hover: hover) {
+  .hero-shop:hover {
+    color: var(--ink-1);
+    border-color: var(--edge-strong);
+  }
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+.hero-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: var(--space-2) var(--gutter) var(--space-6);
+  text-align: center;
+}
+
+.hero-copy,
+.hero-ask {
+  width: 100%;
+}
+
+/* Wide screens get the product beside the words rather than above them: the
+   column that works on a phone leaves a desktop mostly empty and puts the
+   answers below the fold of a laptop. */
+@media (min-width: 1024px) {
+  .hero-main {
+    max-width: 72rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 28rem);
+    grid-template-areas:
+      'stage copy'
+      'stage ask';
+    align-content: center;
+    column-gap: var(--space-8);
+    text-align: left;
+  }
+  .hero-stage { grid-area: stage; }
+  .hero-copy { grid-area: copy; align-self: end; }
+  .hero-ask { grid-area: ask; align-self: start; }
+}
+
+/* ── Stage: the bottle on a charge pad, the stack bursting out of it ─────── */
+
+.hero-stage {
+  --spread: 1;
+  position: relative;
+  width: 100%;
+  /* Short phones keep the answers in view; tall ones get the moment. */
+  height: clamp(108px, 21svh, 200px);
+  container-type: size;
+  pointer-events: none;
+}
+
+/* On a wide screen the stage is tall and the column beside it is the copy, so
+   the capsules pull in rather than fly out over the words. */
+@media (min-width: 1024px) {
+  .hero-stage { --spread: 0.62; height: clamp(320px, 58svh, 520px); }
+}
+
+.hero-pad,
+.hero-pulse {
+  position: absolute;
+  left: 50%;
+  bottom: 2cqh;
+  width: 108cqh;
+  height: 17cqh;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.hero-pad {
+  background:
+    radial-gradient(closest-side, color-mix(in srgb, var(--accent) 34%, transparent), transparent 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--accent-line),
+    0 0 26px -4px var(--accent-glow);
+}
+
+.hero-pulse {
+  border: 1px solid var(--accent-line);
+  opacity: 0;
+  animation: hero-pulse 3.2s var(--ease-settle) 1.2s infinite;
+}
+
+@keyframes hero-pulse {
+  0%   { transform: translateX(-50%) scale(1); opacity: 0.9; }
+  100% { transform: translateX(-50%) scale(1.75); opacity: 0; }
+}
+
+.hero-bottle {
+  position: absolute;
+  left: 50%;
+  bottom: 8cqh;
+  height: 84cqh;
+  width: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6cqh 18cqh color-mix(in srgb, var(--accent) 30%, transparent));
+  animation:
+    hero-arrive 900ms var(--ease-spring) both,
+    hero-hover 6s ease-in-out 900ms infinite;
+}
+
+@keyframes hero-arrive {
+  from { transform: translateX(-50%) translateY(10cqh) scale(0.92); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes hero-hover {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(-4cqh); }
+}
+
+/* Each capsule is placed by its wrapper and floats on its image, so the
+   burst-out and the drift never fight over one `transform`. */
+.hero-capsule {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: var(--w);
+  transform: translate(calc(-50% + var(--x) * var(--spread)), calc(-50% + var(--y))) rotate(var(--r));
+  opacity: var(--o, 1);
+  animation: hero-burst 1100ms var(--ease-spring) var(--delay) both;
+}
+
+.hero-capsule img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 2cqh 5cqh color-mix(in srgb, var(--ground-base) 80%, transparent));
+  animation: hero-drift var(--drift) ease-in-out var(--delay) infinite;
+}
+
+/* Out of the bottle's mouth to their places — the stack being worked out. */
+@keyframes hero-burst {
+  from {
+    transform: translate(-50%, 0) rotate(0deg) scale(0.3);
+    opacity: 0;
+  }
+  to {
+    transform: translate(calc(-50% + var(--x) * var(--spread)), calc(-50% + var(--y))) rotate(var(--r));
+    opacity: var(--o, 1);
+  }
+}
+
+@keyframes hero-drift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-5cqh) rotate(4deg); }
+}
+
+/* Near ones are larger and sharp; far ones smaller, dimmer and soft. */
+.hero-capsule-1 { --x: -66cqh; --y: -22cqh; --r: -28deg; --w: 34cqh; --delay: 260ms; --drift: 6.2s; }
+.hero-capsule-2 { --x: 64cqh;  --y: -30cqh; --r: 22deg;  --w: 30cqh; --delay: 320ms; --drift: 7.1s; --o: 0.9; }
+.hero-capsule-3 { --x: -78cqh; --y: 22cqh;  --r: 14deg;  --w: 30cqh; --delay: 380ms; --drift: 5.6s; }
+.hero-capsule-4 { --x: 76cqh;  --y: 18cqh;  --r: -16deg; --w: 32cqh; --delay: 440ms; --drift: 6.7s; }
+.hero-capsule-5 { --x: 30cqh;  --y: -40cqh; --r: 48deg;  --w: 22cqh; --delay: 500ms; --drift: 7.9s; --o: 0.7; }
+.hero-capsule-5 img { filter: blur(0.6px); }
+
+/* ── Copy ────────────────────────────────────────────────────────────────── */
+
+.hero-title {
+  margin-top: var(--space-3);
+  font-family: var(--font-display);
+  font-weight: var(--weight-strong);
+  font-size: clamp(2.15rem, 9.6vw, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: var(--tracking-display);
+  text-wrap: balance;
+}
+
+.hero-title-accent {
+  display: block;
+  color: var(--accent);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.hero-lede {
+  margin: var(--space-3) auto 0;
+  max-width: 22rem;
+  color: var(--ink-2);
+  font-size: clamp(var(--text-body), 3.9vw, var(--text-lead));
+  line-height: var(--leading-snug);
+  text-wrap: pretty;
+}
+
+@media (min-width: 1024px) {
+  .hero-title { margin-top: 0; }
+  .hero-lede { margin-left: 0; max-width: 26rem; }
+}
+
+/* ── The first question ──────────────────────────────────────────────────── */
+
+.hero-ask {
+  margin-top: var(--space-5);
+}
+
+.hero-question {
+  font-family: var(--font-display);
+  font-weight: var(--weight-strong);
+  font-size: var(--text-lead);
+  letter-spacing: var(--tracking-title);
+  color: var(--ink-1);
+}
+
+.hero-goals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* A solid control with a lit top edge — the system's button language, at the
+   size of an answer. Picking one pours the charge across it before the quiz
+   takes over: the answer is seen to land. */
+.hero-goal {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-lg);
+  padding: var(--space-2) var(--space-6) var(--space-2) var(--space-2);
+  border-radius: var(--radius-row);
+  border: 1px solid var(--edge);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+  box-shadow: var(--inset-hairline), var(--shadow-card);
+  color: var(--ink-1);
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: var(--weight-strong);
+  line-height: 1.15;
+  letter-spacing: var(--tracking-title);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--duration-fast) var(--ease-settle),
+    border-color var(--duration-fast) var(--ease-settle),
+    opacity var(--duration-base) var(--ease-settle),
+    color var(--duration-fast) var(--ease-settle) 140ms,
+    box-shadow var(--duration-base) var(--ease-settle);
+}
+
+.hero-goal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-goal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--fill-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 380ms var(--ease-settle);
+}
+
+.hero-goal-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-chip);
+  background: var(--accent-fill);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--accent);
+  transition: background var(--duration-fast) var(--ease-settle), color var(--duration-fast) var(--ease-settle) 140ms;
+}
+
+.hero-goal-label {
+  flex: 1;
+  min-width: 0;
+  text-wrap: balance;
+}
+
+.hero-goal .hero-goal-tick {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  margin-top: -7px;
+  line-height: 0;
+  opacity: 0;
+  color: var(--ink-on-accent);
+}
+
+.hero-goal:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hero-goal:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .hero-goal:hover {
+    border-color: var(--accent-line);
+    box-shadow: var(--inset-hairline), var(--glow-accent);
+  }
+}
+
+.hero-goal[data-state='picked'] {
+  color: var(--ink-on-accent);
+  border-color: transparent;
+  box-shadow: var(--inset-highlight), var(--glow-accent-strong);
+}
+
+.hero-goal[data-state='picked']::before {
+  transform: scaleX(1);
+}
+
+.hero-goal[data-state='picked'] .hero-goal-icon {
+  background: color-mix(in srgb, var(--ink-on-accent) 14%, transparent);
+  box-shadow: none;
+  color: var(--ink-on-accent);
+}
+
+.hero-goal[data-state='picked'] .hero-goal-tick {
+  opacity: 1;
+  animation: check-pop 360ms var(--ease-spring) 180ms both;
+}
+
+.hero-goal[data-state='other'] {
+  opacity: 0.4;
+}
+
+.hero-hint {
+  margin-top: var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-body-sm);
+}
+
+.hero-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-md);
+  margin-top: var(--space-1);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-size: var(--text-body-sm);
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+.hero-more:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (hover: hover) {
+  .hero-more:hover { color: var(--accent-bright); }
+}
+
+/* The Amp Consult door, when the rollout offers it. */
+.hero-consult {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--accent-line);
+  background: linear-gradient(180deg, var(--accent-fill), var(--surface-1));
+  box-shadow: var(--inset-hairline);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-settle), transform var(--duration-fast) var(--ease-settle);
+}
+
+.hero-consult:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.hero-consult:active { transform: scale(0.99); }
+
+@media (hover: hover) {
+  .hero-consult:hover { border-color: var(--accent); }
+}
+
+.hero-consult-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-weight: var(--weight-strong);
+  font-size: var(--text-body);
+  color: var(--ink-1);
+}
+
+.hero-consult-sub {
+  margin-top: var(--space-1);
+  font-size: var(--text-body-sm);
+  color: var(--ink-2);
+  line-height: var(--leading-snug);
+}
+
+.hero-badge {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--fill-accent);
+  color: var(--ink-on-accent);
+  font-size: var(--text-micro);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+/* ── Trust ───────────────────────────────────────────────────────────────── */
+
+.hero-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-5);
+  color: var(--ink-2);
+  font-size: var(--text-body-sm);
+}
+
+.hero-trust li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.hero-trust svg {
+  color: var(--tone-positive);
+}
+
+@media (min-width: 1024px) {
+  .hero-trust { justify-content: flex-start; }
+}
+
+/* ── Entrance ────────────────────────────────────────────────────────────────
+   Copy rises in, then the answers one by one. Short, and never a gate: every
+   answer is tappable from the first frame, because the animation is on opacity
+   and transform only. */
+.hero-rise {
+  /* `backwards`, not `both`: once risen, the element's own opacity and
+     transform apply again — a held final keyframe would pin them, and the
+     press, the dimming of the answers not picked and the hover would all stop
+     working. */
+  animation: hero-rise 640ms var(--ease-settle) backwards;
+  animation-delay: calc(120ms + var(--i, 0) * 50ms);
+}
+
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Reduced motion: everything arrives where it ends up, and nothing drifts.
+   Applied both from the media query and from the hero's own prop, which tracks
+   a preference changed while the page is open. */
+@media (prefers-reduced-motion: reduce) {
+  .hero *,
+  .hero *::before,
+  .hero *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+.hero[data-reduced-motion='true'] *,
+.hero[data-reduced-motion='true'] *::before,
+.hero[data-reduced-motion='true'] *::after {
+  animation: none !important;
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
+.hero[data-reduced-motion='true'] .hero-pulse { display: none; }

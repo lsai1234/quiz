@@ -1,5 +1,5 @@
 import { emptyInterview } from '../types'
-import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '../interview'
+import { answerQuestion, openedFromHero, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '../interview'
 import { questionById } from '../bank'
 import { CONFIRMED, NOTED, addDriver, rankedDrivers } from '../drivers'
 
@@ -186,5 +186,20 @@ describe('editing one answer from the review screen', () => {
     expect(after.asked).toEqual(before.asked)
     expect(after.picked).toEqual(before.picked)
     expect(after.drivers).toEqual(before.drivers)
+  })
+})
+
+describe('a run opened from the hero', () => {
+  it('starts on the goals screen with the tapped goal already chosen', () => {
+    const s = openedFromHero(emptyInterview(10), 'wellbeing', ['sleep-better'])
+    expect(s.track).toBe('wellbeing')
+    expect(s.goals).toEqual(['sleep-better'])
+    expect(s.primaryGoal).toBe('sleep-better')
+    // Chosen, not answered: the goals screen is still the one on show.
+    expect(s.asked).toEqual([])
+  })
+
+  it('opens as an empty run when no track was chosen, so the chooser shows', () => {
+    expect(openedFromHero(emptyInterview(10), null, [])).toEqual(emptyInterview(10))
   })
 })

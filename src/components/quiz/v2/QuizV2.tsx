@@ -17,7 +17,7 @@ import {
 import { funnel } from '@/lib/analytics/quiz'
 import { quizFactForQuestion, type QuizFact } from '@/lib/quiz-sell'
 import { emptyInterview, type BankQuestion, type InterviewState } from '@/lib/quiz-v2/types'
-import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setPortions, setTrack, setTryOurs } from '@/lib/quiz-v2/interview'
+import { answerQuestion, openedFromHero, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setPortions, setTrack, setTryOurs } from '@/lib/quiz-v2/interview'
 import { endedEarly, planNext } from '@/lib/quiz-v2/planner'
 import { projectAnswers } from '@/lib/quiz-v2/project'
 import { questionById } from '@/lib/quiz-v2/bank'
@@ -198,13 +198,16 @@ interface Props {
 
 export function QuizV2({ onComplete, reducedMotion }: Props) {
   const { interview, setInterview, setAnswers, setIdentity, setStackLevel, setStackReady } = useQuizStore()
+  const heroTrack = useQuizStore((s) => s.answers.track)
+  const heroGoals = useQuizStore((s) => s.answers.goals)
   const { budget: budgetConfig, aiSteer } = useQuizArmState()
 
   // The interview lives in the store so a refresh resumes it. Seeded on first
-  // mount from whichever budget the founder has set for this track.
+  // mount from whichever budget the founder has set for this track, and from
+  // the goal tapped on the hero — which is the first answer, already given.
   const state: InterviewState = useMemo(
-    () => interview ?? emptyInterview(budgetConfig.performance),
-    [interview, budgetConfig.performance],
+    () => interview ?? openedFromHero(emptyInterview(budgetConfig.performance), heroTrack, heroGoals),
+    [interview, budgetConfig.performance, heroTrack, heroGoals],
   )
 
   const update = useCallback((next: InterviewState) => setInterview(next), [setInterview])

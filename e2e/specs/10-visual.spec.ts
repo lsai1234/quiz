@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { founderSessionViaApi, signUpViaApi } from '../support/accounts'
 import { openShop } from '../support/shop'
 import { sellBundle } from '../support/bundles'
+import { tapHeroGoal } from '../support/quiz'
 
 /**
  * Visual regression — the pass that catches what words cannot describe.
@@ -53,15 +54,7 @@ test.describe('the storefront', () => {
 
   test('the first question', async ({ page }) => {
     await page.goto('/')
-    const entry = page.getByRole('button', { name: /Performance \+ wellness/ })
-    await expect(entry).toBeVisible()
-    await expect
-      .poll(async () => {
-        if (await page.locator('h2').count()) return true
-        await entry.click({ timeout: 5_000 }).catch(() => {})
-        return (await page.locator('h2').count()) > 0
-      }, { timeout: 30_000 })
-      .toBe(true)
+    await tapHeroGoal(page, 'Build muscle')
     await settle(page)
     await expect(page).toHaveScreenshot('quiz-first-question.png', STILL)
   })

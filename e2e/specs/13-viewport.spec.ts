@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { startQuiz } from '../support/quiz'
+import { startQuiz, tapHeroGoal } from '../support/quiz'
 
 /**
  * The Continue button has to be on screen. All of it, on every shell, at every
@@ -69,16 +69,7 @@ test('v1: the CTA stays in frame as the window shrinks', async ({ page }) => {
 
 test('v2: the CTA stays in frame as the window shrinks', async ({ page }) => {
   await page.goto('/?quizArm=v2')
-  const track = page.getByRole('button', { name: /Performance \+ wellness/ })
-  await expect(track).toBeVisible()
-  await expect
-    .poll(async () => {
-      if (await page.getByRole('button', { name: 'More energy' }).count()) return true
-      await track.click({ timeout: 2_000 }).catch(() => {})
-      return false
-    }, { timeout: 20_000 })
-    .toBe(true)
-  await page.getByRole('button', { name: 'More energy' }).click()
+  await tapHeroGoal(page, 'More energy')
 
   for (const height of HEIGHTS) {
     await page.setViewportSize({ width: 390, height })

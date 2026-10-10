@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { tapHeroGoal } from '../support/quiz'
 
 /**
  * The adaptive interview (v2).
@@ -50,20 +51,10 @@ async function answerOne(page: Page, prefer?: string): Promise<string> {
 /** Open v2 and choose goals. */
 async function startV2(page: Page, goal = 'More energy') {
   await page.goto('/?quizArm=v2')
-  const track = page.getByRole('button', { name: /Performance \+ wellness/ })
-  await expect(track).toBeVisible()
-  // The page is server-rendered, so the button is clickable a moment before
-  // React attaches — press until the screen actually changes (same reasoning
-  // as the v1 helper).
-  await expect
-    .poll(async () => {
-      if (await page.getByRole('button', { name: goal }).count()) return true
-      await track.click({ timeout: 2000 }).catch(() => {})
-      return false
-    }, { timeout: 20_000 })
-    .toBe(true)
-
-  await page.getByRole('button', { name: goal }).click()
+  // The hero's goal is the interview's first answer: it opens on the goals
+  // screen with this one already chosen.
+  await tapHeroGoal(page, goal)
+  await expect(page.getByRole('button', { name: goal })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: /^Continue with/ }).click()
   await expect(heading(page)).toHaveText(/Anything we should factor in/)
 }
@@ -202,8 +193,8 @@ test.describe('when the AI steer fails', () => {
 test.describe('the experiment switch', () => {
   test('the homepage serves v1 while the experiment is off', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: /Performance \+ wellness/ }).click()
-    await expect(page.getByRole('button', { name: 'Build muscle' })).toBeVisible()
+    await tapHeroGoal(page, 'Build muscle')
+    await expect(page.getByRole('button', { name: 'Build muscle' })).toHaveAttribute('aria-pressed', 'true')
     // v1's goals step is followed by its own copy; v2's opening question is not
     // reachable on this arm.
     await expect(page.getByText('and they change based on what you say')).toHaveCount(0)
@@ -211,22 +202,13 @@ test.describe('the experiment switch', () => {
 
   test('?quizArm=v2 pins the new quiz without switching it on for anyone else', async ({ page }) => {
     await page.goto('/?quizArm=v2')
-    const track = page.getByRole('button', { name: /Performance \+ wellness/ })
-    // Same hydration race as the v1 helper guards against: the hero is
-    // server-rendered, so the card is clickable before React has attached and a
-    // single click can be swallowed.
-    await expect
-      .poll(async () => {
-        if (await page.getByRole('button', { name: 'More energy' }).count()) return true
-        await track.click({ timeout: 2000 }).catch(() => {})
-        return false
-      }, { timeout: 20_000 })
-      .toBe(true)
+    await tapHeroGoal(page, 'More energy')
 
     // v2's own line on its opening screen. v1 says "N quick questions".
     await expect(page.getByText('they change based on what you say')).toBeVisible()
 
-    await page.getByRole('button', { name: 'More energy' }).click()
+    // The hero's answer carried in: no second track chooser, the goal lit.
+    await expect(page.getByRole('button', { name: 'More energy' })).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: /^Continue with/ }).click()
     await expect(heading(page)).toHaveText(/Anything we should factor in/)
   })

@@ -33,31 +33,49 @@ export const QUIZ_NAME = 'Alex'
 
 export type Track = 'performance' | 'wellbeing'
 
-/** Act 1 — choose a track and enter the questions. */
-export async function startQuiz(page: Page, track: Track = 'performance'): Promise<void> {
-  await page.goto('/')
-  const entry = {
-    performance: /Performance \+ wellness/,
-    wellbeing: /Everyday wellness/,
-  }[track]
-
-  /* The hero is server-rendered, so the button is on screen and clickable a
-     good moment before React has attached its handler — a click that lands in
-     that window is swallowed silently and the page just sits there. Rather than
-     sleeping for a guessed interval, press it until the act actually changes. */
-  const button = page.getByRole('button', { name: entry })
-  const firstStep = page.getByRole('button', { name: /^Continue|^Pick at least/ })
+/**
+ * Act 1 — tap a goal on the hero and wait for the quiz to take over.
+ *
+ * The hero asks the quiz's first question itself, so this is a real answer:
+ * the goals screen opens with this goal already chosen.
+ *
+ * The hero is server-rendered, so a goal is on screen and clickable a good
+ * moment before React has attached its handler — a click that lands in that
+ * window is swallowed silently and the page just sits there. Rather than
+ * sleeping for a guessed interval, press it until the act actually changes.
+ * The quiz is the first thing on the page with an `h2`; the hero has none.
+ */
+export async function tapHeroGoal(page: Page, goal: string): Promise<void> {
+  /* The hero's own button, never the quiz's: the goals screen has a button with
+     the same name, and a retry that lands just after the quiz has mounted would
+     press that one and untick the very goal being chosen. */
+  const button = page.locator('button[data-goal]').filter({ hasText: goal })
   await expect(button).toBeVisible()
   await expect
     .poll(
       async () => {
-        if (await firstStep.count()) return true
-        await button.click({ timeout: 5_000 }).catch(() => {})
-        return (await firstStep.count()) > 0
+        if (await page.locator('h2').count()) return true
+        // Taken: the charge is pouring and the quiz is on its way.
+        const taken = (await button.getAttribute('data-state', { timeout: 500 }).catch(() => null)) === 'picked'
+        if (!taken) await button.click({ timeout: 2_000 }).catch(() => {})
+        return (await page.locator('h2').count()) > 0
       },
       { timeout: 30_000, intervals: [250, 500, 1000] },
     )
     .toBe(true)
+}
+
+/** The goal each track is entered with — one from each column of the hero. */
+export const HERO_ENTRY: Record<Track, string> = {
+  performance: 'Build muscle',
+  wellbeing: 'Sleep better',
+}
+
+/** Act 1 — enter the questions on a track, through the hero. */
+export async function startQuiz(page: Page, track: Track = 'performance'): Promise<void> {
+  await page.goto('/')
+  await tapHeroGoal(page, HERO_ENTRY[track])
+  await expect(page.getByRole('button', { name: /^Continue|^Pick at least/ })).toBeVisible()
 }
 
 /** The question currently on screen, or null once the questions are done. */
@@ -100,7 +118,11 @@ export async function answerStep(page: Page): Promise<boolean> {
   if (wanted && wanted.length) {
     for (const label of wanted) {
       const option = page.getByRole('button', { name: label, exact: false }).first()
-      if (await option.count()) await option.click()
+      if (!(await option.count())) continue
+      // Already chosen — the goal tapped on the hero arrives lit — and a second
+      // press would take it off again.
+      if ((await option.getAttribute('aria-pressed')) === 'true') continue
+      await option.click()
     }
   } else if (!wanted) {
     // Unmapped question — take the first real option so the walk continues.

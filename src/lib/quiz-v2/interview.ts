@@ -29,6 +29,23 @@ export function setGoals(state: InterviewState, goals: Goal[]): InterviewState {
   return { ...state, goals, primaryGoal: goals[0] ?? null }
 }
 
+/**
+ * A fresh run, opened from the front page.
+ *
+ * The hero asks the first question itself — which goal — and writes the answer
+ * where both quizzes can read it. v1 reads it in place; this is v2's half, so
+ * the interview opens on its goals screen with that goal already lit instead of
+ * asking for a track the visitor has just chosen. With no track chosen ("see
+ * every goal") the run opens exactly as an empty one does, on the chooser.
+ */
+export function openedFromHero(
+  state: InterviewState,
+  track: QuizTrack | null,
+  goals: Goal[],
+): InterviewState {
+  return track ? setGoals(setTrack(state, track), goals) : state
+}
+
 export function setForm(
   state: InterviewState,
   patch: Partial<InterviewState['form']>,

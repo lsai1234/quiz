@@ -110,26 +110,26 @@ describe('H11 the hero honours the rollout', () => {
 
   it('offers the quiz only by default, as the home page did before the consult', () => {
     render(<Act1Hero onEnterQuiz={jest.fn()} onEnterConsult={jest.fn()} reducedMotion />)
-    expect(screen.getByText('Everyday wellness')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sleep better' })).toBeInTheDocument()
     expect(screen.queryByTestId('enter-consult')).toBeNull()
-    expect(screen.getByText('What’s your goal?')).toBeInTheDocument()
+    expect(screen.getByText('What do you want to work on?')).toBeInTheDocument()
   })
 
   it('offers both when the rollout says so', () => {
     hero('both')
-    expect(screen.getByText('Everyday wellness')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sleep better' })).toBeInTheDocument()
     expect(screen.getByTestId('enter-consult')).toBeInTheDocument()
   })
 
   it('hides the consult when switched off', () => {
     hero('quiz-only')
     expect(screen.queryByTestId('enter-consult')).toBeNull()
-    expect(screen.getByText('Performance + wellness')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Build muscle' })).toBeInTheDocument()
   })
 
   it('shows the consult alone on its side of a split', () => {
     hero('consult-only')
     expect(screen.getByTestId('enter-consult')).toBeInTheDocument()
-    expect(screen.queryByText('Everyday wellness')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Sleep better' })).toBeNull()
   })
 })
