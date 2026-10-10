@@ -336,6 +336,92 @@ export function productRemoved(ctx: RemovedContext, brand: BrandContext = {}): R
   }
 }
 
+// ─── An item on an order could not be sent as bought ──────────────────────────
+
+export interface OrderItemUpdateContext {
+  /**
+   *   removed     — taken off the order and refunded.
+   *   swapped     — sent as the closest match instead.
+   *   backordered — the rest went now; this follows separately when it is back.
+   */
+  kind: 'removed' | 'swapped' | 'backordered'
+  reference: string
+  firstName: string | null
+  productTitle: string
+  /** `swapped` only. */
+  replacementTitle?: string
+  /** What was put back on their card (£), when anything was. */
+  refund?: number
+  /** True when other items on the same order are still on their way. */
+  restOnItsWay: boolean
+  accountUrl: string | null
+}
+
+/**
+ * One-off orders: an item sold out at the supplier between the customer paying
+ * and the order being sent, and a founder decided what to do about it.
+ *
+ * Written to the same rule as the plan emails — the decision is made and acted
+ * on before we write, the email says what happened — with one difference that
+ * matters for a one-off: there is no hub setting they agreed to in advance, so
+ * every version offers a refund in a reply. Nothing here asks them to act for
+ * their order to keep moving.
+ */
+export function orderItemUpdate(ctx: OrderItemUpdateContext, brand: BrandContext = {}): RenderedEmail {
+  const rest = ctx.restOnItsWay ? 'Everything else in your order is on its way as normal.' : null
+  const refundLine = (amount: number) =>
+    `We've refunded ${formatGBP(amount)} to the card you paid with — it usually shows within 5 to 10 working days.`
+
+  let heading: string
+  let paragraphs: string[]
+  let footnote: string
+
+  if (ctx.kind === 'swapped') {
+    heading = 'A swap in your order'
+    paragraphs = [
+      `Sorry — ${ctx.productTitle} sold out at our supplier before we could send your order, so we've sent ${ctx.replacementTitle} in its place: the closest match we have.`,
+      ...(ctx.refund && ctx.refund > 0 ? [`It costs a little less, so ${refundLine(ctx.refund).replace(/^We've/, "we've")}`] : []),
+      ...(rest ? [rest] : []),
+      ALLERGEN_CHECK_SENTENCE,
+    ]
+    footnote = "Rather not have the swap? Reply to this email and we'll refund it."
+  } else if (ctx.kind === 'removed') {
+    heading = 'One item could not be sent'
+    paragraphs = [
+      `Sorry — ${ctx.productTitle} sold out at our supplier before we could send your order, so we've taken it off.`,
+      ...(ctx.refund && ctx.refund > 0 ? [refundLine(ctx.refund)] : []),
+      ...(rest ? [rest] : []),
+    ]
+    footnote = "Want something in its place? Reply to this email and we'll sort it out."
+  } else {
+    heading = ctx.restOnItsWay ? 'Part of your order will follow' : 'Your order is waiting on stock'
+    paragraphs = [
+      ctx.restOnItsWay
+        ? `${ctx.productTitle} is out of stock at our supplier for the moment, so we've sent the rest of your order now and ${ctx.productTitle} will follow separately as soon as it's back — at no extra cost to you.`
+        : `${ctx.productTitle} is out of stock at our supplier for the moment, so your order will go out as soon as it's back. You don't need to do anything.`,
+    ]
+    footnote = "Rather not wait? Reply to this email and we'll refund it straight away."
+  }
+
+  return {
+    subject:
+      ctx.kind === 'backordered'
+        ? `${ctx.productTitle} will follow shortly — ${ctx.reference}`
+        : `An update on your order ${ctx.reference}`,
+    ...layout(
+      ctx.firstName ? `${heading}, ${ctx.firstName}` : heading,
+      {
+        paragraphs,
+        ...(ctx.accountUrl ? { cta: { label: 'See your order', url: ctx.accountUrl } } : {}),
+        // A customer whose order just went wrong is not one to sell to.
+        marketing: false,
+        footnote,
+      },
+      brand,
+    ),
+  }
+}
+
 // ─── Price change notice ──────────────────────────────────────────────────────
 
 export interface PriceChangeContext {

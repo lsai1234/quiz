@@ -76,3 +76,53 @@ export function getOrderingSource(): OrderingMode {
 export function isLiveOrdering(): boolean {
   return getOrderingSource() === 'live'
 }
+
+// ── Automatic sending ─────────────────────────────────────────────────────────
+//
+// Whether a paid order goes to PowerBody by itself, with no founder pressing
+// Send. A separate switch from the one above on purpose: "sends are real" and
+// "sends happen without me" are two decisions, and the second only means
+// anything once the first is made — automatic sending is never active while
+// ordering is simulated. What it will and will not send is `lib/orders/auto-send`.
+//
+// Runtime override set from Settings → Supplier, persisted and hydrated by
+// `syncPortalRuntime()`. Env fallback: `SUPPLIER_AUTO_SEND=on`. Default off.
+
+let _autoSendOverride: boolean | null = null
+let _autoSendSince: string | null = null
+
+/**
+ * `since` is when it was switched on. The daily sweep only picks up orders paid
+ * after that — switching it on must not suddenly send a backlog nobody has
+ * looked at.
+ */
+export function setAutoSendOverride(on: boolean | null, since: string | null = null): void {
+  _autoSendOverride = on
+  _autoSendSince = since
+}
+
+/** When automatic sending was switched on, if the hub recorded it. */
+export function getAutoSendSince(): string | null {
+  return _autoSendSince
+}
+
+/** What was chosen, before the ordering switch is taken into account. */
+export function getAutoSendSetting(): boolean {
+  if (_autoSendOverride !== null) return _autoSendOverride
+  const raw = (process.env.SUPPLIER_AUTO_SEND ?? '').trim().toLowerCase()
+  return raw === 'on' || raw === 'true' || raw === '1'
+}
+
+/** Why automatic sending is chosen but not happening, or null. */
+export function autoSendBlockedReason(): string | null {
+  if (!getAutoSendSetting()) return null
+  if (getOrderingSource() !== 'live') {
+    return 'Order sending is set to simulate, so there is nothing real to send automatically. Switch it to live above.'
+  }
+  return null
+}
+
+/** True when a paid order should go to PowerBody without anyone pressing Send. */
+export function isAutoSendActive(): boolean {
+  return getAutoSendSetting() && getOrderingSource() === 'live'
+}

@@ -1,4 +1,5 @@
 import {
+  orderItemUpdate,
   priceChangeNotice,
   productRemoved,
   productSubstituted,
@@ -214,5 +215,34 @@ describe('every template', () => {
     const email = substituted({ replacementTitle: '<script>alert(1)</script>' })
     expect(email.html).not.toContain('<script>')
     expect(email.html).toContain('&lt;script&gt;')
+  })
+})
+
+describe('orderItemUpdate — an item that sold out after they paid', () => {
+  const base = { reference: 'CHRGD-9GPNM1DN', firstName: 'Charlie', productTitle: 'Vitamin D3 + K2', accountUrl: null }
+
+  it('removed: says what came off, what was refunded, and that the rest is coming', () => {
+    const email = orderItemUpdate({ ...base, kind: 'removed', refund: 8.27, restOnItsWay: true })
+    expect(email.subject).toBe('An update on your order CHRGD-9GPNM1DN')
+    expect(email.text).toMatch(/Vitamin D3 \+ K2 sold out at our supplier/)
+    expect(email.text).toMatch(/refunded £8\.27/)
+    expect(email.text).toMatch(/Everything else in your order is on its way/)
+  })
+
+  it('swapped: names both products, carries the allergen check, and offers a refund by reply', () => {
+    const email = orderItemUpdate({ ...base, kind: 'swapped', replacementTitle: 'Vegan D3', refund: 0.77, restOnItsWay: true })
+    expect(email.text).toMatch(/we've sent Vegan D3 in its place/)
+    expect(email.text).toMatch(/It costs a little less, so we've refunded £0\.77/)
+    expect(email.text).toContain(ALLERGEN_CHECK_SENTENCE)
+    expect(email.text).toMatch(/Reply to this email and we'll refund it/)
+  })
+
+  it('back-ordered: the rest now, this later, at no cost — or the whole order waits', () => {
+    expect(orderItemUpdate({ ...base, kind: 'backordered', restOnItsWay: true }).text).toMatch(
+      /sent the rest of your order now and Vitamin D3 \+ K2 will follow separately/,
+    )
+    const waits = orderItemUpdate({ ...base, kind: 'backordered', restOnItsWay: false })
+    expect(waits.subject).toBe('Vitamin D3 + K2 will follow shortly — CHRGD-9GPNM1DN')
+    expect(waits.text).toMatch(/your order will go out as soon as it's back/)
   })
 })

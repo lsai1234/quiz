@@ -67,6 +67,20 @@ export interface SupplierAttempt {
   error: string | null
 }
 
+/** What automatic sending decided about one order. */
+export interface AutoSendRecord {
+  at: string
+  /**
+   *   sending — claimed, the send is in flight (or died mid-way; the order's
+   *             own status says which).
+   *   sent    — PowerBody accepted it.
+   *   held    — not sent, and why is in `reasons`; a founder decides.
+   *   failed  — sent, and PowerBody refused it.
+   */
+  outcome: 'sending' | 'sent' | 'held' | 'failed'
+  reasons: string[]
+}
+
 /** An audit entry appended on every meaningful transition. */
 export interface OrderEvent {
   at: string
@@ -200,6 +214,29 @@ export interface Order {
    * diagnosis reads it. Absent until the first send after it existed.
    */
   lastSupplierAttempt?: SupplierAttempt | null
+  /**
+   * What automatic sending did with this order. Set once, which is what makes
+   * it safe for both the payment webhook and the daily sweep to try: whichever
+   * gets there second sees the record and leaves the order alone. See
+   * `lib/orders/auto-send`.
+   */
+  autoSend?: AutoSendRecord | null
+  /**
+   * The order this one was split off — the out-of-stock line taken out of the
+   * original so the rest could ship. Shares the original's payment, so a refund
+   * here is for this order's `total`, never the whole payment.
+   */
+  splitFrom?: string | null
+  /** Orders split off this one. */
+  splitInto?: string[]
+  /** Set on an order split off to wait for its item to come back in stock. */
+  backorder?: { sku: string; title: string; since: string } | null
+  /**
+   * Money already given back for lines taken off this order (£). `total` is
+   * what the order is worth NOW; this is what came off it — so a later full
+   * refund refunds `total`, not the original payment.
+   */
+  refundedAmount?: number
   trackingNumber: string | null
   /**
    * The partner code this order came in on, normalised (`SARAH20`), or absent.

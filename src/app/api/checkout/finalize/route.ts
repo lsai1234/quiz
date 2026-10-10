@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { CheckoutRejected, PaymentStartFailed, finalizeCheckout } from '@/lib/checkout/finalize'
+import { CheckoutRejected, PaymentStartFailed, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
 import { reportError } from '@/lib/monitoring/report'
@@ -52,6 +52,10 @@ export async function POST(req: Request) {
         { error: err.message, code: err.code, versions: err.versions },
         { status: 400 },
       )
+    }
+    // Something in the plan sold out. Theirs to fix — swap it — not ours.
+    if (err instanceof StockUnavailable) {
+      return NextResponse.json({ error: err.message, unavailable: err.unavailable }, { status: 409 })
     }
     // Anything else — a Stripe call that failed, a write that didn't land — is
     // ours. Logged with the member's id so it can be traced, and answered with

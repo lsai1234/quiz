@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getHubUser } from '@/lib/auth/session'
 import { kvGet, kvDelete } from '@/lib/db/kv'
-import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX } from '@/lib/checkout/finalize'
+import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, StockUnavailable } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
 import { getProvider } from '@/lib/auth/providers'
@@ -61,6 +61,12 @@ export async function GET(req: Request) {
       // than landing on a hub with no plan and no explanation.
       console.warn('[checkout/continue] consent rejected:', err.message)
       return NextResponse.redirect(`${origin}/?checkout=consent-required`)
+    }
+    if (err instanceof StockUnavailable) {
+      // Nothing was saved or charged. Back to the start rather than a hub with
+      // no plan in it, which is where the fall-through below would land them.
+      console.warn('[checkout/continue] plan has sold-out items:', err.message)
+      return NextResponse.redirect(`${origin}/?checkout=sold-out`)
     }
     console.error('[checkout/continue] finalize failed:', err)
   }

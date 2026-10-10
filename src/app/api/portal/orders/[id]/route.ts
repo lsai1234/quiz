@@ -40,7 +40,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  * POST /api/portal/orders/[id]  Body: { action, note? }
  *
  * action ∈ approve | hold | reject | return | submit | sync | refund | cancel |
- * address | diagnose | delete-check | delete.
+ * address | diagnose | line-options | line-swap | line-remove | line-backorder |
+ * delete-check | delete.
  *
  * The first four are the fulfilment review; `submit` is the only one that talks
  * to PowerBody and it requires an approval first (enforced in the orders domain,
@@ -52,7 +53,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
   const { id } = await params
-  let body: { action?: string; note?: string; address?: SupplierAddress }
+  let body: {
+    action?: string
+    note?: string
+    address?: SupplierAddress
+    /** Line actions: which line, and the SKU the screen showed on it. */
+    line?: number
+    sku?: string | null
+    /** `line-swap`: the replacement. */
+    productId?: string
+    variantId?: string
+    /** Line actions: email the customer. Default true. */
+    notify?: boolean
+  }
   try {
     body = await req.json()
   } catch {
@@ -121,12 +134,66 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const existing = await getOrder(id)
         if (!existing) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
         // Issue the Stripe refund when we're live and have a payment to refund.
+        // An order that shares its payment (split off another) or has already
+        // had an item refunded refunds what it is worth now, not the payment:
+        // the payment also paid for goods elsewhere, or was partly given back.
+        const { refundAmountFor } = await import('@/lib/orders/line-changes')
+        const amount = refundAmountFor(existing)
         if (getPaymentSource() === 'stripe' && existing.stripePaymentIntentId) {
-          const { refundPayment } = await import('@/lib/payments/stripe')
-          await refundPayment(existing.stripePaymentIntentId)
+          if (amount === null) {
+            const { refundPayment } = await import('@/lib/payments/stripe')
+            await refundPayment(existing.stripePaymentIntentId)
+          } else {
+            const { refundPaymentAmount } = await import('@/lib/payments/stripe')
+            await refundPaymentAmount(existing.stripePaymentIntentId, amount, {
+              idempotencyKey: `order-refund:${existing.id}`,
+              reason: `Refund of ${existing.id}`,
+            })
+          }
         }
-        const order = await refundOrder(id, 'Refunded from Founders Hub')
+        const order = await refundOrder(
+          id,
+          amount === null ? 'Refunded from Founders Hub' : `Refunded £${amount.toFixed(2)} from Founders Hub`,
+        )
         return NextResponse.json({ ok: true, order })
+      }
+
+      /*
+        One item that cannot be sent as bought — see `lib/orders/line-changes`.
+        `line-options` is read-only (live stock and replacements); the other
+        three change the order, may move money, and email the customer unless
+        `notify` is false.
+      */
+      case 'line-options': {
+        const { lineOptions } = await import('@/lib/orders/line-changes')
+        return NextResponse.json({ ok: true, options: await lineOptions(id, Number(body.line)) })
+      }
+      case 'line-swap': {
+        if (!body.productId || !body.variantId) {
+          return NextResponse.json({ error: 'productId and variantId are required' }, { status: 400 })
+        }
+        const { swapLine } = await import('@/lib/orders/line-changes')
+        const order = await swapLine(
+          id,
+          Number(body.line),
+          body.sku ?? null,
+          { productId: body.productId, variantId: body.variantId },
+          { by, notify: body.notify !== false },
+        )
+        return NextResponse.json({ ok: true, order })
+      }
+      case 'line-remove': {
+        const { removeLine } = await import('@/lib/orders/line-changes')
+        const order = await removeLine(id, Number(body.line), body.sku ?? null, { by, notify: body.notify !== false })
+        return NextResponse.json({ ok: true, order })
+      }
+      case 'line-backorder': {
+        const { backorderLine } = await import('@/lib/orders/line-changes')
+        const { order, backorder } = await backorderLine(id, Number(body.line), body.sku ?? null, {
+          by,
+          notify: body.notify !== false,
+        })
+        return NextResponse.json({ ok: true, order, backorderId: backorder.id })
       }
       /*
         What deleting this order would do, and whether it may be done at all.
@@ -160,7 +227,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       default:
         return NextResponse.json(
-          { error: 'action must be approve | hold | reject | return | submit | sync | refund | cancel | address | diagnose' },
+          {
+            error:
+              'action must be approve | hold | reject | return | submit | sync | refund | cancel | address | diagnose | line-options | line-swap | line-remove | line-backorder',
+          },
           { status: 400 },
         )
     }

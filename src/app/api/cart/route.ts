@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
+import { runAfterResponse } from '@/lib/after-response'
 import { getPaymentSource } from '@/lib/payments'
+import { checkLiveStock } from '@/lib/supplier/stock-check'
+import { rememberLiveStock } from '@/lib/supplier/sync'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { getHubUser } from '@/lib/auth/session'
 import { getSubscription } from '@/lib/db/hub-data'
@@ -54,6 +57,77 @@ const round = (n: number) => Math.round(n * 100) / 100
 
 function originFrom(req: Request): string {
   return process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
+}
+
+/** What a basket line is called, the way the customer saw it. */
+function lineTitle(m: { product: CatalogueProduct; variant: CatalogueVariant }): string {
+  const variant = m.variant.flavour || m.variant.size
+  return variant ? `${m.product.title} (${variant})` : m.product.title
+}
+
+interface UnavailableLine {
+  variantId: string
+  sku: string | null
+  title: string
+  /** What PowerBody hold, when they said. */
+  stock: number | null
+}
+
+/**
+ * The basket lines that cannot be sold right now: sold out in the catalogue, or
+ * short at PowerBody when asked live.
+ */
+async function unavailableLines(
+  matched: { product: CatalogueProduct; variant: CatalogueVariant; quantity: number }[],
+): Promise<UnavailableLine[]> {
+  const out: UnavailableLine[] = []
+  for (const m of matched) {
+    if (!m.variant.available) {
+      out.push({ variantId: m.variant.id, sku: m.variant.sku ?? null, title: lineTitle(m), stock: m.variant.inventory ?? 0 })
+    }
+  }
+
+  const live = await checkLiveStock(
+    matched
+      .filter((m) => m.variant.available && m.variant.sku)
+      .map((m) => ({
+        sku: m.variant.sku!,
+        quantity: m.quantity,
+        title: lineTitle(m),
+        supplierProductId: m.product.supplierProductId ?? null,
+      })),
+    { deadlineMs: checkoutStockDeadlineMs() },
+  ).catch(() => null)
+  if (!live) return out
+
+  // Keep what PowerBody said, after the response: the shop stops offering
+  // what just sold out without this customer waiting on the write.
+  if (live.live.length > 0) await runAfterResponse('cart stock', () => rememberLiveStock(live.live))
+
+  for (const shortfall of live.shortfalls) {
+    const m = matched.find((x) => x.variant.sku === shortfall.sku)
+    if (!m) continue
+    out.push({ variantId: m.variant.id, sku: shortfall.sku, title: lineTitle(m), stock: shortfall.stock })
+  }
+  return out
+}
+
+function checkoutStockDeadlineMs(): number {
+  const raw = Number.parseInt(process.env.CHECKOUT_STOCK_DEADLINE_MS ?? '', 10)
+  return Number.isFinite(raw) && raw > 0 ? raw : 5_000
+}
+
+/** The sentence, written for the screen the customer is looking at. */
+function soldOutMessage(lines: UnavailableLine[], channel: OrderChannel): string {
+  const fix = channel === 'quiz' ? 'Swap it in your stack' : 'Take it out of your basket'
+  const short = lines.find((l) => (l.stock ?? 0) > 0)
+  if (lines.length === 1) {
+    return short
+      ? `Sorry — there are only ${short.stock} of ${short.title} left. Lower the quantity and try again.`
+      : `Sorry — ${lines[0].title} has just sold out. ${fix} and try again — you have not been charged.`
+  }
+  const names = lines.map((l) => l.title).join(', ')
+  return `Sorry — some of this has just sold out: ${names}. ${channel === 'quiz' ? 'Swap them in your stack' : 'Take them out of your basket'} and try again — you have not been charged.`
 }
 
 export async function POST(req: Request) {
@@ -112,6 +186,28 @@ export async function POST(req: Request) {
   // order that was never going to exist.
   if (matched.length === 0) {
     return NextResponse.json({ error: 'None of the basket lines could be matched to a product.' }, { status: 400 })
+  }
+
+  /**
+   * Stock, checked HERE — before a code is claimed and before Stripe is asked
+   * for anything.
+   *
+   * The screens grey out a sold-out variant, but only from the catalogue's own
+   * flag, which is as old as the last nightly sync and was never refreshed at
+   * all for products past the end of PowerBody's feed. So the server asks
+   * PowerBody directly about exactly what is in this basket. An order taken for
+   * something that has sold out is a refund and an apology later; a sentence
+   * now is neither. See `lib/supplier/stock-check`.
+   *
+   * Fails OPEN: if PowerBody are slow, the catalogue's word stands and the sale
+   * goes ahead. A rare miss is caught before sending, on the order page.
+   */
+  const unavailable = await unavailableLines(matched)
+  if (unavailable.length > 0) {
+    return NextResponse.json(
+      { error: soldOutMessage(unavailable, channelFrom(lines)), unavailable },
+      { status: 409 },
+    )
   }
 
   const user = await getHubUser().catch(() => null)

@@ -744,6 +744,32 @@ export async function refundPayment(paymentIntentId: string): Promise<void> {
 }
 
 /**
+ * Refund PART of one payment — an item taken off an order, the difference on a
+ * cheaper swap, or an order split off another that shares its payment.
+ *
+ * `idempotencyKey` must identify the THING being refunded (the order and the
+ * line), not the attempt: a founder pressing twice on a slow connection must
+ * not pay out twice.
+ */
+export async function refundPaymentAmount(
+  paymentIntentId: string,
+  amount: number,
+  opts: { idempotencyKey: string; reason?: string },
+): Promise<void> {
+  const pence = Math.round(amount * 100)
+  if (pence <= 0) return
+  const stripe = getStripeClient()
+  await stripe.refunds.create(
+    {
+      payment_intent: paymentIntentId,
+      amount: pence,
+      metadata: opts.reason ? { reason: opts.reason.slice(0, 450) } : undefined,
+    },
+    { idempotencyKey: opts.idempotencyKey },
+  )
+}
+
+/**
  * Refund a set amount across the payments a member actually made, newest first.
  *
  * A returns refund is rarely one whole payment: it is a share of everything they

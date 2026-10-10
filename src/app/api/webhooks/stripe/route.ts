@@ -8,6 +8,13 @@ import { syncPortalRuntime } from '@/lib/portal/store'
 export const dynamic = 'force-dynamic'
 
 /**
+ * Room for the work that runs after Stripe has had its answer: automatic
+ * sending checks stock with PowerBody and places the order (`lib/orders/
+ * auto-send`), which can take longer than Stripe will wait for a reply.
+ */
+export const maxDuration = 60
+
+/**
  * POST /api/webhooks/stripe
  * Verifies the signature against the signing secret of the *selected* Stripe
  * environment (see `lib/payments/keys.ts`), then dispatches the event. Raw body

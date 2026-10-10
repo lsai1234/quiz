@@ -301,7 +301,7 @@ function itemChecks(order: Order, found: Map<string, SupplierProduct>, error: st
           : {
               ...base,
               status: 'fail',
-              detail: `PowerBody have no product with this code on your account. They cannot fill a line they do not sell — replace it with another product, or remove it and refund the difference.`,
+              detail: `PowerBody have no product with this code on your account. They cannot fill a line they do not sell — press Change on this item below to swap it or take it off and refund it.`,
             }
       }
 
@@ -310,7 +310,7 @@ function itemChecks(order: Order, found: Map<string, SupplierProduct>, error: st
         return {
           ...base,
           status: 'fail',
-          detail: 'PowerBody have stopped selling this (disabled or archived), though some stock still shows. They will not ship it — swap it for another product.',
+          detail: 'PowerBody have stopped selling this (disabled or archived), though some stock still shows. They will not ship it — press Change on this item below to swap it or take it off and refund it.',
           evidence,
         }
       }
@@ -320,8 +320,8 @@ function itemChecks(order: Order, found: Map<string, SupplierProduct>, error: st
           status: 'fail',
           detail:
             product.stock <= 0
-              ? 'Out of stock at PowerBody. An order with a line they cannot fill is refused — wait for it to come back, or swap it.'
-              : `Only ${product.stock} in stock at PowerBody and this order needs ${line.quantity}.`,
+              ? 'Out of stock at PowerBody, and an order with a line they cannot fill is refused. Press Change on this item below: swap it, take it off and refund it, or send the rest now and this later.'
+              : `Only ${product.stock} in stock at PowerBody and this order needs ${line.quantity}. Press Change on this item below to sort it.`,
           evidence,
         }
       }

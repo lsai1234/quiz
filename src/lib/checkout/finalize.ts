@@ -162,6 +162,69 @@ export interface FinalizeOptions {
   userAgent?: string | null
 }
 
+/**
+ * Something in the plan has sold out. Thrown before anything is stored or
+ * charged; the routes answer it with the sentence and the list.
+ */
+export class StockUnavailable extends Error {
+  constructor(
+    message: string,
+    readonly unavailable: { productId: string; title: string; sku: string | null }[],
+  ) {
+    super(message)
+    this.name = 'StockUnavailable'
+  }
+}
+
+/**
+ * Refuse a plan whose first box cannot be sent.
+ *
+ * Catalogue flag first (free), then PowerBody asked live about the rest. Lines
+ * whose product is not in the catalogue are left to the checks that already
+ * handle them; this only ever answers "is it in stock?".
+ */
+export async function assertPlanInStock(sub: MemberSubscription): Promise<void> {
+  const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
+  const { skuForLine } = await import('@/lib/changes/detect')
+  const { checkLiveStock } = await import('@/lib/supplier/stock-check')
+  const { products } = await getResolvedCatalogue()
+
+  const unavailable: StockUnavailable['unavailable'] = []
+  const toCheck: { productId: string; title: string; sku: string; quantity: number; supplierProductId: string | null }[] = []
+  for (const line of sub.lines ?? []) {
+    const product = products.find((p) => p.id === line.productId)
+    if (!product) continue
+    const sku = skuForLine(line, products)
+    const variant = product.variants.find((v) => v.sku === sku) ?? null
+    const title = line.variantTitle ? `${line.productTitle} (${line.variantTitle})` : line.productTitle
+    if (variant && !variant.available) {
+      unavailable.push({ productId: line.productId, title, sku })
+    } else if (sku) {
+      toCheck.push({ productId: line.productId, title, sku, quantity: line.quantity, supplierProductId: product.supplierProductId ?? null })
+    }
+  }
+
+  const live = await checkLiveStock(toCheck, { deadlineMs: 5_000 }).catch(() => null)
+  for (const shortfall of live?.shortfalls ?? []) {
+    const line = toCheck.find((l) => l.sku === shortfall.sku)
+    if (line) unavailable.push({ productId: line.productId, title: line.title, sku: line.sku })
+  }
+  if (live && live.live.length > 0) {
+    const { rememberLiveStock } = await import('@/lib/supplier/sync')
+    const { runAfterResponse } = await import('@/lib/after-response')
+    await runAfterResponse('plan stock', () => rememberLiveStock(live.live))
+  }
+
+  if (unavailable.length === 0) return
+  const names = unavailable.map((u) => u.title).join(', ')
+  throw new StockUnavailable(
+    unavailable.length === 1
+      ? `Sorry — ${names} has just sold out. Swap it in your plan and try again — you have not been charged.`
+      : `Sorry — some of your plan has just sold out: ${names}. Swap them and try again — you have not been charged.`,
+    unavailable,
+  )
+}
+
 export async function finalizeCheckout(
   userId: string,
   email: string | null,
@@ -207,6 +270,12 @@ export async function finalizeCheckout(
   if (redemption && !redemption.ok) {
     console.warn(`[finalizeCheckout] partner code refused: ${redemption.reason}`)
   }
+
+  // 3b. Stock, before anything is stored or charged. The first box ships every
+  //     line, so a plan built on something that has sold out would start with a
+  //     box we cannot send. Fails open, like the shop: PowerBody being slow is
+  //     not a reason to turn a member away.
+  await assertPlanInStock(payload.subscription)
 
   // 4. Store the member's bundle + quiz answers on their account, banking the
   //    first-month discount they revealed as we go.

@@ -8,6 +8,7 @@ interface State {
   mode: 'simulate' | 'live'
   effective: 'simulate' | 'live'
   blockedReason: string | null
+  autoSend?: { on: boolean; active: boolean; blockedReason: string | null }
 }
 
 const OPTIONS = [
@@ -55,6 +56,22 @@ export function OrderSendingToggle() {
     } finally {
       setSaving(false)
       setConfirming(false)
+    }
+  }
+
+  const [confirmingAuto, setConfirmingAuto] = useState(false)
+  async function setAutoSend(on: boolean) {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/portal/ordering-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoSend: on }),
+      })
+      if (res.ok) setData(await res.json())
+    } finally {
+      setSaving(false)
+      setConfirmingAuto(false)
     }
   }
 
@@ -117,6 +134,58 @@ export function OrderSendingToggle() {
               Cancel
             </Button>
           </div>
+        </Card>
+      )}
+
+      {/*
+        Automatic sending. Its own card, under the live switch, because it only
+        means anything once sends are real — and it says so when they are not.
+      */}
+      {data.autoSend && (
+        <Card padding="tight" tone={data.autoSend.active ? 'attention' : undefined}>
+          <div className="flex items-start justify-between flex-wrap" style={{ gap: 'var(--space-3)' }}>
+            <div className="min-w-0 flex-1">
+              <p style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                Send paid orders automatically
+              </p>
+              <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+                The moment payment is confirmed, an order goes to PowerBody with nobody pressing Send — but only a
+                clean one: every item checked in stock at PowerBody, an address they deliver to, and a phone or email for
+                the courier. Anything else stays in the review queue with the reason on it, and your phone is told. Free
+                orders always wait for you.
+              </p>
+              {data.autoSend.blockedReason && (
+                <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)', marginTop: 'var(--space-2)' }}>
+                  <strong>On, but not sending.</strong> {data.autoSend.blockedReason}
+                </p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant={data.autoSend.on ? 'secondary' : 'primary'}
+              loading={saving}
+              aria-pressed={data.autoSend.on}
+              onClick={() => (data.autoSend!.on ? setAutoSend(false) : setConfirmingAuto(true))}
+            >
+              {data.autoSend.on ? 'Turn off' : 'Turn on'}
+            </Button>
+          </div>
+          {confirmingAuto && (
+            <div className="flex flex-col" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+              <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--tone-attention)' }}>
+                <strong>Real orders, unattended.</strong> Paid orders that pass every check will be placed with PowerBody
+                without you seeing them first. Orders already waiting stay with you — only orders paid from now on are sent.
+              </p>
+              <div className="flex" style={{ gap: 'var(--space-2)' }}>
+                <Button variant="destructive" size="sm" loading={saving} onClick={() => setAutoSend(true)}>
+                  Yes, send automatically
+                </Button>
+                <Button size="sm" disabled={saving} onClick={() => setConfirmingAuto(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

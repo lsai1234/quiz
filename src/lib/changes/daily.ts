@@ -48,6 +48,11 @@ export interface DailyRunResult {
   /** Snoozed plans whose return date arrived and are now active again. */
   snoozesResumed?: number
   /**
+   * The automatic-sending safety net (`lib/orders/auto-send`): paid orders its
+   * payment-time trigger never reached, and back-orders back in stock.
+   */
+  autoSend?: { sent: number; held: number; failed: number; backordersReleased: number }
+  /**
    * Storage-limitation sweeps (Article 5(1)(e)) — see `lib/legal/retention.ts`.
    * `retentionFailed` naming a sweep means retention is falling behind, which
    * is a compliance problem rather than an operational one and is worth looking
@@ -82,8 +87,10 @@ export interface DailyRunResult {
  *   • `sweepSupplierStatuses`, which asks the supplier what happened to every
  *     order already sent. PowerBody push us nothing, so status and tracking only
  *     ever moved when a founder opened an order and pressed sync — this is the
- *     same read on a schedule. It cannot send anything: the approval gate lives
- *     in `submitOrderToSupplier` and nothing here calls it.
+ *     same read on a schedule. It cannot send anything.
+ *   • `sweepAutoSend`, the one step that CAN send: paid orders automatic sending
+ *     missed, and back-orders back in stock. Inert unless automatic sending is
+ *     switched on and order sending is live.
  *
  * All are idempotent — applying an applied event is a no-op, and the outbox's
  * dedupe key means nobody is told the same thing twice — so running this more
@@ -130,6 +137,19 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
   // products the shop actually sells, so an item that went out of stock at the
   // supplier stops being buyable here.
   const productSync = await syncImportedProducts()
+
+  // Automatic sending's safety net. The ONE thing in this job that can send an
+  // order — and only when the founders switched automatic sending on and order
+  // sending is live; otherwise it only flags back-orders that are back in stock.
+  // Every order it touches goes through the same gate and the same checks as
+  // the payment-time trigger. Never allowed to fail the rest of the job.
+  let autoSend: DailyRunResult['autoSend']
+  try {
+    const { sweepAutoSend } = await import('@/lib/orders/auto-send')
+    autoSend = await sweepAutoSend()
+  } catch (err) {
+    console.error('[daily] automatic sending sweep failed:', err)
+  }
   // Commission past its return window becomes payable. Idempotent — a row
   // already confirmed is no longer `accrued`, so a second run today moves
   // nothing. Never allowed to fail the rest of the job.
@@ -213,6 +233,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     productsMissing: productSync.missing.length,
     commissionsConfirmed,
     snoozesResumed,
+    autoSend,
     retention,
     retentionFailed,
   }

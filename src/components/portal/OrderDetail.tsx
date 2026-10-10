@@ -7,6 +7,7 @@ import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
 import { Button, Card, Input, Note } from '@/components/system'
 import { displayStatus, neverPaid } from '@/lib/orders/unpaid'
 import { OrderSendDiagnosis } from './OrderSendDiagnosis'
+import { OrderLineChange } from './OrderLineChange'
 
 
 interface OrderLine {
@@ -47,6 +48,10 @@ interface Order {
   supplierStatus: string | null
   supplierSimulated?: boolean
   lastSupplierAttempt?: { ok: boolean; error: string | null } | null
+  splitFrom?: string | null
+  splitInto?: string[]
+  backorder?: { sku: string; title: string; since: string } | null
+  refundedAmount?: number
   trackingNumber: string | null
   shippingAddress: ShippingAddress | null
   partnerCode?: string | null
@@ -79,6 +84,8 @@ export function OrderDetail({ id }: { id: string }) {
   const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** The line whose Change panel is open. */
+  const [changing, setChanging] = useState<number | null>(null)
 
   const load = useCallback(() => {
     fetch(`/api/portal/orders/${id}`)
@@ -138,6 +145,9 @@ export function OrderDetail({ id }: { id: string }) {
   const review = order.review?.state ?? 'pending'
   const awaitingReview = !order.supplierOrderId && canSubmit
   const sendFailure = order.status === 'failed' && !unpaid ? lastSendFailure(order) : null
+  // Items can be swapped, back-ordered or refunded only before PowerBody hold
+  // the order — the server says the same; this decides whether to offer it.
+  const canChangeLines = (order.status === 'paid' || order.status === 'failed') && !order.supplierOrderId && !unpaid
 
   return (
     <div className="space-y-5">
@@ -156,6 +166,35 @@ export function OrderDetail({ id }: { id: string }) {
           Not paid. This customer reached the Stripe payment page and left without paying, so
           nothing was charged and there is nothing to send. Nothing to do here: leave it, or delete
           it at the bottom of the page.
+        </Note>
+      )}
+
+      {/* An order split in two is two orders sharing one payment: say so on both. */}
+      {order.splitFrom && (
+        <Note tone="info">
+          {order.backorder ? `${order.backorder.title} was moved here` : 'This was split'} from{' '}
+          <Link href={`${BACK_HREF}/${order.splitFrom}`} className="underline">
+            {order.splitFrom}
+          </Link>{' '}
+          to follow when it is back in stock. It shares that order’s payment, so a refund here is for this order’s
+          own value only.
+        </Note>
+      )}
+      {!order.splitFrom && order.backorder && (
+        <Note tone="info">Waiting for {order.backorder.title} to come back in stock at PowerBody.</Note>
+      )}
+      {(order.splitInto?.length ?? 0) > 0 && (
+        <Note tone="info">
+          Part of this order follows separately:{' '}
+          {order.splitInto!.map((childId, i) => (
+            <span key={childId}>
+              {i > 0 && ', '}
+              <Link href={`${BACK_HREF}/${childId}`} className="underline">
+                {childId}
+              </Link>
+            </span>
+          ))}
+          .
         </Note>
       )}
 
@@ -273,12 +312,31 @@ export function OrderDetail({ id }: { id: string }) {
         <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Items</h2>
         <div className="rounded-2xl border divide-y" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
           {order.lines.map((l, i) => (
-            <div key={i} className="p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--ink-1)] truncate">{l.title}{l.variantTitle ? <span className="text-[var(--ink-3)]"> · {l.variantTitle}</span> : null}</p>
-                <p className="text-[11px] text-[var(--ink-3)]">SKU {l.sku ?? '—'} · qty {l.quantity}{l.supplierCost != null ? ` · cost ${money(l.supplierCost, order.currency)}` : ''}</p>
+            <div key={`${i}-${l.sku ?? l.productId}`} className="p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--ink-1)] truncate">{l.title}{l.variantTitle ? <span className="text-[var(--ink-3)]"> · {l.variantTitle}</span> : null}</p>
+                  <p className="text-[11px] text-[var(--ink-3)]">SKU {l.sku ?? '—'} · qty {l.quantity}{l.supplierCost != null ? ` · cost ${money(l.supplierCost, order.currency)}` : ''}</p>
+                </div>
+                <div className="flex items-center shrink-0" style={{ gap: 'var(--space-2)' }}>
+                  <span className="text-sm text-[var(--ink-1)]">{money(l.unitPrice * l.quantity, order.currency)}</span>
+                  {canChangeLines && changing !== i && (
+                    <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setChanging(i)}>
+                      Change
+                    </Button>
+                  )}
+                </div>
               </div>
-              <span className="text-sm text-[var(--ink-1)] shrink-0">{money(l.unitPrice * l.quantity, order.currency)}</span>
+              {canChangeLines && changing === i && (
+                <OrderLineChange
+                  orderId={order.id}
+                  index={i}
+                  sku={l.sku}
+                  firstName={order.shippingAddress?.name?.split(' ')[0] ?? null}
+                  onChanged={(next) => setOrder(next as Order)}
+                  onClose={() => setChanging(null)}
+                />
+              )}
             </div>
           ))}
           {order.partnerCode && (
@@ -294,6 +352,12 @@ export function OrderDetail({ id }: { id: string }) {
             <span className="text-sm font-bold text-[var(--ink-1)]">Total</span>
             <span className="text-sm font-bold text-[var(--ink-1)]">{money(order.total, order.currency)}</span>
           </div>
+          {(order.refundedAmount ?? 0) > 0 && (
+            <div className="p-3 flex items-center justify-between">
+              <span className="text-xs text-[var(--ink-3)]">Already refunded for items taken off</span>
+              <span className="text-xs text-[var(--ink-3)]">{money(order.refundedAmount!, order.currency)}</span>
+            </div>
+          )}
         </div>
       </section>
 

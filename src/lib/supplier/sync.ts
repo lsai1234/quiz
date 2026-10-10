@@ -262,3 +262,43 @@ export async function syncImportedProducts(): Promise<SupplierSyncReport> {
   await saveReport(report)
   return report
 }
+
+/**
+ * Write what a live stock check saw back onto the catalogue.
+ *
+ * The nightly sync is the only other thing that moves `available`, and it reads
+ * a feed that stops short of the whole catalogue — so a product past that point
+ * could sell out and stay on sale indefinitely. Whenever a checkout or a send
+ * asks PowerBody directly, the answer is kept, and the shop stops offering what
+ * just sold out rather than waiting for a sync that may never reach it.
+ *
+ * Narrow on purpose: availability and the stock count, nothing else. Cost and
+ * RRP stay the nightly sync's business. Only products that actually moved are
+ * written, so the common case — everything as expected — writes nothing.
+ * Never throws: forgetting a stock level is not a reason to fail a checkout.
+ */
+export async function rememberLiveStock(
+  live: { sku: string; stock: number; inStock: boolean }[],
+): Promise<number> {
+  if (live.length === 0) return 0
+  try {
+    const { getImportedProducts, addImportedProducts } = await import('@/lib/portal/store')
+    const bySku = new Map(live.map((l) => [l.sku, l]))
+    const moved: CatalogueProduct[] = []
+    for (const product of await getImportedProducts()) {
+      let touched = false
+      const variants = product.variants.map((variant) => {
+        const level = variant.sku ? bySku.get(variant.sku) : undefined
+        if (!level || (variant.available === level.inStock && variant.inventory === level.stock)) return variant
+        touched = true
+        return { ...variant, available: level.inStock, inventory: level.stock }
+      })
+      if (touched) moved.push({ ...product, variants })
+    }
+    if (moved.length > 0) await addImportedProducts(moved)
+    return moved.length
+  } catch (err) {
+    console.error('[supplier] could not remember live stock:', err)
+    return 0
+  }
+}

@@ -25,6 +25,8 @@ export type TemplateId =
   | 'order-confirmation'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
+  /** A one-off order item sold out after payment: removed, swapped or back-ordered. */
+  | 'order-item-update'
   /** We swapped a product for the closest equivalent. */
   | 'product-substituted'
   /** We took a product off the plan and lowered the monthly. */

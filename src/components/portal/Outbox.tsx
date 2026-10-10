@@ -7,6 +7,7 @@ import { Badge, Button, Card, Input, Select, Tabs } from '@/components/system'
 
 const TEMPLATE_LABEL: Record<string, string> = {
   'order-confirmation': 'Order confirmation',
+  'order-item-update': 'Order item changed',
   'subscription-confirmation': 'Subscription confirmation',
   'product-substituted': 'Product swapped',
   'product-removed': 'Product removed',

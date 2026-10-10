@@ -21,7 +21,7 @@ import { getDataSourceMode, setDataSourceOverride } from '@/lib/data-source'
 import type { SupplierMode } from '@/lib/supplier'
 import { getSupplierMode, setSupplierOverride } from '@/lib/supplier'
 import type { OrderingMode } from '@/lib/supplier/ordering'
-import { getOrderingMode, setOrderingOverride } from '@/lib/supplier/ordering'
+import { getAutoSendSetting, getOrderingMode, setAutoSendOverride, setOrderingOverride } from '@/lib/supplier/ordering'
 import type { PaymentMode, StripeEnvironment } from '@/lib/payments'
 import {
   getPaymentMode,
@@ -63,6 +63,10 @@ interface PersistedSettings {
   /** Whether a queue "Send" really reaches PowerBody. Separate from
    *  `supplierMode` on purpose — see `lib/supplier/ordering.ts`. */
   orderingMode?: OrderingMode
+  /** Paid orders go to PowerBody by themselves — see `lib/orders/auto-send`. */
+  autoSendPaid?: boolean
+  /** When it was last switched on (ISO). Orders paid before it are left alone. */
+  autoSendSince?: string | null
   paymentMode?: PaymentMode
   /** Test-mode or live-mode Stripe keys. Separate from `paymentMode` on
    *  purpose — see `lib/payments/keys.ts`. */
@@ -125,6 +129,7 @@ export async function syncPortalRuntime(force = false): Promise<void> {
     setDataSourceOverride(settings.dataSourceMode ?? null)
     setSupplierOverride(settings.supplierMode ?? null)
     setOrderingOverride(settings.orderingMode ?? null)
+    setAutoSendOverride(settings.autoSendPaid ?? null, settings.autoSendSince ?? null)
     setPaymentOverride(settings.paymentMode ?? null)
     setStripeEnvironmentOverride(settings.stripeEnvironment ?? null)
     lastSyncedAt = Date.now()
@@ -214,6 +219,18 @@ export async function getOrderingSetting(): Promise<OrderingMode> {
 export async function setOrderingSetting(mode: OrderingMode): Promise<void> {
   await saveSettings({ orderingMode: mode })
   setOrderingOverride(mode)
+  lastSyncedAt = Date.now()
+}
+
+// ── Automatic sending of paid orders ──
+export async function getAutoSendPaidSetting(): Promise<boolean> {
+  const settings = await loadSettings()
+  return settings.autoSendPaid ?? getAutoSendSetting()
+}
+export async function setAutoSendPaidSetting(on: boolean): Promise<void> {
+  const since = on ? new Date().toISOString() : null
+  await saveSettings({ autoSendPaid: on, autoSendSince: since })
+  setAutoSendOverride(on, since)
   lastSyncedAt = Date.now()
 }
 

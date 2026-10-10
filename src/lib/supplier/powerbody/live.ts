@@ -43,6 +43,7 @@ import { SupplierSendError } from '../errors'
 import { partitionBySkuMap } from '../product-id-map'
 import { createKvDetailStore, isStale, type DetailStore } from './detail-cache'
 import {
+  isSellableStatus,
   orderReplyRecord,
   readOrderAck,
   toCreateOrderPayload,
@@ -806,7 +807,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       const ids = [...new Set(productIds.map((id) => String(id ?? '').trim()).filter(Boolean))]
       if (ids.length === 0) return []
 
-      const found = await mapLimit(ids, DETAIL_CONCURRENCY, async (id) => {
+      const found = await mapLimit(ids, DETAIL_CONCURRENCY, async (id): Promise<SupplierProductStub | null> => {
         try {
           const info = await fetchDetail(id)
           const sku = String(info.sku ?? '').trim()
@@ -817,6 +818,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
             name: String(info.name ?? '').trim(),
             wholesalePrice: Math.round(num(info.price) * 100) / 100,
             stock: num(info.qty),
+            inStock: num(info.qty) > 0 && isSellableStatus(info.status),
           }
         } catch {
           // Empty id, or a refusal. Both mean "no product recorded here"; the

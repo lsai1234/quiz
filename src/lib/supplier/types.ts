@@ -145,6 +145,12 @@ export interface SupplierProductStub {
   name: string
   wholesalePrice: number
   stock: number
+  /**
+   * Stock above zero AND a status PowerBody still sell. A disabled product
+   * stays visible with stock for 30 days, so `stock > 0` alone is not "can be
+   * ordered". Optional because a sweep only ever needed identity.
+   */
+  inStock?: boolean
 }
 
 /** Where to start reading, and how much to read, so a long feed can be taken in

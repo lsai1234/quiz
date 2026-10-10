@@ -727,6 +727,13 @@ Orders arrive at PowerBody **unpaid**, resting at `holded`. They ship once paid 
 powerbody.eu with the same credentials, select the orders and check out (Sage Pay). There
 are no credit accounts.
 
+### Automatic sending, stock at checkout, and sold-out items
+
+See **`docs/FULFILMENT_AUTOMATION.md`**: stock is checked live at checkout, paid
+orders can be sent automatically (Settings → Supplier), and an item that sells out
+after payment can be swapped, sent later as its own order, or removed and refunded
+from the order page.
+
 ### When an order will not send
 
 A refusal used to reach the hub as one timeline line ending in the single word PowerBody put

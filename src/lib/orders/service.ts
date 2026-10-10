@@ -136,8 +136,24 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     await accrueCommission(order)
     await confirmByEmail(order)
     await alertFounders(order)
+    await sendAutomatically(order)
   }
   return order
+}
+
+/**
+ * Hand a newly paid order to automatic sending — which does nothing unless the
+ * founders switched it on and order sending is live. Same funnel and the same
+ * promise as the email and the alert above: every route to a paid order, never
+ * throws, never blocks. See `./auto-send`.
+ */
+async function sendAutomatically(order: Order): Promise<void> {
+  try {
+    const { scheduleAutoSend } = await import('./auto-send')
+    await scheduleAutoSend(order)
+  } catch (err) {
+    console.error('[orders] automatic sending could not be scheduled:', err)
+  }
 }
 
 /**
@@ -405,6 +421,7 @@ export async function markOrderPaid(
     // why it cannot be sent when the order was raised.
     await confirmByEmail(order)
     await alertFounders(order)
+    await sendAutomatically(order)
   }
   return order
 }
