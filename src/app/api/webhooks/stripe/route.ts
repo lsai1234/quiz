@@ -3,6 +3,7 @@ import { constructWebhookEvent } from '@/lib/payments/stripe'
 import { getStripeEnvironment, stripeKeysFor } from '@/lib/payments'
 import { handleStripeEvent } from '@/lib/payments/webhook'
 import { reportError } from '@/lib/monitoring/report'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,11 @@ export async function POST(req: Request) {
   if (!signature) return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 })
 
   const rawBody = await req.text()
+  // Which world to verify against is a Founders Hub setting held in memory and
+  // hydrated from the database. A cold instance has not read it yet, and would
+  // otherwise fall back to the env default — rejecting every live event as
+  // "signed by the other environment" until some other route warmed it up.
+  await syncPortalRuntime()
   let event
   try {
     event = constructWebhookEvent(rawBody, signature)

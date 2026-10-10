@@ -16,6 +16,7 @@ import type { SupplierAddress } from '@/lib/supplier/types'
 import { getFounder } from '@/lib/portal/guard'
 import { checkOrderDeletion, deleteOrder } from '@/lib/admin/deletion'
 import { getPaymentSource } from '@/lib/payments'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  await syncPortalRuntime()
   const { id } = await params
   let body: { action?: string; note?: string; address?: SupplierAddress }
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
 import { getSubscription } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const user = await getHubUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+
+  await syncPortalRuntime()
 
   if (getPaymentSource() !== 'stripe') {
     return NextResponse.json({ error: 'Billing portal is only available with Stripe payments enabled.' }, { status: 400 })

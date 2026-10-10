@@ -5,6 +5,7 @@ import { buildExitQueue, returnablesFrom } from '@/lib/portal/exits'
 import { refundForReturnedValue } from '@/lib/recharge/exit'
 import { listOrders } from '@/lib/orders/repo'
 import { getPaymentSource } from '@/lib/payments'
+import { syncPortalRuntime } from '@/lib/portal/store'
 import type { MemberSubscription } from '@/lib/recharge/types'
 
 export const dynamic = 'force-dynamic'
@@ -86,6 +87,7 @@ type Action = 'waive' | 'write-off' | 'mark-paid' | 'mark-refunded' | 'refund-re
 
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  await syncPortalRuntime()
 
   let body: {
     userId?: string
