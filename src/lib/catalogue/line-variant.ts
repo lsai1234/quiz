@@ -52,6 +52,11 @@ export function rememberRenames(before: CatalogueProduct, after: CatalogueProduc
   return touched ? { ...after, variants } : after
 }
 
+/** How a saved line writes this SKU: "flavour · size", or its title. */
+function writtenAs(v: Pick<CatalogueVariant, 'flavour' | 'size' | 'title'>): string {
+  return [v.flavour, v.size].filter(Boolean).join(' · ') || v.title
+}
+
 export interface LineRef {
   productId: string
   variantTitle?: string | null
@@ -78,18 +83,34 @@ export function variantForLine(
   }
 
   const product = catalogue.find((p) => p.id === line.productId)
-  if (product) {
-    const byId = line.variantId ? product.variants.find((v) => v.id === line.variantId) : undefined
+  if (product && line.variantId) {
+    const byId = product.variants.find((v) => v.id === line.variantId)
     if (byId) return { product, variant: byId }
-    const byLabel = label ? product.variants.find((v) => labelsOf(v).includes(label)) : undefined
-    if (byLabel) return { product, variant: byLabel }
   }
 
-  // Renamed, split off, or merged into another product: follow its note.
-  for (const p of catalogue) {
-    for (const v of p.variants) {
-      if (v.formerly?.some((f) => f.productId === line.productId && (!label || f.labels.includes(label)))) {
-        return { product: p, variant: v }
+  if (label) {
+    /*
+      Best match first. A line is WRITTEN as "flavour · size" (or the title), so
+      a SKU whose written form is exactly the label is the one it meant. Next, a
+      SKU that was renamed or moved FROM this label on this product — it was the
+      one the line meant when it was written, even if a sibling now carries a
+      similar name. Only then a looser match on another spelling ("Chocolate"
+      for "Chocolate · 1kg"), which can be ambiguous between sizes.
+    */
+    const exact = product?.variants.find((v) => writtenAs(v) === label)
+    if (exact) return { product: product!, variant: exact }
+    for (const p of catalogue) {
+      for (const v of p.variants) {
+        if (v.formerly?.some((f) => f.productId === line.productId && f.labels.includes(label))) return { product: p, variant: v }
+      }
+    }
+    const loose = product?.variants.find((v) => labelsOf(v).includes(label))
+    if (loose) return { product: product!, variant: loose }
+  } else if (!product) {
+    // No label and the product is gone (merged away): follow wherever its SKU went.
+    for (const p of catalogue) {
+      for (const v of p.variants) {
+        if (v.formerly?.some((f) => f.productId === line.productId)) return { product: p, variant: v }
       }
     }
   }

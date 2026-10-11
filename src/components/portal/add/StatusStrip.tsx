@@ -52,14 +52,14 @@ export function StatusStrip({
     <Card padding="tight" as="section">
       <Stack gap="var(--space-3)">
         <Row align="start" gap="var(--space-3)">
-          <span style={{ ...metaText, minWidth: '6rem' }}>Answering</span>
+          <span style={{ ...metaText, minWidth: 'calc(var(--space-8) * 3)' }}>Answering</span>
           <div className="min-w-0 flex-1">
             <SupplierLine supplier={supplier} />
           </div>
         </Row>
 
         <Row align="start" gap="var(--space-3)">
-          <span style={{ ...metaText, minWidth: '6rem' }}>Product index</span>
+          <span style={{ ...metaText, minWidth: 'calc(var(--space-8) * 3)' }}>Product index</span>
           <div className="min-w-0 flex-1">
             <Row>
               <IndexLine index={index} error={indexError} sample={sample} />
@@ -150,7 +150,7 @@ function IndexLine({ index, error, sample }: { index: IndexStatus | null; error:
   if (error && !index) {
     return <span style={metaText}>Could not read the index just now — lookups still work, just slower.</span>
   }
-  if (!index) return <Skeleton height="var(--space-5)" width="12rem" />
+  if (!index) return <Skeleton height="var(--space-5)" width="40%" />
   if (sample && index.products === 0) {
     return <span style={metaText}>Not built — not needed while the sample catalogue answers.</span>
   }

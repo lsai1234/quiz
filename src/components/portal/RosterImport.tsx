@@ -1,8 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useRef, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
-import { Button, Card } from '@/components/system'
+import { Button, Card, Disclosure, Note, buttonSurface } from '@/components/system'
+import { FilePickButton, readFileText } from '@/components/portal/FilePickButton'
+import { REVIEW_HREF, productHref } from '@/lib/portal/product-links'
 
 interface RowResult {
   sku: string
@@ -10,10 +13,43 @@ interface RowResult {
   title: string
   enriched: boolean
   notes: string[]
+  /** What the import did with this row's product. Absent from an older server: read as added. */
+  outcome?: 'added' | 'refreshed' | 'already' | 'removed'
+  existingId?: string
+  existingTitle?: string
 }
 
+/** Everything the batches reported, added up. */
+interface Totals {
+  imported: number
+  refreshed: number
+  already: number
+  enriched: number
+  total: number
+  /** SKUs PowerBody's product id is not known for yet. */
+  withoutIds: string[]
+  results: RowResult[]
+  warnings: string[]
+  lookupErrors: string[]
+}
+
+const empty = (): Totals => ({
+  imported: 0,
+  refreshed: 0,
+  already: 0,
+  enriched: 0,
+  total: 0,
+  withoutIds: [],
+  results: [],
+  warnings: [],
+  lookupErrors: [],
+})
+
+const s = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+const quiet = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' } as const
+
 /**
- * Import a curated roster CSV, enriched from PowerBody as it goes.
+ * Import a curated roster spreadsheet, enriched from PowerBody as it goes.
  *
  * WHY A FILE AND NOT THE SKU BOX
  * ──────────────────────────────
@@ -24,172 +60,272 @@ interface RowResult {
  * hundred-product roster never gets finished, so they are decided in a
  * spreadsheet and brought in together.
  *
- * Each row is still looked up as it imports, so the picture, category and blurb
- * come from PowerBody and the money is today's. A SKU they cannot answer for
- * still imports — it is orderable either way, since `createOrder` takes a SKU —
- * it just arrives without a picture, and the row says so.
+ * Each row is looked up in the stored PowerBody index as it imports, so the
+ * picture, category and blurb come from PowerBody and the money is today's. A
+ * SKU the index has no id for still imports — it is orderable either way — and
+ * is reported, with a button that looks those ids up.
  *
- * Sent in slices because each row costs a throttled supplier call: a hundred of
- * them will not fit in one request, so the screen loops and shows progress.
+ * ── Safe to run twice ──────────────────────────────────────────────────────
+ * A product already in the catalogue is never replaced. One still waiting for
+ * review gets the sheet's own fields refreshed (swap group, goals, warnings —
+ * the half only the sheet knows); one on sale is left exactly as it is. Both
+ * are counted, so a re-run says what it did rather than "0 imported".
+ *
+ * ── A batch that fails ─────────────────────────────────────────────────────
+ * Sent twelve rows at a time, because each row can cost a throttled supplier
+ * call. A failed batch is asked for once more on its own (PowerBody's server
+ * fails transiently under load); if it fails again the import stops there and
+ * offers to carry on from that row. What landed before it is real and stays.
  */
-export function RosterImport() {
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
-  const [results, setResults] = useState<RowResult[] | null>(null)
-  const [warnings, setWarnings] = useState<string[]>([])
-  const [error, setError] = useState<string | null>(null)
+export function RosterImport({
+  onPowerBodyCsv,
+  onFindIds,
+}: {
+  /** The file turned out to be PowerBody's own catalogue: hand it to the picker that reads it. */
+  onPowerBodyCsv?: (csv: string, fileName: string) => void
+  /** Look up the SKUs that came in without a PowerBody id. */
+  onFindIds?: (skus: string[]) => void
+} = {}) {
+  const csvRef = useRef<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
+  const [totals, setTotals] = useState<Totals | null>(null)
+  const [failure, setFailure] = useState<{ message: string; resumeAt: number | null; total: number } | null>(null)
+  const [refusal, setRefusal] = useState<string | null>(null)
 
-  const run = useCallback(async (csv: string) => {
+  const run = useCallback(async (startAt: number, carried: Totals | null) => {
+    const csv = csvRef.current
+    if (csv === null) return
     setBusy(true)
-    setError(null)
-    setResults(null)
-    setWarnings([])
-    setProgress(null)
+    setFailure(null)
+    setRefusal(null)
+    const acc: Totals = carried ? { ...carried, withoutIds: [...carried.withoutIds], results: [...carried.results] } : empty()
+    let offset: number | null = startAt
     try {
-      const all: RowResult[] = []
-      let offset: number | null = 0
-      let fileWarnings: string[] = []
-
       while (offset !== null) {
-        const res: Response = await fetch('/api/portal/products/import-csv', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ csv, offset }),
-        })
-        const d = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          setError(d.error ?? 'Import failed.')
-          // Whatever landed before the failure is real and already in Review —
-          // showing it is more use than pretending the run never happened.
-          if (all.length > 0) setResults(all)
+        let data: Record<string, unknown> | null = null
+        let problem = ''
+        let fatal = false
+        for (let attempt = 0; attempt < 2 && !data; attempt += 1) {
+          try {
+            const res: Response = await fetch('/api/portal/products/import-csv', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ csv, offset }),
+            })
+            const d = (await res.json().catch(() => ({}))) as Record<string, unknown>
+            if (res.ok) {
+              data = d
+              break
+            }
+            if (d.powerBodyCsv) {
+              setRefusal(typeof d.error === 'string' ? d.error : 'That is PowerBody’s own product list, not a roster spreadsheet.')
+              return
+            }
+            problem = typeof d.error === 'string' ? d.error : `the server answered ${res.status}`
+            // A 400 is the file, not the weather: asking again gets the same answer.
+            if (res.status === 400) {
+              fatal = true
+              break
+            }
+          } catch {
+            problem = 'the connection dropped'
+          }
+          if (attempt === 0) {
+            setProgress(`Row ${offset + 1} did not go through (${problem}) — trying that batch once more…`)
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+          }
+        }
+
+        if (!data) {
+          if (acc.imported + acc.refreshed > 0) invalidateCatalogue()
+          setTotals(acc.results.length > 0 ? acc : null)
+          setFailure({ message: problem, resumeAt: fatal ? null : offset, total: acc.total })
           return
         }
-        all.push(...(d.results ?? []))
-        if (offset === 0) fileWarnings = d.warnings ?? []
-        if (d.lookupError) {
-          fileWarnings = [...fileWarnings, `PowerBody could not be reached: ${d.lookupError}`]
-        }
-        setProgress({ done: all.length, total: d.total ?? all.length })
-        offset = d.nextOffset ?? null
-      }
 
+        const results = Array.isArray(data.results) ? (data.results as RowResult[]) : []
+        acc.results.push(...results)
+        acc.total = Number(data.total ?? acc.total) || acc.total
+        // The counts are the server's; an older server sent only results, which were all imports.
+        acc.imported += typeof data.imported === 'number' ? data.imported : results.length
+        acc.refreshed += Number(data.refreshed ?? 0)
+        acc.already += Number(data.already ?? 0)
+        acc.enriched += Number(data.enriched ?? results.filter((r) => r.enriched).length)
+        for (const sku of Array.isArray(data.withoutIds) ? (data.withoutIds as string[]) : []) {
+          if (!acc.withoutIds.includes(sku)) acc.withoutIds.push(sku)
+        }
+        if (offset === 0 && Array.isArray(data.warnings)) acc.warnings = data.warnings as string[]
+        if (typeof data.lookupError === 'string' && !acc.lookupErrors.includes(data.lookupError)) acc.lookupErrors.push(data.lookupError)
+        setProgress(`${acc.results.length} of ${acc.total} rows done…`)
+        offset = typeof data.nextOffset === 'number' ? data.nextOffset : null
+      }
       invalidateCatalogue()
-      setResults(all)
-      setWarnings(fileWarnings)
-    } catch {
-      setError('Could not import that file.')
+      setTotals(acc)
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }, [])
 
   const onFile = useCallback(
     async (file: File) => {
       setFileName(file.name)
-      await run(await file.text())
+      setTotals(null)
+      try {
+        csvRef.current = await readFileText(file)
+      } catch {
+        setFailure({ message: `${file.name} could not be read — if it is open in Excel, close it and choose it again`, resumeAt: null, total: 0 })
+        return
+      }
+      await run(0, null)
     },
     [run],
   )
 
-  const enriched = (results ?? []).filter((r) => r.enriched).length
-  const flagged = (results ?? []).filter((r) => r.notes.length > 0)
+  const flagged = (totals?.results ?? []).filter((r) => r.notes.length > 0)
+  const elsewhere = (totals?.results ?? []).filter((r) => r.outcome && r.outcome !== 'added' && r.outcome !== 'refreshed' && r.existingId)
 
   return (
-    <Card padding="tight" className="space-y-2.5">
-      <div>
-        <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
-          Import a roster CSV
-        </p>
-        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-          Your own spreadsheet of what to sell — one row per product, with a <code>sku</code> column. Each row is
-          looked up as it imports, so the picture, category and description come from PowerBody. Everything lands in
-          Review; nothing goes on sale.
-        </p>
-      </div>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".csv,text/csv"
-        // `hidden`, not `sr-only`: this is a mechanism, not a control. The
-        // Button is what is labelled and focusable, and sr-only would leave an
-        // unnamed file input sitting in the tab order.
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0]
-          // Cleared so choosing the same file again still fires a change.
-          e.target.value = ''
-          if (file) void onFile(file)
-        }}
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" loading={busy} onClick={() => fileRef.current?.click()}>
-          Choose a CSV
-        </Button>
-        {fileName && (
-          <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>{fileName}</span>
-        )}
-        {progress && busy && (
-          <span role="status" style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
-            {progress.done} of {progress.total} imported…
-          </span>
-        )}
-      </div>
-
-      {error && (
-        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', color: 'var(--tone-critical)', border: '1px solid var(--critical-line)' }}>
-          {error}
-        </p>
-      )}
-
-      {results && results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--accent-fill)', color: 'var(--ink-2)', border: '1px solid var(--accent-line)' }}>
-            {results.length} product{results.length === 1 ? '' : 's'} imported, {enriched} with a picture and
-            description from PowerBody. All waiting in Products → Review — nothing is on sale until you approve it.
+    <Card padding="normal" as="section">
+      <div className="flex flex-col" style={{ gap: 'var(--space-3)' }}>
+        <div>
+          <h3 style={{ fontSize: 'var(--text-body)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+            Import a roster spreadsheet
+          </h3>
+          <p style={{ ...quiet, marginTop: 'var(--space-1)' }}>
+            Your own spreadsheet of what to sell — one row per product with a <code>sku</code> column, and your choices
+            for each (swap group, goals, actives, warnings, which SKUs are its flavours). Not PowerBody’s product list:
+            that one goes in “Pick from PowerBody’s spreadsheet” above. Everything lands in Review; nothing goes on sale.
           </p>
+        </div>
 
-          {/* Named individually: a product that came in without a picture, or
-              with an unusable swap group, is one somebody has to go and fix. */}
-          {flagged.length > 0 && (
-            <details className="rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
-              <summary className="text-xs cursor-pointer" style={{ color: 'var(--ink-2)' }}>
-                {flagged.length} need{flagged.length === 1 ? 's' : ''} a look before approving
-              </summary>
-              <ul className="mt-2 space-y-1.5">
-                {flagged.map((r) => (
-                  <li key={r.id} className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
-                    <span style={{ color: 'var(--ink-2)' }}>{r.title}</span> ({r.sku})
-                    <ul className="ml-3 list-disc">
-                      {r.notes.map((note) => (
-                        <li key={note}>{note}</li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-
-          {warnings.length > 0 && (
-            <details className="rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
-              <summary className="text-xs cursor-pointer" style={{ color: 'var(--ink-2)' }}>
-                {warnings.length} problem{warnings.length === 1 ? '' : 's'} in the file itself
-              </summary>
-              <ul className="mt-2 space-y-1 list-disc ml-4">
-                {warnings.map((w) => (
-                  <li key={w} className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
-                    {w}
-                  </li>
-                ))}
-              </ul>
-            </details>
+        <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+          <FilePickButton accept=".csv,text/csv" variant="secondary" loading={busy} onFile={onFile}>
+            Choose a roster spreadsheet
+          </FilePickButton>
+          {fileName && <span style={quiet}>{fileName}</span>}
+          {progress && busy && (
+            <span role="status" style={quiet}>
+              {progress}
+            </span>
           )}
         </div>
-      )}
+
+        {refusal && (
+          <Note tone="attention" live="polite">
+            {refusal}{' '}
+            {onPowerBodyCsv && csvRef.current !== null && (
+              <Button size="sm" variant="secondary" onClick={() => onPowerBodyCsv(csvRef.current as string, fileName ?? 'PowerBody’s spreadsheet')}>
+                Open it in the spreadsheet picker
+              </Button>
+            )}
+          </Note>
+        )}
+
+        {failure && (
+          <Note tone="critical" live="assertive">
+            {failure.resumeAt !== null ? (
+              <>
+                Stopped at row {failure.resumeAt + 1}
+                {failure.total ? ` of ${failure.total}` : ''} — {failure.message}, twice. Rows before it are in and stay
+                in.{' '}
+                <Button size="sm" variant="secondary" onClick={() => run(failure.resumeAt as number, totals)}>
+                  Carry on from row {failure.resumeAt + 1}
+                </Button>
+              </>
+            ) : (
+              <>Not imported — {failure.message}. Fix the file and choose it again.</>
+            )}
+          </Note>
+        )}
+
+        {totals && totals.results.length > 0 && (
+          <div className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+            <Note tone="positive" live="polite">
+              {s(totals.imported, 'product')} imported, {totals.enriched} with a picture and description from PowerBody.
+              {totals.refreshed > 0 &&
+                ` ${s(totals.refreshed, 'product')} already waiting for review ${totals.refreshed === 1 ? 'was' : 'were'} refreshed with your sheet’s swap groups, goals and warnings — prices, pictures and names kept.`}
+              {totals.already > 0 &&
+                ` ${s(totals.already, 'product')} already in the catalogue ${totals.already === 1 ? 'was' : 'were'} left exactly as ${totals.already === 1 ? 'it is' : 'they are'}.`}{' '}
+              Nothing is on sale until you approve it.
+            </Note>
+
+            {totals.withoutIds.length > 0 && (
+              <Note tone="attention">
+                {s(totals.withoutIds.length, 'SKU')} {totals.withoutIds.length === 1 ? 'has' : 'have'} no PowerBody
+                product id yet, so {totals.withoutIds.length === 1 ? 'it' : 'they'} came in without PowerBody’s picture,
+                cost and stock. Look them up to find their ids — each one found is kept, so pulling the product’s details
+                on its page afterwards is instant.{' '}
+                {onFindIds && (
+                  <Button size="sm" variant="secondary" onClick={() => onFindIds(totals.withoutIds)}>
+                    Find their ids
+                  </Button>
+                )}
+              </Note>
+            )}
+
+            {totals.lookupErrors.length > 0 && (
+              <Note tone="attention">
+                PowerBody could not be reached for part of the file ({totals.lookupErrors.join('; ')}), so those rows came
+                in without their details. Their product pages’ “Pull from PowerBody” fills them in.
+              </Note>
+            )}
+
+            <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+              <Link href={REVIEW_HREF} {...buttonSurface('primary', 'sm')}>
+                Next: review them
+              </Link>
+            </div>
+
+            {elsewhere.length > 0 && (
+              <Disclosure summary={`${s(elsewhere.length, 'row')} already in the catalogue`}>
+                <ul className="flex flex-col" style={{ gap: 'var(--space-1)', ...quiet }}>
+                  {elsewhere.map((r) => (
+                    <li key={`${r.sku}-${r.existingId}`}>
+                      {r.sku}: already in{' '}
+                      <Link href={productHref(r.existingId as string)} className="system-focus" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>
+                        {r.existingTitle ?? r.title}
+                      </Link>
+                      {r.outcome === 'removed' ? ' (removed — restore it on its page)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            )}
+
+            {/* Named individually: a product that came in without a picture, or
+                with an unusable swap group, is one somebody has to go and fix. */}
+            {flagged.length > 0 && (
+              <Disclosure summary={`${flagged.length} need${flagged.length === 1 ? 's' : ''} a look before approving`}>
+                <ul className="flex flex-col" style={{ gap: 'var(--space-2)', ...quiet }}>
+                  {flagged.map((r) => (
+                    <li key={`${r.id}-${r.sku}`}>
+                      <span style={{ color: 'var(--ink-2)' }}>{r.title}</span> ({r.sku})
+                      <ul style={{ paddingLeft: 'var(--space-4)', listStyle: 'disc' }}>
+                        {r.notes.map((note) => (
+                          <li key={note}>{note}</li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            )}
+
+            {totals.warnings.length > 0 && (
+              <Disclosure summary={`${s(totals.warnings.length, 'problem')} in the file itself`}>
+                <ul style={{ paddingLeft: 'var(--space-4)', listStyle: 'disc', ...quiet }}>
+                  {totals.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </Disclosure>
+            )}
+          </div>
+        )}
+      </div>
     </Card>
   )
 }

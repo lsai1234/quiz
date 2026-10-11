@@ -267,6 +267,7 @@ export function ProductsList() {
           </div>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
             {VIEW_LINE[filters.show]}
+            {showChecks && counts.live > 0 && ` ${counts.live - counts.attention} of ${counts.live} on sale pass every check.`}
             {filters.show === 'pending' && counts.pending > 0 && (
               <>
                 {' '}

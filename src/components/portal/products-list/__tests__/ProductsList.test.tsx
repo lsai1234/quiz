@@ -61,7 +61,7 @@ describe('ProductsList', () => {
     expect(row).toHaveAttribute('href', '/founderhub/products/item/whey')
     expect(screen.getByText('£49.99 (was £59.99)')).toBeInTheDocument()
     // The master SKU's servings, and one of the two flavours sold out.
-    expect(row).toHaveAccessibleDescription(/2 flavours\/sizes · 66 servings · 1 sold out/)
+    expect(row).toHaveAccessibleDescription(/2 flavours\/sizes · 66 servings · subscribable · 1 sold out/)
     expect(screen.getByText('Optimum · Protein')).toBeInTheDocument()
 
     // Removed products are in All, at the bottom.

@@ -240,6 +240,11 @@ export function priceLabel(p: CatalogueProduct): string {
   return `${base}${was}${mine}`
 }
 
+/** Whether it can be put on a monthly plan, or is sold one-off only. */
+export function subscriptionLabel(p: CatalogueProduct): string {
+  return p.subscriptionEligible ? 'subscribable' : 'one-off only'
+}
+
 /** How many flavours or sizes it comes in, in words. */
 export function skuCountLabel(p: CatalogueProduct): string {
   const n = p.variants.length

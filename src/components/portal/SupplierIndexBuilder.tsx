@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Card } from '@/components/system'
 
 /** Mirrors PAGES_PER_PASS in the crawl route — only used to name the range
  *  being read, so a drift here costs a slightly wrong label, nothing more. */
 const PAGES_PER_PASS = 15
 
-interface IndexState {
+export interface IndexState {
   products: number
   pagesRead: number
   complete: boolean
@@ -45,8 +45,19 @@ interface Step {
  * each pass reads what fits and says where it got to, and this loops until the
  * feed genuinely ends.
  */
-export function SupplierIndexBuilder() {
+export function SupplierIndexBuilder({
+  onChange,
+}: {
+  /**
+   * Told whenever the stored index is read back — on load and after every run
+   * — so a summary elsewhere on the page (the Add page's status strip) never
+   * says "not built" under a crawl that has just finished.
+   */
+  onChange?: (state: IndexState) => void
+} = {}) {
   const [state, setState] = useState<IndexState | null>(null)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   /**
@@ -78,7 +89,11 @@ export function SupplierIndexBuilder() {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/portal/supplier/index', { cache: 'no-store' })
-      if (res.ok) setState(await res.json())
+      if (res.ok) {
+        const d: IndexState = await res.json()
+        setState(d)
+        onChangeRef.current?.(d)
+      }
     } catch {
       // A failed status read is not worth a message of its own — the crawl
       // button reports properly when it is pressed.
@@ -363,8 +378,8 @@ export function SupplierIndexBuilder() {
           PowerBody product index
         </p>
         <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)', lineHeight: 'var(--leading-loose)' }}>
-          Reads their whole product list once and keeps the SKU → product id mapping. Do this before importing a
-          roster: every code it reaches then imports without paging or searching for it.
+          Reads PowerBody’s whole product list once and keeps every SKU’s product id, so every lookup on this page —
+          and every roster import — is instant instead of a search. Refresh it weekly so new products are in it.
         </p>
         {/* Said before it starts, because both of these look like faults while
             they are happening and neither is. */}

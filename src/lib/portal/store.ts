@@ -781,7 +781,10 @@ export function applyProductOverrides(
       describes: 100 capsules beside a 454g bag are 33 servings and 454, and
       those keep their own (see `catalogue/split`).
     */
-    if (override.servings === undefined || override.servings === null) return merged
+    // An override written by the current editor carries its SKUs whole, each
+    // with exactly the count that was saved — spreading over them again would
+    // overwrite a flavour's own number with the master's.
+    if (override.servings === undefined || override.servings === null || override.variants) return merged
     const variants = spreadServings(merged, merged.servings)
     return variants ? { ...merged, variants } : merged
   })

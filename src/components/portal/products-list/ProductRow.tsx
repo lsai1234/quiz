@@ -14,6 +14,7 @@ import {
   servingsLabel,
   skuCountLabel,
   stockLabel,
+  subscriptionLabel,
   type ListEntry,
 } from './model'
 
@@ -45,7 +46,7 @@ export function ProductRow({ entry, showChecks }: { entry: ListEntry; showChecks
   const summary = showChecks ? null : attentionSummary(entry)
   const stock = stockLabel(p)
   const servings = servingsLabel(p)
-  const facts = [skuCountLabel(p), servings].filter(Boolean).join(' · ')
+  const facts = [skuCountLabel(p), servings, subscriptionLabel(p)].filter(Boolean).join(' · ')
   const brandLine = [p.brand, p.category].filter(Boolean).join(' · ')
 
   return (

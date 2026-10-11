@@ -121,7 +121,9 @@ const optionalText: Check = (v, label) => {
 }
 const number = (opts: { min?: number; max?: number; integer?: boolean; nullable?: boolean; zeroIsUnknown?: boolean }): Check =>
   (v, label) => {
-    if (v === null || v === '') return opts.nullable ? ok(null) : bad(`${label} needs a number.`)
+    // Blank — including a box of spaces, which `Number` would read as 0: a VAT
+    // rate of 0 is zero-rated, a 20% error on the margin, not "not set".
+    if (v === null || (typeof v === 'string' && v.trim() === '')) return opts.nullable ? ok(null) : bad(`${label} needs a number.`)
     const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
     if (!Number.isFinite(n)) return bad(`${label} must be a number.`)
     if (opts.zeroIsUnknown && n === 0) return ok(null)
@@ -308,7 +310,9 @@ export function validateEdit(
     // The label and the flavour move together: the shop's picker reads
     // `flavour` and falls back to `title`, so setting one and not the other is
     // how a product ends up named two different things.
-    if (typeof out.title === 'string' && !('flavour' in raw) && variant.flavour !== null) out.flavour = out.title
+    if (typeof out.title === 'string' && out.title !== variant.title && !('flavour' in raw) && variant.flavour !== null) {
+      out.flavour = out.title
+    }
     const moved = Object.keys(out).filter(
       (k) => k !== 'id' && JSON.stringify(out[k] ?? null) !== JSON.stringify((variant as unknown as Record<string, unknown>)[k] ?? null),
     )

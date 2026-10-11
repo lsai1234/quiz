@@ -218,21 +218,24 @@ test.describe('pricing a product by hand', () => {
     // Every product opens its own page from the one Products list.
     await page.getByRole('link', { name: /CHRGD Whey Protein/ }).first().click()
     await expect(page).toHaveURL(/\/founderhub\/products\/item\/chrgd-whey-protein/)
-    await expect(page.getByText(/what it costs us, and what we charge/i)).toBeVisible({ timeout: 20_000 })
+    const skus = page.locator('#variants')
+    await expect(skus.getByRole('heading', { name: /Flavours, sizes & prices/ })).toBeVisible({ timeout: 20_000 })
 
-    // The panel is a table of money on a dense screen, so it gets the same
-    // reading the rest of the hub gets: nothing clipped, no raw id, no mojibake.
+    // The page is money on a dense screen, so it gets the same reading the
+    // rest of the hub gets: nothing clipped, no raw id, no mojibake.
     const findings = await inspect(page)
     expect(report('the product page', findings), report('the product page', findings)).toBe('')
 
-    const box = page.getByLabel(/^Our price for /).first()
+    // The master SKU is listed first; its editor holds the price.
+    await skus.getByRole('button', { name: 'Edit' }).first().click()
+    const box = skus.getByLabel(/^Our price for /).first()
     const was = await box.inputValue()
-    expect(was, 'the panel opened with no price in it').toMatch(/^\d+\.\d{2}$/)
+    expect(was, 'the editor opened with no price in it').toMatch(/^\d+\.\d{2}$/)
 
     try {
       await box.fill('99.99')
-      await page.getByRole('button', { name: /^Set our price for / }).first().click()
-      await expect(page.getByText(/is £99\.99 until you change it/)).toBeVisible({ timeout: 20_000 })
+      await skus.getByRole('button', { name: 'Set our price' }).first().click()
+      await expect(page.getByText(/Price set/)).toBeVisible({ timeout: 20_000 })
 
       // The shelf, not just the screen that set it. This is the master SKU, so
       // the product's own price moved with it.
