@@ -139,11 +139,14 @@ export function applyStockLevels(
       }
     })
 
-    // Cost comes from the cheapest matching line: with one SKU (the normal case)
-    // that is simply its price, and it is the honest floor when a product maps
-    // to several.
-    const cost = round(Math.min(...matched.map((l) => l.wholesalePrice)))
-    const supplierRrp = round(Math.max(...matched.map((l) => l.rrp)))
+    // The product's cost and RRP are its MASTER SKU's — the one rule every
+    // writer uses (a pull, an absorbed price change), so this job and a pull do
+    // not flip the number back and forth. A master the feed did not return
+    // falls back to the cheapest line, as before.
+    const storedMaster = product.variants.find((v) => v.id === product.defaultVariantId) ?? product.variants[0]
+    const masterLevel = storedMaster?.sku ? bySku.get(storedMaster.sku) : undefined
+    const cost = round(masterLevel && masterLevel.wholesalePrice > 0 ? masterLevel.wholesalePrice : Math.min(...matched.map((l) => l.wholesalePrice)))
+    const supplierRrp = round(masterLevel && masterLevel.rrp > 0 ? masterLevel.rrp : Math.max(...matched.map((l) => l.rrp)))
 
     const wasInStock = product.variants.some((v) => v.available)
     const nowInStock = variants.some((v) => v.available)
@@ -223,6 +226,60 @@ async function saveReport(report: SupplierSyncReport): Promise<void> {
 }
 
 /**
+ * Stock and cost for SKUs their product list did not return, asked by id.
+ *
+ * Their list stops at about 3,000 of 8,000+ products, so every product past
+ * that point used to come back "missing" from the nightly check — reported as
+ * if PowerBody had delisted it — and its stock was never refreshed. A SKU whose
+ * id we hold (saved on it, or in the stored index) is one detail call away, and
+ * the reply carries the SKU, so it is checked rather than trusted. Bounded by a
+ * clock so a slow supplier cannot hold the nightly job.
+ */
+async function levelsById(
+  supplier: import('./types').SupplierProvider,
+  products: CatalogueProduct[],
+  seen: Set<string>,
+  budgetMs = 60_000,
+): Promise<SupplierStockLevel[]> {
+  const { indexedProductIds } = await import('@/lib/portal/supplier-index')
+  const wanted = new Map<string, string>()
+  for (const p of products) {
+    for (const v of p.variants) {
+      if (!v.sku || seen.has(v.sku)) continue
+      const id = v.supplierProductId ?? (p.variants.length === 1 ? p.supplierProductId : null)
+      if (id) wanted.set(v.sku, String(id))
+    }
+  }
+  const unknown = products.flatMap((p) => p.variants.map((v) => v.sku)).filter((s): s is string => Boolean(s && !seen.has(s) && !wanted.has(s)))
+  if (unknown.length > 0) {
+    for (const [sku, hit] of await indexedProductIds(unknown).catch(() => new Map())) if (hit.productId) wanted.set(sku, hit.productId)
+  }
+  const out: SupplierStockLevel[] = []
+  const startedAt = Date.now()
+  const ids = [...new Set(wanted.values())]
+  for (let i = 0; i < ids.length && Date.now() - startedAt < budgetMs; i += 10) {
+    try {
+      for (const p of await supplier.getProductsById(ids.slice(i, i + 10))) {
+        if (!p.sku || wanted.get(p.sku) !== String(p.productId ?? wanted.get(p.sku))) continue
+        out.push({
+          sku: p.sku,
+          productId: p.productId,
+          stock: p.stock,
+          inStock: p.inStock,
+          wholesalePrice: p.wholesalePrice,
+          rrp: p.rrp,
+          updatedAt: new Date().toISOString(),
+        })
+      }
+    } catch {
+      // A refused batch leaves those SKUs as they were — and reported as not
+      // reached, which is the truth.
+    }
+  }
+  return out
+}
+
+/**
  * Check every imported product against the supplier and refresh what moved.
  *
  * This is the daily "did anything change under us?" pass over the products we
@@ -236,7 +293,7 @@ async function saveReport(report: SupplierSyncReport): Promise<void> {
  */
 export async function syncImportedProducts(): Promise<SupplierSyncReport> {
   const { getSupplier, getSupplierSource } = await import('./index')
-  const { getImportedProducts, addImportedProducts } = await import('@/lib/portal/store')
+  const { getImportedProducts, updateImportedProducts } = await import('@/lib/portal/store')
   const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
 
   const at = new Date().toISOString()
@@ -251,12 +308,24 @@ export async function syncImportedProducts(): Promise<SupplierSyncReport> {
   const supplier = await getSupplier()
   const skus = imported.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))
   // The cheap call: stock and price only, no per-product detail fetch.
-  const levels = await supplier.getStockLevels(skus)
+  const listed = await supplier.getStockLevels(skus)
+  // …and, for whatever their list could not reach, ask by id.
+  const levels = [...listed, ...(await levelsById(supplier, imported, new Set(listed.map((l) => l.sku))))]
 
-  const { products, ...summary } = applyStockLevels(imported, levels, {
-    marginFloorPct: getPricingConfig().marginFloorPct,
-  })
-  if (summary.updated > 0) await addImportedProducts(products)
+  const options = { marginFloorPct: getPricingConfig().marginFloorPct }
+  const { products: _preview, ...preview } = applyStockLevels(imported, levels, options)
+  void _preview
+  // Applied again inside the write, to the products as they are THEN: the call
+  // above can take a minute, and writing back what was read before it would
+  // undo every edit a founder made in that minute.
+  const summary =
+    preview.updated > 0
+      ? await updateImportedProducts((current) => {
+          const { products, ...applied } = applyStockLevels(current, levels, options)
+          const before = new Map(current.map((p) => [p.id, JSON.stringify(p)]))
+          return { products: products.filter((p) => before.get(p.id) !== JSON.stringify(p)), result: applied }
+        })
+      : preview
 
   const report: SupplierSyncReport = { at, source, ...summary }
   await saveReport(report)
@@ -282,21 +351,29 @@ export async function rememberLiveStock(
 ): Promise<number> {
   if (live.length === 0) return 0
   try {
-    const { getImportedProducts, addImportedProducts } = await import('@/lib/portal/store')
+    const { getImportedProducts, updateImportedProducts } = await import('@/lib/portal/store')
     const bySku = new Map(live.map((l) => [l.sku, l]))
-    const moved: CatalogueProduct[] = []
-    for (const product of await getImportedProducts()) {
-      let touched = false
-      const variants = product.variants.map((variant) => {
-        const level = variant.sku ? bySku.get(variant.sku) : undefined
-        if (!level || (variant.available === level.inStock && variant.inventory === level.stock)) return variant
-        touched = true
-        return { ...variant, available: level.inStock, inventory: level.stock }
-      })
-      if (touched) moved.push({ ...product, variants })
+    const movedIn = (products: CatalogueProduct[]): CatalogueProduct[] => {
+      const moved: CatalogueProduct[] = []
+      for (const product of products) {
+        let touched = false
+        const variants = product.variants.map((variant) => {
+          const level = variant.sku ? bySku.get(variant.sku) : undefined
+          if (!level || (variant.available === level.inStock && variant.inventory === level.stock)) return variant
+          touched = true
+          return { ...variant, available: level.inStock, inventory: level.stock }
+        })
+        if (touched) moved.push({ ...product, variants })
+      }
+      return moved
     }
-    if (moved.length > 0) await addImportedProducts(moved)
-    return moved.length
+    // Checked against a cached read first, so the common case — nothing moved —
+    // costs no write at all.
+    if (movedIn(await getImportedProducts()).length === 0) return 0
+    return await updateImportedProducts((current) => {
+      const moved = movedIn(current)
+      return { products: moved, result: moved.length }
+    })
   } catch (err) {
     console.error('[supplier] could not remember live stock:', err)
     return 0

@@ -36,6 +36,7 @@
 import type { SupplierProvider } from './types'
 import { findProductIdForSku, sweepForSku, fitIdFromSku, skuNumber, type ProbeResult } from './product-id-search'
 import { productIdForSku } from './product-id-map'
+import { PowerBodySoapError } from './powerbody/soap'
 
 /** Thrown through the search when the clock runs out, so a timeout can never be
  *  mistaken for an exhausted range. Caught by `resolveProductIdForSku`. */
@@ -304,6 +305,11 @@ export function supplierProbe(supplier: SupplierProvider): {
         return { sku: null }
       } catch (err) {
         if (!firstError) firstError = err instanceof Error ? err : new Error(String(err))
+        // A refusal that could pass with time — a rate limit, a 503 — is NOT an
+        // empty id. Read as one, a throttle burst would end the search with
+        // "not there" and send someone to check a code that was fine. It stops
+        // the search instead, and the caller says what really happened.
+        if (err instanceof PowerBodySoapError && err.retryable) throw err
         return { sku: null }
       }
     },

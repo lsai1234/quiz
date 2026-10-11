@@ -175,6 +175,14 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
   // was-price, which is what `compareAtPrice` is for.
   const sellPrice = listPriceFor(sp.wholesalePrice)
   const wasPrice = sp.rrp > sellPrice ? sp.rrp : null
+  // Their id for this SKU — the expensive thing to find, so every SKU keeps it.
+  // Only a real PowerBody id — numeric. The sample catalogue's ids look like
+  // SKUs ("P12345"), and storing one would send it to PowerBody later.
+  const supplierProductId = sp.productId && /^\d+$/.test(String(sp.productId)) ? String(sp.productId) : null
+  const own = {
+    ...(supplierProductId ? { supplierProductId } : {}),
+    ...(sp.servings != null && sp.servings > 0 ? { servings: sp.servings } : {}),
+  }
 
   const variants: CatalogueVariant[] =
     sp.flavours.length > 0
@@ -194,6 +202,7 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           // but for anything merged later is not. The margin figures read it,
           // and the nightly sync keeps it current from here on.
           cost: sp.wholesalePrice,
+          ...own,
         }))
       : [{
           id,
@@ -206,6 +215,8 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           inventory: sp.stock,
           sku: sp.sku,
           cost: sp.wholesalePrice,
+          ...own,
+          ...(sp.imageUrl ? { imageUrl: sp.imageUrl } : {}),
         }]
 
   /*
@@ -257,6 +268,7 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     weightGrams: sp.weightGrams ?? null,
     vatRate: sp.vatRate ?? null,
     supplierRrp: sp.rrp,
+    supplierProductId,
     // Nothing with no dose can be a monthly plan: a shaker a month is not a
     // subscription, it is a cupboard problem.
     subscriptionEligible: !isAccessoryProduct,

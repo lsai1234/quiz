@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { listEditableProducts } from '@/lib/portal/product-edit'
 import { setProductOverride } from '@/lib/portal/store'
 import { productReadiness } from '@/lib/portal/readiness'
 import { aiClassifyProduct, gapPatch } from '@/lib/portal/ai-classify'
@@ -24,8 +25,10 @@ export async function POST(req: Request) {
   const { products, source } = await getResolvedCatalogue()
   const live = source === 'real'
 
+  // Asked for by id, any product a founder can open counts — including one
+  // still waiting for review, which is exactly when suggestions are wanted.
   const targets = body.ids
-    ? products.filter((p) => body.ids!.includes(p.id))
+    ? (await listEditableProducts()).filter((e) => e.state !== 'removed' && body.ids!.includes(e.product.id)).map((e) => e.product)
     : products.filter((p) => productReadiness(p, { live }).overall !== 'ok')
 
   const results: { id: string; title: string; suggestion: Record<string, unknown>; current: Record<string, unknown>; patch: Record<string, unknown>; applied: boolean; source: string }[] = []

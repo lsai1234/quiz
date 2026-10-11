@@ -6,7 +6,9 @@ import { rosterRowToProduct, type VariantFacts } from '@/lib/supplier/roster-imp
 import { splitBySize } from '@/lib/catalogue/split'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport } from '@/lib/catalogue/review'
-import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { importProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { looksLikePowerBodyCsv } from '@/lib/supplier/powerbody-csv'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { indexedProductIds } from '@/lib/portal/supplier-index'
 
 export const dynamic = 'force-dynamic'
@@ -54,6 +56,20 @@ export async function POST(req: Request) {
   }
   if (typeof body.csv !== 'string' || body.csv.trim() === '') {
     return NextResponse.json({ error: 'Send the CSV text as `csv`.' }, { status: 400 })
+  }
+  // PowerBody's own product list parses as a roster (it has a sku column) and
+  // would import 8,000 rows — one product per flavour, flooding Review. It is
+  // a different file with a different job, and the founder is told where it goes.
+  if (looksLikePowerBodyCsv(body.csv)) {
+    return NextResponse.json(
+      {
+        error:
+          'That is PowerBody’s own product list, not a roster spreadsheet. To add products from it, use ' +
+          '“Pick from PowerBody’s spreadsheet” on this page — it lets you search it and tick the ones you want.',
+        powerBodyCsv: true,
+      },
+      { status: 400 },
+    )
   }
   const rawOffset = Number(body.offset)
   const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0
@@ -152,21 +168,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // Only what the index could not answer for pays for the feed walk.
-    const stillMissing = mainSkus.filter((sku) => !found.some((p) => p.sku === sku))
-    if (stillMissing.length > 0) {
-      try {
-        found = [...found, ...(await supplier.getProductsBySku(stillMissing))]
-      } catch (err) {
-        // A supplier that will not answer must not stop the import: the rows still
-        // carry everything the quiz reads. It costs the pictures, and it is said.
-        lookupError = err instanceof Error ? err.message : 'PowerBody could not be reached.'
-      }
-    }
+    // No walk of PowerBody's list for what the index could not answer: that
+    // walk cannot be stopped once started, shares the rate limit, and was why a
+    // batch ran out of time with nothing saved. Rows without an id import
+    // without their PowerBody details and are reported; "Find ids" on the Add
+    // page (or a pull on the product) fills them in.
     const bySku = new Map(found.map((p) => [p.sku, p]))
 
     const taken = [...(await getImportedProducts())]
-    const pending = []
+    const pending: CatalogueProduct[] = []
     const results = []
 
     for (const row of slice) {
@@ -177,7 +187,18 @@ export async function POST(req: Request) {
       // The product id travels with the product. It is the expensive half of
       // every later call, and it never changes.
       const supplierProductId = bySku.get(row.sku)?.productId ?? indexed.get(row.sku)?.productId ?? null
-      const built = { ...product, id, handle: id, ...(supplierProductId ? { supplierProductId: String(supplierProductId) } : {}) }
+      // …and so does every flavour's own id, so no flavour is ever searched for again.
+      const variants = product.variants.map((v) => {
+        const own = v.sku ? (indexed.get(v.sku)?.productId ?? (v.sku === row.sku ? supplierProductId : null)) : null
+        return own && !v.supplierProductId ? { ...v, supplierProductId: String(own) } : v
+      })
+      const built = {
+        ...product,
+        variants,
+        id,
+        handle: id,
+        ...(supplierProductId ? { supplierProductId: String(supplierProductId) } : {}),
+      }
 
       /*
         One product per UNIT OF SALE, not one per roster row.
@@ -208,26 +229,48 @@ export async function POST(req: Request) {
           unit,
           sourcesForImport(enriched ? [] : ['imageUrl', 'description', 'category'], false),
         )
+        // The notes travel with the product, so Review can say why it looks
+        // the way it does long after this screen has gone.
+        if (stored.review && rowNotes.length > 0) stored.review = { ...stored.review, notes: rowNotes }
         taken.push(stored)
         pending.push(stored)
       }
       results.push({ sku: row.sku, id, title: product.title, enriched, notes: rowNotes })
     }
 
-    await addImportedProducts(pending)
+    /*
+      Re-running the spreadsheet is safe. A product whose SKUs are already in the
+      catalogue is never replaced: one waiting for review gets the spreadsheet's
+      own fields refreshed (its tags, swap group, actives, warnings — the half
+      only the sheet knows), and one already on sale is left exactly as it is
+      and reported. It used to be replaced wholesale with a fresh pending copy,
+      which took it off sale and threw away every price, picture and name worked
+      out since.
+    */
+    const outcomes = await importProducts(pending, { refresh: refreshFromRoster })
+    const outcomeById = new Map(pending.map((p, i) => [p.id, outcomes[i]]))
+    for (const r of results) {
+      const o = outcomeById.get(r.id)
+      if (o && o.status !== 'added') Object.assign(r, { outcome: o.status, existingId: o.id, existingTitle: o.title })
+      else if (o) Object.assign(r, { outcome: 'added', id: o.id })
+    }
 
     const nextOffset = offset + slice.length < rows.length ? offset + slice.length : null
     return NextResponse.json({
       ok: true,
       total: rows.length,
       offset,
-      imported: pending.length,
+      imported: outcomes.filter((o) => o.status === 'added').length,
+      refreshed: outcomes.filter((o) => o.status === 'refreshed').length,
+      already: outcomes.filter((o) => o.status === 'already' || o.status === 'removed').length,
       nextOffset,
       enriched: results.filter((r) => r.enriched).length,
       // How many ROWS the index answered for without a feed walk. Counted over
       // the main SKUs only: the flavour lookups are a detail of those rows, not
       // rows of their own, and counting them would inflate this past the batch.
       fromIndex: mainSkus.filter((sku) => indexed.has(sku)).length,
+      // SKUs in this batch PowerBody's id is not yet known for.
+      withoutIds: everySku.filter((sku) => !indexed.get(sku)?.productId),
       results,
       // Parse warnings belong to the whole file, so they are sent once with the
       // first slice rather than repeated on every batch.
@@ -239,5 +282,39 @@ export async function POST(req: Request) {
       { error: err instanceof Error ? err.message : 'Import failed.' },
       { status: 502 },
     )
+  }
+}
+
+/** The fields only the spreadsheet knows. Everything else stays as the product has it. */
+const ROSTER_FIELDS = [
+  'stackSlots', 'goals', 'swapGroup', 'dietaryTags', 'formats', 'hasStimulants', 'contraindications',
+  'warnings', 'actives', 'subscriptionEligible', 'recommendationPriority', 'shortReason',
+] as const
+
+/**
+ * A spreadsheet re-run over a product still waiting for review: take the
+ * sheet's fields, keep everything else (prices, pictures, names, PowerBody
+ * facts), and un-confirm what changed so it is looked at again.
+ */
+function refreshFromRoster(current: CatalogueProduct, incoming: CatalogueProduct): CatalogueProduct {
+  const next = { ...current } as Record<string, unknown>
+  const changed: string[] = []
+  for (const key of ROSTER_FIELDS) {
+    const value = (incoming as unknown as Record<string, unknown>)[key]
+    if (value === undefined) continue
+    if (JSON.stringify(value) !== JSON.stringify(next[key])) {
+      next[key] = value
+      changed.push(key)
+    }
+  }
+  const review = current.review
+  if (!review) return next as unknown as CatalogueProduct
+  return {
+    ...(next as unknown as CatalogueProduct),
+    review: {
+      ...review,
+      confirmed: review.confirmed.filter((k) => !changed.includes(k)),
+      notes: incoming.review?.notes ?? review.notes,
+    },
   }
 }

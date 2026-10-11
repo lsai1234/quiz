@@ -1,3 +1,4 @@
+import { variantForLine } from '@/lib/catalogue/line-variant'
 /**
  * Order lifecycle service.
  *
@@ -258,11 +259,11 @@ export function subscriptionOrderLines(
   // removed it from the member's picture of the box and shipped it regardless.
   const removed = removedLinesAtCycle(sub, cycle)
   return sub.lines.filter((line) => shipsAtCycle(line, cycle) && !removed.includes(line.id)).map((line) => {
-    const product = catalogue.find((p) => p.id === line.productId)
-    const variant =
-      product?.variants.find((v) => (v.flavour || v.size || v.title) === line.variantTitle) ??
-      product?.variants.find((v) => v.available) ??
-      product?.variants[0]
+    // Every spelling of the label, and any rename, split or merge since —
+    // see `catalogue/line-variant`.
+    const found = variantForLine(line, catalogue)
+    const product = found?.product
+    const variant = found?.variant
     return {
       sku: variant?.sku ?? null,
       productId: line.productId,

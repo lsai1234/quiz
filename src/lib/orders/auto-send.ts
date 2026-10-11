@@ -43,6 +43,7 @@ import { getOrder, listAwaitingFulfilment, updateOrder } from './repo'
 import { approveOrderForSupplier, orderReference, reviewStateOf, sendBlocker, submitOrderToSupplier } from './service'
 import { neverPaid } from './unpaid'
 import type { Order } from './types'
+import { supplierIdFor } from '@/lib/catalogue/master'
 
 export type AutoSendResult =
   | { outcome: 'off' | 'skipped'; reason: string }
@@ -79,7 +80,7 @@ export function stockItemsFor(order: Pick<Order, 'lines'>, catalogue: CatalogueP
       sku: line.sku!,
       quantity: line.quantity,
       title: line.variantTitle ? `${line.title} (${line.variantTitle})` : line.title,
-      supplierProductId: catalogue.find((p) => p.id === line.productId)?.supplierProductId ?? null,
+      supplierProductId: supplierIdFor(catalogue.find((p) => p.id === line.productId), line.sku),
     }))
 }
 

@@ -1,48 +1,22 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import {
-  getImportedProducts,
-  getProductOverrides,
-  saveImportedProduct,
-  setProductOverride,
-  syncPortalRuntime,
-} from './store'
+import { applyPatch, diffProducts, isEmptyPatch } from '@/lib/catalogue/patch'
+import { rememberRenames } from '@/lib/catalogue/line-variant'
+import { editStoredProduct } from './store'
+import { listEditableProducts } from './product-edit'
 
 /**
- * Reading and writing a product the way the Hub edits one.
+ * Reading and writing a product for the supplier pull and the price screen.
  *
- * A product lives in one of two places and the difference decides how a change
- * is written, which is subtle enough that two screens got it right by copying
- * each other and would have drifted the moment one of them changed:
- *
- *   IMPORTED   still in the review queue, and ours outright — rewritten whole.
- *   LIVE       in the catalogue, where the base product is regenerated from the
- *              feed. A direct write is lost on the next sync, so the edit is
- *              held as an OVERRIDE and composed over the base on read.
- *
- * Both callers — the supplier pull and the price screen — need the same two
- * steps: every product as it currently stands (base + override + imported), and
- * a write that goes to whichever of the two places this one belongs in.
+ * Both work the same way: read the product, work out what it should become, save
+ * that. The save used to write the WHOLE product back — an imported record
+ * replaced wholesale — so anything that moved between the read and the write
+ * (the stock sync, another screen) was put back as it was. `saveProductChange`
+ * writes only what this pass changed, onto the product as it is at write time.
  */
 
-/**
- * Every product a founder can edit, as it currently stands.
- *
- * Imported products are composed with their overrides here too: one can be
- * edited before it is approved, and a pass that read the raw imported record
- * would hand back a product missing the edit and then write that back over it.
- */
+/** Every product a founder can edit, as it currently stands (pending and removed included). */
 export async function allEditableProducts(): Promise<CatalogueProduct[]> {
-  await syncPortalRuntime()
-  const [imported, resolved, overrides] = await Promise.all([
-    getImportedProducts(),
-    getResolvedCatalogue(),
-    getProductOverrides(),
-  ])
-  const byId = new Map<string, CatalogueProduct>()
-  for (const p of resolved.products) byId.set(p.id, p)
-  for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
-  return [...byId.values()]
+  return (await listEditableProducts()).map((e) => e.product)
 }
 
 /** …and one of them, by id. */
@@ -51,18 +25,14 @@ export async function editableProduct(id: string): Promise<CatalogueProduct | un
 }
 
 /**
- * Write a change to a product, the way that product is stored.
- *
- * `next` is the whole product after the change and `patch` is the part of it
- * that changed: an imported record is replaced with the first, a live one gets
- * the second as its override. Passing both is what lets one call serve both
- * shapes without the caller having to know which it is holding.
+ * Save what changed between `before` (as read) and `after` (as worked out).
+ * Returns the product as saved, or `before` untouched when nothing changed.
  */
-export async function saveProductEdit(
-  next: CatalogueProduct,
-  patch: Partial<CatalogueProduct>,
-): Promise<void> {
-  const imported = new Set((await getImportedProducts()).map((p) => p.id))
-  if (imported.has(next.id)) await saveImportedProduct(next)
-  else await setProductOverride(next.id, patch)
+export async function saveProductChange(before: CatalogueProduct, after: CatalogueProduct): Promise<CatalogueProduct> {
+  // A pass that renames flavours (the name repair) keeps the old names on file,
+  // so subscription lines written against them still find them.
+  const patch = diffProducts(before, rememberRenames(before, after))
+  if (isEmptyPatch(patch)) return before
+  // No servings spread: a pass that sets a SKU's own count means that SKU.
+  return editStoredProduct(after.id, (current) => applyPatch(current, patch, { spreadServings: false }))
 }

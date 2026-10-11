@@ -1,35 +1,34 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed, getFounder } from '@/lib/portal/guard'
 import {
-  getImportedProducts,
   getPendingReviewProducts,
-  saveImportedProduct,
   discardImportedProduct,
+  editStoredProduct,
+  restructureProducts,
   syncPortalRuntime,
+  ProductNotFound,
 } from '@/lib/portal/store'
-import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed, withoutSupplierOwned, isBlankValue } from '@/lib/catalogue/review'
+import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed } from '@/lib/catalogue/review'
 import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
-import { uniqueProductId } from '@/lib/supplier/mapping'
+import { applyPatch, type ProductPatch } from '@/lib/catalogue/patch'
 import { getSupplier } from '@/lib/supplier'
-import { autopopulateProduct } from '@/lib/supplier/autopopulate'
-import { resolveProductIdForSku, type ResolveStep } from '@/lib/supplier/resolve-sku'
-import { indexedProductId } from '@/lib/portal/supplier-index'
-import { listPriceFor } from '@/lib/pricing/list-price'
+import { pullProduct } from '@/lib/supplier/pull'
+import { saveProductChange } from '@/lib/portal/editable-products'
+import { fillBlanks } from '@/lib/portal/product-actions'
+import { PersistError } from '@/lib/portal/persist'
+import type { ResolveStep } from '@/lib/supplier/resolve-sku'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { SupplierProduct } from '@/lib/supplier/types'
 
 export const dynamic = 'force-dynamic'
-// The SKU search is tens of throttled requests, so this route needs the long
-// budget. `resolveProductIdForSku` keeps its own clock well inside it.
-export const maxDuration = 60
+// Filling from PowerBody may have to search for a SKU's id past the feed's
+// ceiling, which is minutes of throttled requests — see `supplier/pull`.
+export const maxDuration = 300
 
 /**
- * The import review queue.
- *
- * Products added from PowerBody land here rather than in the shop. Everything a
- * rule or a model decided has to be confirmed — or corrected — before the
- * product can be sold, because the fields nobody looks at are exactly the ones
- * that decide who the quiz recommends it to.
+ * The review queue: products imported from PowerBody that are held out of the
+ * shop and the quiz until a founder has checked the half a rule or a model
+ * decided. Each product is reviewed on its own product page; this is the queue
+ * and the actions on it.
  */
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -47,17 +46,18 @@ export async function GET() {
 
 interface ReviewBody {
   id?: string
-  /** Field edits to apply before confirming. */
   patch?: Partial<CatalogueProduct>
-  /** Fields being ticked off as checked. */
   confirm?: string[]
   action?: 'save' | 'approve' | 'discard' | 'combine' | 'enrich' | 'ai-fill'
-  /** For `combine`: the products to fold into one. */
   ids?: string[]
-  /** For `combine`: what to call the result. Defaults to what the titles share. */
   title?: string
-  /** For `enrich`: stream progress as newline-delimited JSON instead of waiting. */
   stream?: boolean
+}
+
+function notSaved(err: unknown) {
+  if (err instanceof ProductNotFound) return NextResponse.json({ error: err.message }, { status: 404 })
+  const message = err instanceof Error ? err.message : String(err)
+  return NextResponse.json({ error: `Not saved — ${message}` }, { status: err instanceof PersistError ? 503 : 500 })
 }
 
 export async function POST(req: Request) {
@@ -71,246 +71,116 @@ export async function POST(req: Request) {
   }
   await syncPortalRuntime()
 
+  /*
+    Several imported flavours become one product. One write: the sources go and
+    the combined product arrives together, or nothing changes.
+  */
   if (body.action === 'combine') {
-    const ids = (body.ids ?? []).filter((id): id is string => typeof id === 'string')
-    const pending = await getPendingReviewProducts()
-    const chosen = ids.map((id) => pending.find((p) => p.id === id)).filter((p): p is CatalogueProduct => Boolean(p))
-    if (chosen.length !== ids.length) {
-      return NextResponse.json({ error: 'Some of those products are not waiting for review.' }, { status: 404 })
+    const ids = [...new Set((body.ids ?? []).filter((id): id is string => typeof id === 'string'))]
+    try {
+      const outcome = await restructureProducts((bench) => {
+        const chosen = ids.map((id) => bench.get(id))
+        if (chosen.some((p) => !p || p.review?.status !== 'pending')) {
+          return { error: 'Some of those products are not waiting for review.', status: 404 } as const
+        }
+        const products = chosen as CatalogueProduct[]
+        // Refused rather than half-supported when the model cannot carry the
+        // difference — see `canMerge`.
+        const check = canMerge(products)
+        if (!check.ok) return { error: check.reason, status: 400 } as const
+        const merged = mergeProducts(products, { title: body.title })
+        for (const id of ids) bench.discard(id)
+        // Whatever any of them still needed checking, the combined product
+        // needs: its review starts from the first one's.
+        const id = bench.add({ ...merged, review: products[0].review })
+        return { id, variants: merged.variants.length } as const
+      })
+      if ('error' in outcome) return NextResponse.json({ error: outcome.error }, { status: outcome.status })
+      return NextResponse.json({ ok: true, ...outcome })
+    } catch (err) {
+      return notSaved(err)
     }
-
-    // Refused rather than half-supported when the variant model cannot carry the
-    // difference — see `canMerge`.
-    const check = canMerge(chosen)
-    if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 })
-
-    const merged = mergeProducts(chosen, { title: body.title })
-    // The merged name can slug to something another product already owns —
-    // combining two products called "Product 20"/"Product 21" yields "product".
-    // Checked against everything EXCEPT the ones being replaced, which are about
-    // to stop existing.
-    const others = (await getImportedProducts()).filter((p) => !ids.includes(p.id))
-    const id = uniqueProductId(merged, others)
-    // Whatever any of them still needed checking, the combined product needs:
-    // its review starts from the primary's.
-    const combined: CatalogueProduct = {
-      ...merged,
-      id,
-      handle: id,
-      review: chosen[0].review,
-    }
-
-    // Replace the sources with the combined product: discarding first means a
-    // failure part-way cannot leave the originals gone and nothing in their place.
-    await saveImportedProduct(combined, { replacing: ids })
-    return NextResponse.json({ ok: true, id: combined.id, variants: combined.variants.length })
   }
 
-  /**
-   * Discard several at once.
-   *
-   * Checked BEFORE the single-id guard, because a bulk discard has ids and no
-   * id. Worth having as its own path rather than looping in the browser: a
-   * hundred sequential requests is a hundred chances to half-finish, and
-   * clearing a queue you are about to re-import has to either happen or not.
-   */
   if (body.action === 'discard' && Array.isArray(body.ids)) {
     const ids = body.ids.filter((v): v is string => typeof v === 'string' && v !== '')
     if (ids.length === 0) return NextResponse.json({ error: 'No products selected.' }, { status: 400 })
-    for (const id of ids) await discardImportedProduct(id)
+    try {
+      await restructureProducts((bench) => {
+        for (const id of ids) if (bench.get(id)?.review?.status === 'pending') bench.discard(id)
+      })
+    } catch (err) {
+      return notSaved(err)
+    }
     return NextResponse.json({ ok: true, discarded: ids.length })
   }
 
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const id = body.id
 
   if (body.action === 'discard') {
-    await discardImportedProduct(body.id)
-    return NextResponse.json({ ok: true, discarded: body.id })
+    try {
+      await discardImportedProduct(id)
+    } catch (err) {
+      return notSaved(err)
+    }
+    return NextResponse.json({ ok: true, discarded: id })
   }
 
-  const pendingForAction = await getPendingReviewProducts()
+  const pending = await getPendingReviewProducts()
+  const target = pending.find((p) => p.id === id)
+  if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
 
-  /**
-   * Pull the descriptive half from PowerBody for ONE product, on demand.
-   *
-   * Doing this during a bulk import means a hundred throttled calls in a row,
-   * which is exactly when their rate limiter starts refusing and every product
-   * arrives pictureless. Doing it here costs one call at the moment somebody is
-   * actually looking at the product, which is both far kinder to the limit and
-   * the point at which a missing picture is worth noticing.
-   *
-   * Only the descriptive fields and the cost are taken. The roster's judgement —
-   * swap group, actives, contraindications, servings — is never overwritten:
-   * that is the half PowerBody cannot answer, and a founder decided it.
-   */
+  /*
+    Fill from PowerBody. The same pull as the product page's button — see
+    `supplier/pull` for what it may write. Streams its steps when asked,
+    because finding an id past the feed ceiling can take a minute or two and a
+    screen showing nothing that long looks hung.
+  */
   if (body.action === 'enrich') {
-    if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-    const target = pendingForAction.find((p) => p.id === body.id)
-    if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
-
-    const sku = target.variants.find((v) => v.sku)?.sku
-    if (!sku) {
-      return NextResponse.json(
-        { error: 'This product has no supplier SKU, so there is nothing to look up.' },
-        { status: 400 },
-      )
+    if (!target.variants.some((v) => v.sku)) {
+      return NextResponse.json({ error: 'This product has no supplier SKU, so there is nothing to look up.' }, { status: 400 })
     }
-
     type EnrichResult =
       | { ok: true; id: string; filled: string[]; gotImage: boolean; via: string; probes: number; trace: ResolveStep[] }
       | { ok: false; status: number; error: string; trace: ResolveStep[] }
 
-    /**
-     * The whole pull, reporting itself as it goes.
-     *
-     * `emit` exists because this can spend a minute making throttled requests,
-     * and a screen showing nothing for a minute is indistinguishable from one
-     * that has hung. The same steps are also kept and returned, so a failure can
-     * be read back afterwards rather than guessed at.
-     */
     const run = async (emit: (step: ResolveStep) => void): Promise<EnrichResult> => {
-      const trace: ResolveStep[] = []
-      const note = (phase: ResolveStep['phase'], message: string, probes = 0) => {
-        const step: ResolveStep = { phase, message, probes }
-        trace.push(step)
-        emit(step)
-      }
-
       try {
         const supplier = await getSupplier()
-
-        /**
-         * Three routes to the same product, cheapest first.
-         *
-         * 1. A product id we already hold — one request, no paging, cannot time out.
-         * 2. The SKU, via the list feed. Free when the SKU is inside the feed's
-         *    3,000-product ceiling.
-         * 3. A binary search over `getProductInfo`, for a SKU above that ceiling.
-         *    The feed cannot reach those AT ALL — no parameter raises the cap — so
-         *    without this a quarter of the roster is permanently unimportable.
-         *    It costs tens of throttled requests, which is why it is last and why
-         *    the id it finds is written back to the product.
-         */
-        let found: SupplierProduct | undefined
-        let resolvedId: string | null = null
-        let via: 'id' | 'index' | 'feed' | 'search' = 'feed'
-        let probes = 0
-
-        if (target.supplierProductId) {
-          note('canary', `Asking PowerBody for product ${target.supplierProductId}, the id we already hold for ${sku}.`)
-          const [byId] = await supplier.getProductsById([target.supplierProductId]).catch(() => [])
-          // Verified, never assumed: an id that now answers with a different SKU
-          // has moved, and trusting it would import somebody else's product.
-          if (byId?.sku === sku) { found = byId; via = 'id' }
-          else note('canary', `That id no longer answers for ${sku}, so it is being resolved again.`)
-        }
-
-        // The stored feed index: a crawl already read PowerBody's product list
-        // and kept the SKU → product id mapping, so this is a lookup rather
-        // than a walk. Nothing here is trusted on its own — the id is used to
-        // fetch live detail, and the SKU on that reply is checked.
-        if (!found) {
-          const indexed = await indexedProductId(sku)
-          if (indexed) {
-            note('canary', `Found ${sku} in the stored product list — it is PowerBody product ${indexed}.`)
-            const [byId] = await supplier.getProductsById([indexed]).catch(() => [])
-            if (byId?.sku === sku) { found = byId; resolvedId = indexed; via = 'index' }
-            else note('canary', `Product ${indexed} did not answer for ${sku}, so the stored index is out of date for this code.`)
+        const result = await pullProduct(target, { supplier, budgetMs: 240_000, force: true, onStep: emit })
+        if (result.answered === 0) {
+          return {
+            ok: false,
+            status: 404,
+            trace: result.trace,
+            error: result.unresolved[0]?.message ?? 'PowerBody did not answer for this product.',
           }
         }
-
-        if (!found) {
-          note('anchors', `Looking for ${sku} in PowerBody's product list.`)
-          // A SKU past the ceiling makes this walk the whole feed and run out of
-          // its build deadline, which arrives as a throw. That is not a supplier
-          // outage and must not end the attempt — it is the exact case the search
-          // below exists for.
-          found = await supplier
-            .getProductsBySku([sku])
-            .then((r) => r[0])
-            .catch((err: unknown) => {
-              note('anchors', `Their list did not answer: ${err instanceof Error ? err.message : String(err)}`)
-              return undefined
-            })
-        }
-
-        if (!found) {
-          const outcome = await resolveProductIdForSku(sku, supplier, {
-            onStep: (step) => { trace.push(step); emit(step) },
-          })
-          probes = outcome.probes
-          via = 'search'
-          if (outcome.productId === null) {
-            // Each reason is a different instruction to the person reading it, so
-            // they are never collapsed into one message. A clock that ran out is
-            // "try again"; an exhausted range is "this is not on the account".
-            const why: Record<string, string> = {
-              deadline: `Searched ${outcome.probes} of PowerBody's product ids for ${sku} without finding it before running out of time. Press again to carry on with a fresh budget.`,
-              'probe-budget': `Searched ${outcome.probes} of PowerBody's product ids for ${sku} without finding it. Press again to search further.`,
-              'not-found': `${sku} is not on this PowerBody account — searched product ids ${outcome.bracket?.lo}–${outcome.bracket?.hi}, either side of where this code should sit, and it is not there. Check the code.`,
-              // The feed's own words, not a guess. This used to say "check the
-              // supplier credentials", which is one cause out of several.
-              'no-anchors': outcome.feedError ?? 'PowerBody\'s product list could not be read.',
-              'unusable-sku': `${sku} has no number in it, so there is no way to work out where it sits in their catalogue. Use the product ID box instead.`,
-            }
-            return { ok: false, status: 404, error: why[outcome.reason] ?? `Could not resolve ${sku}.`, trace }
-          }
-          resolvedId = String(outcome.productId)
-          note('done', `Fetching the full details for product ${resolvedId}.`, probes)
-          const [byId] = await supplier.getProductsById([resolvedId])
-          if (byId?.sku !== sku) {
-            return {
-              ok: false, status: 502, trace,
-              error: `Found a product id for ${sku} but it answered for ${byId?.sku ?? 'nothing'}. Not importing it.`,
-            }
-          }
-          found = byId
-        }
-
-        // Cost is theirs, and the shelf price is our rule applied to it — the same
-        // way the importer does it, so a product enriched here and one enriched at
-        // import cannot end up priced differently.
-        const cost = found.wholesalePrice > 0 ? found.wholesalePrice : target.cost
-        const patch: Partial<CatalogueProduct> = {
-          ...(found.imageUrl ? { imageUrl: found.imageUrl } : {}),
-          ...(found.description ? { description: found.description } : {}),
-          ...(found.category ? { category: found.category } : {}),
-          ...(found.weightGrams != null ? { weightGrams: found.weightGrams } : {}),
-          ...(found.vatRate != null ? { vatRate: found.vatRate } : {}),
-          ...(found.rrp > 0 ? { compareAtPrice: found.rrp, supplierRrp: found.rrp } : {}),
-          ...(cost != null && cost > 0 ? { cost, basePrice: listPriceFor(cost) } : {}),
-        }
-        // The id is the expensive half. Written back so no later pull, price
-        // refresh or stock check ever pays for the search again.
-        const supplierProductId = resolvedId ?? found.productId ?? target.supplierProductId ?? null
-        if (supplierProductId) patch.supplierProductId = String(supplierProductId)
-        const next: CatalogueProduct = { ...target, ...patch }
-        // Variant prices follow the product's, or the shop would ring up the old one.
-        if (patch.basePrice != null) {
-          next.variants = next.variants.map((v) => ({ ...v, price: patch.basePrice as number }))
-        }
-        // Fields PowerBody answered for are confirmed BY them — nobody needs to
-        // re-check a picture that came straight from the supplier.
-        await saveImportedProduct(withConfirmed(next, Object.keys(patch), []))
-
-        note('done', `Saved ${Object.keys(patch).length} fields from PowerBody.`, probes)
-        return { ok: true, id: target.id, filled: Object.keys(patch), gotImage: Boolean(found.imageUrl), via, probes, trace }
-      } catch (err) {
+        const confirmed = result.filled.length > 0
+          ? (() => {
+              const review = result.after.review
+              if (!review) return result.after
+              const sources = { ...review.sources }
+              for (const key of result.filled) sources[key as keyof CatalogueProduct] = 'supplier'
+              return { ...result.after, review: { ...review, sources, confirmed: [...new Set([...review.confirmed, ...result.filled])] } }
+            })()
+          : result.after
+        await saveProductChange(target, confirmed)
         return {
-          ok: false, status: 502, trace,
-          error: err instanceof Error ? err.message : 'PowerBody could not be reached.',
+          ok: true,
+          id: target.id,
+          filled: result.filled,
+          gotImage: Boolean(confirmed.imageUrl),
+          via: 'pull',
+          probes: result.trace.reduce((n, s) => Math.max(n, s.probes), 0),
+          trace: result.trace,
         }
+      } catch (err) {
+        return { ok: false, status: 502, trace: [], error: err instanceof Error ? err.message : 'PowerBody could not be reached.' }
       }
     }
 
-    /**
-     * Stream the steps as they happen when the caller asks for it.
-     *
-     * Newline-delimited JSON rather than SSE: there is one consumer, it wants
-     * objects, and NDJSON needs no event framing to parse. The response is
-     * marked no-transform and no-buffering because a proxy that helpfully
-     * buffers it turns live progress back into a minute of silence.
-     */
     if (body.stream) {
       const encoder = new TextEncoder()
       const stream = new ReadableStream<Uint8Array>({
@@ -320,10 +190,7 @@ export async function POST(req: Request) {
             const result = await run((step) => write({ type: 'step', ...step }))
             write({ type: 'result', ...result })
           } catch (err) {
-            write({
-              type: 'result', ok: false, status: 500, trace: [],
-              error: err instanceof Error ? err.message : 'The lookup stopped unexpectedly.',
-            })
+            write({ type: 'result', ok: false, status: 500, trace: [], error: err instanceof Error ? err.message : 'The lookup stopped unexpectedly.' })
           }
           controller.close()
         },
@@ -336,128 +203,57 @@ export async function POST(req: Request) {
         },
       })
     }
-
     const result = await run(() => {})
     return result.ok
       ? NextResponse.json(result)
       : NextResponse.json({ error: result.error, trace: result.trace }, { status: result.status })
   }
 
-  /**
-   * Fill the BLANKS with the classifier, and nothing else.
-   *
-   * "Blank" is the whole contract. A field somebody has already filled — from
-   * the roster, from PowerBody, or by hand in this screen — is a decision, and
-   * a model overwriting a decision is the single worst thing this could do. So
-   * every candidate is checked against the product as it stands and dropped if
-   * that field already holds anything.
-   *
-   * WHAT IT MAY NOT TOUCH
-   * `withoutSupplierOwned` strips the fields PowerBody own and the ones our own
-   * pricing rule computes. A model guessing a cost or a shelf price would put a
-   * fabricated number straight into the margin model.
-   *
-   * WHAT IT LEAVES UNDONE, ON PURPOSE
-   * Filled fields are recorded as `ai` (or `heuristic`) and are deliberately NOT
-   * marked confirmed. That is the difference between this and the PowerBody
-   * pull: a picture from the supplier is a fact and needs no second opinion,
-   * whereas a model's answer to "what is this product for" is a suggestion and
-   * must still be ticked by a person before the product can be approved. The
-   * queue's "N fields left to check" counter therefore does not fall.
-   *
-   * Claim safety is hard-gated upstream in `autopopulateProduct`: generated card
-   * copy has to be grounded in `APPROVED_CLAIMS` for the product's swap group or
-   * it is replaced, so no new health claim can be invented here.
-   */
+  /*
+    Fill the BLANKS with the classifier, and nothing else — recorded as the
+    model's and left unconfirmed, so a person still ticks each one.
+  */
   if (body.action === 'ai-fill') {
-    if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-    const target = pendingForAction.find((p) => p.id === body.id)
-    if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
-
     try {
-      const { patch, source } = await autopopulateProduct(target)
-      const candidate = withoutSupplierOwned(patch)
-
-      const filled: Partial<CatalogueProduct> = {}
-      for (const [key, value] of Object.entries(candidate)) {
-        // Blanks only. An already-filled field is somebody's decision, and a
-        // model quietly overwriting a decision is the worst thing this could do.
-        if (!isBlankValue(key, (target as unknown as Record<string, unknown>)[key])) continue
-        if (value === null || value === undefined) continue
-        if (typeof value === 'string' && value.trim() === '') continue
-        if (Array.isArray(value) && value.length === 0) continue
-        ;(filled as Record<string, unknown>)[key] = value
-      }
-
-      const keys = Object.keys(filled)
-      if (keys.length === 0) {
-        return NextResponse.json({ ok: true, id: target.id, filled: [], source })
-      }
-
-      const review = target.review
-      const next: CatalogueProduct = {
-        ...target,
-        ...filled,
-        ...(review
-          ? {
-              review: {
-                ...review,
-                sources: {
-                  ...review.sources,
-                  ...Object.fromEntries(keys.map((k) => [k, source])),
-                },
-                // Confirmed is untouched: a machine wrote these, so a person
-                // still has to tick them before this product can be approved.
-                confirmed: review.confirmed.filter((k) => !keys.includes(k)),
-              },
-            }
-          : {}),
-      }
-      await saveImportedProduct(next)
-
-      return NextResponse.json({ ok: true, id: target.id, filled: keys, source })
+      const { filled, source } = await fillBlanks(id)
+      return NextResponse.json({ ok: true, id, filled, source })
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : 'Could not fill the blanks.' },
-        { status: 502 },
-      )
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Could not fill the blanks.' }, { status: 502 })
     }
   }
 
-  const pending = pendingForAction
-  const current = pending.find((p) => p.id === body.id)
-  if (!current) {
-    return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
-  }
-
-  // An edited field is confirmed by the act of editing it, and its source
-  // becomes the founder — it is no longer a machine's answer.
-  const edited = Object.keys(body.patch ?? {})
-  let next: CatalogueProduct = { ...current, ...(body.patch ?? {}) }
-  next = withConfirmed(next, [...(body.confirm ?? []), ...edited], edited)
-
-  if (body.action === 'approve') {
-    if (!isReviewComplete(next)) {
-      // The point of the queue is that nothing sells unchecked, so this refuses
-      // rather than approving and hoping.
-      return NextResponse.json(
-        {
-          error: 'Some fields still need checking.',
-          remaining: fieldsNeedingReview(next).map((f) => f.key),
-        },
-        { status: 400 },
-      )
+  // Save / approve. An edited field is confirmed by the act of editing it, and
+  // its source becomes the founder — it is no longer a machine's answer.
+  const founder = body.action === 'approve' ? await getFounder() : null
+  let refusal: string[] | null = null
+  try {
+    const next = await editStoredProduct(id, (current) => {
+      if (current.review?.status !== 'pending') return null
+      const edited = Object.keys(body.patch ?? {})
+      let product = body.patch ? applyPatch(current, body.patch as ProductPatch) : current
+      product = withConfirmed(product, [...(body.confirm ?? []), ...edited], edited)
+      if (body.action === 'approve') {
+        if (!isReviewComplete(product)) {
+          // The point of the queue is that nothing sells unchecked, so this
+          // refuses rather than approving and hoping.
+          refusal = fieldsNeedingReview(product).map((f) => f.key as string)
+          return null
+        }
+        product = approved(product, founder?.email)
+      }
+      return product
+    })
+    if (refusal) {
+      return NextResponse.json({ error: 'Some fields still need checking.', remaining: refusal }, { status: 400 })
     }
-    const founder = await getFounder()
-    next = approved(next, founder?.email)
+    return NextResponse.json({
+      ok: true,
+      product: next,
+      remaining: fieldsNeedingReview(next).map((f) => f.key),
+      complete: isReviewComplete(next),
+      approved: next.review?.status === 'approved',
+    })
+  } catch (err) {
+    return notSaved(err)
   }
-
-  await saveImportedProduct(next)
-  return NextResponse.json({
-    ok: true,
-    product: next,
-    remaining: fieldsNeedingReview(next).map((f) => f.key),
-    complete: isReviewComplete(next),
-    approved: next.review?.status === 'approved',
-  })
 }

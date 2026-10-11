@@ -12,6 +12,7 @@
  * is permanent and the plan has to change. You can only tell them apart across
  * time, which is what the snapshot is for.
  */
+import { variantForLine } from '@/lib/catalogue/line-variant'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { SupplierProduct } from '@/lib/supplier/types'
@@ -129,16 +130,10 @@ export function diffSupplierFeed(
 
 /** The supplier SKU behind a subscription line, via its catalogue variant. */
 export function skuForLine(
-  line: Pick<MemberSubscriptionLine, 'productId' | 'variantTitle'>,
+  line: Pick<MemberSubscriptionLine, 'productId' | 'variantTitle'> & { sku?: string | null; variantId?: string | null },
   catalogue: CatalogueProduct[],
 ): string | null {
-  const product = catalogue.find((p) => p.id === line.productId)
-  if (!product) return null
-  const variant =
-    product.variants.find((v) => (v.flavour || v.size || v.title) === line.variantTitle) ??
-    product.variants.find((v) => v.available) ??
-    product.variants[0]
-  return variant?.sku ?? null
+  return variantForLine(line, catalogue)?.variant.sku ?? null
 }
 
 export interface AffectedLine {

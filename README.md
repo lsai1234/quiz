@@ -73,7 +73,7 @@ NEXT_PUBLIC_DATA_SOURCE=mock   # mock | real
 - `mock` (default) — the built-in sample catalogue, plus anything added from PowerBody.
   Every journey works without adding a single product.
 - `real` — **only** the products you have added from the PowerBody feed. This is the shop
-  you actually sell, and it starts empty: add products in Hub → Products → PowerBody.
+  you actually sell, and it starts empty: add products in Hub → Products → Add products.
 
 No credentials are involved, so this can't silently fall back. Flip it at runtime in the
 Founders Hub (Settings → Catalogue). A previous storefront integration was the old

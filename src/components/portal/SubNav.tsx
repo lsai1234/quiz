@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 
@@ -8,6 +9,24 @@ export interface SubNavItem {
   label: string
   /** Match only this exact path — for a section's index page. */
   exact?: boolean
+  /**
+   * Other paths that count as being "in" this view. A product's own page sits
+   * at `/founderhub/products/item/…` but belongs to the Products list it was
+   * opened from, and the bar should say so rather than light up nothing.
+   */
+  activeFor?: string[]
+  /**
+   * Something to draw after the label — a count of what is waiting there.
+   * Part of the link, so its text is part of the link's name: give it words
+   * for a screen reader ("3 waiting"), not just a number.
+   */
+  badge?: ReactNode
+}
+
+/** Whether `pathname` is in the view an item names. */
+export function isActive(item: SubNavItem, pathname: string): boolean {
+  if (item.exact ? pathname === item.href : pathname.startsWith(item.href)) return true
+  return (item.activeFor ?? []).some((prefix) => pathname.startsWith(prefix))
 }
 
 /**
@@ -58,14 +77,15 @@ export function SubNav({ items, title, blurb }: { items: SubNavItem[]; title: st
         aria-label={`${title} views`}
       >
         {items.map((item) => {
-          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+          const active = isActive(item, pathname)
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className="system-control system-focus shrink-0 whitespace-nowrap"
+              className="system-control system-focus shrink-0 whitespace-nowrap inline-flex items-center"
               style={{
+                gap: 'var(--space-2)',
                 padding: 'var(--space-2) var(--space-4)',
                 fontSize: 'var(--text-body-sm)',
                 fontWeight: 'var(--weight-strong)',
@@ -89,6 +109,7 @@ export function SubNav({ items, title, blurb }: { items: SubNavItem[]; title: st
               }}
             >
               {item.label}
+              {item.badge}
             </Link>
           )
         })}

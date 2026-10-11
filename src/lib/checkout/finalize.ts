@@ -32,6 +32,7 @@ import {
 } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
 import { healthConsentIsCurrent, healthDataDocument, sanitiseHealthData } from '@/lib/legal/health-data'
+import { supplierIdFor } from '@/lib/catalogue/master'
 
 export const PENDING_COOKIE = 'pending_checkout'
 export const PENDING_KEY_PREFIX = 'pending:'
@@ -200,7 +201,7 @@ export async function assertPlanInStock(sub: MemberSubscription): Promise<void> 
     if (variant && !variant.available) {
       unavailable.push({ productId: line.productId, title, sku })
     } else if (sku) {
-      toCheck.push({ productId: line.productId, title, sku, quantity: line.quantity, supplierProductId: product.supplierProductId ?? null })
+      toCheck.push({ productId: line.productId, title, sku, quantity: line.quantity, supplierProductId: supplierIdFor(product, sku) })
     }
   }
 

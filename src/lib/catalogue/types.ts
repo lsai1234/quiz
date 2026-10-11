@@ -93,6 +93,19 @@ export type SwapGroup =
   | 'accessory'
   | 'general'
 
+/** Every swap group, for pickers and for validating what a founder sends. */
+export const SWAP_GROUPS: SwapGroup[] = [
+  'protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine',
+  'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3',
+  'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'joint-support', 'sleep-support', 'fat-burner',
+  'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c',
+  'protein-bar', 'nootropic', 'vitamin-b', 'zma', 'energy-gel', 'accessory', 'general',
+]
+
+export const DIETARY_TAGS: DietaryTag[] = [
+  'vegan', 'vegetarian', 'gluten-free', 'dairy-free', 'nut-free', 'halal', 'keto-friendly',
+]
+
 // ─── Variant ──────────────────────────────────────────────────────────────────
 
 export interface CatalogueVariant {
@@ -167,6 +180,27 @@ export interface CatalogueVariant {
    * halves of that live.
    */
   priceSource?: 'rule' | 'founder' | null
+  /**
+   * PowerBody's `product_id` for THIS SKU.
+   *
+   * Every flavour is its own product at their end, with its own id, and the id
+   * is the expensive thing to find (see `supplierProductId` on the product). The
+   * product-level one only ever described the master, so a stock check or a
+   * pull for any other flavour had to search for its id again. Stored per SKU,
+   * each is found once. A shortcut, never trusted on its own: every use checks
+   * the SKU on PowerBody's reply.
+   */
+  supplierProductId?: string | null
+  /**
+   * Where this SKU used to live and what it used to be called.
+   *
+   * A subscription line remembers its product id and the flavour's LABEL, not
+   * the SKU. So the moment a flavour is renamed, split onto its own product or
+   * merged into another, a renewal looking for "Chocolate" on the old product
+   * found nothing — and shipped the first flavour in stock instead. Each move or
+   * rename leaves a note here, and `catalogue/line-variant` follows it.
+   */
+  formerly?: Array<{ productId: string; labels: string[] }>
 }
 
 // ─── Consumption protocol ─────────────────────────────────────────────────────
@@ -184,6 +218,7 @@ export type ConsumptionCadence =
  * (sweat) and infers the rest from goals + lifestyle.
  */
 export type AsNeededTrigger = 'sweat' | 'sleep' | 'stress' | 'immunity' | 'digestion'
+export const AS_NEEDED_TRIGGERS: AsNeededTrigger[] = ['sweat', 'sleep', 'stress', 'immunity', 'digestion']
 
 /**
  * Safety flags the quiz screens for, and that a product can be contraindicated
@@ -197,6 +232,7 @@ export type AsNeededTrigger = 'sweat' | 'sleep' | 'stress' | 'immunity' | 'diges
  *     A flag with no question behind it is decoration, so the safety screen asks.
  */
 export type SafetyFlag = 'pregnancy' | 'medication' | 'shellfish'
+export const SAFETY_FLAGS: SafetyFlag[] = ['pregnancy', 'medication', 'shellfish']
 
 /** When a drink is best taken — drives the Pour Plan protocol copy (guidance,
  *  not a rigid schedule). */
@@ -232,6 +268,7 @@ export type EffectOnset =
   | 'short'      // ~1–3 weeks — sleep, energy, recovery, gut
   | 'long'       // ~6–12 weeks, subtle/preventative — omega-3, vitamin D/C, collagen, multivitamin
   | 'none'       // never consciously felt — protein, creatine
+export const EFFECT_ONSETS: EffectOnset[] = ['immediate', 'short', 'long', 'none']
 
 // ─── Social proof ───────────────────────────────────────────────────────────────
 // Aggregate customer rating shown on shop cards and the product sheet. Only ever
@@ -514,6 +551,13 @@ export interface ProductReview {
   importedAt: string
   approvedAt?: string
   approvedBy?: string
+  /**
+   * What the import noticed about this product — a size split, a swap group it
+   * did not recognise, a supplier lookup that failed. Kept on the product so the
+   * review shows WHY it looks the way it does, long after the import screen has
+   * gone.
+   */
+  notes?: string[]
 }
 
 // ─── Catalogue query options ──────────────────────────────────────────────────

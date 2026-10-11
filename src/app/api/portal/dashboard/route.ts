@@ -12,7 +12,7 @@ import { buildVatPosition } from '@/lib/pricing/vat-position'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { productReadiness } from '@/lib/portal/readiness'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
-import { syncPortalRuntime } from '@/lib/portal/store'
+import { getPendingReviewProducts, syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams
   const days = Math.min(365, Math.max(1, Number(params.get('days')) || 30))
 
-  const [orders, unfulfilled, subs, openChanges, funnel, catalogue] = await Promise.all([
+  const [orders, unfulfilled, subs, openChanges, funnel, catalogue, awaitingReview] = await Promise.all([
     listOrders({ limit: 500 }),
     listAwaitingFulfilment(),
     listActiveSubscriptions(),
@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     // recomputes it for somebody who has just run the quiz to see it move.
     quizFunnel(days, { fresh: params.get('fresh') === '1' }),
     getResolvedCatalogue(),
+    getPendingReviewProducts().catch(() => []),
   ])
 
   const byUser = new Map<string, typeof openChanges>()
@@ -55,7 +56,8 @@ export async function GET(req: Request) {
   const notReady = catalogue.products.filter((p) => productReadiness(p, { live }).overall !== 'ok').length
   const config = getPricingConfig()
 
-  const costed = catalogue.products.filter((p) => p.cost != null && p.basePrice > 0)
+  // A cost of 0 is "not known", not "free" — see `catalogue/price`.
+  const costed = catalogue.products.filter((p) => p.cost != null && p.cost > 0 && p.basePrice > 0)
   const vat = buildVatPosition({
     orders,
     config,
@@ -76,6 +78,7 @@ export async function GET(req: Request) {
       undeliverable: queue.undeliverable,
       openChanges: openChanges.length,
       productsNeedingAttention: notReady,
+      productsAwaitingReview: awaitingReview.length,
       vat: vat.verdict,
     }),
     funnel: funnel.funnel,

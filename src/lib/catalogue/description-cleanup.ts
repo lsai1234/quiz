@@ -20,7 +20,7 @@
  */
 import { cleanDescription, looksLikeHtml } from './description'
 import { rewriteDescription, type RewriteResult } from './rewrite-description'
-import { getImportedProducts, addImportedProducts } from '@/lib/portal/store'
+import { getImportedProducts, updateImportedProducts } from '@/lib/portal/store'
 import type { ClaimFlag } from '@/lib/shop/claim-safety'
 import type { CatalogueProduct } from './types'
 
@@ -148,7 +148,15 @@ export async function cleanupDescriptions(options: CleanupOptions = {}): Promise
 
   // One write for the batch. The batch is the caller's unit of progress, so
   // finishing it and losing the write would be the worst of both.
-  if (write && updated.length > 0) await addImportedProducts(updated)
+  // Only the description, onto each product as it is at write time: the AI
+  // pass above takes a while, and the rest of the record may have moved.
+  if (write && updated.length > 0) {
+    const cleaned = new Map(updated.map((p) => [p.id, p.description]))
+    await updateImportedProducts((current) => ({
+      products: current.filter((p) => cleaned.has(p.id)).map((p) => ({ ...p, description: cleaned.get(p.id)! })),
+      result: undefined,
+    }))
+  }
 
   return { scanned: batch.length, changes, unchanged, aiUsed, fellBack, written: write && updated.length > 0 }
 }

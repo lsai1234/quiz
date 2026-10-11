@@ -80,7 +80,7 @@ export function loadCatalogue(): Promise<CatalogueLoad> {
       const error =
         data.error ??
         (products.length === 0
-          ? 'The catalogue came back empty. Add products in Hub → Products → PowerBody, or switch the data source back to Mock.'
+          ? 'The catalogue came back empty. Add products in Hub → Products → Add products, or switch the data source back to Mock.'
           : null)
 
       useQuizStore.getState().setCatalogueProducts(products)

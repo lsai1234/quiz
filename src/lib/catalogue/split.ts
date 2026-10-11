@@ -1,4 +1,5 @@
 import type { CatalogueProduct, CatalogueVariant } from './types'
+import { rememberWhere } from './line-variant'
 
 /**
  * Telling a FLAVOUR apart from a different PRODUCT.
@@ -58,6 +59,23 @@ const UNITS: Array<[RegExp, string]> = [
   [/^sachets?$/, 'sachet'],
   [/^bars?$/, 'bar'],
 ]
+
+/**
+ * The size a supplier name carries at its end — "…- 454 grams", "…- 100 vcaps".
+ *
+ * Only for the variant's `size` field, which is a LABEL: it is what separates
+ * two rows in the picker when the flavour column is empty, and it is what the
+ * per-serving maths falls back to scaling by when nothing knows the real count.
+ * A name it cannot read gives null rather than a guess — an invented size is a
+ * per-serving price that is confidently wrong.
+ */
+export function sizeFromName(name: string | null | undefined): string | null {
+  if (!name) return null
+  const match = name.match(
+    /(\d[\d.]*)\s*(kg|g|grams?|ml|l|litres?|caps?|capsules?|vcaps?|softgels?|tablets?|tabs?|servings?|sachets?|bars?)\b\s*$/i,
+  )
+  return match ? `${match[1]} ${match[2]}`.trim() : null
+}
 
 /**
  * A size string reduced to something two SKUs can be compared on.
@@ -176,6 +194,9 @@ export function splitOut(
   const staying = product.variants.filter((v) => !ids.has(v.id))
   if (moving.length === 0 || staying.length === 0) return null
 
+  // Each moving SKU remembers where it was, so a subscription line that still
+  // names the old product finds it (see `catalogue/line-variant`).
+  const movedVariants = moving.map((v) => rememberWhere(v, product.id))
   const moved: CatalogueProduct = {
     ...product,
     id: opts.id,
@@ -183,7 +204,7 @@ export function splitOut(
     // URL nothing else answers on.
     handle: opts.id,
     title: (opts.title ?? '').trim() || defaultTitleFor(product, moving),
-    variants: moving,
+    variants: movedVariants,
     formats: formatsFor(moving, product.formats),
     ...faceOf(moving, product),
   }
@@ -196,6 +217,14 @@ export function splitOut(
     write them here confidently.
   */
   delete (moved as { supplierProductId?: string | null }).supplierProductId
+  // …unless its new master SKU carries its own, which is then exactly right.
+  const movedMaster = moving.find((v) => v.id === moved.defaultVariantId)
+  if (movedMaster?.supplierProductId) moved.supplierProductId = movedMaster.supplierProductId
+  // Derived from the parent, so wrong for the new product: its Top 25 place
+  // (the roster names the parent, not this) and a short name worked out from
+  // the parent's title. Both are worked out again for the new one.
+  delete (moved as { topRank?: number | null }).topRank
+  delete (moved as { shortName?: string | null }).shortName
 
   const kept: CatalogueProduct = {
     ...product,

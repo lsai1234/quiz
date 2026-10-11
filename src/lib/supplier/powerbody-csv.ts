@@ -105,3 +105,59 @@ export function looksLikePowerBodyCsv(text: string): boolean {
   const cells = first.toLowerCase().split(';').map((c) => c.trim())
   return cells[0] === HEADER_SKU && cells.includes('name')
 }
+
+/** One product as a founder would think of it: a name, a brand, its flavours. */
+export interface CsvProductGroup {
+  /** Stable key: brand + name without the flavour. */
+  key: string
+  /** The name every flavour shares, size included ("Creatine HCl - 75g"). */
+  title: string
+  brand: string
+  /** One row per SKU — usually one per flavour. */
+  rows: Array<PowerBodyCsvRow & { label: string }>
+}
+
+/**
+ * The name with its flavour taken out, so the flavours of one product line up.
+ *
+ * PowerBody write "<Product>, <Flavour> - <size>" — "Creatine HCl, Fruit Punch
+ * - 75g". The size stays in: a 75g and a 300g are different products, each
+ * with its own flavours (see `catalogue/merge` on why sizes stay apart).
+ */
+export function nameWithoutFlavour(name: string, flavour?: string | null): { base: string; label: string } {
+  const trimmed = name.trim()
+  const m = trimmed.match(/^(.*?),\s*(.+?)(\s+-\s+[^-]+)?$/)
+  if (m) {
+    const label = m[2].trim()
+    return { base: `${m[1].trim()}${m[3] ?? ''}`.trim(), label }
+  }
+  if (flavour && trimmed.toLowerCase().includes(flavour.toLowerCase())) {
+    const base = trimmed.replace(new RegExp(`\\s*${flavour.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), ' ').replace(/\s+/g, ' ').trim()
+    return { base, label: flavour }
+  }
+  return { base: trimmed, label: flavour ?? trimmed }
+}
+
+/**
+ * Group the export's rows into products: same brand, same name once the flavour
+ * is taken out. What a founder picks from, instead of eight thousand lines.
+ */
+export function groupCsvRows(rows: PowerBodyCsvRow[]): CsvProductGroup[] {
+  const groups = new Map<string, CsvProductGroup>()
+  for (const row of rows) {
+    const { base, label } = nameWithoutFlavour(row.name, row.flavour)
+    const key = `${row.brand.toLowerCase()}|${base.toLowerCase()}`
+    const group = groups.get(key) ?? { key, title: base, brand: row.brand, rows: [] }
+    group.rows.push({ ...row, label })
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+}
+
+/** Does a group match what a founder typed? Name, brand, flavour or SKU. */
+export function groupMatches(group: CsvProductGroup, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return true
+  const hay = [group.title, group.brand, ...group.rows.map((r) => `${r.label} ${r.sku}`)].join(' ').toLowerCase()
+  return words.every((w) => hay.includes(w))
+}

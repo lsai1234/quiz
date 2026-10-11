@@ -105,7 +105,7 @@ Read PowerBody for real; sell nothing yet.
 
 - [ ] **B1** Set `POWERBODY_API_URL` / `_USER` / `_KEY`, then Settings → Supplier → **Live
       PowerBody**. It should not fall back to mock — if it does, a credential is missing.
-- [ ] **B2** Products → PowerBody → **Show me some SKUs** returns codes. This is the only
+- [ ] **B2** Products → Add products → **Show me some SKUs** returns codes. This is the only
       way to find a code in a sandbox whose products exist nowhere else.
 - [ ] **B3** Paste 3–5 SKUs → each comes back with a name, image, stock, cost and what we
       would charge.

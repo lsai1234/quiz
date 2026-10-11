@@ -118,6 +118,8 @@ describe('repriceVariants', () => {
     ])
     const whey = product({
       servings: 30,
+      cost: 11.12,
+      supplierRrp: 15.5,
       variants: [
         variant({ id: 'choc', sku: 'P100', price: 21.99, servings: 30, cost: 11.12, size: '1 kg', imageUrl: 'https://pb/choc.jpg' }),
         variant({ id: 'van', sku: 'P200', price: 21.99, servings: 30, cost: 11.12, size: '1 kg', imageUrl: 'https://pb/van.jpg' }),
@@ -125,6 +127,32 @@ describe('repriceVariants', () => {
     })
 
     expect(repriceVariants(whey, flavours, false)).toBeNull()
+  })
+
+  /*
+    The catalogue list, readiness and Top 25 read the PRODUCT's cost. A pull
+    that filled every SKU's and left the product's empty meant the founder saw
+    costs arrive and every screen kept saying "no cost set".
+  */
+  it('gives the product its master SKU’s cost, RRP and PowerBody id', () => {
+    const facts = new Map<string, SkuFacts>([
+      ['P100', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Chocolate - 1kg', productId: '4401' }],
+      ['P200', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Vanilla - 1kg', productId: '4402' }],
+    ])
+    const whey = product({
+      cost: undefined,
+      supplierRrp: null,
+      defaultVariantId: 'van',
+      variants: [
+        variant({ id: 'choc', sku: 'P100', price: 21.99, size: '1 kg' }),
+        variant({ id: 'van', sku: 'P200', price: 21.99, size: '1 kg' }),
+      ],
+    })
+    const out = repriceVariants(whey, facts, false)!.product
+    expect(out.cost).toBe(11.12)
+    expect(out.supplierRrp).toBe(15.5)
+    expect(out.supplierProductId).toBe('4402')
+    expect(out.variants.map((v) => v.supplierProductId)).toEqual(['4401', '4402'])
   })
 
   it('writes no servings onto an accessory, which has no dose to count', () => {

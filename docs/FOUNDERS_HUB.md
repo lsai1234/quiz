@@ -37,7 +37,7 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 | --- | --- | --- |
 | **Dashboard** | `/founderhub` | The business at a glance (see §4). |
 | **Commerce** | `/founderhub/commerce` | Review queue · Single orders · Subscriptions · Financials |
-| **Products** | `/founderhub/products` | Catalogue · Top 25 · Pre-built bundles · Session stacks · PowerBody · Dashboard · Readiness · Coverage |
+| **Products** | `/founderhub/products` | Products · Add products · Review · Fix-ups · Top 25 · Pre-built bundles · Session stacks · Coverage (see §7) |
 | **Pricing** | `/founderhub/pricing` | Every pricing rule, in one place (see §2). |
 | **Requires action** | `/founderhub/actions` | Product changes on live subscriptions. |
 | **Emails** | `/founderhub/emails` | The outbox. |
@@ -47,10 +47,11 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 
 | Was | Now |
 | --- | --- |
-| `/founderhub/dashboard` | `/founderhub/products/dashboard` |
+| `/founderhub/dashboard`, then `/founderhub/products/dashboard` | `/founderhub/products` |
+| `/founderhub/products/dashboard/[id]` | `/founderhub/products/item/[id]` |
 | `/founderhub/coverage` | `/founderhub/products/coverage` |
-| `/founderhub/readiness` | `/founderhub/products/readiness` |
-| `/founderhub/supplier` | `/founderhub/products/powerbody` |
+| `/founderhub/readiness`, then `/founderhub/products/readiness` | `/founderhub/products?show=attention` |
+| `/founderhub/supplier`, then `/founderhub/products/powerbody` | `/founderhub/products/add` |
 | `/founderhub/bundles` | `/founderhub/products/bundles` |
 | `/founderhub/orders` | `/founderhub/commerce/orders` |
 | `/founderhub/subscriptions` | `/founderhub/commerce/subscriptions` |
@@ -58,8 +59,8 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 ### Routes that were removed
 
 - **Bulk import** (`/founderhub/import`, `/api/portal/import`, `lib/portal/import.ts`,
-  the Olivit CSV template). Products come from the PowerBody feed via
-  `/founderhub/products/powerbody`, which maps, AI-fills and de-dupes them — the CSV
+  the Olivit CSV template). Products come from PowerBody via
+  `/founderhub/products/add`, which maps, AI-fills and de-dupes them — the CSV
   path was a second, worse way to do the same thing.
 - **Improvements backlog** (`/founderhub/backlog`, `/api/portal/backlog`,
   `lib/portal/backlog*.ts`). A to-do list inside the product it is a to-do list
@@ -262,10 +263,10 @@ price product by product. It is not always right for the one product in front of
 you: a line every customer can price-check in ten seconds, a loss leader, a cost
 that jumped between orders.
 
-`/founderhub/products/dashboard/[id]` is where that exception is made. Open any
-product (every product opens now, not only the ones with several SKUs) and the
-**Price** panel shows, per SKU: what PowerBody charge us, their RRP, what the
-rule makes of that cost, and a box for our own price.
+The product's own page (`/founderhub/products/item/[id]`, section **Flavours,
+sizes & prices**) is where that exception is made. Open a SKU and its editor
+shows what PowerBody charge us, their RRP, what the rule makes of that cost, and
+a box for our own price.
 
 - The price is set **per SKU**, and the product's `basePrice` follows only its
   **master** — a flavour nobody opens on does not reprice the card.
@@ -279,8 +280,8 @@ rule makes of that cost, and a box for our own price.
   the margin report.
 
 The rules are in `lib/catalogue/price.ts` (pure), the write is
-`POST /api/portal/products/price`, and the panel is
-`components/portal/ProductPricing.tsx`.
+`POST /api/portal/products/price`, and the editor is the SKU editor in
+`components/portal/product/VariantsSection.tsx`.
 
 ---
 
@@ -530,3 +531,85 @@ failed attempt. Under a founder code the free-delivery progress bar stands down
 — "£12 away from free delivery" describes a ladder that no longer applies — and
 the drawer prices through the same `priceAtFounderTerms` the checkout bills
 from, so the £0.00 on screen is the £0.00 on the card.
+
+---
+
+## 7. Products — one list, one page, one way in
+
+Product management used to be a Catalogue list with an editor modal, a Dashboard
+of cards with a separate per-product page, a Readiness list, a Review screen with
+its own product view, and a PowerBody tab of seven stacked panels. Each showed
+part of a product and each edited it its own way, so a founder could not tell
+where to change what the shop shows — and an edit made on one screen could be
+silently undone by another (see "Why edits used to vanish" below).
+
+### The screens
+
+| Screen | Route | Job |
+| --- | --- | --- |
+| **Products** | `/founderhub/products` | Every product — on sale, waiting for review, removed — with filters (Blocking, Warnings, …), search by name/brand/flavour/SKU/PowerBody id. Each row opens the product page. |
+| **Product page** | `/founderhub/products/item/[id]` | Everything about one product, each field in exactly one place (below). |
+| **Add products** | `/founderhub/products/add` | The guided way in from PowerBody (below). |
+| **Review** | `/founderhub/products/review` | The queue of imports held out of the shop; combine, discard, approve the checked ones, or go through them one at a time on their product pages. |
+| **Fix-ups** | `/founderhub/products/fix-ups` | Catalogue-wide passes: tidy descriptions, repair flavour names, fill SKU prices/servings/pictures, short names, suggested tags, the nightly supplier sync report. |
+
+### The product page
+
+One copy of the product on screen; every save answers with the product as it now
+stands and replaces it (`components/portal/product/shared.tsx`).
+
+| Section | Owns |
+| --- | --- |
+| Header | Status, Approve / Discard (pending), Remove / Restore, View in shop. Remove names the Top 25 place, bundles and stacks that use it first. |
+| Checks | Readiness, and for a pending product every machine-filled field with **Looks right**, grouped by the section that fixes it. |
+| What the customer sees | The shop's own card and product page, inert. |
+| Shop listing | Name (only here), short name, brand, category, picture, description, card copy, dietary tags, formats, stimulants, warnings. |
+| Flavours, sizes & prices | Every SKU: name in the picker, size, servings, picture, our price / rule price / "was" price, cost, PowerBody id; master; naming helpers; servings per size; split; add a flavour; merge another product in. |
+| Quiz & subscription | Slots, goals, swap group, how it is taken (Auto really clears), plan sizing, refill product, safety flags ("Not for"), actives, priorities. |
+| Supplier | PowerBody id, cost, weight, VAT; **Pull from PowerBody** (streamed). PowerBody's RRP is shown for reference only. |
+
+**Servings** live on each SKU. The product's `servings` is always its master
+SKU's; the quiz section says which number the shelf shows and which sizes a plan.
+
+### Adding products
+
+PowerBody's spreadsheet has SKUs; every useful call wants their numeric product
+id, and the only route from one to the other is their product list. So:
+
+1. **The index** (Add products → PowerBody index) reads their whole list once,
+   paced, and keeps SKU → id. Build it once, refresh weekly. With it, lookups
+   are instant and a SKU missing from it really is not on the account.
+2. **Look up** takes SKUs and ids in any mix. One quick pass answers everything
+   an id is already held for (on our products, in the index), checked with one
+   batch of calls. Anything left gets the id search (`lib/supplier/resolve-sku`),
+   one code at a time with its progress shown.
+3. Every outcome says what to do next (`lib/supplier/resolve-code.ts`):
+   **not found yet** (search again — it carries on — or paste the id),
+   **not on the account** (only from a complete index), **PowerBody refused**
+   split into rate-limited (wait), DEMO sandbox (ask PowerBody), login (Settings →
+   Supplier) and their own words. Nothing says "timed out" with no way forward.
+4. Found products are added separately, as one product with flavours, or as
+   flavours of an existing product. A SKU already on a product is never added
+   twice; re-importing never takes a live product off sale (`importProducts`).
+
+PowerBody's own catalogue CSV can be searched and ticked on the Add page; the
+roster spreadsheet import is separate and refuses PowerBody's file.
+
+### Why edits used to vanish, and the rules now
+
+- **One write path.** Imported products are edited in their own record
+  (`portal/store.ts editStoredProduct`). The old per-product *override* layer is
+  folded in once (`catalogue/patch.ts foldOverride`, with a backup of the store
+  taken first) — it had frozen copies of every SKU that hid later stock, price
+  and split changes.
+- **Safe writes.** Every product write is read-fresh / change / compare-and-set
+  (`portal/persist.ts mutateJson`): two servers writing at once retry instead of
+  dropping one edit, a store that cannot be read is never written over, and a
+  failed write is reported, never shown as "Saved".
+- **Patches.** `null` clears an optional field (back to Auto); SKUs in a patch are
+  edits by id, never a replacement list; adding/moving SKUs is its own operation.
+- **Per-SKU PowerBody ids** (`variant.supplierProductId`) are kept from every
+  path, so stock checks, pulls and the nightly sync never search twice.
+- **Subscriptions follow renames and moves.** A renamed, split or merged SKU
+  records where it was (`variant.formerly`); renewals match by SKU, every label
+  spelling, then that note (`catalogue/line-variant.ts`).

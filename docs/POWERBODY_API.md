@@ -23,7 +23,7 @@ They are deliberately independent, which gives you a safe path in:
 
 1. Point **Read** at live PowerBody and pull real products in by SKU, while the shop
    still serves the mock catalogue and orders are still pretend.
-2. Add the products you want (Hub → Products → PowerBody). They land in *our* catalogue —
+2. Add the products you want (Hub → Products → Add products). They land in *our* catalogue —
    ours is the curated subset; customers only ever see what has been added.
 3. Flip **Shop** to `real` when you are happy with what is in it.
 4. Flip **Write** to `live` last, once you have worked a day's queue as a dry run.
@@ -115,7 +115,7 @@ throttled request per product. So a browsable list was either a page of bare
 supplier codes, or thousands of requests to make it readable. Neither is a way
 to choose what to sell.
 
-**Products → PowerBody** is now a SKU box. Paste the codes — off their site, a
+**Products → Add products** is now a SKU box. Paste the codes — off their site, a
 spreadsheet, an email — and each one comes back whole: picture, name, brand,
 category, live stock, their RRP, what we pay, what we would charge and what we
 would keep. Then **Add**, which sends it to Review.
@@ -775,7 +775,7 @@ you until the supplier refuses them.
 
 ## Finding and importing specific SKUs
 
-**Products → PowerBody** takes SKUs in any format — commas, spaces, newlines — fetches
+**Products → Add products** takes SKUs in any format — commas, spaces, newlines — fetches
 their full records on the spot, shows what each one is and what it would make us, and
 imports the ones you pick.
 

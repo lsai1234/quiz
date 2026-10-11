@@ -154,6 +154,51 @@ test.describe('orders', () => {
   })
 })
 
+test.describe('the Products list', () => {
+  /**
+   * One list replaced three screens — Catalogue, Dashboard and Readiness — and
+   * the PowerBody tab became the Add products page. The old addresses stay as
+   * redirects, because they are in bookmarks, in old emails, and in the front
+   * page's action items of anybody who has not reloaded since.
+   */
+  test('the old product addresses land on their new pages', async ({ page }) => {
+    await founderSessionViaApi(page)
+    const moved: Array<[from: string, to: RegExp]> = [
+      ['/founderhub/products/dashboard', /\/founderhub\/products$/],
+      ['/founderhub/products/dashboard/chrgd-whey-protein', /\/founderhub\/products\/item\/chrgd-whey-protein/],
+      ['/founderhub/products/readiness', /\/founderhub\/products\?show=attention$/],
+      ['/founderhub/products/powerbody', /\/founderhub\/products\/add$/],
+    ]
+    for (const [from, to] of moved) {
+      await page.goto(from)
+      await expect(page, `${from} did not redirect`).toHaveURL(to)
+    }
+  })
+
+  test('finds a product by a flavour and a word of its name', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/products')
+    await expect(page.getByRole('heading', { name: 'Every product' })).toBeVisible({ timeout: 20_000 })
+
+    // The sample catalogue says it is the sample catalogue, with the way out.
+    await expect(page.getByRole('link', { name: 'Settings → Catalogue' })).toBeVisible({ timeout: 20_000 })
+
+    // "Chocolate Fudge" is a flavour label and "whey" is in the title: the two
+    // live in different fields, and nobody searching knows or cares which.
+    // (The sample catalogue has no SKUs; the unit tests cover finding by SKU.)
+    await page.getByLabel('Search products').fill('whey chocolate fudge')
+    await expect(page.getByRole('link', { name: /CHRGD Whey Protein/ }).first()).toBeVisible({ timeout: 20_000 })
+  })
+
+  test('the attention view says what to fix and links to where', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/products?show=attention')
+    // Both halves of "needs attention" are pressed — that view is the two together.
+    await expect(page.getByRole('button', { name: /^Blocking \(\d+\)$/ })).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+    await expect(page.getByRole('button', { name: /^Warnings \(\d+\)$/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
 test.describe('pricing a product by hand', () => {
   /**
    * The shop's prices are computed — supplier cost × the markup, rounded down
@@ -167,11 +212,12 @@ test.describe('pricing a product by hand', () => {
    */
   test('a founder opens a product, sets its price, and the shop charges it', async ({ page }) => {
     await founderSessionViaApi(page)
-    await page.goto('/founderhub/products/dashboard')
+    await page.goto('/founderhub/products')
     await page.getByLabel('Search products').fill('Whey Protein')
 
-    // Every product opens now, not only the ones with several SKUs to sort out.
+    // Every product opens its own page from the one Products list.
     await page.getByRole('link', { name: /CHRGD Whey Protein/ }).first().click()
+    await expect(page).toHaveURL(/\/founderhub\/products\/item\/chrgd-whey-protein/)
     await expect(page.getByText(/what it costs us, and what we charge/i)).toBeVisible({ timeout: 20_000 })
 
     // The panel is a table of money on a dense screen, so it gets the same
@@ -195,7 +241,7 @@ test.describe('pricing a product by hand', () => {
       expect(whey.basePrice).toBe(99.99)
 
       // …and the list says which prices are somebody's rather than the rule's.
-      await page.goto('/founderhub/products/dashboard')
+      await page.goto('/founderhub/products')
       await page.getByLabel('Search products').fill('Whey Protein')
       await expect(page.getByText(/£99\.99.*your price/).first()).toBeVisible({ timeout: 20_000 })
     } finally {

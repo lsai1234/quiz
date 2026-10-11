@@ -136,16 +136,21 @@ describe('product readiness', () => {
     expect(r.overall).toBe('fail')
   })
 
-  it('warns but never blocks when there is no shipping weight, live or not', () => {
+  it('only informs — never warns or blocks — when there is no shipping weight, live or not', () => {
     // PowerBody publish no weight on either product call, so this is supplier
     // information we cannot fetch. It costs us the margin ESTIMATE — the order
     // still goes, weighed at their end — so failing a product for it would fail
     // the whole catalogue over something nobody can fix from here.
     for (const live of [true, false]) {
       const readiness = productReadiness(makeProduct({ weightGrams: null }), { live })
-      expect(readiness.checks.find((c) => c.id === 'shipping')?.status).toBe('warn')
-      expect(readiness.overall).not.toBe('fail')
+      expect(readiness.checks.find((c) => c.id === 'shipping')?.status).toBe('info')
+      expect(readiness.overall).toBe('ok')
     }
+  })
+
+  it('treats a cost of 0 as not known', () => {
+    const r = productReadiness(makeProduct({ cost: 0 }), { live: true })
+    expect(r.checks.find((c) => c.id === 'pricing')?.status).toBe('warn')
   })
 })
 

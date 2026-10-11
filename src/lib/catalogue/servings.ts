@@ -28,8 +28,16 @@ import { normaliseSize } from './split'
 export function spreadServings(
   product: CatalogueProduct,
   servings: number | null | undefined,
+  options: {
+    /** Leave a SKU that already knows its own count alone. */
+    onlyUnknown?: boolean
+    /** Use the STORED master rather than whichever SKU is in stock today. */
+    storedMaster?: boolean
+  } = {},
 ): CatalogueVariant[] | null {
-  const master = masterVariant(product)
+  const master = options.storedMaster
+    ? (product.variants.find((v) => v.id === product.defaultVariantId) ?? product.variants[0])
+    : masterVariant(product)
   if (!master) return null
 
   const key = normaliseSize(master.size)
@@ -38,6 +46,7 @@ export function spreadServings(
   const variants = product.variants.map((v) => {
     if (normaliseSize(v.size) !== key) return v
     if ((v.servings ?? null) === value) return v
+    if (options.onlyUnknown && v.servings != null && v.servings > 0) return v
     if (value === null) {
       // Cleared rather than set to zero: `servings: 0` reads as a fact ("no
       // servings"), and what is meant is "we were never told".

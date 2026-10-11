@@ -146,7 +146,12 @@ async function isCatalogueImage(url: string): Promise<boolean> {
   if (!catalogueUrls || Date.now() - catalogueAt >= CATALOGUE_TTL_MS) {
     try {
       const { products } = await getResolvedCatalogue()
-      catalogueUrls = new Set(products.map((p) => p.imageUrl).filter((u): u is string => !!u))
+      // Each flavour's own photograph is as much a catalogue image as the
+      // product's — the shop shows it the moment that flavour is picked — and
+      // leaving them out sent every per-flavour picture to the shelf unprocessed.
+      catalogueUrls = new Set(
+        products.flatMap((p) => [p.imageUrl, ...(p.variants ?? []).map((v) => v.imageUrl)]).filter((u): u is string => !!u),
+      )
       catalogueAt = Date.now()
     } catch {
       // A catalogue we cannot read is not a reason to widen the boundary. Keep
@@ -158,12 +163,30 @@ async function isCatalogueImage(url: string): Promise<boolean> {
   return catalogueUrls.has(url)
 }
 
+/**
+ * A picture on a product still waiting for review, asked for by a signed-in
+ * founder — the product page's preview of how the shop WILL draw it. Not in the
+ * public set: nothing outside the hub should be able to make this route fetch
+ * images for products that are not on sale.
+ */
+async function isPendingImageForFounder(url: string): Promise<boolean> {
+  try {
+    const { isPortalAuthed } = await import('@/lib/portal/guard')
+    if (!(await isPortalAuthed())) return false
+    const { getPendingReviewProducts } = await import('@/lib/portal/store')
+    const pending = await getPendingReviewProducts()
+    return pending.some((p) => p.imageUrl === url || p.variants.some((v) => v.imageUrl === url))
+  } catch {
+    return false
+  }
+}
+
 export async function GET(request: Request) {
   const req = parseImageRequest(new URL(request.url).searchParams)
   if (!req) {
     return NextResponse.json({ error: 'Unsupported image request' }, { status: 400 })
   }
-  if (!(await isCatalogueImage(req.url))) {
+  if (!(await isCatalogueImage(req.url)) && !(await isPendingImageForFounder(req.url))) {
     return NextResponse.json({ error: 'Not a catalogue image' }, { status: 400 })
   }
 

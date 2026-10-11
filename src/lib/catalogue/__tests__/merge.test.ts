@@ -76,13 +76,21 @@ describe('canMerge', () => {
       product('Whey 2.27kg', 'W-2KG', { cost: 38.5 }),
     ])
     expect(check.ok).toBe(false)
-    expect(check.ok === false && check.reason).toMatch(/different sizes rather than flavours|cost different amounts/)
+    expect(check.ok === false && check.reason).toMatch(/different sizes \(1 kg, 2.27 kg\)/)
   })
 
-  it('refuses when servings differ, which sizes the subscription', () => {
-    const check = canMerge([product('Whey A', 'A'), product('Whey B', 'B', { servings: 71 })])
-    expect(check.ok).toBe(false)
-    expect(check.ok === false && check.reason).toMatch(/servings/)
+  /*
+    Each SKU now carries its own cost and servings, so flavours PowerBody price
+    a few pence apart — most of them — can be grouped. Refusing them made
+    grouping flavours impossible for half the range.
+  */
+  it('combines flavours that cost or serve differently, each keeping its own numbers', () => {
+    const a = product('Whey A', 'A', { cost: 10, servings: 30 })
+    const b = product('Whey B', 'B', { cost: 10.4, servings: 33 })
+    expect(canMerge([a, b]).ok).toBe(true)
+    const merged = mergeProducts([a, b])
+    expect(merged.variants.map((v) => v.cost)).toEqual([10, 10.4])
+    expect(merged.variants.map((v) => v.servings)).toEqual([30, 33])
   })
 
   it('refuses when shipped weight differs, which sets the delivery band', () => {

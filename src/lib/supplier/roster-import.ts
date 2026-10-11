@@ -25,6 +25,7 @@ import { listPriceFor } from '@/lib/pricing/list-price'
 import { rhythmForSwap, classifySupplierProduct } from './mapping'
 import { variantLabels, commonProductName } from './variant-labels'
 import { putNamesRightWayRound } from './variant-naming'
+import { sizeFromName } from '@/lib/catalogue/split'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -91,22 +92,7 @@ export interface VariantFacts {
   imageUrl?: string | null
 }
 
-/**
- * The size a supplier name carries at its end — "…- 454 grams", "…- 100 vcaps".
- *
- * Only for the variant's `size` field, which is a LABEL: it is what separates
- * two rows in the picker when the flavour column is empty, and it is what the
- * per-serving maths falls back to scaling by when nothing knows the real count.
- * A name it cannot read gives null rather than a guess — an invented size is a
- * per-serving price that is confidently wrong.
- */
-export function sizeFromName(name: string | null | undefined): string | null {
-  if (!name) return null
-  const match = name.match(
-    /(\d[\d.]*)\s*(kg|g|grams?|ml|l|litres?|caps?|capsules?|vcaps?|softgels?|tablets?|tabs?|servings?|sachets?|bars?)\b\s*$/i,
-  )
-  return match ? `${match[1]} ${match[2]}`.trim() : null
-}
+export { sizeFromName }
 
 /**
  * @param variantFacts per-SKU stock, keyed by SKU, from the crawled feed index.

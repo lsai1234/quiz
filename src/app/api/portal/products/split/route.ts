@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import {
-  getImportedProducts,
-  addImportedProducts,
-  saveImportedProduct,
-  setProductOverride,
-  syncPortalRuntime,
-} from '@/lib/portal/store'
+import { restructureProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { listEditableProducts } from '@/lib/portal/product-edit'
 import { splitOut, freeId, normaliseSize } from '@/lib/catalogue/split'
 
 /**
@@ -52,11 +46,13 @@ export async function POST(request: Request) {
   }
 
   await syncPortalRuntime()
-  const [{ products }, imported] = await Promise.all([getResolvedCatalogue(), getImportedProducts()])
-  const product = products.find((p) => p.id === body.id)
+  // Any product a founder can open — one still waiting for review splits the
+  // same way as one on sale (sizes are often only noticed while reviewing).
+  const entries = await listEditableProducts()
+  const product = entries.find((e) => e.product.id === body.id)?.product
   if (!product) return NextResponse.json({ error: 'No such product.' }, { status: 404 })
 
-  const taken = new Set([...products.map((p) => p.id), ...imported.map((p) => p.id)])
+  const taken = new Set(entries.map((e) => e.product.id))
   /*
     The new product's URL says what it is.
 
@@ -67,44 +63,35 @@ export async function POST(request: Request) {
     when the sizes disagree, which is a split the founder made for some other
     reason and which only they can name.
   */
-  const moving = product.variants.filter((v) => body.variantIds!.includes(v.id))
-  const sizes = new Set(moving.map((v) => normaliseSize(v.size)).filter(Boolean))
-  const suffix = sizes.size === 1 ? [...sizes][0] : (moving[0]?.sku ?? 'split')
-  const result = splitOut(product, body.variantIds, {
-    id: freeId(`${product.id}-${suffix}`, taken),
-    title: body.title,
-  })
-  if (!result) {
+  const variantIds = body.variantIds
+  let outcome: { kept: { id: string; title: string; skus: number }; moved: { id: string; title: string; skus: number } } | null
+  try {
+    // Worked out again inside the write, from the product as it is then: both
+    // halves land together or neither does.
+    outcome = await restructureProducts((bench) => {
+      const current = bench.get(product.id)
+      if (!current) return null
+      const moving = current.variants.filter((v) => variantIds.includes(v.id))
+      const sizes = new Set(moving.map((v) => normaliseSize(v.size)).filter(Boolean))
+      const suffix = sizes.size === 1 ? [...sizes][0] : (moving[0]?.sku ?? 'split')
+      const result = splitOut(current, variantIds, { id: freeId(`${current.id}-${suffix}`, taken), title: body.title })
+      if (!result) return null
+      bench.put(result.kept)
+      const movedId = bench.add(result.moved)
+      return {
+        moved: { id: movedId, title: result.moved.title, skus: result.moved.variants.length },
+        kept: { id: result.kept.id, title: result.kept.title, skus: result.kept.variants.length },
+      }
+    })
+  } catch (err) {
+    return NextResponse.json({ error: `Not split: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 })
+  }
+  if (!outcome) {
     return NextResponse.json(
       { error: 'A split needs at least one SKU to move and at least one to leave behind.' },
       { status: 400 },
     )
   }
 
-  const { kept, moved } = result
-  await addImportedProducts([moved])
-
-  if (imported.some((p) => p.id === product.id)) {
-    await saveImportedProduct(kept)
-  } else {
-    // An override carries only what changed. `variants` is the split itself;
-    // the rest is the face the remaining SKUs now present.
-    await setProductOverride(product.id, {
-      variants: kept.variants,
-      formats: kept.formats,
-      defaultVariantId: kept.defaultVariantId,
-      basePrice: kept.basePrice,
-      compareAtPrice: kept.compareAtPrice,
-      imageUrl: kept.imageUrl,
-      servings: kept.servings,
-      cost: kept.cost,
-      ...(kept.consumption ? { consumption: kept.consumption } : {}),
-    })
-  }
-
-  return NextResponse.json({
-    ok: true,
-    moved: { id: moved.id, title: moved.title, skus: moved.variants.length },
-    kept: { id: kept.id, title: kept.title, skus: kept.variants.length },
-  })
+  return NextResponse.json({ ok: true, moved: outcome.moved, kept: outcome.kept })
 }

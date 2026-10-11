@@ -37,6 +37,8 @@ export interface SkuFacts {
    * one photograph six times.
    */
   image?: string | null
+  /** PowerBody's id for this SKU, kept on the SKU so it is never searched for again. */
+  productId?: string | null
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -107,6 +109,10 @@ export function repriceVariants(
       if (size) next = { ...next, size }
     }
 
+    if (fact.productId && next.supplierProductId !== fact.productId) {
+      next = { ...next, supplierProductId: fact.productId }
+    }
+
     // Its own picture. Only filled in, never overwritten: a founder who has
     // pointed a variant at a better photograph than the supplier's should not
     // have it replaced by a repair pass.
@@ -120,12 +126,28 @@ export function repriceVariants(
     return next
   })
 
-  if (variants.every((v, i) => v === product.variants[i])) return null
-
   const defaultVariant =
     variants.find((v) => v.id === product.defaultVariantId && v.available) ??
     variants.find((v) => v.available) ??
     variants[0]
+
+  /*
+    The product's own cost and RRP follow its master SKU.
+
+    They are what the catalogue list, readiness and Top 25 read. A pull used to
+    fill every SKU's cost and leave the product's at null, so the founder
+    watched the costs arrive and every screen went on saying "no cost set".
+  */
+  const masterFact = defaultVariant?.sku ? facts.get(defaultVariant.sku) : undefined
+  const productCost = defaultVariant?.cost != null && defaultVariant.cost > 0 ? defaultVariant.cost : product.cost
+  const productRrp = masterFact?.rrp != null && masterFact.rrp > 0 ? round(masterFact.rrp) : product.supplierRrp
+  const productId = defaultVariant?.supplierProductId ?? product.supplierProductId
+
+  const variantsMoved = !variants.every((v, i) => v === product.variants[i])
+  const productMoved =
+    productCost !== product.cost || (productRrp ?? null) !== (product.supplierRrp ?? null) || (productId ?? null) !== (product.supplierProductId ?? null)
+  if (!variantsMoved && !productMoved) return null
+  if (productCost !== product.cost && productCost != null) changed.cost = `product cost £${productCost.toFixed(2)}`
 
   return {
     product: {
@@ -136,6 +158,9 @@ export function repriceVariants(
       // card disagree about the price.
       basePrice: defaultVariant?.price ?? product.basePrice,
       compareAtPrice: defaultVariant?.compareAtPrice ?? product.compareAtPrice,
+      ...(productCost != null ? { cost: productCost } : {}),
+      ...(productRrp != null ? { supplierRrp: productRrp } : {}),
+      ...(productId ? { supplierProductId: productId } : {}),
     },
     changed,
   }

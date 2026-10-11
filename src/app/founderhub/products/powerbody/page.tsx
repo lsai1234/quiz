@@ -1,49 +1,12 @@
-import { RosterImport } from '@/components/portal/RosterImport'
-import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
-import { SupplierImport } from '@/components/portal/SupplierImport'
-import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
-import { DescriptionCleanupPanel } from '@/components/portal/DescriptionCleanupPanel'
-import { VariantNameRepairPanel } from '@/components/portal/VariantNameRepairPanel'
-import { VariantPriceRepairPanel } from '@/components/portal/VariantPriceRepairPanel'
+import { redirect } from 'next/navigation'
+import { ADD_PRODUCTS_HREF } from '@/lib/portal/product-links'
 
-export const dynamic = 'force-dynamic'
-
-export default function SupplierPage() {
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-lg font-black mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>PowerBody</h2>
-        <p className="text-sm text-[var(--ink-3)]">
-          Pull products in from PowerBody by SKU. Each one comes back in full — picture, name, brand, live stock, what
-          we pay and what we would make — and lands in Review before it can be sold.
-        </p>
-      </div>
-
-      {/* What moved under us since yesterday — read before adding anything new. */}
-      <SupplierSyncPanel />
-
-      {/* Descriptions pulled in before the import path cleaned them. Sits with
-          the sync panel because both are about products already here, above the
-          three panels that bring new ones in. */}
-      <DescriptionCleanupPanel />
-
-      {/* Flavours that came in as bare SKU codes, from before import looked up
-          anything but a row's main SKU. Also about products already here. */}
-      <VariantNameRepairPanel />
-
-      {/* Variants that were all priced from the row's main SKU, and all given
-          its serving count. Same vintage of bug as the flavour names, and the
-          same shape of fix: a pass over what is already here. */}
-      <VariantPriceRepairPanel />
-
-      {/* Crawled first, because the roster import resolves every code through
-          it — see SupplierIndexBuilder. */}
-      <SupplierIndexBuilder />
-
-      {/* A whole roster at once, enriched per row — see RosterImport. */}
-      <RosterImport />
-
-      <SupplierImport />
-    </div>
-  )
+/**
+ * The old PowerBody tab. Adding products from PowerBody is now the guided Add
+ * products page; the repair panels that shared this screen moved to Fix-ups,
+ * and the nightly sync report with them. Kept so the address still goes
+ * somewhere — Add, because that is what almost everyone came here to do.
+ */
+export default function PowerBodyRedirect() {
+  redirect(ADD_PRODUCTS_HREF)
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { syncPortalRuntime, setProductOverride } from '@/lib/portal/store'
+import { listEditableProducts } from '@/lib/portal/product-edit'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { deriveShortName, aiShortName, shortNameNeedsWork } from '@/lib/catalogue/short-name'
 
@@ -78,8 +79,10 @@ export async function POST(request: Request) {
 
   try {
     const wanted = new Set(ids.filter((id): id is string => typeof id === 'string'))
-    const { products } = await getResolvedCatalogue()
-    const targets = products.filter((p) => wanted.has(p.id))
+    // Any product a founder can open, waiting-for-review ones included.
+    const targets = (await listEditableProducts())
+      .filter((e) => e.state !== 'removed' && wanted.has(e.product.id))
+      .map((e) => e.product)
 
     const changes = []
     for (const product of targets) {

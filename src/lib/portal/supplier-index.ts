@@ -30,7 +30,7 @@
  * actually ended or merely stopped, so a SKU that is absent is only evidence of
  * absence when the crawl finished. Everything else still needs the search.
  */
-import { readJson, writeJson } from './persist'
+import { mutateJson, readJson, writeJson } from './persist'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 const INDEX_FILE = 'supplier-index'
@@ -130,7 +130,34 @@ const EMPTY: SupplierIndex = {
   sweepComplete: false,
 }
 
+/**
+ * Pairs found one at a time — by a lookup, a pull, an id search — kept apart
+ * from the crawl's document.
+ *
+ * The crawl document is large, slow to rebuild, and written whole by each pass.
+ * A lookup writing its one find into it could, after a single failed read, have
+ * replaced thousands of crawled rows with one; and a crawl pass finishing just
+ * after would have dropped the find. So finds live here, are written through
+ * `mutateJson` (which never writes over what it could not read), and are merged
+ * over the crawl on read.
+ */
+const FOUND_FILE = 'supplier-index-found'
+
+interface FoundPairs {
+  bySku: Record<string, IndexedProduct>
+}
+
 export async function readSupplierIndex(): Promise<SupplierIndex> {
+  const [crawl, found] = await Promise.all([
+    readJson<SupplierIndex>(INDEX_FILE, EMPTY),
+    readJson<FoundPairs>(FOUND_FILE, { bySku: {} }),
+  ])
+  if (!found.bySku || Object.keys(found.bySku).length === 0) return crawl
+  return { ...crawl, bySku: { ...crawl.bySku, ...found.bySku } }
+}
+
+/** Only what the crawl itself wrote — for the passes that rewrite it. */
+async function readCrawl(): Promise<SupplierIndex> {
   return readJson<SupplierIndex>(INDEX_FILE, EMPTY)
 }
 
@@ -172,7 +199,7 @@ export async function mergeIntoIndex(
   levels: SupplierStockLevel[],
   meta: { pagesRead: number; complete: boolean; reset?: boolean; resumeFrom?: number | null },
 ): Promise<SupplierIndex> {
-  const current = meta.reset ? { ...EMPTY } : await readSupplierIndex()
+  const current = meta.reset ? { ...EMPTY } : await readCrawl()
   const bySku = { ...current.bySku }
   for (const level of levels) {
     if (!level.sku || !level.productId) continue
@@ -221,7 +248,7 @@ export async function mergeSweep(
   found: Array<{ productId: string; sku: string; name: string; wholesalePrice: number; stock: number }>,
   meta: { sweptTo: number; idsVisited: number; sweepComplete: boolean; emptyRun: number },
 ): Promise<SupplierIndex> {
-  const current = await readSupplierIndex()
+  const current = await readCrawl()
   const bySku = { ...current.bySku }
   let added = 0
   for (const p of found) {
@@ -249,13 +276,43 @@ export async function mergeSweep(
   return next
 }
 
+/**
+ * Remember SKU → product id pairs found one at a time — by the add-products
+ * lookup, a pull, or a search — so the next lookup of the same code is instant.
+ *
+ * Only the pairs: nothing about how far a crawl or a sweep has got changes,
+ * because one product found by a search says nothing about the feed's extent.
+ * Best-effort, like the rest of the index: losing this costs a repeat search,
+ * never a wrong answer (every id is checked against the SKU it returns).
+ */
+export async function rememberIndexed(
+  found: Array<{ sku: string; productId: string; name?: string; wholesalePrice?: number; stock?: number }>,
+): Promise<void> {
+  const fresh = found.filter((f) => f.sku && /^\d+$/.test(String(f.productId)))
+  if (fresh.length === 0) return
+  await mutateJson<FoundPairs>(FOUND_FILE, { bySku: {} }, (current) => {
+    const bySku = { ...(current.bySku ?? {}) }
+    for (const f of fresh) {
+      const had = bySku[f.sku]
+      bySku[f.sku] = {
+        productId: String(f.productId),
+        qty: f.stock ?? had?.qty ?? 0,
+        price: f.wholesalePrice ?? had?.price ?? 0,
+        ...(f.name ? { name: f.name } : had?.name ? { name: had.name } : {}),
+        swept: true,
+      }
+    }
+    return { bySku }
+  })
+}
+
 /** Record what the page probe found, for the crawl to show progress against. */
 export async function saveMeasurement(measured: {
   pageSize: number
   lastPage: number
   totalProducts: number
 }): Promise<void> {
-  const current = await readSupplierIndex()
+  const current = await readCrawl()
   await writeJson(INDEX_FILE, { ...current, measured: { ...measured, at: new Date().toISOString() } })
 }
 

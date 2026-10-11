@@ -18,6 +18,7 @@ import type { SubscriptionSummary } from '@/lib/changes/health'
 import { blendedDeliveryCost } from '@/lib/pricing/delivery'
 import { revenueFromShelfPrice, costFromSupplierPrice } from '@/lib/pricing/vat'
 import type { PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { REVIEW_HREF, productsHref } from './product-links'
 
 const round = (n: number) => Math.round(n * 100) / 100
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 1000 : 0)
@@ -172,6 +173,8 @@ export interface DashboardInput {
   openChanges: number
   /** Products failing a launch-readiness check. */
   productsNeedingAttention: number
+  /** Products added from PowerBody that are not on sale until somebody checks them. */
+  productsAwaitingReview?: number
   /** Where we stand on VAT registration, when it's worth saying anything. */
   vat?: { tone: 'ok' | 'watch' | 'act'; headline: string; detail: string } | null
   /** Paid orders going somewhere PowerBody will not ship. */
@@ -197,7 +200,11 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
     { label: 'Approved orders ready to send', count: input.readyToSend, href: '/founderhub/commerce/queue' },
     { label: 'Product changes on live subscriptions', count: input.openChanges, href: '/founderhub/actions' },
     { label: 'Subscriptions needing attention', count: requiresAction, href: '/founderhub/commerce/subscriptions' },
-    { label: 'Products not launch-ready', count: input.productsNeedingAttention, href: '/founderhub/products/readiness' },
+    { label: 'Products waiting for review', count: input.productsAwaitingReview ?? 0, href: REVIEW_HREF },
+    // The Products list's "needs attention" view: blocking problems first, each
+    // check linking to the part of the product page that fixes it. It counts
+    // the products on sale, exactly as this number does.
+    { label: 'Products not launch-ready', count: input.productsNeedingAttention, href: productsHref('attention') },
     // Not an abandoned checkout, which is `failed` too — see `@/lib/orders/unpaid`.
     { label: 'Orders that failed to reach the supplier', count: failedAtSupplier, href: '/founderhub/commerce/orders' },
   ]

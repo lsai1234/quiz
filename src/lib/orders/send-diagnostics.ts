@@ -31,6 +31,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { getOrder } from './repo'
 import { reviewStateOf, sendBlocker, supplierOrderInputFor } from './service'
 import type { Order, SupplierAttempt } from './types'
+import { supplierIdFor } from '@/lib/catalogue/master'
 
 export type SendCheckStatus = 'pass' | 'warn' | 'fail' | 'skip'
 
@@ -258,7 +259,7 @@ async function lookUpItems(
 
   const ids = new Set<string>()
   for (const line of order.lines) {
-    const id = catalogue.find((p) => p.id === line.productId)?.supplierProductId
+    const id = supplierIdFor(catalogue.find((p) => p.id === line.productId), line.sku)
     if (line.sku && id) ids.add(String(id))
   }
   if (ids.size > 0) {
@@ -367,7 +368,7 @@ function weightCheck(weightKg: number | null): SendCheck {
     ...base,
     status: 'warn',
     detail:
-      'Sent empty. PowerBody publish no weights, so unless one was typed in at import review we have none, and they weigh the parcel themselves. If their reason mentions weight, this is it: add a weight to each product under Products → Review and send again.',
+      'Sent empty. PowerBody publish no weights, so unless one was typed in at import review we have none, and they weigh the parcel themselves. If their reason mentions weight, this is it: open each product from Products, add its weight under Supplier, and send again.',
   }
 }
 

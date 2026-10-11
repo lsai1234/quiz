@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
-import { supplierProductToCatalogue, uniqueProductId } from '@/lib/supplier/mapping'
+import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport, withoutSupplierOwned } from '@/lib/catalogue/review'
 import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
-import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { importProducts, restructureProducts, syncPortalRuntime, type ImportOutcome } from '@/lib/portal/store'
+import { mergeInto } from '@/lib/catalogue/merge'
+import { PersistError } from '@/lib/portal/persist'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +36,15 @@ export const maxDuration = 60
  */
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  let body: { skus?: unknown; productIds?: unknown; autopopulate?: boolean; combine?: boolean; title?: string }
+  let body: {
+    skus?: unknown
+    productIds?: unknown
+    autopopulate?: boolean
+    combine?: boolean
+    title?: string
+    /** Add them as more flavours of this existing product instead. */
+    into?: string
+  }
   try {
     body = await req.json()
   } catch {
@@ -46,7 +56,8 @@ export async function POST(req: Request) {
   if (skus.length === 0 && productIds.length === 0) {
     return NextResponse.json({ error: 'skus or productIds must be a non-empty array' }, { status: 400 })
   }
-  const autopopulate = body.autopopulate !== false
+  // Flavours joining an existing product take its tags; classifying them is wasted calls.
+  const autopopulate = body.autopopulate !== false && !body.into
 
   try {
     await syncPortalRuntime()
@@ -99,6 +110,39 @@ export async function POST(req: Request) {
       sourcesById.set(product.id, sourcesForImport(aiFields, aiUsed))
     }
 
+    /*
+      Flavours of a product already in the catalogue. The SKUs join it; nothing
+      new is created. Checked against the product as it is at write time, and
+      refused (not half-done) if the sizes do not match.
+    */
+    if (typeof body.into === 'string' && body.into) {
+      const into = body.into
+      const result = await restructureProducts((bench) => {
+        const target = bench.get(into)
+        if (!target) return { error: 'That product no longer exists.', status: 404 } as const
+        const skusHere = mapped.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))
+        const holder = bench.holderOf(skusHere, into)
+        if (holder) {
+          return { error: `${holder.product.title} already sells one of these SKUs.`, status: 409, holder: holder.product.id } as const
+        }
+        const check = canMerge([target, ...mapped])
+        if (!check.ok) return { error: check.reason, status: 400 } as const
+        const merged = mergeInto(target, mapped)
+        bench.put(merged)
+        return { added: merged.variants.length - target.variants.length, id: into } as const
+      })
+      if ('error' in result) return NextResponse.json(result, { status: result.status })
+      return NextResponse.json({
+        ok: true,
+        added: 0,
+        into: result.id,
+        flavoursAdded: result.added,
+        ids: [result.id],
+        outcomes: [],
+        notFound,
+      })
+    }
+
     let toStore = mapped
     if (body.combine) {
       const check = canMerge(mapped)
@@ -108,33 +152,32 @@ export async function POST(req: Request) {
 
     // Held out of the shop and quiz until reviewed, carrying a record of which
     // fields came from PowerBody, which from our rules, and which from a model.
-    // `taken` grows as we go, so two SKUs sharing a name inside ONE paste
-    // disambiguate against each other and not just against what is already here.
-    const taken = [...(await getImportedProducts())]
-    const pending = toStore.map((product) => {
-      const id = uniqueProductId(product, taken)
-      const sources = sourcesById.get(product.id) ?? sourcesForImport([], aiUsed)
-      const stored = asPendingReview({ ...product, id, handle: id }, sources)
-      taken.push(stored)
-      return stored
-    })
-
-    await addImportedProducts(pending)
+    const pending = toStore.map((product) =>
+      asPendingReview(product, sourcesById.get(product.id) ?? sourcesForImport([], aiUsed)),
+    )
+    // Never a duplicate and never an un-publish: a SKU already on a product is
+    // reported (with where it is) instead of being added a second time.
+    const outcomes: ImportOutcome[] = await importProducts(pending)
+    const added = outcomes.filter((o) => o.status === 'added')
     return NextResponse.json({
       ok: true,
-      added: pending.length,
+      added: added.length,
       combined: Boolean(body.combine),
       skusAdded: mapped.length,
       autopopulated: autopopulate,
       aiUsed,
       /** Nothing is sellable yet — the hub sends the founder to Review next. */
-      pendingReview: pending.length,
-      ids: pending.map((p) => p.id),
+      pendingReview: added.length,
+      ids: added.map((o) => o.id),
+      outcomes,
       // Named explicitly so a typo'd SKU is reported rather than silently
       // dropped from a bulk paste.
       notFound,
     })
   } catch (err) {
+    if (err instanceof PersistError) {
+      return NextResponse.json({ error: `Not added — ${err.message}` }, { status: 503 })
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to add products.' },
       { status: 502 },

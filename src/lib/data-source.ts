@@ -10,7 +10,8 @@
  *          with no credentials and no supplier calls.
  *   real → ONLY the products added from PowerBody in the Founders Hub. This is
  *          the shop we actually sell. It starts empty — add products in
- *          Hub → Products → PowerBody and they appear here.
+ *          Hub → Products → Add products, approve them in Review, and they
+ *          appear here.
  *
  * Two things are deliberately NOT part of this decision:
  *

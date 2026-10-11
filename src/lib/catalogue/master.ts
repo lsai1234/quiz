@@ -84,3 +84,21 @@ export function masterPatch(
 
   return unchanged ? null : patch
 }
+
+/**
+ * PowerBody's product id for one of a product's SKUs, when anything has found it.
+ *
+ * The SKU's own id first — every flavour is its own product at PowerBody, with
+ * its own id. The product-level one is only a fallback: it was found for one SKU
+ * (usually the master) and is right for the others only by luck. Every caller
+ * checks the SKU on PowerBody's reply, so a wrong guess costs one call and a
+ * fallback to searching, never the wrong product.
+ */
+export function supplierIdFor(
+  product: Pick<CatalogueProduct, 'supplierProductId' | 'variants'> | undefined,
+  sku: string | null | undefined,
+): string | null {
+  if (!product) return null
+  const variant = sku ? product.variants?.find((v) => v.sku === sku) : undefined
+  return variant?.supplierProductId ?? product.supplierProductId ?? null
+}

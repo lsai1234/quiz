@@ -103,6 +103,20 @@ beforeEach(() => {
 })
 
 describe('what it will fetch', () => {
+  /*
+    A flavour's own photograph is a catalogue image too — the shop shows it the
+    moment that flavour is picked — and refusing it sent every per-flavour
+    picture to the shelf unprocessed.
+  */
+  it('normalises a flavour’s own picture, not only the product’s', async () => {
+    const FLAVOUR = 'https://cdn.powerbody.test/vanilla.jpg'
+    getResolvedCatalogue.mockResolvedValue({
+      products: [{ ...product(CATALOGUE_IMAGE), variants: [{ id: 'v', imageUrl: FLAVOUR }] }],
+    })
+    const res = await get(`u=${encodeURIComponent(FLAVOUR)}&w=320`)
+    expect(res.status).toBe(200)
+  })
+
   it('normalises an image the catalogue actually carries', async () => {
     const res = await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)
     expect(res.status).toBe(200)

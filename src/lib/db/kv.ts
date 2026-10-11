@@ -33,11 +33,63 @@ export async function kvGetRaw(key: string): Promise<string | null> {
 
 export async function kvSet<T>(key: string, value: T): Promise<void> {
   const db = await getEngine()
+  // A unique stamp, not bare `now()`: two kvSet writes in one millisecond would
+  // otherwise share a stamp, and a `kvCompareAndSet` holding the first would
+  // pass and silently overwrite the second.
   await db.run(
     `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [key, JSON.stringify(value), now()],
+    [key, JSON.stringify(value), uniqueStamp()],
   )
+}
+
+/**
+ * A value and the stamp of the write that put it there.
+ *
+ * The stamp is what makes a read-modify-write safe across serverless
+ * instances: `kvCompareAndSet` only writes when the row still carries the stamp
+ * the caller read, so two instances editing the same document cannot silently
+ * drop one another's change. `null` raw means there is no row.
+ */
+export async function kvGetStamped(key: string): Promise<{ raw: string | null; stamp: string | null }> {
+  const db = await getEngine()
+  const row = await db.get<{ value: string; updated_at: string }>('SELECT value, updated_at FROM kv WHERE key = ?', [key])
+  return row ? { raw: row.value, stamp: row.updated_at } : { raw: null, stamp: null }
+}
+
+/**
+ * A stamp no other write can share.
+ *
+ * `now()` alone is millisecond ISO, and two writes in the same millisecond on
+ * two instances would carry the same stamp — each would then pass the other's
+ * check. The suffix keeps it unique while it still sorts by time, which is all
+ * `kvListPrefix` asks of the column.
+ */
+function uniqueStamp(): string {
+  return `${now()}~${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * Write `value` only if the row still carries `expected` (null = only if there
+ * is no row yet). Returns the new stamp, or null when somebody else wrote first.
+ *
+ * `RETURNING` is how both engines say whether the write happened without a
+ * second query: SQLite has had it since 3.35 and Postgres always has.
+ */
+export async function kvCompareAndSet<T>(key: string, value: T, expected: string | null): Promise<string | null> {
+  const db = await getEngine()
+  const stamp = uniqueStamp()
+  const text = JSON.stringify(value)
+  const row = expected === null
+    ? await db.get<{ key: string }>(
+        'INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING RETURNING key',
+        [key, text, stamp],
+      )
+    : await db.get<{ key: string }>(
+        'UPDATE kv SET value = ?, updated_at = ? WHERE key = ? AND updated_at = ? RETURNING key',
+        [text, stamp, key, expected],
+      )
+  return row ? stamp : null
 }
 
 export async function kvHas(key: string): Promise<boolean> {

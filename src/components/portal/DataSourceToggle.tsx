@@ -140,8 +140,8 @@ export function DataSourceToggle() {
         )}
         {realButEmpty ? (
           <p style={{ color: 'var(--tone-attention)' }} className="leading-relaxed pt-1">
-            <strong>Nothing added yet, so the shop is empty.</strong> Go to Products → PowerBody and add the products
-            you want to sell. They appear here as soon as you do.
+            <strong>Nothing added yet, so the shop is empty.</strong> Go to Products → Add products and add the
+            products you want to sell. Each goes on sale here once you approve it in Review.
           </p>
         ) : (
           <p className="text-[var(--ink-3)] pt-1">The quiz, hub and subscriptions use this on their next page load.</p>

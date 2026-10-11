@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { indexedProductIds } from '@/lib/portal/supplier-index'
-import { allEditableProducts, saveProductEdit } from '@/lib/portal/editable-products'
+import { saveProductChange } from '@/lib/portal/editable-products'
+import { listEditableProducts } from '@/lib/portal/product-edit'
+import { resolveCode } from '@/lib/supplier/resolve-code'
 import { repriceVariants, sliceBySkuBudget, type SkuFacts } from '@/lib/supplier/variant-pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -65,7 +67,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 export const dynamic = 'force-dynamic'
 
 /** Detail lookups are one throttled call per SKU, so this needs the room a lookup gets. */
-export const maxDuration = 60
+export const maxDuration = 300
 
 interface Repair {
   productId: string
@@ -82,7 +84,7 @@ function isMultiSku(product: CatalogueProduct): boolean {
 
 /** …narrowed to the ones a sweep is about: more than one supplier SKU behind them. */
 async function candidates(): Promise<CatalogueProduct[]> {
-  return (await allEditableProducts()).filter(isMultiSku)
+  return (await listEditableProducts()).filter((e) => e.state !== 'removed').map((e) => e.product).filter(isMultiSku)
 }
 
 /** A product whose variants are all at one price is the one worth flagging. */
@@ -154,7 +156,43 @@ const SKUS_PER_BATCH = 12
 const RUN_BUDGET_MS = 20_000
 
 /** Ask PowerBody about these SKUs — one detail call each, through the index. */
-async function fetchFacts(skus: string[]): Promise<{ facts: Map<string, SkuFacts>; report: RunReport }> {
+/**
+ * The PowerBody ids for these SKUs, cheapest source first: the id already saved
+ * on the SKU, then the stored index, then — for a single product someone is
+ * looking at — the full lookup (`resolveCode`), which can reach SKUs past the
+ * feed's ceiling. The sweep skips that last step: it would spend minutes.
+ */
+async function idsFor(
+  skus: string[],
+  saved: Map<string, string>,
+  options: { resolveMissing: boolean; budgetMs: number },
+): Promise<Map<string, string>> {
+  const ids = new Map<string, string>()
+  for (const sku of skus) {
+    const id = saved.get(sku)
+    if (id) ids.set(sku, id)
+  }
+  const indexed = await indexedProductIds(skus.filter((s) => !ids.has(s)))
+  for (const [sku, hit] of indexed) if (hit.productId) ids.set(sku, hit.productId)
+
+  if (options.resolveMissing) {
+    const startedAt = Date.now()
+    const supplier = await getSupplier()
+    for (const sku of skus.filter((s) => !ids.has(s))) {
+      const left = options.budgetMs - (Date.now() - startedAt)
+      if (left < 8_000) break
+      const outcome = await resolveCode(sku, { supplier, budgetMs: Math.min(left, 60_000) }).catch(() => null)
+      if (outcome?.status === 'found' && outcome.productId) ids.set(sku, outcome.productId)
+    }
+  }
+  return ids
+}
+
+async function fetchFacts(
+  skus: string[],
+  saved: Map<string, string> = new Map(),
+  options: { resolveMissing: boolean; budgetMs: number } = { resolveMissing: false, budgetMs: 0 },
+): Promise<{ facts: Map<string, SkuFacts>; report: RunReport }> {
   const startedAt = Date.now()
   const facts = new Map<string, SkuFacts>()
   const report: RunReport = {
@@ -170,11 +208,11 @@ async function fetchFacts(skus: string[]): Promise<{ facts: Map<string, SkuFacts
   }
   if (skus.length === 0) return { facts, report }
 
-  const indexed = await indexedProductIds(skus)
+  const known = await idsFor(skus, saved, options)
   // A SKU with no id is not a failure to report as an outage: nothing can be
-  // asked about it until the feed index has been crawled far enough to hold it.
-  report.unindexed = skus.filter((sku) => !indexed.get(sku)?.productId)
-  const ids = skus.map((s) => indexed.get(s)?.productId).filter((id): id is string => Boolean(id))
+  // asked about it until something has found its id.
+  report.unindexed = skus.filter((sku) => !known.get(sku))
+  const ids = [...new Set(skus.map((s) => known.get(s)).filter((id): id is string => Boolean(id)))]
 
   if (ids.length > 0) {
     try {
@@ -191,6 +229,7 @@ async function fetchFacts(skus: string[]): Promise<{ facts: Map<string, SkuFacts
           // product id — which at PowerBody means per SKU, so this is a
           // per-flavour photograph rather than the product's.
           image: p.imageUrl || null,
+          productId: p.productId ? String(p.productId) : known.get(p.sku) ?? null,
         })
       }
     } catch (err) {
@@ -254,9 +293,9 @@ export async function POST(request: Request) {
     is a fair question to ask of any product with a supplier code on it.
   */
   if (productId) {
-    const product = (await allEditableProducts()).find((p) => p.id === productId)
-    if (!product) return NextResponse.json({ error: `No product with id "${productId}".` }, { status: 404 })
-    return runOn([product], force, { offset: 0, totalProducts: 1, nextOffset: null })
+    const entry = (await listEditableProducts()).find((e) => e.product.id === productId)
+    if (!entry) return NextResponse.json({ error: `No product with id "${productId}".` }, { status: 404 })
+    return runOn([entry.product], force, { offset: 0, totalProducts: 1, nextOffset: null }, { resolveMissing: true, budgetMs: 200_000 })
   }
 
   const affected = await candidates()
@@ -293,11 +332,20 @@ async function runOn(
   slice: CatalogueProduct[],
   force: boolean,
   position: { offset: number; totalProducts: number; nextOffset: number | null },
+  lookup: { resolveMissing: boolean; budgetMs: number } = { resolveMissing: false, budgetMs: 0 },
 ) {
   const skus = [
     ...new Set(slice.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))),
   ]
-  const { facts, report } = await fetchFacts(skus)
+  // Ids already saved on the SKUs — and the product's own for a one-SKU product.
+  const saved = new Map<string, string>()
+  for (const p of slice) {
+    for (const v of p.variants) {
+      if (v.sku && v.supplierProductId) saved.set(v.sku, v.supplierProductId)
+      else if (v.sku && p.variants.length === 1 && p.supplierProductId) saved.set(v.sku, p.supplierProductId)
+    }
+  }
+  const { facts, report } = await fetchFacts(skus, saved, lookup)
   // Informational, not a retry: this batch's slice HAS been processed with
   // whatever landed, so the run moves on either way. It is the signal the
   // screen uses to say the supplier is being slow rather than silent.
@@ -309,13 +357,9 @@ async function runOn(
     const result = repriceVariants(product, facts, force)
     if (!result) continue
 
-    // Written back the way that product is stored — imported records whole,
-    // live ones as an override. See `portal/editable-products`.
-    await saveProductEdit(result.product, {
-      variants: result.product.variants,
-      basePrice: result.product.basePrice,
-      compareAtPrice: result.product.compareAtPrice,
-    })
+    // Only what this pull changed, onto the product as it is now — see
+    // `portal/editable-products`.
+    await saveProductChange(product, result.product)
 
     repaired.push({ productId: product.id, title: product.title, changed: result.changed })
   }

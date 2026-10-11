@@ -136,7 +136,15 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
   // works off snapshots of the feed; this is what writes today's numbers onto the
   // products the shop actually sells, so an item that went out of stock at the
   // supplier stops being buyable here.
-  const productSync = await syncImportedProducts()
+  // Never allowed to fail the rest of the job: a save that could not land (the
+  // store changed under it four times, or the database refused) must not stop
+  // the safety net for paid orders below.
+  let productSync: { updated: number; missing: string[] } = { updated: 0, missing: [] }
+  try {
+    productSync = await syncImportedProducts()
+  } catch (err) {
+    console.error('[daily] product stock sync failed:', err)
+  }
 
   // Automatic sending's safety net. The ONE thing in this job that can send an
   // order — and only when the founders switched automatic sending on and order

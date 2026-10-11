@@ -472,7 +472,10 @@ export async function absorbPriceChange(
   )
   if (events.length === 0) return []
 
-  await recordNewCost(productId, events[0].price!.newWholesale)
+  // Written first, and allowed to fail loudly: marking the events "absorbed"
+  // when the new cost never landed would leave every margin figure wrong while
+  // the hub said it was handled.
+  await recordNewCost(productId, events[0].price!.newWholesale, events[0].sku ?? null)
 
   const resolved: ChangeEvent[] = []
   for (const event of events) {
@@ -489,13 +492,26 @@ export async function absorbPriceChange(
   return resolved
 }
 
-/** Persist what a product now costs us, as a founder-level product override. */
-async function recordNewCost(productId: string, cost: number): Promise<void> {
+/**
+ * Record what a SKU now costs us. The SKU's own cost, and the product's when
+ * that SKU is its master — one rule for product cost everywhere (it is the
+ * master's), so the nightly sync and a pull do not flip it back and forth.
+ */
+async function recordNewCost(productId: string, cost: number, sku: string | null): Promise<void> {
+  const { editStoredProduct, setProductOverride, ProductNotFound } = await import('@/lib/portal/store')
   try {
-    const { setProductOverride } = await import('@/lib/portal/store')
-    await setProductOverride(productId, { cost })
+    await editStoredProduct(productId, (product) => {
+      const target = sku ? product.variants.find((v) => v.sku === sku) : undefined
+      const masterId = product.defaultVariantId ?? product.variants[0]?.id
+      const variants = target ? product.variants.map((v) => (v === target ? { ...v, cost } : v)) : product.variants
+      const isMaster = !target || target.id === masterId
+      return { ...product, variants, ...(isMaster ? { cost } : {}) }
+    })
   } catch (err) {
-    console.error('[changes] could not record the new cost:', err)
+    // A product the store does not hold (only ever a test fixture or a sample
+    // product since removed) keeps the old behaviour: the cost is held for it.
+    if (!(err instanceof ProductNotFound)) throw err
+    await setProductOverride(productId, { cost })
   }
 }
 

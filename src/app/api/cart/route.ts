@@ -28,6 +28,7 @@ import { deliveryOptions } from '@/lib/pricing/delivery'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
+import { supplierIdFor } from '@/lib/catalogue/master'
 
 /**
  * POST /api/cart
@@ -94,7 +95,7 @@ async function unavailableLines(
         sku: m.variant.sku!,
         quantity: m.quantity,
         title: lineTitle(m),
-        supplierProductId: m.product.supplierProductId ?? null,
+        supplierProductId: supplierIdFor(m.product, m.variant.sku),
       })),
     { deadlineMs: checkoutStockDeadlineMs() },
   ).catch(() => null)

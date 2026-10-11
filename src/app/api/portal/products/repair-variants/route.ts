@@ -2,14 +2,9 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { indexedProductIds } from '@/lib/portal/supplier-index'
-import {
-  getImportedProducts,
-  saveImportedProduct,
-  getProductOverrides,
-  setProductOverride,
-  syncPortalRuntime,
-} from '@/lib/portal/store'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { syncPortalRuntime } from '@/lib/portal/store'
+import { listEditableProducts } from '@/lib/portal/product-edit'
+import { saveProductChange } from '@/lib/portal/editable-products'
 import {
   relabel,
   brokenSkus,
@@ -135,15 +130,9 @@ async function fetchNames(
  */
 async function candidates(force = false): Promise<CatalogueProduct[]> {
   await syncPortalRuntime()
-  const [imported, resolved, overrides] = await Promise.all([
-    getImportedProducts(),
-    getResolvedCatalogue(),
-    getProductOverrides(),
-  ])
-  const byId = new Map<string, CatalogueProduct>()
-  for (const p of resolved.products) byId.set(p.id, p)
-  for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
-  return [...byId.values()].filter((p) =>
+  // On sale or waiting for review — a removed product is not worth the calls.
+  const products = (await listEditableProducts()).filter((e) => e.state !== 'removed').map((e) => e.product)
+  return products.filter((p) =>
     force
       ? p.variants.length > 1 && p.variants.some((v) => v.sku)
       : // A flavour still showing its code, or either end of the name mix-up —
@@ -238,28 +227,15 @@ export async function POST(request: Request) {
     )
   }
 
-  const imported = new Set((await getImportedProducts()).map((p) => p.id))
   const repaired: Repair[] = []
 
   for (const product of affected) {
     const result = relabel(product, names, force)
     if (!result) continue
 
-    /*
-      Written back the way that product is stored. An imported product is ours
-      to rewrite whole; a live one is edited through an override, because the
-      base product is regenerated from the feed and a direct write would be
-      lost on the next sync.
-    */
-    if (imported.has(product.id)) {
-      await saveImportedProduct(result.product)
-    } else {
-      await setProductOverride(product.id, {
-        variants: result.product.variants,
-        // Only when it changed, and never the handle with it.
-        ...(result.renamedTo ? { title: result.renamedTo } : {}),
-      })
-    }
+    // Only the names this pass changed, onto the product as it is now — see
+    // `portal/editable-products`.
+    await saveProductChange(product, result.product)
 
     repaired.push({
       productId: product.id,

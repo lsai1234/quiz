@@ -95,6 +95,13 @@ export interface MemberSubscriptionLine {
   productId: string
   productTitle: string
   variantTitle: string
+  /**
+   * The SKU and variant this line was for, when it was written. Optional
+   * because older lines have neither; `catalogue/line-variant` matches those by
+   * label (and follows renames and moves). A line that has its SKU never has to.
+   */
+  sku?: string | null
+  variantId?: string | null
   /** The stack slot this fulfils, e.g. "Protein". */
   slotTitle: string
   /** Primary stack slot — used to offer same-slot swap alternatives. */

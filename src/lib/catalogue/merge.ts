@@ -26,6 +26,8 @@
  * Pure: no I/O, so the rules are testable without a database or a supplier.
  */
 import type { CatalogueProduct, CatalogueVariant } from './types'
+import { normaliseSize, sizeFromName } from './split'
+import { rememberWhere } from './line-variant'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -41,57 +43,80 @@ export type MergeCheck = { ok: true } | { ok: false; reason: string }
 const money = (n: number | undefined | null) => (typeof n === 'number' ? `£${n.toFixed(2)}` : 'unknown')
 
 /**
+ * Each SKU carrying its own cost, servings, picture and PowerBody id.
+ *
+ * Once SKUs share a product, the product-level numbers describe only its master
+ * — so anything a SKU was relying on the product for has to move onto the SKU
+ * before it joins, or it would quietly inherit the master's.
+ */
+export function withOwnFacts(product: CatalogueProduct): CatalogueVariant[] {
+  const single = product.variants.length === 1
+  // The product-level id was found for its master SKU — the stored one, not
+  // whichever happens to be in stock today.
+  const masterId = product.defaultVariantId ?? product.variants[0]?.id
+  return product.variants.map((v) => ({
+    ...v,
+    // A product-level cost or serving count describes its master; it is only
+    // known to be THIS SKU's when there is no other SKU it could describe.
+    ...(single && v.cost == null && product.cost != null && product.cost > 0 ? { cost: product.cost } : {}),
+    ...(single && v.servings == null && product.servings > 0 ? { servings: product.servings } : {}),
+    ...(!v.imageUrl && product.imageUrl && (single || v.id === masterId) ? { imageUrl: product.imageUrl } : {}),
+    ...(!v.supplierProductId && product.supplierProductId && (single || v.id === masterId)
+      ? { supplierProductId: product.supplierProductId }
+      : {}),
+  }))
+}
+
+/**
  * Whether these products can honestly become one.
  *
- * The checks are about what the variant model can actually carry, not about
- * taste — merging two unrelated products is a founder's mistake to make, and
- * they are looking at both titles when they do it.
+ * A SKU now carries its own cost, servings and picture, so flavours that cost a
+ * few pence apart — which PowerBody's do — combine fine; refusing them made
+ * grouping flavours impossible for half the range. What still cannot share a
+ * product is two SIZES: a 1kg and a 2.27kg tub ship in different weight bands
+ * and a customer comparing "per serving" across a picker would be comparing
+ * different things. Those stay separate products, and the reason says so.
+ *
+ * The checks are about what the model can carry, not about taste — merging two
+ * unrelated products is a founder's mistake to make, and they are looking at
+ * both titles when they do it.
  */
 export function canMerge(products: CatalogueProduct[]): MergeCheck {
   if (products.length < 2) return { ok: false, reason: 'Pick at least two products to combine.' }
-
   const withoutSku = products.filter((p) => skusOf(p).length === 0)
   if (withoutSku.length > 0) {
     return {
       ok: false,
-      reason: `${withoutSku[0].title} has no supplier SKU, so it could not be ordered as a variant.`,
+      reason: `${withoutSku[0].title} has no supplier SKU, so it could not be ordered as a flavour.`,
     }
   }
-
-  const [first, ...rest] = products
-
-  const differingCost = rest.find((p) => (p.cost ?? null) !== (first.cost ?? null))
-  if (differingCost) {
+  // A SKU's size is its own field when the supplier gave one, else whatever
+  // its name ends in ("Whey 2.27kg"). Unknown sizes prove nothing either way.
+  const sizes = new Map<string, string>()
+  for (const p of products) {
+    for (const v of p.variants) {
+      const size = v.size ?? sizeFromName(p.variants.length === 1 ? p.title : v.title)
+      const key = normaliseSize(size)
+      if (key) sizes.set(key, (size ?? '').trim())
+    }
+  }
+  if (sizes.size > 1) {
     return {
       ok: false,
       reason:
-        `These cost different amounts (${money(first.cost)} vs ${money(differingCost.cost)}), so they are different ` +
-        'sizes rather than flavours. A variant carries its own price and SKU but not its own cost, servings or ' +
-        'weight — combining them would price and ship every size as if it were the first. Keep them as separate ' +
-        'products.',
+        `These are different sizes (${[...sizes.values()].join(', ')}). Each size is its own product, so it can be ` +
+        'priced, shipped and compared per serving on its own. Combine the flavours of each size separately.',
     }
   }
-
-  const differingServings = rest.find((p) => p.servings !== first.servings)
-  if (differingServings) {
+  const weights = products.map((p) => p.weightGrams).filter((w): w is number => w != null && w > 0)
+  if (weights.length > 1 && Math.max(...weights) > Math.min(...weights) * 1.25) {
     return {
       ok: false,
       reason:
-        `These hold different numbers of servings (${first.servings} vs ${differingServings.servings}), which sizes ` +
-        'the monthly subscription. Combining them would size every one off the first. Keep them as separate products.',
+        `These ship at clearly different weights (${Math.min(...weights)}g and ${Math.max(...weights)}g), which ` +
+        'usually means different sizes. Keep them as separate products.',
     }
   }
-
-  const differingWeight = rest.find((p) => (p.weightGrams ?? null) !== (first.weightGrams ?? null))
-  if (differingWeight) {
-    return {
-      ok: false,
-      reason:
-        'These ship at different weights, and PowerBody charge delivery by weight band — combining them would cost ' +
-        'the wrong postage on all but one. Keep them as separate products.',
-    }
-  }
-
   return { ok: true }
 }
 
@@ -156,7 +181,7 @@ export function mergeProducts(products: CatalogueProduct[], options: MergeOption
   const variants: CatalogueVariant[] = []
   for (const product of products) {
     const label = variantLabelFor(product.title, prefix)
-    for (const variant of product.variants) {
+    for (const variant of withOwnFacts(product)) {
       // A product that already had flavours keeps them, qualified by its own
       // label, so combining two multi-flavour products doesn't collapse them.
       const ownLabel = product.variants.length > 1 && variant.flavour ? `${label} ${variant.flavour}`.trim() : label
@@ -183,4 +208,37 @@ export function mergeProducts(products: CatalogueProduct[], options: MergeOption
     // Point at something buyable, not at whichever flavour happens to be first.
     defaultVariantId: variants.find((v) => v.available)?.id ?? variants[0]?.id ?? null,
   }
+}
+
+/**
+ * Add other products' SKUs to an existing product as more flavours.
+ *
+ * The other half of "combine": the target keeps its id, name, description,
+ * tags and master — everything a customer and the quiz already know it by —
+ * and the newcomers arrive as flavours labelled by what their own titles add
+ * to the target's name. Each brings its own cost, servings, picture and id.
+ *
+ * Pure. The caller decides what becomes of the products the SKUs came from.
+ */
+export function mergeInto(target: CatalogueProduct, sources: CatalogueProduct[]): CatalogueProduct {
+  const taken = new Set(target.variants.map((v) => v.id))
+  const skus = new Set(target.variants.map((v) => v.sku).filter(Boolean))
+  // The target's own SKUs are left exactly as they were — ids, labels, facts.
+  const variants: CatalogueVariant[] = [...target.variants]
+  for (const source of sources) {
+    const prefix = commonTitlePrefix([target.title, source.title])
+    const label = variantLabelFor(source.title, prefix)
+    for (const variant of withOwnFacts(source)) {
+      if (variant.sku && skus.has(variant.sku)) continue
+      const ownLabel = source.variants.length > 1 && variant.flavour ? `${label} ${variant.flavour}`.trim() : label
+      // Its own id where it can keep it — bundles and baskets may point at it.
+      let id = variant.id
+      for (let n = 2; taken.has(id); n += 1) id = `${variant.id}-${n}`
+      taken.add(id)
+      if (variant.sku) skus.add(variant.sku)
+      const moved = rememberWhere(variant, source.id)
+      variants.push({ ...moved, id, title: ownLabel, flavour: variant.size && !variant.flavour ? null : ownLabel })
+    }
+  }
+  return { ...target, variants }
 }

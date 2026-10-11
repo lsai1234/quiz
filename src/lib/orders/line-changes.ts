@@ -36,6 +36,7 @@ import { getOrder, saveOrder, updateOrder } from './repo'
 import { newOrderId, newOrderReference, orderReference } from './service'
 import { neverPaid } from './unpaid'
 import type { Order, OrderLine } from './types'
+import { supplierIdFor } from '@/lib/catalogue/master'
 
 const round = (n: number) => Math.round(n * 100) / 100
 const lineValue = (line: Pick<OrderLine, 'unitPrice' | 'quantity'>) => round(line.unitPrice * line.quantity)
@@ -370,11 +371,11 @@ export async function lineOptions(id: string, index: number, deps: LineChangeDep
   const catalogue = await catalogueFor(deps)
   const candidates = replacementCandidates(order, line, catalogue)
 
-  const idFor = (productId: string) => catalogue.find((p) => p.id === productId)?.supplierProductId ?? null
+  const idFor = (productId: string, sku: string | null | undefined) => supplierIdFor(catalogue.find((p) => p.id === productId), sku)
   const check = await checkLiveStock(
     [
-      ...(line.sku ? [{ sku: line.sku, quantity: line.quantity, title: titleOf(line), supplierProductId: idFor(line.productId) }] : []),
-      ...candidates.map((c) => ({ sku: c.sku, quantity: line.quantity, title: c.title, supplierProductId: idFor(c.productId) })),
+      ...(line.sku ? [{ sku: line.sku, quantity: line.quantity, title: titleOf(line), supplierProductId: idFor(line.productId, line.sku) }] : []),
+      ...candidates.map((c) => ({ sku: c.sku, quantity: line.quantity, title: c.title, supplierProductId: idFor(c.productId, c.sku) })),
     ],
     { supplier: deps.supplier, deadlineMs: 10_000 },
   ).catch(() => null)
@@ -424,7 +425,7 @@ export async function swapLine(
 
   // Asked live: the whole point is to send something that IS there.
   const check = await checkLiveStock(
-    [{ sku: variant.sku, quantity: line.quantity, title: product.title, supplierProductId: product.supplierProductId ?? null }],
+    [{ sku: variant.sku, quantity: line.quantity, title: product.title, supplierProductId: supplierIdFor(product, variant.sku) }],
     { supplier: deps.supplier, deadlineMs: 10_000 },
   )
   if (check.shortfalls.length > 0) throw new Error(`${product.title} is out of stock at PowerBody too — pick another.`)

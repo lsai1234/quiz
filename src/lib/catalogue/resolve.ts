@@ -59,7 +59,7 @@ export async function getResolvedCatalogue(): Promise<{ products: CatalogueProdu
       products,
       source: 'real',
       ...(products.length === 0
-        ? { error: 'No products added yet. Add them in Hub → Products → PowerBody, or switch the data source back to Mock.' }
+        ? { error: 'No products on sale yet. Add them in Hub → Products → Add products and approve them in Review, or switch the data source back to Mock.' }
         : {}),
     }
   }

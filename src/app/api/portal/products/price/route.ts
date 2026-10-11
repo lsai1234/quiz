@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { allEditableProducts, saveProductEdit } from '@/lib/portal/editable-products'
+import { allEditableProducts, saveProductChange } from '@/lib/portal/editable-products'
+import { withConfirmed } from '@/lib/catalogue/review'
+import { productPayload } from '@/lib/portal/product-edit'
 import { clearVariantPrice, priceRows, rulePriceFor, setVariantPrice } from '@/lib/catalogue/price'
 
 /**
@@ -82,18 +84,18 @@ export async function POST(req: Request) {
   const next = clearing ? clearVariantPrice(product, variantId) : setVariantPrice(product, variantId, price)
   // Nothing to do is a success: the price on the shelf is already the one asked
   // for, and a founder who pressed Save twice has not made a mistake.
-  if (next) {
-    await saveProductEdit(next, {
-      variants: next.variants,
-      basePrice: next.basePrice,
-      compareAtPrice: next.compareAtPrice,
-    })
-  }
-
-  const saved = next ?? product
+  // Setting a price on a product waiting for review IS checking it: "What we
+  // charge" is one of the fields Review asks a person to confirm, and the price
+  // screen is now where that happens.
+  const confirmed = next && next.review?.status === 'pending' ? withConfirmed(next, ['basePrice'], ['basePrice']) : next
+  const saved = confirmed ? await saveProductChange(product, confirmed) : product
+  // The whole product as it now stands, so the page replaces its state from
+  // this answer rather than re-reading (see `productPayload`).
+  const payload = await productPayload(productId)
   return NextResponse.json({
     ok: true,
     basePrice: saved.basePrice,
     rows: priceRows(saved),
+    ...(payload ?? {}),
   })
 }

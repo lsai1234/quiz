@@ -13,7 +13,15 @@ const addImportedProducts = jest.fn(async (products: import('../types').Catalogu
 
 jest.mock('@/lib/portal/store', () => ({
   getImportedProducts: async () => store.imported,
-  addImportedProducts: (products: import('../types').CatalogueProduct[]) => addImportedProducts(products),
+  // The real one hands the change the products as stored at write time and
+  // writes back the ones it returns — modelled the same way here.
+  updateImportedProducts: async (
+    change: (current: import('../types').CatalogueProduct[]) => { products: import('../types').CatalogueProduct[]; result: unknown },
+  ) => {
+    const { products, result } = change(store.imported.map((p) => ({ ...p })))
+    if (products.length > 0) await addImportedProducts(products)
+    return result
+  },
 }))
 
 const rewriteDescription = jest.fn()
