@@ -46,6 +46,8 @@ const empty = (): Totals => ({
 })
 
 const s = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+/** A server's sentence, made fit to sit inside one of ours: no full stop of its own. */
+const clause = (message: string) => message.trim().replace(/[.。]+$/, '')
 const quiet = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' } as const
 
 /**
@@ -133,7 +135,7 @@ export function RosterImport({
             problem = 'the connection dropped'
           }
           if (attempt === 0) {
-            setProgress(`Row ${offset + 1} did not go through (${problem}) — trying that batch once more…`)
+            setProgress(`Row ${offset + 1} did not go through (${clause(problem)}) — trying that batch once more…`)
             await new Promise((resolve) => setTimeout(resolve, 2000))
           }
         }
@@ -229,14 +231,14 @@ export function RosterImport({
             {failure.resumeAt !== null ? (
               <>
                 Stopped at row {failure.resumeAt + 1}
-                {failure.total ? ` of ${failure.total}` : ''} — {failure.message}, twice. Rows before it are in and stay
-                in.{' '}
+                {failure.total ? ` of ${failure.total}` : ''} — that batch failed twice ({clause(failure.message)}). Rows
+                before it are in and stay in.{' '}
                 <Button size="sm" variant="secondary" onClick={() => run(failure.resumeAt as number, totals)}>
                   Carry on from row {failure.resumeAt + 1}
                 </Button>
               </>
             ) : (
-              <>Not imported — {failure.message}. Fix the file and choose it again.</>
+              <>Not imported — {clause(failure.message)}. Fix the file and choose it again.</>
             )}
           </Note>
         )}

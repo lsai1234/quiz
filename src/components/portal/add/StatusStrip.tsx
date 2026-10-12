@@ -1,7 +1,7 @@
 'use client'
 
 import { Badge, Button, Card, Skeleton } from '@/components/system'
-import { SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
+import { FIXUPS_HREF, SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
 import { daysSince, shortDate } from './lookup'
 import { Row, Stack, TextLink, bodyText, metaText } from './ui'
 
@@ -13,6 +13,12 @@ export interface SupplierStatus {
   hasCredentials?: boolean
   /** PowerBody answered like their DEMO sandbox. Learnt from a lookup, not asked. */
   demo?: boolean
+  /**
+   * The setting could not be read (a dropped connection, an expired session).
+   * Said as such rather than guessed: the first lookup reports which supplier
+   * answered it, and fills this in.
+   */
+  unknown?: boolean
 }
 
 export interface IndexStatus {
@@ -77,12 +83,24 @@ export function StatusStrip({
           <span style={metaText}>— every PowerBody call, one at a time, under Settings → Supplier → Test the integration.</span>
         </Row>
 
+        {/* The nightly check used to sit at the top of the PowerBody tab. It is
+            about products already on sale, not ones being added, so it moved to
+            Fix-ups with the other passes over the catalogue — said here because
+            this is where founders went looking for it. */}
+        <Row>
+          <span style={metaText}>
+            What changed at PowerBody overnight — prices and stock of what we already sell — is under{' '}
+            <TextLink href={`${FIXUPS_HREF}#supplier-check`}>Fix-ups → Supplier check</TextLink>.
+          </span>
+        </Row>
+
         {/* On the sample catalogue or a DEMO account there is no other way to
-            find a code that exists, so it is a real button there and a quiet
-            one everywhere else. */}
+            find a code that exists, so the codes are shown from the start there
+            (and the button only hides them); everywhere else it is a quiet
+            button for when one is wanted. */}
         <Row>
           <Button size="sm" variant={quietSkus ? 'ghost' : 'secondary'} onClick={onShowSkus} aria-expanded={showingSkus}>
-            Show me some SKUs
+            {showingSkus ? 'Hide the SKUs' : 'Show me some SKUs'}
           </Button>
           {!quietSkus && (
             <span style={metaText}>
@@ -98,6 +116,15 @@ export function StatusStrip({
 function SupplierLine({ supplier }: { supplier: SupplierStatus | null }) {
   if (!supplier) return <Skeleton height="var(--space-5)" width="60%" />
   const settings = <TextLink href={SUPPLIER_SETTINGS_HREF}>Settings → Supplier</TextLink>
+
+  if (!supplier.effective) {
+    return (
+      <span style={metaText}>
+        Could not tell just now whether PowerBody or the sample catalogue answers — the first lookup will say. It is
+        chosen in {settings}.
+      </span>
+    )
+  }
 
   if (supplier.effective === 'mock') {
     const wantedLive = supplier.mode === 'powerbody' || supplier.mode === 'auto'

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Note, Skeleton } from '@/components/system'
 import { SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
+import { clause } from './lookup'
 import { Row, Stack, TextLink, metaText } from './ui'
 
 /**
@@ -37,7 +38,7 @@ export function SampleSkus({ onPick, onPutAll }: { onPick: (sku: string) => void
   if (error) {
     return (
       <Note tone="critical" live="polite">
-        No sample codes — {error}.{' '}
+        No sample codes — {clause(error)}.{' '}
         <Button size="sm" variant="ghost" onClick={() => setAttempt((n) => n + 1)}>
           Try again
         </Button>{' '}

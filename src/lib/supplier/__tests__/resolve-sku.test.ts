@@ -1,5 +1,6 @@
 import { resolveProductIdForSku, anchorsFromFeed, supplierProbe, lastPopulatedPage } from '@/lib/supplier/resolve-sku'
 import type { SupplierProvider } from '@/lib/supplier/types'
+import { PowerBodySoapError } from '@/lib/supplier/powerbody/soap'
 
 /**
  * A fake PowerBody whose catalogue is known, so the search can be judged on what
@@ -292,6 +293,28 @@ describe('supplierProbe', () => {
     expect(await probe(5)).toEqual({ sku: null })
     expect(answered()).toBe(0)
     expect(firstError()?.message).toBe('Access denied')
+  })
+
+  it('rethrows a retryable refusal instead of reading it as an empty id', async () => {
+    // A rate limit or a 503 passes with time. Read as "nothing at this id", a
+    // throttle burst would end the search with "not there" and send someone to
+    // check a code that was fine.
+    const throttled = new PowerBodySoapError('Service Unavailable', '503', false, true)
+    const supplier = {
+      async getProductsById() { throw throttled },
+    } as unknown as SupplierProvider
+    const { probe, firstError } = supplierProbe(supplier)
+
+    await expect(probe(5)).rejects.toBe(throttled)
+    expect(firstError()).toBe(throttled)
+  })
+
+  it('still reads a non-retryable SOAP fault as an empty id', async () => {
+    const supplier = {
+      async getProductsById() { throw new PowerBodySoapError('Product not found', 'x', false, false) },
+    } as unknown as SupplierProvider
+    const { probe } = supplierProbe(supplier)
+    expect(await probe(5)).toEqual({ sku: null })
   })
 })
 

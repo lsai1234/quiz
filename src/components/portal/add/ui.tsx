@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
-import type { CSSProperties, ReactNode } from 'react'
+import { useId, type CSSProperties, type ReactNode } from 'react'
+import { Button } from '@/components/system'
 
 /**
  * The few pieces of type every section of the Add page repeats.
@@ -76,5 +79,66 @@ export function Stack({ children, gap = 'var(--space-3)', className }: { childre
     <div className={`flex flex-col ${className ?? ''}`} style={{ gap }}>
       {children}
     </div>
+  )
+}
+
+/**
+ * A section that folds away but keeps what is inside it running.
+ *
+ * Not the `Disclosure` primitive, on purpose: that one unmounts its children
+ * when it closes, and the thing folded here is the index crawl — a run of
+ * several minutes whose loop lives in the component. Closing a Disclosure over
+ * it would orphan the loop (still asking PowerBody, with nobody to report to)
+ * and reopening it would offer to start a second crawl beside the first. So the
+ * children stay mounted and are hidden with the `hidden` attribute, and while
+ * something inside is `busy` the section will not fold at all.
+ *
+ * The toggle is the system Button, with the same `aria-expanded` /
+ * `aria-controls` wiring Disclosure has.
+ */
+export function Collapsible({
+  title,
+  badge,
+  lede,
+  open,
+  onOpenChange,
+  busy = false,
+  children,
+}: {
+  title: ReactNode
+  badge?: ReactNode
+  lede?: ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  busy?: boolean
+  children: ReactNode
+}) {
+  const panelId = useId()
+  const headingId = useId()
+  return (
+    <section aria-labelledby={headingId} className="flex flex-col" style={{ gap: 'var(--space-3)' }}>
+      <div>
+        <Row>
+          <SectionTitle id={headingId}>{title}</SectionTitle>
+          {badge}
+          <Button
+            size="sm"
+            variant="ghost"
+            iconRight="chevron-down"
+            aria-expanded={open}
+            aria-controls={panelId}
+            disabled={open && busy}
+            title={open && busy ? 'It cannot be folded away while it is running.' : undefined}
+            onClick={() => onOpenChange(!open)}
+          >
+            {open ? 'Hide' : 'Show'}
+          </Button>
+        </Row>
+        {lede && <Lede>{lede}</Lede>}
+      </div>
+      <div id={panelId} hidden={!open}>
+        {children}
+      </div>
+    </section>
   )
 }

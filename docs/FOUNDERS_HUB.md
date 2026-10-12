@@ -560,7 +560,7 @@ stands and replaces it (`components/portal/product/shared.tsx`).
 
 | Section | Owns |
 | --- | --- |
-| Header | Status, Approve / Discard (pending), Remove / Restore, View in shop. Remove names the Top 25 place, bundles and stacks that use it first. |
+| Header | Status, Approve / Discard (pending), Remove / Restore (or Undo merge), View in shop. Remove names the Top 25 place, bundles and stacks that use it first. |
 | Checks | Readiness, and for a pending product every machine-filled field with **Looks right**, grouped by the section that fixes it. |
 | What the customer sees | The shop's own card and product page, inert. |
 | Shop listing | Name (only here), short name, brand, category, picture, description, card copy, dietary tags, formats, stimulants, warnings. |
@@ -570,6 +570,13 @@ stands and replaces it (`components/portal/product/shared.tsx`).
 
 **Servings** live on each SKU. The product's `servings` is always its master
 SKU's; the quiz section says which number the shelf shows and which sizes a plan.
+
+**Merging and undoing it.** Merging brings another product's SKUs in as more
+flavours. A source that never went on sale is discarded; one that was on sale is
+removed, and can come back with **Undo merge** (on the merge card straight after,
+or on its own page): its SKUs leave the target and it returns exactly as it was
+(`product-actions.ts undoMerge`). A plain Restore is refused while another
+product sells its SKUs, since the same tub would be listed twice.
 
 ### Adding products
 

@@ -47,6 +47,7 @@ interface Step {
  */
 export function SupplierIndexBuilder({
   onChange,
+  onBusyChange,
 }: {
   /**
    * Told whenever the stored index is read back — on load and after every run
@@ -54,10 +55,17 @@ export function SupplierIndexBuilder({
    * says "not built" under a crawl that has just finished.
    */
   onChange?: (state: IndexState) => void
+  /**
+   * Told when a crawl or a sweep starts and stops, so the section around this
+   * can say one is running and refuse to fold away over it.
+   */
+  onBusyChange?: (busy: boolean) => void
 } = {}) {
   const [state, setState] = useState<IndexState | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const onBusyChangeRef = useRef(onBusyChange)
+  onBusyChangeRef.current = onBusyChange
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   /**
@@ -101,6 +109,10 @@ export function SupplierIndexBuilder({
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
+
+  useEffect(() => {
+    onBusyChangeRef.current?.(busy || sweeping)
+  }, [busy, sweeping])
 
   // Only ticks while something is running: a crawl can sit in a sixty-second
   // backoff, and a frozen elapsed time is indistinguishable from a hung page.

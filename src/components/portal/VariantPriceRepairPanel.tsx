@@ -1,8 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
-import { Button, Note } from '@/components/system'
+import { Badge, Button, Card, Note } from '@/components/system'
+import { ProductLink, useProductIndex } from '@/components/portal/fixups/product-index'
+import type { FixupPanelProps } from '@/components/portal/fixups/types'
+import { ADD_PRODUCTS_HREF } from '@/lib/portal/product-links'
 
 interface Candidate {
   productId: string
@@ -69,6 +73,12 @@ const EMPTY: Progress = {
   prices: 0, servings: 0, pictures: 0, unindexed: [], seconds: 0,
 }
 
+const META = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' } as const
+/** How many products to list before the rest fold behind "Show all". */
+const LISTED = 12
+const EYEBROW = { fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', textTransform: 'uppercase', color: 'var(--ink-3)' } as const
+const LINK = { color: 'var(--accent)', fontWeight: 'var(--weight-strong)', textDecoration: 'underline', textUnderlineOffset: '0.2em' } as const
+
 /**
  * Variants that were all given the main SKU's price, servings and picture.
  *
@@ -85,27 +95,55 @@ const EMPTY: Progress = {
  * screen drives the loop — a dozen SKUs a request — and every batch writes what
  * it repaired before it returns. A run that stops halfway has still fixed half,
  * and pressing the button again picks up where it stopped.
+ *
+ * The route chooses the products (every one with more than one SKU) and takes
+ * no list, so the sweep also covers products still waiting for review — which
+ * is harmless, since a pull is what Review would do for them anyway. They are
+ * marked in the list, so the count is not mistaken for products on sale.
  */
-export function VariantPriceRepairPanel() {
+export function VariantPriceRepairPanel({ onSummary, onRunningChange }: FixupPanelProps) {
+  const index = useProductIndex()
   const [scan, setScan] = useState<Scan | null>(null)
-  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<Progress>(EMPTY)
   const [repaired, setRepaired] = useState<Repair[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   const cancelled = useRef(false)
 
   const load = useCallback(() => {
-    fetch('/api/portal/products/repair-variant-pricing')
-      .then((r) => r.json())
-      .then((d) => setScan(Array.isArray(d.products) ? d : null))
-      .catch(() => {})
-      .finally(() => setLoaded(true))
+    setLoadError(null)
+    fetch('/api/portal/products/repair-variant-pricing', { cache: 'no-store' })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null)
+        if (r.ok && Array.isArray(d?.products)) setScan(d)
+        else setLoadError(d?.error ?? `The server answered with an error (HTTP ${r.status}).`)
+      })
+      .catch(() => setLoadError('Could not reach the server — check the connection.'))
   }, [])
 
   useEffect(load, [load])
+  useEffect(() => onRunningChange?.(busy), [busy, onRunningChange])
+
+  const waiting = (id: string) => index.byId.get(id)?.state === 'pending'
+
+  useEffect(() => {
+    if (!onSummary) return
+    if (loadError) return onSummary({ count: null, line: 'Could not count — see inside.' })
+    if (!scan) return onSummary({ count: null, line: 'Counting…' })
+    const onePrice = scan.products.filter((p) => p.onePrice).length
+    const noPictures = scan.products.filter((p) => p.picturesKnown === 0).length
+    onSummary({
+      count: scan.total,
+      line:
+        scan.total === 0
+          ? 'No product has more than one PowerBody SKU behind it, so there is nothing to read per SKU.'
+          : `${scan.total} product${scan.total === 1 ? '' : 's'} with more than one SKU — ${onePrice} showing every SKU at one price, ${noPictures} with no per-flavour pictures yet.`,
+    })
+  }, [onSummary, scan, loadError])
 
   /**
    * One batch.
@@ -115,11 +153,17 @@ export function VariantPriceRepairPanel() {
    * PowerBody" would be the wrong thing to say about our own timeout.
    */
   async function runBatch(force: boolean, offset: number): Promise<BatchResult | null> {
-    const res = await fetch('/api/portal/products/repair-variant-pricing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force, offset }),
-    })
+    let res: Response
+    try {
+      res = await fetch('/api/portal/products/repair-variant-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force, offset }),
+      })
+    } catch {
+      setError('Could not reach our server — check the connection. Anything already corrected is saved; press the button again to carry on.')
+      return null
+    }
     const body = await res.json().catch(() => null)
     if (!body) {
       setError(
@@ -224,62 +268,50 @@ export function VariantPriceRepairPanel() {
     }
   }
 
-  if (!loaded || !scan) return null
+  if (loadError) {
+    return (
+      <Note tone="critical">
+        The per-SKU prices could not be checked: {loadError}{' '}
+        <Button size="sm" variant="ghost" icon="refresh" onClick={load}>
+          Try again
+        </Button>
+      </Note>
+    )
+  }
+  if (!scan) return <p style={META}>Counting…</p>
 
   const suspect = scan.products.filter((p) => p.onePrice)
   const noPictures = scan.products.filter((p) => p.picturesKnown === 0).length
   const totalSkus = scan.products.reduce((n, p) => n + p.variants, 0)
 
   return (
-    <section
-      style={{
-        background: 'var(--surface-1)',
-        border: '1px solid var(--edge)',
-        borderRadius: 'var(--radius-card)',
-        padding: 'var(--space-4)',
-        display: 'grid',
-        gap: 'var(--space-3)',
-      }}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-        <div>
-          <h2
-            style={{
-              fontSize: 'var(--text-body-sm)',
-              fontWeight: 'var(--weight-strong)',
-              fontFamily: 'var(--font-display)',
-              color: 'var(--ink-1)',
-            }}
-          >
-            Variant prices, servings &amp; pictures
-          </h2>
-          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-            {scan.total === 0
-              ? 'No product has more than one supplier SKU behind it.'
-              : `${scan.total} product${scan.total === 1 ? '' : 's'} merge more than one supplier SKU — ` +
-                `${totalSkus} SKUs in all. ${suspect.length} show every variant at the same price, and ` +
-                `${noPictures} have no per-flavour pictures yet.`}
-          </p>
-        </div>
-        {scan.total > 0 && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {busy ? (
-              <Button size="sm" variant="secondary" onClick={() => { cancelled.current = true }}>
-                Stop after this batch
+    <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <p style={{ ...META, color: 'var(--ink-2)' }}>
+        {scan.total === 0
+          ? 'No product has more than one supplier SKU behind it.'
+          : `${scan.total} product${scan.total === 1 ? '' : 's'} merge more than one supplier SKU — ` +
+            `${totalSkus} SKUs in all. ${suspect.length} show every variant at the same price, and ` +
+            `${noPictures} have no per-flavour pictures yet.`}
+      </p>
+
+      {scan.total > 0 && (
+        <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>
+          {busy ? (
+            <Button size="sm" variant="secondary" icon="pause" onClick={() => { cancelled.current = true }}>
+              Stop after this batch
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="primary" onClick={() => void run(false)}>
+                Fix mispriced variants
               </Button>
-            ) : (
-              <>
-                <Button size="sm" onClick={() => void run(false)}>
-                  Fix mispriced variants
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void run(true)}>
-                  Re-price all from cost
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+              <Button size="sm" variant="ghost" onClick={() => void run(true)}>
+                Re-price all from cost
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {/*
         What is happening, while it happens.
@@ -324,7 +356,8 @@ export function VariantPriceRepairPanel() {
           <br />
           <br />
           <strong>Re-price all from cost</strong> rewrites every variant of every multi-SKU product back to
-          cost × 2, overwriting prices you have set yourself. That is why it is separate.
+          the rule price from its own cost. A price you set yourself on a product&rsquo;s page is never touched by
+          either button.
         </Note>
       )}
 
@@ -352,86 +385,65 @@ export function VariantPriceRepairPanel() {
 
       {progress.unindexed.length > 0 && (
         <Note tone="attention">
-          {progress.unindexed.length} SKU{progress.unindexed.length === 1 ? ' is' : 's are'} not in the crawled
-          product list ({progress.unindexed.slice(0, 6).join(', ')}
+          {progress.unindexed.length} SKU{progress.unindexed.length === 1 ? ' is' : 's are'} not in the stored PowerBody
+          index ({progress.unindexed.slice(0, 6).join(', ')}
           {progress.unindexed.length > 6 ? '…' : ''}), so nothing could be asked about{' '}
-          {progress.unindexed.length === 1 ? 'it' : 'them'}. Run the feed index below, then this again.
+          {progress.unindexed.length === 1 ? 'it' : 'them'}. Build or refresh the index at the bottom of{' '}
+          <Link href={ADD_PRODUCTS_HREF} style={LINK}>
+            Add products
+          </Link>
+          , then run this again — or open a product and use Pull from PowerBody, which searches for any id it is missing.
         </Note>
       )}
 
       {!busy && suspect.length > 0 && !repaired && (
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-          <p
-            style={{
-              fontSize: 'var(--text-micro)',
-              fontWeight: 'var(--weight-strong)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-            }}
-          >
-            Every variant at one price ({suspect.length})
-          </p>
-          {suspect.slice(0, 12).map((c) => (
-            <div
-              key={c.productId}
-              style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--edge)',
-                borderRadius: 'var(--radius-row)',
-                padding: 'var(--space-3)',
-              }}
-            >
-              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
-                {c.title}
-              </p>
-              <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-                {c.variants} variants · {c.servingsKnown} with their own serving count ·{' '}
-                {c.picturesKnown} with their own picture
-              </p>
+          <p style={EYEBROW}>Every variant at one price ({suspect.length})</p>
+          <ul style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            {(showAll ? suspect : suspect.slice(0, LISTED)).map((c) => (
+              <Card key={c.productId} as="li" solid padding="tight">
+                <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+                  <ProductLink id={c.productId} section="variants">
+                    {c.title}
+                  </ProductLink>
+                  {waiting(c.productId) && <Badge tone="info">Waiting for review</Badge>}
+                </div>
+                <p style={META}>
+                  {c.variants} variants · {c.servingsKnown} with their own serving count ·{' '}
+                  {c.picturesKnown} with their own picture
+                </p>
+              </Card>
+            ))}
+          </ul>
+          {suspect.length > LISTED && (
+            <div>
+              <Button size="sm" variant="ghost" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+                {showAll ? 'Show fewer' : `Show all ${suspect.length}`}
+              </Button>
             </div>
-          ))}
-          {suspect.length > 12 && (
-            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
-              …and {suspect.length - 12} more.
-            </p>
           )}
         </div>
       )}
 
       {repaired && repaired.length > 0 && (
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-          <p
-            style={{
-              fontSize: 'var(--text-micro)',
-              fontWeight: 'var(--weight-strong)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-            }}
-          >
-            Corrected ({repaired.length})
-          </p>
-          {repaired.map((r) => (
-            <div
-              key={r.productId}
-              style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--edge)',
-                borderRadius: 'var(--radius-row)',
-                padding: 'var(--space-3)',
-                display: 'grid',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
-                {r.title}
-              </p>
-              <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)', lineHeight: 'var(--leading-snug)' }}>
-                {Object.entries(r.changed).map(([sku, what]) => `${sku}: ${what}`).join(' · ')}
-              </p>
-            </div>
-          ))}
+          <p style={EYEBROW}>Corrected ({repaired.length})</p>
+          <ul style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            {repaired.map((r) => (
+              <Card key={r.productId} as="li" solid padding="tight">
+                <p style={{ fontSize: 'var(--text-body-sm)' }}>
+                  <ProductLink id={r.productId} section="variants">
+                    {r.title}
+                  </ProductLink>
+                </p>
+                <p style={{ ...META, color: 'var(--ink-2)', lineHeight: 'var(--leading-snug)' }}>
+                  {Object.entries(r.changed).map(([sku, what]) => `${sku}: ${what}`).join(' · ')}
+                </p>
+              </Card>
+            ))}
+          </ul>
         </div>
       )}
-    </section>
+    </div>
   )
 }

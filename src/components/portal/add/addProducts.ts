@@ -89,8 +89,10 @@ function looksLikeSizes(message: string): boolean {
  *
  * "already" and "removed" carry the SKUs they matched on, so those are exact.
  * "added" carries only an id and a title, so it is matched on the product name
- * PowerBody gave the card — and when one card and one outcome are left over,
- * they are each other's.
+ * PowerBody gave the card (the new product's title IS that name), then on the
+ * id the card's row says it would be stored under (which the store suffixes
+ * when the plain one is taken) — and when one card and one outcome are left
+ * over, they are each other's.
  */
 function placeBatch(
   cards: CodeCard[],
@@ -116,7 +118,11 @@ function placeBatch(
     }
   }
   for (const o of unmatched) {
-    const hit = cards.find((c) => left.has(c.key) && c.row?.name === o.title)
+    // Exact before prefix, so "whey-isolate" is never claimed by a "whey" card.
+    const hit =
+      cards.find((c) => left.has(c.key) && c.row?.name === o.title) ??
+      cards.find((c) => left.has(c.key) && c.row?.mappedId === o.id) ??
+      cards.find((c) => left.has(c.key) && c.row?.mappedId && o.id.startsWith(`${c.row.mappedId}-`))
     if (hit) {
       into.set(hit.key, { id: o.id, title: o.title })
       left.delete(hit.key)
@@ -143,7 +149,11 @@ async function post(body: Record<string, unknown>): Promise<{ ok: boolean; statu
 }
 
 const errorOf = (r: { status: number; data: Record<string, unknown> }) =>
-  typeof r.data.error === 'string' ? r.data.error : `the server answered ${r.status || 'nothing'}`
+  r.status === 401
+    ? 'your session has expired — reload the page to sign in again, then add them again.'
+    : typeof r.data.error === 'string'
+      ? r.data.error
+      : `the server answered ${r.status || 'nothing'}`
 
 /**
  * Add the given cards. `onProgress` is called after every request with the

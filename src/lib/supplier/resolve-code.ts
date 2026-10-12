@@ -275,6 +275,11 @@ export async function resolveCode(raw: string, options: ResolveCodeOptions): Pro
       }
       idNote = `PowerBody have no product with id ${code}.`
     } catch (err) {
+      // A refusal that searching cannot get past (a rate limit, the sandbox, a
+      // login) stops here, as it does for a held id below — a search would only
+      // spend throttled requests on the same refusal.
+      const why = refusalOf(err)
+      if (why.kind !== 'supplier-error') return result({ status: 'refused', refusal: why.kind, message: why.message, next: why.next })
       idNote = `PowerBody would not answer for product ${code}: ${errorText(err)}`
     }
     if (skuIds.length > 0) {

@@ -1,5 +1,6 @@
 import type { CatalogueProduct, FieldSource } from '@/lib/catalogue/types'
 import { canMerge, mergeInto } from '@/lib/catalogue/merge'
+import { rememberWhere } from '@/lib/catalogue/line-variant'
 import { isBlankValue, withoutSupplierOwned } from '@/lib/catalogue/review'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
 import { editStoredProduct, markProductRemoved, restructureProducts, ProductNotFound } from './store'
@@ -44,8 +45,11 @@ export async function restoreRemovedProduct(id: string): Promise<void> {
     const skus = product.variants.map((v) => v.sku).filter((s): s is string => Boolean(s))
     const holder = bench.holderOf(skus, id)
     if (holder && holder.state !== 'removed') {
+      const merged = holder.product.variants.some((v) => v.formerly?.some((f) => f.productId === id))
       throw new ActionRefused(
-        `Its SKUs are now sold as “${holder.product.title}”, so restoring this would list them twice.`,
+        merged
+          ? `It was merged into “${holder.product.title}”, which sells its SKUs now — undo the merge to bring it back.`
+          : `Its SKUs are now sold as “${holder.product.title}”, so restoring this would list them twice.`,
         { label: `Open ${holder.product.title}`, href: productHref(holder.product.id) },
       )
     }
@@ -109,6 +113,76 @@ export async function mergeIntoProduct(
       }
     }
     return { product: merged, moved: merged.variants.length - target.variants.length, removed, discarded }
+  })
+}
+
+/**
+ * Undo a merge: give a removed product back the SKUs it brought to another one,
+ * and put it back on sale.
+ *
+ * A merged product can't simply be restored — the product it went into holds
+ * its SKUs, and restoring it would list each tub twice. So the SKUs that came
+ * from it (they remember where they came from, in `formerly`) leave the target,
+ * and the removed product comes back with its own record, exactly as it was
+ * before the merge. Anything changed on those SKUs while they were on the
+ * target stays with the target's copy and goes. Lines written against the
+ * target since the merge follow the SKU back, by the note left here.
+ *
+ * A product that was discarded by the merge (it never went on sale) has no
+ * record to come back to; the refusal says what to do instead.
+ */
+export async function undoMerge(sourceId: string): Promise<{ restored: CatalogueProduct; target: CatalogueProduct; moved: number }> {
+  return restructureProducts((bench) => {
+    const source = bench.get(sourceId)
+    if (!source) {
+      throw new ActionRefused(
+        'That product was discarded when it was merged — it had never gone on sale — so there is no record to bring back. To separate its flavours again, tick them under Flavours & sizes and move them into their own product.',
+      )
+    }
+    if (!bench.isRemoved(sourceId)) throw new ActionRefused(`“${source.title}” is not merged into anything — it is still listed on its own.`)
+    const skus = source.variants.map((v) => v.sku).filter((s): s is string => Boolean(s))
+    const holder = bench.holderOf(skus, sourceId)
+    if (!holder || holder.state === 'removed') {
+      throw new ActionRefused('No product on sale holds its SKUs any more, so there is nothing to undo — Restore puts it back as it was.')
+    }
+    const target = holder.product
+    const theirs = new Set(skus)
+    const leaving = target.variants.filter((v) => v.sku && theirs.has(v.sku) && v.formerly?.some((f) => f.productId === sourceId))
+    if (leaving.length === 0) {
+      throw new ActionRefused(
+        `Its SKUs are sold as “${target.title}”, but they were added there rather than merged from here, so there is no merge to undo.`,
+        { label: `Open ${target.title}`, href: productHref(target.id) },
+      )
+    }
+    if (leaving.length === target.variants.length) {
+      throw new ActionRefused(`Every SKU on “${target.title}” came from this product, so undoing would leave it empty. Remove “${target.title}” and restore this one instead.`)
+    }
+    if (leaving.some((v) => v.id === target.defaultVariantId)) {
+      throw new ActionRefused(
+        `“${target.title}” uses one of this product’s SKUs as its master. Make one of its own SKUs the master first (Flavours & sizes), then undo.`,
+        { label: `Open ${target.title}`, href: productHref(target.id) },
+      )
+    }
+    const leftBehind = new Set(leaving.map((v) => v.id))
+    const shrunk = { ...target, variants: target.variants.filter((v) => !leftBehind.has(v.id)) }
+    bench.put(shrunk)
+    bench.put({
+      ...source,
+      variants: source.variants.map((v) => {
+        const was = leaving.find((l) => l.sku === v.sku)
+        return was ? rememberWhere(v, target.id, was) : v
+      }),
+    })
+    // Anything else that came to hold these SKUs meanwhile (a re-add) wins: refuse.
+    const other = bench.holderOf(skus, sourceId)
+    if (other && other.state !== 'removed') {
+      throw new ActionRefused(`Its SKUs are also sold as “${other.product.title}”, so restoring it would list them twice.`, {
+        label: `Open ${other.product.title}`,
+        href: productHref(other.product.id),
+      })
+    }
+    bench.restore(sourceId)
+    return { restored: bench.get(sourceId)!, target: shrunk, moved: leaving.length }
   })
 }
 

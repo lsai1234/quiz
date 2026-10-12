@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFounder, isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { setProductOverride, syncPortalRuntime, ProductNotFound } from '@/lib/portal/store'
+import { syncPortalRuntime, ProductNotFound } from '@/lib/portal/store'
 import { productReadiness } from '@/lib/portal/readiness'
 import {
   EditRejected,
@@ -18,11 +18,11 @@ import {
   mergeIntoProduct,
   removeProduct,
   restoreRemovedProduct,
+  undoMerge,
 } from '@/lib/portal/product-actions'
 import { fieldsNeedingReview } from '@/lib/catalogue/review'
 import { getDataSource } from '@/lib/data-source'
 import { PersistError } from '@/lib/portal/persist'
-import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +37,9 @@ export const dynamic = 'force-dynamic'
  * GET ?id=…      one product, any state, with what still needs checking and
  *                what else uses it. The product page reads this.
  * POST           change one: { id, set?, variants?, master?, confirm? }, or an
- *                action { id, action: remove | restore | discard | fill-blanks | merge }.
+ *                action { id, action: remove | restore | discard | fill-blanks | merge
+ *                | undo-merge }. undo-merge takes the REMOVED product's id, and
+ *                `view` names the product whose page asked (its payload answers).
  * DELETE         { id } — remove (soft).
  */
 export async function GET(req: Request) {
@@ -80,15 +82,20 @@ type Body = {
   id?: string
   /** For `approve-ready`: the products to approve (each only if fully checked). */
   ids?: string[]
-  action?: 'remove' | 'restore' | 'discard' | 'fill-blanks' | 'merge' | 'approve' | 'approve-ready'
+  action?: 'remove' | 'restore' | 'discard' | 'fill-blanks' | 'merge' | 'undo-merge' | 'approve' | 'approve-ready'
   /** For `merge`: the products whose SKUs come here. */
   from?: string[]
+  /** For `undo-merge` sent from the product it was merged into: answer with that one. */
+  view?: string
   set?: Record<string, unknown>
   variants?: Array<Record<string, unknown>>
   master?: string
   confirm?: string[]
-  /** The old shape — a raw patch. Still accepted; it is applied by the same rules. */
-  patch?: Partial<CatalogueProduct>
+  /**
+   * The old screens' raw patch. No screen sends it any more (the last one,
+   * Suggest tags, now sends `set`) and it is refused — see below.
+   */
+  patch?: unknown
 }
 
 /** Every failure as something a founder can read and act on. */
@@ -177,17 +184,30 @@ export async function POST(req: Request) {
         const result = await mergeIntoProduct(id, Array.isArray(body.from) ? body.from.filter((f) => typeof f === 'string') : [])
         return done({ moved: result.moved, removed: result.removed, discarded: result.discarded })
       }
+      case 'undo-merge': {
+        const result = await undoMerge(id)
+        const extra = { moved: result.moved, restored: { id: result.restored.id, title: result.restored.title }, target: { id: result.target.id, title: result.target.title } }
+        if (typeof body.view === 'string' && body.view !== id) {
+          const payload = await productPayload(body.view)
+          return NextResponse.json({ ok: true, ...extra, ...(payload ?? {}) })
+        }
+        return done(extra)
+      }
       case undefined:
         break
       default:
         return NextResponse.json({ error: `Unknown action “${String(body.action)}”.` }, { status: 400 })
     }
 
-    if (body.patch && !body.set && !body.variants && !body.master) {
-      // The old screens' shape. Applied by the same rules (null clears only
-      // optional fields, SKUs edited by id), but unchecked — new screens send `set`.
-      await setProductOverride(id, body.patch)
-      return done()
+    if (body.patch !== undefined && !body.set && !body.variants && !body.master) {
+      // The old screens' raw patch skipped every check `updateProduct` makes,
+      // and nothing sends it now. Refused out loud rather than ignored: a page
+      // left open from before the change would otherwise be told "saved" for
+      // an edit that never happened.
+      return NextResponse.json(
+        { error: 'Not saved — this page is out of date. Reload it and make the change again.' },
+        { status: 400 },
+      )
     }
 
     const { changed } = await updateProduct(id, {

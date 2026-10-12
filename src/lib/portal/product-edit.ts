@@ -429,6 +429,12 @@ export interface ProductPayload {
   usageWarning: string | null
   /** Whether the shop is serving the real catalogue or the sample one. */
   source: 'real' | 'mock'
+  /**
+   * For a removed product: the product on sale that now sells its SKUs, if
+   * any, and whether they got there by a merge from this one (so the page can
+   * offer Undo merge rather than a Restore that would be refused).
+   */
+  heldBy?: { id: string; title: string; merged: boolean } | null
 }
 
 /**
@@ -449,6 +455,7 @@ export async function productPayload(id: string, options: { fresh?: boolean } = 
   const usage = await productUsage(id)
   return {
     ...entry,
+    heldBy: entry.state === 'removed' ? await heldBy(entry.product) : null,
     readiness: productReadiness(entry.product, { live }),
     remaining: entry.state === 'pending' ? fieldsNeedingReview(entry.product).map((f) => f.key as string) : [],
     priceRows: priceRows(entry.product, config),
@@ -457,6 +464,23 @@ export async function productPayload(id: string, options: { fresh?: boolean } = 
     usageWarning: usageWarning(usage),
     source: live ? 'real' : 'mock',
   }
+}
+
+/** The product on sale (or waiting) that sells a removed product's SKUs now. */
+async function heldBy(product: CatalogueProduct): Promise<ProductPayload['heldBy']> {
+  const skus = new Set(product.variants.map((v) => v.sku).filter(Boolean))
+  if (skus.size === 0) return null
+  for (const other of await listEditableProducts()) {
+    if (other.product.id === product.id || other.state === 'removed') continue
+    const shared = other.product.variants.filter((v) => v.sku && skus.has(v.sku))
+    if (shared.length === 0) continue
+    return {
+      id: other.product.id,
+      title: other.product.title,
+      merged: shared.some((v) => v.formerly?.some((f) => f.productId === product.id)),
+    }
+  }
+  return null
 }
 
 /**

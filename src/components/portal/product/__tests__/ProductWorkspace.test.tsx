@@ -137,6 +137,19 @@ describe('the product page', () => {
     expect(calls.at(-1)?.body).toEqual({ id: 'whey', action: 'remove' })
   })
 
+  it('offers Undo merge, not a Restore that would be refused, for a product merged into another', async () => {
+    answer = () => ({ ok: true, ...payload({ state: 'live' }) })
+    render(<ProductWorkspace initial={payload({ state: 'removed', heldBy: { id: 'whey-big', title: 'Whey Isolate (all flavours)', merged: true } })} />)
+    expect(screen.queryByRole('button', { name: /Restore/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Whey Isolate (all flavours)' })).toHaveAttribute('href', '/founderhub/products/item/whey-big')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo the merge' }))
+    expect(calls).toHaveLength(0)
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm — undo the merge' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', action: 'undo-merge' })
+    expect(await screen.findByText(/Back on sale on its own/)).toBeInTheDocument()
+  })
+
   it('says why a save was refused instead of saying it saved', async () => {
     answer = () => ({ ok: false, error: 'Not saved — the store kept changing.', problems: ['Name can’t be empty.'] })
     global.fetch = jest.fn(async (url: string, init?: RequestInit) => {

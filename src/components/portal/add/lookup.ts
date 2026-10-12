@@ -289,6 +289,15 @@ export function isAddable(card: CodeCard): boolean {
 
 export const money = (n: number) => `£${n.toFixed(2)}`
 
+/**
+ * A server's sentence, made fit to sit inside one of ours: trimmed, and without
+ * a full stop of its own, so "did not start — PowerBody refused." is not
+ * followed by a second one.
+ */
+export function clause(message: string): string {
+  return message.trim().replace(/\.+$/, '')
+}
+
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { Button, Note } from '@/components/system'
+import { clause } from './lookup'
 import { Row, Stack, metaText } from './ui'
 
 /** A stop of last resort. The feed ending is what normally halts the loop. */
@@ -45,7 +46,7 @@ export function FeedExport() {
           setResult({
             tone: 'critical',
             text:
-              `PowerBody stopped answering after ${rows} products (${d.error ?? `the server answered ${res.status}`}). ` +
+              `PowerBody stopped answering after ${rows} products (${clause(d.error ?? `the server answered ${res.status}`)}). ` +
               'Nothing was downloaded — press it again in a few minutes, or run the checks in Settings → Supplier.',
           })
           return

@@ -767,7 +767,9 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [all, setAll] = useState<Array<{ id: string; title: string; state: string; skus: number }> | null>(null)
-  const [picked, setPicked] = useState<{ id: string; title: string; warning: string | null } | null>(null)
+  const [picked, setPicked] = useState<{ id: string; title: string; state: string; warning: string | null } | null>(null)
+  // The last product merged in from here, while Undo can still bring it back.
+  const [merged, setMerged] = useState<{ id: string; title: string } | null>(null)
 
   useEffect(() => {
     if (!open || all) return
@@ -793,9 +795,10 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
     return q.length >= 2 && (p.title.toLowerCase().includes(q) || p.id.includes(q))
   })
 
-  async function pick(p: { id: string; title: string }) {
+  async function pick(p: { id: string; title: string; state: string }) {
     const d = await fetch(`/api/portal/products?id=${encodeURIComponent(p.id)}`).then((r) => r.json()).catch(() => null)
-    setPicked({ id: p.id, title: p.title, warning: d?.usageWarning ?? null })
+    setMerged(null)
+    setPicked({ id: p.id, title: p.title, state: p.state, warning: d?.usageWarning ?? null })
   }
 
   return (
@@ -808,7 +811,7 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
       </div>
       {open && (
         <div className="space-y-2">
-          <p style={META}>For a flavour that came in as a product of its own. Its SKUs come here; it is taken off sale (or discarded if it never went on sale).</p>
+          <p style={META}>For a flavour that came in as a product of its own. Its SKUs come here, and it is taken off sale — Undo brings it back — or discarded if it never went on sale.</p>
           <Input label="Find the product to bring in" type="search" value={query} onChange={(e) => setQuery(e.target.value)} />
           {matches.slice(0, 8).map((p) => (
             <div key={p.id} className="flex items-center justify-between flex-wrap gap-2">
@@ -834,6 +837,8 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
                   onClick={() =>
                     void send('/api/portal/products', { id: product.id, action: 'merge', from: [picked.id] }, 'merge', `“${picked.title}” is now part of this product.`).then((ok) => {
                       if (ok) {
+                        // Only a product that was on sale is kept (removed) and can come back.
+                        setMerged(picked.state === 'pending' ? null : { id: picked.id, title: picked.title })
                         setPicked(null)
                         setAll(null)
                         setQuery('')
@@ -848,6 +853,26 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
                 </Button>
               </div>
             </Card>
+          )}
+          {merged && (
+            <div className="flex items-center flex-wrap gap-2">
+              <span style={META}>Merged the wrong one?</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={busy === 'undo-merge'}
+                onClick={() =>
+                  void send(
+                    '/api/portal/products',
+                    { id: merged.id, action: 'undo-merge', view: product.id },
+                    'undo-merge',
+                    `“${merged.title}” is back on sale on its own, and its SKUs have left this product.`,
+                  ).then((ok) => ok && setMerged(null))
+                }
+              >
+                Undo — put “{merged.title}” back on its own
+              </Button>
+            </div>
           )}
         </div>
       )}

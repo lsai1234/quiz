@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Badge, Button, Card, Disclosure, Note, Textarea } from '@/components/system'
+import { Badge, Button, Card, Note, Textarea } from '@/components/system'
 import { RosterImport } from '@/components/portal/RosterImport'
 import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
-import { SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
+import { ADD_PRODUCTS_HREF, SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
 import { AddChoices } from './AddChoices'
 import { CodeCardView, type CardActions } from './CodeCardView'
 import { CsvPicker } from './CsvPicker'
@@ -12,8 +12,8 @@ import { FeedExport } from './FeedExport'
 import { SampleSkus } from './SampleSkus'
 import { StatusStrip, type IndexStatus, type SupplierStatus } from './StatusStrip'
 import { MAX_CODES, isAddable, plural, splitCodes, type LookupGroup } from './lookup'
-import { useLookup, type Lookup } from './useLookup'
-import { Lede, Row, SectionTitle, Stack, TextLink, bodyText, metaText } from './ui'
+import { useLookup, type Lookup, type LookupHalt } from './useLookup'
+import { Collapsible, Lede, Row, SectionTitle, Stack, TextLink, bodyText, metaText } from './ui'
 
 /** Scroll a section into view once the render that opened it has landed. */
 function bringIntoView(el: HTMLElement | null) {
@@ -47,7 +47,14 @@ export function AddProducts() {
   const [index, setIndex] = useState<IndexStatus | null>(null)
   const [indexError, setIndexError] = useState(false)
   const [indexOpen, setIndexOpen] = useState(false)
-  const [showSkus, setShowSkus] = useState(false)
+  const [indexBusy, setIndexBusy] = useState(false)
+  /**
+   * Whether the sample codes are showing. Null until the founder chooses, and
+   * until then it follows the supplier: on the sample catalogue or a DEMO
+   * account there is nowhere else to get a code that exists, so they show from
+   * the start; on a live account they wait to be asked for.
+   */
+  const [showSkus, setShowSkus] = useState<boolean | null>(null)
   const [input, setInput] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
   const [handover, setHandover] = useState<{ text: string; fileName: string; nonce: number } | null>(null)
@@ -78,12 +85,18 @@ export function AddProducts() {
         const d = await res.json().catch(() => ({}))
         if (!active) return
         if (!res.ok) {
-          setSupplier((prev) => prev ?? { unknown: true })
+          setSupplier((prev): SupplierStatus => prev ?? { unknown: true })
           return
         }
-        setSupplier((prev) => ({ mode: d.mode, effective: d.effective, hasCredentials: d.hasCredentials, ...(prev?.demo ? { demo: true } : {}) }))
+        // A lookup may have answered first; what it saw is newer than the setting.
+        setSupplier((prev): SupplierStatus => ({
+          mode: d.mode,
+          effective: prev?.effective ?? d.effective,
+          hasCredentials: d.hasCredentials,
+          ...(prev?.demo ? { demo: true } : {}),
+        }))
       })
-      .catch(() => active && setSupplier((prev) => prev ?? { unknown: true }))
+      .catch(() => active && setSupplier((prev): SupplierStatus => prev ?? { unknown: true }))
     return () => {
       active = false
     }
@@ -129,6 +142,7 @@ export function AddProducts() {
   }
 
   const typed = splitCodes(input).length
+  const skusShowing = showSkus ?? (supplier?.effective === 'mock' || Boolean(supplier?.demo))
 
   const actions: CardActions = {
     searchAgain: lookup.searchAgain,
@@ -158,10 +172,10 @@ export function AddProducts() {
         indexError={indexError}
         onOpenIndex={openIndex}
         onShowSkus={() => {
-          setShowSkus((v) => !v)
-          bringIntoView(boxRef.current)
+          setShowSkus(!skusShowing)
+          if (!skusShowing) bringIntoView(boxRef.current)
         }}
-        showingSkus={showSkus}
+        showingSkus={skusShowing}
       />
 
       {/* 2 ── One box for any codes. */}
@@ -203,7 +217,7 @@ export function AddProducts() {
               </span>
             </Row>
 
-            {showSkus && (
+            {skusShowing && (
               <SampleSkus
                 onPick={(sku) => setInput((v) => (v.trim() ? `${v.trim()}, ${sku}` : sku))}
                 onPutAll={(skus) => setInput(skus.join(', '))}
@@ -213,6 +227,8 @@ export function AddProducts() {
         </Card>
       </div>
 
+      {/* 3 ── Each lookup's cards, and under them the choices for the ones
+          ticked. Above the spreadsheet so codes ticked there land in view. */}
       <div ref={resultsRef} className="flex flex-col" style={{ gap: 'var(--space-4)' }}>
         <RunStatus lookup={lookup} />
         {lookup.groups.map((group) => (
@@ -241,7 +257,19 @@ export function AddProducts() {
             bringIntoView(csvRef.current)
           }}
           onFindIds={(skus) => {
-            void lookup.run([{ title: 'Roster SKUs without a PowerBody id', source: 'roster', codes: skus.slice(0, MAX_CODES) }])
+            // One lookup takes 200 codes. A longer list goes 200 at a time —
+            // each press takes the next 200 not already on the page — and the
+            // group says how many are left, so none is silently left behind.
+            const onPage = new Set(lookup.groups.flatMap((g) => g.cards.map((c) => c.code)))
+            const all = splitCodes(skus.join('\n'))
+            const todo = all.filter((code) => !onPage.has(code))
+            const next = (todo.length > 0 ? todo : all).slice(0, MAX_CODES)
+            const left = todo.length - next.length
+            const title =
+              left > 0
+                ? `Roster SKUs without a PowerBody id — ${next.length} now, ${left} more after (press “Find their ids” again)`
+                : 'Roster SKUs without a PowerBody id'
+            void lookup.run([{ title, source: 'roster', codes: next }])
             bringIntoView(resultsRef.current)
           }}
         />
@@ -249,24 +277,27 @@ export function AddProducts() {
 
       {/* 6 ── The index: open while there is none, tucked away once built. */}
       <div ref={indexRef}>
-        <Card padding="normal" as="section">
-          <Disclosure
+        <Card padding="normal" as="div">
+          <Collapsible
+            title="PowerBody index"
+            badge={
+              indexBusy ? (
+                <Badge tone="info" dot>
+                  Running
+                </Badge>
+              ) : index && index.products === 0 ? (
+                <Badge tone="attention">Not built</Badge>
+              ) : null
+            }
+            lede="Reads PowerBody’s whole product list once and keeps every product’s id, so every lookup is instant instead of a search. Build it once; refresh it weekly so new products are in it."
             open={indexOpen}
             onOpenChange={setIndexOpen}
-            summary={
-              <span className="inline-flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
-                PowerBody index — makes every lookup instant
-                {index && index.products === 0 && <Badge tone="attention">Not built</Badge>}
-              </span>
-            }
+            busy={indexBusy}
           >
             <Stack gap="var(--space-4)">
-              <p style={bodyText}>
-                Reads PowerBody’s whole product list once and keeps every product’s id, so every lookup is instant
-                instead of a search. Build it once; refresh it weekly so new products are in it.
-              </p>
               <SupplierIndexBuilder
                 onChange={(s) => setIndex({ products: s.products, complete: s.complete, updatedAt: s.updatedAt })}
+                onBusyChange={setIndexBusy}
               />
               <Stack gap="var(--space-2)">
                 <p style={metaText}>
@@ -276,7 +307,7 @@ export function AddProducts() {
                 <FeedExport />
               </Stack>
             </Stack>
-          </Disclosure>
+          </Collapsible>
         </Card>
       </div>
     </div>
@@ -339,23 +370,24 @@ function RunStatus({ lookup }: { lookup: Lookup }) {
       ) : null}
 
       {lookup.halt && (
-        <Note tone="critical" live="assertive">
+        <Note tone={lookup.halt.kind === 'signed-out' ? 'attention' : 'critical'} icon={lookup.halt.kind === 'signed-out' ? 'lock' : undefined} live="assertive">
           <span className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
-            <span>
-              {lookup.halt.kind === 'sandbox'
-                ? 'Stopped: this PowerBody API account is still their DEMO sandbox, which cannot look products up — so every code after this one would have been refused the same way. Only PowerBody can switch it to live: ask your account manager.'
-                : lookup.halt.kind === 'credentials'
-                  ? 'Stopped: PowerBody did not accept our login, so every code after this one would have been refused the same way.'
-                  : 'Stopped before the rest were looked up.'}
-            </span>
-            <span style={metaText}>{lookup.halt.message}</span>
+            <span>{haltHeadline(lookup.halt.kind)}</span>
+            {lookup.halt.kind !== 'signed-out' && <span style={metaText}>{lookup.halt.message}</span>}
             <span className="flex flex-wrap items-center" style={{ gap: 'var(--space-3)' }}>
-              {lookup.halt.kind === 'credentials' ? (
+              {lookup.halt.kind === 'signed-out' ? (
+                // A full page load, not a client navigation: the sign-in
+                // screen is drawn by the hub's root layout, which a soft
+                // navigation keeps.
+                <a href={ADD_PRODUCTS_HREF} style={{ color: 'var(--accent)', fontWeight: 'var(--weight-strong)' }}>
+                  Sign in again
+                </a>
+              ) : lookup.halt.kind === 'credentials' ? (
                 <TextLink href={SUPPLIER_SETTINGS_HREF}>Check the login in Settings → Supplier</TextLink>
               ) : (
                 <TextLink href={SUPPLIER_SETTINGS_HREF}>Run the checks</TextLink>
               )}
-              {stranded > 0 && (
+              {stranded > 0 && lookup.halt.kind !== 'signed-out' && (
                 <Button size="sm" variant="secondary" onClick={lookup.retryStopped}>
                   Try the rest again ({stranded})
                 </Button>
@@ -375,6 +407,22 @@ function RunStatus({ lookup }: { lookup: Lookup }) {
       )}
     </>
   )
+}
+
+/** The circuit breaker's banner, by what tripped it. Each says what the rest would have met. */
+function haltHeadline(kind: LookupHalt['kind']): string {
+  switch (kind) {
+    case 'sandbox':
+      return 'Stopped: this PowerBody API account is still their DEMO sandbox, which cannot look products up — so every code after this one would have been refused the same way. Only PowerBody can switch it to live: ask your account manager.'
+    case 'credentials':
+      return 'Stopped: PowerBody did not accept our login, so every code after this one would have been refused the same way.'
+    case 'signed-out':
+      return 'Your session has expired, so the hub refused the lookup before PowerBody was asked. Sign in again, then look these codes up again.'
+    case 'gave-up':
+      return 'Stopped: PowerBody kept asking us to slow down.'
+    default:
+      return 'Stopped before the rest were looked up.'
+  }
 }
 
 /** One lookup's cards, with the choices for the ones ticked. */

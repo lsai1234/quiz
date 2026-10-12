@@ -166,13 +166,13 @@ function Header({
   onGone: (href: string) => void
 }) {
   const { product, state } = payload
-  const [confirming, setConfirming] = useState<'remove' | 'discard' | null>(null)
+  const [confirming, setConfirming] = useState<'remove' | 'discard' | 'undo-merge' | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [link, setLink] = useState<{ label: string; href: string } | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
-  async function act(action: 'approve' | 'remove' | 'restore' | 'discard') {
+  async function act(action: 'approve' | 'remove' | 'restore' | 'discard' | 'undo-merge') {
     setBusy(action)
     setError(null)
     setLink(null)
@@ -199,7 +199,9 @@ function Header({
         ? 'Approved — it is on sale in the shop and the quiz can recommend it.'
         : action === 'remove'
           ? 'Removed from the shop, the quiz and every list. Restore brings it back exactly as it was.'
-          : 'Restored — it is on sale again.',
+          : action === 'undo-merge'
+            ? `Back on sale on its own, as it was before the merge. Its SKUs have left “${payload.heldBy?.title ?? 'the other product'}”.`
+            : 'Restored — it is on sale again.',
     )
   }
 
@@ -279,12 +281,51 @@ function Header({
             )}
           </>
         )}
-        {state === 'removed' && (
+        {state === 'removed' && !payload.heldBy && (
           <Button variant="primary" size="sm" loading={busy === 'restore'} onClick={() => void act('restore')}>
             Restore — put it back on sale
           </Button>
         )}
+        {state === 'removed' && payload.heldBy?.merged && (
+          confirming === 'undo-merge' ? (
+            <>
+              <Button variant="primary" size="sm" loading={busy === 'undo-merge'} onClick={() => void act('undo-merge')}>
+                Confirm — undo the merge
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+                Leave it merged
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" size="sm" onClick={() => setConfirming('undo-merge')}>
+              Undo the merge
+            </Button>
+          )
+        )}
       </div>
+
+      {/*
+        A removed product whose SKUs are sold by another can't just be restored —
+        the same tub would be listed twice. Say where they went, and offer the
+        way back when it was a merge.
+      */}
+      {state === 'removed' && payload.heldBy && (
+        <p style={META}>
+          {payload.heldBy.merged ? 'Merged into ' : 'Its SKUs are sold as '}
+          <Link href={productHref(payload.heldBy.id)} style={{ textDecoration: 'underline' }}>
+            {payload.heldBy.title}
+          </Link>
+          {payload.heldBy.merged
+            ? ' — its flavours are listed there now.'
+            : ' now, so it cannot be restored without listing them twice.'}
+        </p>
+      )}
+      {confirming === 'undo-merge' && payload.heldBy && (
+        <p style={META}>
+          Its SKUs leave “{payload.heldBy.title}” and this product goes back on sale as it was before the merge. Anything
+          changed on those SKUs while they were part of “{payload.heldBy.title}” stays behind.
+        </p>
+      )}
 
       {confirming === 'remove' && (
         <p style={META}>

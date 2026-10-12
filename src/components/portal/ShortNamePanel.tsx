@@ -1,8 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
-import { Button, Note } from '@/components/system'
+import { Button, Card, Note } from '@/components/system'
+import { deriveShortName } from '@/lib/catalogue/short-name'
+import { liveProducts, ProductLink, useProductIndex } from '@/components/portal/fixups/product-index'
+import type { FixupPanelProps } from '@/components/portal/fixups/types'
 
 interface Candidate {
   id: string
@@ -43,6 +46,8 @@ interface Progress {
   total: number
 }
 
+const META = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' } as const
+
 /** Why an AI name was thrown away, in words a founder can act on. */
 function fallbackReason(change: Change): string {
   switch (change.reason) {
@@ -75,28 +80,74 @@ function fallbackReason(change: Change): string {
  * product and is a judgement call about what a thing is really called, so it is
  * the quieter one — and it shows every name it wrote, because a name you would
  * trust on three products is not automatically one you trust on three hundred.
+ *
+ * ── The two must not lock each other out ────────────────────────────────────
+ * Filling from titles STORES the derived name, after which the scan counts the
+ * product as named — and the AI pass used to be offered only for products the
+ * scan still counted, so pressing the free button first disabled the better one
+ * for good. A stored name that is exactly what the title derives to is still a
+ * guess, so those stay in the AI pass's reach: it is offered for every product
+ * with no name AND every product whose name was derived. A name somebody wrote
+ * (or the AI wrote) is neither, and is left alone.
  */
-export function ShortNamePanel() {
+export function ShortNamePanel({ onSummary, onRunningChange }: FixupPanelProps) {
+  const index = useProductIndex()
   const [scan, setScan] = useState<Scan | null>(null)
-  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [changes, setChanges] = useState<Change[]>([])
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    fetch('/api/portal/product-short-names')
-      .then((r) => r.json())
-      .then((d) => setScan(d.ok ? d : null))
-      .catch(() => {})
-      .finally(() => setLoaded(true))
+    setLoadError(null)
+    fetch('/api/portal/product-short-names', { cache: 'no-store' })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null)
+        if (r.ok && d?.ok) setScan(d)
+        else setLoadError(d?.error ?? `The server answered with an error (HTTP ${r.status}).`)
+      })
+      .catch(() => setLoadError('Could not reach the server — check the connection.'))
   }, [])
 
   useEffect(load, [load])
 
+  const busy = progress !== null
+  useEffect(() => onRunningChange?.(busy), [busy, onRunningChange])
+
+  /** On sale, named, and the name is exactly what the title derives to. */
+  const derived = useMemo(() => {
+    const waiting = new Set(scan?.candidates.map((c) => c.id) ?? [])
+    return liveProducts(index)
+      .filter((p) => !waiting.has(p.id))
+      .filter((p) => {
+        const stored = p.shortName?.trim()
+        return Boolean(stored) && stored === deriveShortName(p)
+      })
+      .map((p) => ({ id: p.id, title: p.title }))
+  }, [index, scan])
+
+  const missing = scan?.candidates.length ?? 0
+  const aiTargets = useMemo(() => [...(scan?.candidates ?? []).map((c) => ({ id: c.id, title: c.title })), ...derived], [scan, derived])
+
+  useEffect(() => {
+    if (!onSummary) return
+    if (loadError) return onSummary({ count: null, line: 'Could not count — see inside.' })
+    if (!scan) return onSummary({ count: null, line: 'Counting…' })
+    onSummary({
+      count: missing,
+      line:
+        missing > 0
+          ? `${missing} of ${scan.total} on sale ${missing === 1 ? 'has' : 'have'} no short name of ${missing === 1 ? 'its' : 'their'} own and fall${missing === 1 ? 's' : ''} back to the title.`
+          : derived.length > 0
+            ? `Every product on sale has one; ${derived.length} ${derived.length === 1 ? 'was' : 'were'} worked out from the title and can be improved with AI.`
+            : `All ${scan.total} on sale have a name that fits a card.`,
+    })
+  }, [onSummary, scan, loadError, missing, derived.length])
+
   async function run(mode: Mode) {
     if (!scan) return
-    const ids = scan.candidates.map((c) => c.id)
+    const ids = mode === 'ai' ? aiTargets.map((t) => t.id) : scan.candidates.map((c) => c.id)
     if (ids.length === 0) return
 
     setError(null)
@@ -117,142 +168,122 @@ export function ShortNamePanel() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ids: slice, ai: mode === 'ai' }),
         })
-        const data = await res.json()
-        if (!data.ok) throw new Error(data.error ?? 'Naming failed.')
+        const data = await res.json().catch(() => null)
+        if (!data?.ok) {
+          throw new Error(
+            data?.error ??
+              `The batch did not come back (HTTP ${res.status}) — most likely it ran out of time. The ${collected.length} named before it are saved; press again to carry on.`,
+          )
+        }
         for (const change of data.changes as Change[]) {
           collected.push(change)
           if (mode === 'ai' && change.source !== 'ai') fellBack++
         }
+        // Saved as each batch lands, so what is done survives whatever happens next.
+        setChanges([...collected])
         setProgress({ mode, done: Math.min(i + BATCH, ids.length), total: ids.length })
       }
 
-      setChanges(collected)
       setDone(
         mode === 'ai'
           ? `Named ${collected.length}. ${collected.length - fellBack} written by AI, ${fellBack} from the title.`
-          : `Named ${collected.length} from their titles.`,
+          : `Named ${collected.length} from their titles. Write with AI is still there for any of them.`,
       )
-      invalidateCatalogue()
-      load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Naming failed.')
     } finally {
       setProgress(null)
+      if (collected.length > 0) {
+        invalidateCatalogue()
+        index.reload()
+      }
+      load()
     }
   }
 
-  if (!loaded || !scan) return null
+  if (loadError) {
+    return (
+      <Note tone="critical">
+        The short names could not be counted: {loadError}{' '}
+        <Button size="sm" variant="ghost" icon="refresh" onClick={load}>
+          Try again
+        </Button>
+      </Note>
+    )
+  }
+  if (!scan) return <p style={META}>Counting…</p>
 
-  const busy = progress !== null
-  const missing = scan.candidates.length
-  const allNamed = missing === 0
+  const noKey = !scan.hasKey
 
   return (
-    <section
-      style={{
-        background: 'var(--surface-1)',
-        border: '1px solid var(--edge)',
-        borderRadius: 'var(--radius-card)',
-        padding: 'var(--space-4)',
-        display: 'grid',
-        gap: 'var(--space-3)',
-      }}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-        <div>
-          <h2
-            style={{
-              fontSize: 'var(--text-body-sm)',
-              fontWeight: 'var(--weight-strong)',
-              fontFamily: 'var(--font-display)',
-              color: 'var(--ink-1)',
-            }}
-          >
-            Short names
-          </h2>
-          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-            {allNamed
-              ? `All ${scan.total} product${scan.total === 1 ? '' : 's'} have a name that fits a card.`
-              : `${scan.withShortName} of ${scan.total} have one. ${missing} fall back to their title.`}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {!allNamed && (
-            <Button size="sm" loading={busy && progress?.mode === 'derive'} disabled={busy} onClick={() => run('derive')}>
-              Fill from titles
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            icon="sparkle"
-            loading={busy && progress?.mode === 'ai'}
-            disabled={busy || allNamed || !scan.hasKey}
-            title={
-              allNamed
-                ? 'Every product already has one'
-                : !scan.hasKey
-                  ? 'No OPENAI_API_KEY is set, so there is nothing to call'
-                  : `Write a name for ${missing} product(s) with AI`
-            }
-            onClick={() => run('ai')}
-          >
-            Write with AI
+    <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+        {missing > 0 && (
+          <Button size="sm" variant="primary" loading={busy && progress?.mode === 'derive'} disabled={busy} onClick={() => void run('derive')}>
+            Fill {missing} from titles
           </Button>
-        </div>
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="sparkle"
+          loading={busy && progress?.mode === 'ai'}
+          disabled={busy || aiTargets.length === 0 || noKey}
+          onClick={() => void run('ai')}
+        >
+          {aiTargets.length > 0 ? `Write ${aiTargets.length} with AI` : 'Write with AI'}
+        </Button>
       </div>
 
-      {!allNamed && !busy && (
+      {noKey && aiTargets.length > 0 && (
+        <p style={META}>
+          Write with AI needs an OpenAI key (OPENAI_API_KEY) on the server, and none is set. Filling from titles works
+          without one.
+        </p>
+      )}
+
+      {missing > 0 && !busy && (
         <Note tone="info">
           Nothing is broken without these — a product with no short name shows a name worked out from its title. What
           this changes is whether that name is a decent guess or the right answer. <strong>Fill from titles</strong>{' '}
-          stores that guess for every product: instant, free and safe to re-run.
+          stores that guess: instant, free and safe to re-run, and <strong>Write with AI</strong> can still improve on it
+          afterwards.
         </Note>
       )}
 
-      {allNamed && !busy && (
+      {missing === 0 && derived.length === 0 && !busy && (
         <Note tone="positive">
-          Every product has a name that fits. Edit any of them on the product itself — this panel only writes the ones
-          that have none.
+          Every product on sale has a name that fits. Edit any of them on the product itself — this pass only writes the
+          ones that have none, or the ones worked out from the title.
         </Note>
       )}
 
       {progress && (
-        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)' }} role="status">
+        <p style={{ ...META, color: 'var(--ink-2)' }} role="status">
           Naming {progress.done} of {progress.total}…
           {progress.mode === 'ai' && ' Each one is an API call, so this takes a moment.'}
         </p>
       )}
 
-      {error && <Note tone="critical" live="assertive">{error}</Note>}
-      {done && !error && <Note tone="positive" live="polite">{done}</Note>}
+      {error && (
+        <Note tone="critical" live="assertive">
+          {error}
+        </Note>
+      )}
+      {done && !error && (
+        <Note tone="positive" live="polite">
+          {done}
+        </Note>
+      )}
 
       {changes.length > 0 && (
-        <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-          <p
-            style={{
-              fontSize: 'var(--text-micro)',
-              fontWeight: 'var(--weight-strong)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-            }}
-          >
-            Named ({changes.length})
-          </p>
+        <ul style={{ display: 'grid', gap: 'var(--space-2)' }} aria-label="Names written">
           {changes.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--edge)',
-                borderRadius: 'var(--radius-row)',
-                padding: 'var(--space-3)',
-                display: 'grid',
-                gap: 'var(--space-1)',
-              }}
-            >
-              <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', lineHeight: 'var(--leading-snug)' }}>
-                {c.title}
+            <Card key={c.id} as="li" solid padding="tight">
+              <p style={META}>
+                <ProductLink id={c.id} section="listing">
+                  {c.title}
+                </ProductLink>
               </p>
               <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
                 → {c.after}
@@ -260,10 +291,10 @@ export function ShortNamePanel() {
               {c.source !== 'ai' && c.reason && c.reason !== 'no-api-key' && (
                 <p style={{ fontSize: 'var(--text-micro)', color: 'var(--tone-attention)' }}>{fallbackReason(c)}</p>
               )}
-            </div>
+            </Card>
           ))}
-        </div>
+        </ul>
       )}
-    </section>
+    </div>
   )
 }
