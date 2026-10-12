@@ -60,6 +60,8 @@ export function AiSuggestPanel({ onSummary, onRunningChange }: FixupPanelProps) 
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [usedModel, setUsedModel] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Products the classifier sent nothing back for — named, each a link, so they can be done by hand. */
+  const [unanswered, setUnanswered] = useState<Array<{ id: string; title: string }>>([])
   /** Offer keys switched off, as `productId|offerKey` (or switched ON, for offers that start off). */
   const [flipped, setFlipped] = useState<Set<string>>(new Set())
   const [applied, setApplied] = useState<Record<string, Applied>>({})
@@ -100,6 +102,7 @@ export function AiSuggestPanel({ onSummary, onRunningChange }: FixupPanelProps) 
     if (targets.length === 0) return
     stopRef.current = false
     setError(null)
+    setUnanswered([])
     setProgress({ done: 0, total: targets.length })
     try {
       for (let i = 0; i < targets.length; i += BATCH) {
@@ -144,12 +147,7 @@ export function AiSuggestPanel({ onSummary, onRunningChange }: FixupPanelProps) 
         const missing = slice.filter((p) => !data.results!.some((r) => r.id === p.id))
         setAsked((prev) => [...prev, ...got])
         setAskedIds((prev) => new Set([...prev, ...slice.map((p) => p.id)]))
-        if (missing.length > 0) {
-          setError(
-            `No suggestion came back for ${missing.map((p) => p.title).join(', ')} — ${missing.length === 1 ? 'it may have' : 'they may have'} ` +
-              'been changed or removed since this page loaded.',
-          )
-        }
+        if (missing.length > 0) setUnanswered((prev) => [...prev, ...missing.map((p) => ({ id: p.id, title: p.title }))])
         setProgress({ done: Math.min(i + BATCH, targets.length), total: targets.length })
       }
     } finally {
@@ -272,6 +270,22 @@ export function AiSuggestPanel({ onSummary, onRunningChange }: FixupPanelProps) 
         </Note>
       )}
 
+      {unanswered.length > 0 && (
+        <Note tone="attention">
+          No suggestion came back for{' '}
+          {unanswered.map((p, i) => (
+            <span key={p.id}>
+              {i > 0 && ', '}
+              <ProductLink id={p.id} section="quiz">
+                {p.title}
+              </ProductLink>
+            </span>
+          ))}{' '}
+          — {unanswered.length === 1 ? 'it may have' : 'they may have'} been changed or removed since this page loaded. Open{' '}
+          {unanswered.length === 1 ? 'it' : 'each'} to tag {unanswered.length === 1 ? 'it' : 'them'} by hand.
+        </Note>
+      )}
+
       {asked.length > 0 && (
         <ul style={{ display: 'grid', gap: 'var(--space-2)' }} aria-label="Suggestions">
           {asked.map((item) => (
@@ -325,8 +339,8 @@ function SuggestionCard({
 
       {item.offers.length === 0 ? (
         <p style={{ ...META, marginTop: 'var(--space-2)' }}>
-          Nothing it could add: the only answers it had were for fields this product already has, or “general”. Open it to
-          set the rest by hand.
+          Nothing it could add: its answers were for fields this product already has, “general”, or tags we do not use.
+          Open it to set the rest by hand, in Quiz &amp; subscription.
         </p>
       ) : (
         !done && (

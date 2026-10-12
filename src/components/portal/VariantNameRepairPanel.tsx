@@ -111,10 +111,13 @@ export function VariantNameRepairPanel({ onSummary, onRunningChange }: FixupPane
       })
       const d = await res.json().catch(() => null)
       if (!res.ok || !d || d.ok === false) {
+        // From the file, the route's reason already says what is wrong with it.
+        // From the API, the way on is the file, which needs nothing from them.
+        const next = csv ? '' : ' Use the catalogue CSV instead: it needs nothing from their API.'
         setError(
-          d?.error ??
-            `The repair did not come back (HTTP ${res.status}) — most likely PowerBody were slow and it ran out of time. ` +
-              'Use the catalogue CSV instead: it needs nothing from their API.',
+          d?.error
+            ? `Nothing was renamed: ${d.error}${next}`
+            : `The repair did not come back (HTTP ${res.status}) — most likely PowerBody were slow and it ran out of time.${next}`,
         )
         return
       }

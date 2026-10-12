@@ -33,6 +33,9 @@ export interface CatalogueLoad {
 /** The in-flight (or settled) load. Shared so N callers make one request. */
 let inflight: Promise<CatalogueLoad> | null = null
 
+/** Fired on `window` whenever products change, for anything showing a count. */
+export const CATALOGUE_CHANGED = 'catalogue:changed'
+
 /** Force the next `loadCatalogue()` to re-fetch (e.g. the portal flipped the
  *  data source, or products were imported). */
 export function invalidateCatalogue(): void {
@@ -42,6 +45,7 @@ export function invalidateCatalogue(): void {
   } catch {
     /* ignore — nothing to clear */
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(CATALOGUE_CHANGED))
 }
 
 /**

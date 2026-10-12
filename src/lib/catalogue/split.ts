@@ -232,6 +232,14 @@ export function splitOut(
     formats: formatsFor(staying, product.formats),
     ...faceOf(staying, product),
   }
+  // The same rule from the other side: the parent's id belongs to its stored
+  // master SKU. If that SKU is the one leaving, the id leaves with it, and what
+  // stays is known only by its new master's own id, if that has one.
+  const parentMaster = product.defaultVariantId ?? product.variants[0]?.id
+  if (!staying.some((v) => v.id === parentMaster)) {
+    const keptMaster = staying.find((v) => v.id === kept.defaultVariantId)
+    kept.supplierProductId = keptMaster?.supplierProductId ?? null
+  }
 
   return { kept, moved }
 }

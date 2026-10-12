@@ -144,6 +144,28 @@ export function commonTitlePrefix(titles: string[]): string {
   return prefix.join(' ')
 }
 
+/**
+ * The whole words `title` opens with that `name` opens with too — all of
+ * `name` when `title` is `name` plus more ("Critical Whey 2kg" in "Critical
+ * Whey 2kg Strawberry").
+ *
+ * Unlike `commonTitlePrefix`, this may take the whole of `name`: only `title`
+ * needs a label left over. Applied to a merge target that already carries the
+ * shared name, `commonTitlePrefix` gave back one word less and labelled the
+ * flavour "2kg Strawberry".
+ */
+function leadingWordsOf(title: string, name: string): string {
+  const own = title.trim().split(/\s+/)
+  const theirs = name.trim().split(/\s+/)
+  const shared: string[] = []
+  for (let i = 0; i < Math.min(own.length, theirs.length) && own[i].toLowerCase() === theirs[i].toLowerCase(); i++) {
+    shared.push(own[i])
+  }
+  // Never all of `title` — that would leave it with no label at all.
+  if (shared.length === own.length) shared.pop()
+  return shared.join(' ')
+}
+
 /** What to call one product's variant once it is part of a group. */
 export function variantLabelFor(title: string, prefix: string): string {
   if (!prefix) return title
@@ -226,7 +248,7 @@ export function mergeInto(target: CatalogueProduct, sources: CatalogueProduct[])
   // The target's own SKUs are left exactly as they were — ids, labels, facts.
   const variants: CatalogueVariant[] = [...target.variants]
   for (const source of sources) {
-    const prefix = commonTitlePrefix([target.title, source.title])
+    const prefix = leadingWordsOf(source.title, target.title)
     const label = variantLabelFor(source.title, prefix)
     for (const variant of withOwnFacts(source)) {
       if (variant.sku && skus.has(variant.sku)) continue
@@ -237,7 +259,13 @@ export function mergeInto(target: CatalogueProduct, sources: CatalogueProduct[])
       taken.add(id)
       if (variant.sku) skus.add(variant.sku)
       const moved = rememberWhere(variant, source.id)
-      variants.push({ ...moved, id, title: ownLabel, flavour: variant.size && !variant.flavour ? null : ownLabel })
+      // Sizes are the same across a merge (canMerge), so what sets a newcomer
+      // apart is its label: it becomes the flavour, which is what the shop's
+      // picker shows ("Lemon · 500g"). Leaving it null would list it as just
+      // "500g", the same as the SKU beside it. Only a label that IS the size
+      // stays out of the flavour, so it does not read "500g · 500g".
+      const labelIsSize = Boolean(variant.size) && normaliseSize(ownLabel) === normaliseSize(variant.size)
+      variants.push({ ...moved, id, title: ownLabel, flavour: labelIsSize ? null : ownLabel })
     }
   }
   return { ...target, variants }

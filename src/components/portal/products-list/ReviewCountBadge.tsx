@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Badge } from '@/components/system'
+import { CATALOGUE_CHANGED } from '@/lib/catalogue/load'
 
 /**
  * How many products are waiting for review, on the sub-nav's Review link.
@@ -13,6 +14,8 @@ import { Badge } from '@/components/system'
  * gone back to the list. Re-read on every move between Products pages instead,
  * which is exactly when the number can have changed — approving happens on the
  * Review page and on a product's own page, and leaving either is a navigation.
+ * A write that stays on the page (approving or discarding a batch in the
+ * queue) announces itself with CATALOGUE_CHANGED, and the count is re-read then.
  *
  * Says nothing at all when the queue is empty or the count cannot be read. A
  * "0" is noise, and a badge is not the place to report a failed request — the
@@ -21,6 +24,13 @@ import { Badge } from '@/components/system'
 export function ReviewCountBadge() {
   const pathname = usePathname()
   const [count, setCount] = useState<number | null>(null)
+  const [changes, setChanges] = useState(0)
+
+  useEffect(() => {
+    const changed = () => setChanges((n) => n + 1)
+    window.addEventListener(CATALOGUE_CHANGED, changed)
+    return () => window.removeEventListener(CATALOGUE_CHANGED, changed)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +47,7 @@ export function ReviewCountBadge() {
     return () => {
       cancelled = true
     }
-  }, [pathname])
+  }, [pathname, changes])
 
   if (!count) return null
   return (

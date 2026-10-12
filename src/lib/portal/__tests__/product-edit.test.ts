@@ -1086,7 +1086,7 @@ describe('productPayload', () => {
     const payload = (await productPayload(id))!
 
     expect(Object.keys(payload).sort()).toEqual(
-      ['markupOnCost', 'priceRows', 'product', 'readiness', 'remaining', 'source', 'state', 'storage', 'usage', 'usageWarning'].sort(),
+      ['heldBy', 'markupOnCost', 'priceRows', 'product', 'readiness', 'remaining', 'source', 'state', 'storage', 'usage', 'usageWarning'].sort(),
     )
     expect(payload).toMatchObject({ state: 'pending', storage: 'imported', source: 'mock' })
     expect(payload.product).toEqual(await stored(id))

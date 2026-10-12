@@ -3,7 +3,7 @@ import type { SupplierProduct, SupplierProvider } from './types'
 import { masterVariant } from '@/lib/catalogue/master'
 import { repriceVariants, type SkuFacts } from './variant-pricing'
 import { indexedProductIds } from '@/lib/portal/supplier-index'
-import { resolveCode, normaliseCode, type CodeResolution } from './resolve-code'
+import { resolveCode, normaliseCode, refusalOf, type CodeResolution, type RefusalKind } from './resolve-code'
 import type { ResolveStep } from './resolve-sku'
 
 /**
@@ -36,15 +36,26 @@ export interface PullResult {
   changed: Record<string, string>
   /** SKUs PowerBody answered for. */
   answered: number
-  /** SKUs whose id could not be found, with why. */
-  unresolved: Array<{ sku: string; message: string }>
+  /** SKUs whose id could not be found, with why — and the refusal kind when PowerBody refused. */
+  unresolved: Array<{ sku: string; message: string; refusal?: RefusalKind }>
+  /**
+   * PowerBody refused outright (rate limit, DEMO sandbox, login, their error),
+   * in their words. A caller working through many products stops on this
+   * rather than reading the wording of `unresolved`.
+   */
+  refused?: { kind: RefusalKind; message: string }
   trace: ResolveStep[]
 }
 
 const DESCRIPTIVE = ['imageUrl', 'description', 'category', 'brand', 'weightGrams', 'vatRate'] as const
 
-function isBlank(value: unknown): boolean {
-  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '') || value === 0
+/**
+ * Blank: nothing there. A weight of 0 is "not known yet"; a VAT rate of 0 is a
+ * real answer (zero-rated), so a founder's 0% is never treated as a gap to fill.
+ */
+function isBlank(value: unknown, key?: string): boolean {
+  if (value === 0) return key !== 'vatRate'
+  return value === null || value === undefined || (typeof value === 'string' && value.trim() === '')
 }
 
 export async function pullProduct(
@@ -81,6 +92,9 @@ export async function pullProduct(
 
   // ── Detail for every id we hold ───────────────────────────────────────────
   const detail = new Map<string, SupplierProduct>()
+  let refused: PullResult['refused']
+  /** Refusals that will refuse the next call too — asking again only digs deeper. */
+  const blocks = (kind: RefusalKind) => kind !== 'supplier-error'
   const known = [...new Set(ordered.map((s) => ids.get(s)).filter((id): id is string => Boolean(id)))]
   if (known.length > 0) {
     note(`Asking PowerBody about ${known.length} SKU${known.length === 1 ? '' : 's'} whose ids we already hold.`)
@@ -94,12 +108,18 @@ export async function pullProduct(
       }
     } catch (err) {
       note(`PowerBody would not answer: ${err instanceof Error ? err.message : String(err)}`)
+      const refusal = refusalOf(err)
+      refused = { kind: refusal.kind, message: refusal.message }
     }
   }
 
   // ── Anything still unknown is looked up properly ──────────────────────────
   const unresolved: PullResult['unresolved'] = []
   for (const sku of ordered.filter((s) => !detail.has(s))) {
+    if (refused && blocks(refused.kind)) {
+      unresolved.push({ sku, message: refused.message, refusal: refused.kind })
+      continue
+    }
     const left = budget - (Date.now() - startedAt)
     if (left < 8_000) {
       unresolved.push({ sku, message: 'Not reached this time — pull again to carry on.' })
@@ -114,7 +134,11 @@ export async function pullProduct(
       },
     })
     if (outcome.status === 'found' && outcome.product) detail.set(sku, outcome.product)
-    else unresolved.push({ sku, message: outcome.message })
+    else if (outcome.status === 'refused' && outcome.refusal) {
+      unresolved.push({ sku, message: outcome.message, refusal: outcome.refusal })
+      refused ??= { kind: outcome.refusal, message: outcome.message }
+      if (blocks(outcome.refusal)) refused = { kind: outcome.refusal, message: outcome.message }
+    } else unresolved.push({ sku, message: outcome.message })
   }
 
   // ── Per-SKU facts, through the pricing rules ──────────────────────────────
@@ -151,7 +175,7 @@ export async function pullProduct(
       const value = offered[key]
       if (isBlank(value)) continue
       const theirs = sources[key as keyof CatalogueProduct] === 'supplier'
-      if (!isBlank(next[key]) && !theirs) continue
+      if (!isBlank(next[key], key) && !theirs) continue
       if (JSON.stringify(next[key]) === JSON.stringify(value)) continue
       next[key] = value
       filled.push(key)
@@ -167,5 +191,5 @@ export async function pullProduct(
       ? `PowerBody answered for ${detail.size} of ${skus.length} SKU${skus.length === 1 ? '' : 's'}.`
       : 'PowerBody answered for none of its SKUs.',
   )
-  return { before: product, after, filled, changed, answered: detail.size, unresolved, trace }
+  return { before: product, after, filled, changed, answered: detail.size, unresolved, trace, ...(refused ? { refused } : {}) }
 }

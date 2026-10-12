@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import { invalidateCatalogue } from '@/lib/catalogue/load'
 import { SubNav, isActive } from '../../SubNav'
 import { ReviewCountBadge } from '../ReviewCountBadge'
 
@@ -49,5 +50,14 @@ describe('the Products sub-nav', () => {
     const second = render(<ReviewCountBadge />)
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     expect(second.container).toBeEmptyDOMElement()
+  })
+
+  it('re-reads the count when products change without leaving the page (a batch approved in the queue)', async () => {
+    serve({ products: [], count: 3 })
+    render(<ReviewCountBadge />)
+    expect(await screen.findByText('3')).toBeInTheDocument()
+    serve({ products: [], count: 1 })
+    act(() => invalidateCatalogue())
+    expect(await screen.findByText('1')).toBeInTheDocument()
   })
 })

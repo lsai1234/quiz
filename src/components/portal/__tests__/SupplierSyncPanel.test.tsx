@@ -78,10 +78,26 @@ describe('SupplierSyncPanel', () => {
     expect(invalidateCatalogue).toHaveBeenCalled()
   })
 
-  it('says what to do when the check fails', async () => {
+  it('says what to do when the check fails, with a link to the checks', async () => {
     serve(null, { post: () => ({ status: 502, body: { ok: false, error: 'PowerBody timed out.' } }) })
     render(<SupplierSyncPanel />)
     await userEvent.click(await screen.findByRole('button', { name: 'Check now' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/PowerBody timed out\. Nothing was changed by it\. Run the checks/)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/PowerBody timed out\. Nothing was changed by it\. Run the checks/)
+    expect(within(alert).getByRole('link', { name: 'Run the checks' })).toHaveAttribute('href', '/founderhub/settings/supplier')
+    expect(invalidateCatalogue).not.toHaveBeenCalled()
+  })
+
+  it('names every product it did not reach, not just the first dozen', async () => {
+    const missing = Array.from({ length: 15 }, (_, i) => `far-${i}`)
+    serve({ ...REPORT, changes: [], missing })
+    render(<SupplierSyncPanel />)
+
+    const list = await screen.findByRole('list', { name: 'Not reached this time' })
+    expect(within(list).getAllByRole('link')).toHaveLength(12)
+    await userEvent.click(screen.getByRole('button', { name: 'Show all 15' }))
+    expect(within(list).getAllByRole('link')).toHaveLength(15)
+    // Not in the product list (the test's index holds one product): named by id, still a link.
+    expect(within(list).getByRole('link', { name: 'far-14' })).toHaveAttribute('href', '/founderhub/products/item/far-14#supplier')
   })
 })

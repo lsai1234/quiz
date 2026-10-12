@@ -59,6 +59,11 @@ describe('offersFor', () => {
   it('does not offer "general" as a swap group', () => {
     expect(offersFor(untagged(), { swapGroup: 'general' }).some((o) => o.field === 'swapGroup')).toBe(false)
   })
+
+  it('never offers a tag the save would refuse', () => {
+    const offers = offersFor(untagged(), { stackSlots: ['protein', 'teleport'], goals: ['flying'], dietaryTags: ['paleo'], swapGroup: 'unicorn' })
+    expect(offers.map((o) => o.key)).toEqual(['stackSlots:protein'])
+  })
 })
 
 describe('setFor', () => {

@@ -1,4 +1,14 @@
-import { SLOT_LABELS, type CatalogueProduct, type DietaryTag, type StackSlot, type SwapGroup } from '@/lib/catalogue/types'
+import {
+  DIETARY_TAGS,
+  SLOT_LABELS,
+  STACK_SLOTS,
+  SWAP_GROUPS,
+  type CatalogueProduct,
+  type DietaryTag,
+  type StackSlot,
+  type SwapGroup,
+} from '@/lib/catalogue/types'
+import { ALL_GOALS } from '@/lib/types'
 import { GOAL_LABELS } from '@/lib/quiz-goals'
 
 /**
@@ -22,6 +32,10 @@ import { GOAL_LABELS } from '@/lib/quiz-goals'
  *   Short name and      both were in the suggestion and silently dropped. A
  *   stimulants          short name fills a blank; "contains stimulants" is only
  *                       ever offered in the safe direction — turning it ON.
+ *   Only what saves     a model can answer with a tag we do not have. The save
+ *                       validates every value and refuses the whole edit for
+ *                       one unknown tag, so a chip that cannot be saved is
+ *                       never shown — it would only fail the ones beside it.
  */
 
 export type OfferField =
@@ -139,11 +153,19 @@ export type Suggestion = Partial<Record<string, unknown>>
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : [])
 
+/** The values `POST /api/portal/products` accepts for each tag field — the same lists it validates against. */
+const KNOWN: Record<'stackSlots' | 'goals' | 'dietaryTags', ReadonlySet<string>> = {
+  stackSlots: new Set<string>(STACK_SLOTS),
+  goals: new Set<string>(ALL_GOALS),
+  dietaryTags: new Set<string>(DIETARY_TAGS),
+}
+const KNOWN_SWAP_GROUPS: ReadonlySet<string> = new Set<string>(SWAP_GROUPS)
+
 export function offersFor(product: CatalogueProduct, suggestion: Suggestion): Offer[] {
   const offers: Offer[] = []
   const tags = (field: 'stackSlots' | 'goals' | 'dietaryTags', current: readonly string[], defaultOn: boolean) => {
     if (current.length > 0) return
-    for (const value of [...new Set(strings(suggestion[field]))]) {
+    for (const value of [...new Set(strings(suggestion[field]))].filter((v) => KNOWN[field].has(v))) {
       offers.push({ key: `${field}:${value}`, field, value, label: tagLabel(field, value), defaultOn })
     }
   }
@@ -155,7 +177,12 @@ export function offersFor(product: CatalogueProduct, suggestion: Suggestion): Of
   tags('dietaryTags', product.dietaryTags, false)
 
   const swap = suggestion.swapGroup
-  if ((!product.swapGroup || product.swapGroup === 'general') && typeof swap === 'string' && swap && swap !== 'general') {
+  if (
+    (!product.swapGroup || product.swapGroup === 'general') &&
+    typeof swap === 'string' &&
+    swap !== 'general' &&
+    KNOWN_SWAP_GROUPS.has(swap)
+  ) {
     offers.push({ key: 'swapGroup', field: 'swapGroup', value: swap, label: swapGroupLabel(swap), defaultOn: true })
   }
 

@@ -73,7 +73,9 @@ export interface PullResult {
   filled?: string[]
   changed?: Record<string, string>
   answered?: number
-  unresolved?: Array<{ sku: string; message: string }>
+  unresolved?: Array<{ sku: string; message: string; refusal?: Exclude<StopKind, 'sample' | 'server'> }>
+  /** PowerBody's refusal, with its kind, when the pull met one. */
+  refused?: { kind: Exclude<StopKind, 'sample' | 'server'>; message: string } | null
   trace?: Array<{ message?: string }>
   product?: CatalogueProduct
   remaining?: string[]
@@ -102,10 +104,10 @@ export interface PullStop {
 }
 
 /*
-  The pull reports a SKU it could not get as a sentence, not a code — the
-  resolver's `refusalOf` writes these, so these patterns follow its wording. A
-  refusal carrying a kind on the pull's result would be better; see the report
-  for this change.
+  The pull says when PowerBody refused, and how (`refused`, and `refusal` on
+  each SKU it could not get). These patterns are the fallback for answers that
+  carry only a sentence — the product route's own errors, the Sample supplier,
+  an older server — and follow the wording of the resolver's `refusalOf`.
 */
 const REFUSALS: Array<[Exclude<StopKind, 'server'>, RegExp]> = [
   ['rate-limited', /limiting how fast|rate.?limit|too many requests|\b429\b|throttl/i],
@@ -135,7 +137,9 @@ export function stopFor(result: PullResult): PullStop | null {
     if ((result.status ?? 500) >= 500) return { kind: 'server', message }
     return null
   }
+  if (result.refused) return { kind: result.refused.kind, message: result.refused.message }
   for (const miss of result.unresolved ?? []) {
+    if (miss.refusal) return { kind: miss.refusal, message: miss.message }
     const kind = classify(miss.message)
     if (kind) return { kind, message: miss.message }
   }

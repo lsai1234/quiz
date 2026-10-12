@@ -1,5 +1,6 @@
 import { normaliseSize, skuGroups, mixedSizes, splitOut, splitBySize, freeId } from '../split'
 import type { CatalogueProduct, CatalogueVariant } from '../types'
+import { labelsOf, variantForLine } from '../line-variant'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
   return { id: 'v', title: 'V', flavour: null, size: null, price: 14.99, compareAtPrice: null, available: true, ...over }
@@ -166,5 +167,70 @@ describe('a free id', () => {
     expect(freeId('Glycine Powder', [])).toBe('glycine-powder')
     expect(freeId('glycine', ['glycine'])).toBe('glycine-2')
     expect(freeId('glycine', ['glycine', 'glycine-2'])).toBe('glycine-3')
+  })
+})
+
+describe('splitOut — what the moved SKUs take with them, and what they leave', () => {
+  it('has each moved SKU remember the product it came from and the labels it was sold under', () => {
+    const product = glycine()
+    const out = splitOut(product, ['powder'], { id: 'glycine-powder' })!
+
+    expect(out.moved.variants[0].formerly).toEqual([{ productId: 'glycine', labels: labelsOf(product.variants[1]) }])
+    // The SKU that stayed did not move, so it remembers nothing.
+    expect(out.kept.variants[0].formerly).toBeUndefined()
+
+    // A subscription line written against the old product still ships the powder.
+    const line = { productId: 'glycine', variantTitle: '454 grams' }
+    expect(variantForLine(line, [out.kept, out.moved])).toMatchObject({
+      product: { id: 'glycine-powder' },
+      variant: { id: 'powder', sku: 'P200' },
+    })
+  })
+
+  it('adds to what a moved SKU already remembered rather than replacing it', () => {
+    const product = glycine()
+    product.variants[1] = { ...product.variants[1], formerly: [{ productId: 'glycine-old', labels: ['Powder'] }] }
+    const out = splitOut(product, ['powder'], { id: 'x' })!
+    expect(out.moved.variants[0].formerly?.map((f) => f.productId)).toEqual(['glycine-old', 'glycine'])
+  })
+
+  it('leaves the parent’s Top 25 place and short name behind — both describe the parent', () => {
+    const out = splitOut(glycine({ topRank: 4, shortName: 'Glycine Caps' }), ['powder'], { id: 'x' })!
+    expect('topRank' in out.moved).toBe(false)
+    expect('shortName' in out.moved).toBe(false)
+    expect(out.kept).toMatchObject({ topRank: 4, shortName: 'Glycine Caps' })
+  })
+
+  it('takes the new product’s PowerBody id from its own master SKU', () => {
+    const product = glycine({ supplierProductId: '1001' })
+    product.variants[1] = { ...product.variants[1], supplierProductId: '2002' }
+    const out = splitOut(product, ['powder'], { id: 'x' })!
+    expect(out.moved.supplierProductId).toBe('2002')
+    expect(out.kept.supplierProductId).toBe('1001')
+  })
+
+  it('takes it only from the master — another moved SKU’s id is not the product’s', () => {
+    const product = glycine({ supplierProductId: '1001' })
+    product.variants.push(
+      variant({ id: 'powder-1kg', sku: 'P300', title: '1kg', size: '1 kg', price: 69.99, supplierProductId: '3003' }),
+    )
+    const out = splitOut(product, ['powder', 'powder-1kg'], { id: 'x' })!
+    expect(out.moved.defaultVariantId).toBe('powder')
+    expect(out.moved.supplierProductId).toBeUndefined()
+  })
+
+  it('stops the product left behind claiming the id of a master SKU that moved away', () => {
+    // The product-level id was found for the stored master — the capsules.
+    // Once the capsules have gone, it is not the powder's.
+    const out = splitOut(glycine({ supplierProductId: '1001' }), ['caps'], { id: 'glycine-caps' })!
+    expect(out.kept.variants.map((v) => v.id)).toEqual(['powder'])
+    expect(out.kept.supplierProductId ?? null).toBeNull()
+  })
+
+  it('gives the product left behind its new master’s own id when the old master moved away', () => {
+    const product = glycine({ supplierProductId: '1001' })
+    product.variants[1] = { ...product.variants[1], supplierProductId: '2002' }
+    const out = splitOut(product, ['caps'], { id: 'glycine-caps' })!
+    expect(out.kept.supplierProductId).toBe('2002')
   })
 })

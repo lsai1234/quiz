@@ -116,11 +116,12 @@ describe('Fix-ups', () => {
     await waitFor(() => expect(hide).toBeEnabled())
     expect(await within(card('Supplier check')).findByText(/Nothing moved/)).toBeInTheDocument()
 
-    // Folded and opened again: the same panel, with its answer, not a fresh one.
+    // Folded: still mounted, just hidden — and opened again it is the same
+    // panel, with its answer, not a fresh one.
     await userEvent.click(hide)
-    expect(screen.queryByText(/Nothing moved/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Nothing moved/)).not.toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Open Supplier check' }))
-    expect(within(card('Supplier check')).getByText(/Nothing moved/)).toBeInTheDocument()
+    expect(within(card('Supplier check')).getByText(/Nothing moved/)).toBeVisible()
     expect(invalidateCatalogue).toHaveBeenCalled()
   })
 

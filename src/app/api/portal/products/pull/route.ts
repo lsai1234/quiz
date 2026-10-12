@@ -57,6 +57,7 @@ export async function POST(req: Request) {
       changed: result.changed,
       answered: result.answered,
       unresolved: result.unresolved,
+      refused: result.refused ?? null,
       trace: result.trace,
     }
   }

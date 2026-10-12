@@ -6,7 +6,7 @@ import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { Badge, Button, Card, Note } from '@/components/system'
 import { ProductLink, useProductIndex } from '@/components/portal/fixups/product-index'
 import type { FixupPanelProps } from '@/components/portal/fixups/types'
-import { ADD_PRODUCTS_HREF } from '@/lib/portal/product-links'
+import { ADD_PRODUCTS_HREF, SUPPLIER_SETTINGS_HREF } from '@/lib/portal/product-links'
 
 interface Candidate {
   productId: string
@@ -109,6 +109,8 @@ export function VariantPriceRepairPanel({ onSummary, onRunningChange }: FixupPan
   const [progress, setProgress] = useState<Progress>(EMPTY)
   const [repaired, setRepaired] = useState<Repair[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Set when the run stopped because PowerBody refused — the checks are the way on. */
+  const [refusal, setRefusal] = useState(false)
   const [done, setDone] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
@@ -185,6 +187,7 @@ export function VariantPriceRepairPanel({ onSummary, onRunningChange }: FixupPan
     setBusy(true)
     cancelled.current = false
     setError(null)
+    setRefusal(false)
     setDone(null)
     setNote(null)
     setRepaired(null)
@@ -253,6 +256,7 @@ export function VariantPriceRepairPanel({ onSummary, onRunningChange }: FixupPan
           this says where the run got to and quotes them, rather than offering
           the same advice a second time in our own words.
         */
+        setRefusal(true)
         setError(
           `PowerBody answered for none of the SKUs in that batch, so the run stopped at ` +
             `${totals.productsDone} of ${totals.totalProducts || (scan?.total ?? 0)} products. ` +
@@ -364,6 +368,15 @@ export function VariantPriceRepairPanel({ onSummary, onRunningChange }: FixupPan
       {error && (
         <Note tone="critical" live="assertive">
           {error}
+          {refusal && (
+            <>
+              {' '}
+              <Link href={SUPPLIER_SETTINGS_HREF} style={LINK}>
+                Run the checks
+              </Link>{' '}
+              to see what PowerBody are answering.
+            </>
+          )}
         </Note>
       )}
 

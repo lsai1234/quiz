@@ -105,6 +105,14 @@ describe('AiSuggestPanel', () => {
     expect(screen.getByRole('button', { name: 'Suggest tags for 1' })).toBeEnabled()
   })
 
+  it('names, with a link, a product the classifier sent nothing back for', async () => {
+    serve({ classify: () => ({ body: { usedAI: true, results: [] } }) })
+    render(<AiSuggestPanel />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Suggest tags for 1' }))
+    expect(await screen.findByText(/No suggestion came back for/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Pea Protein' })).toHaveAttribute('href', '/founderhub/products/item/pea#quiz')
+  })
+
   it('shows why a save was refused, keeping the suggestions to try again', async () => {
     serve({ save: () => ({ status: 400, body: { error: 'Not saved.', problems: ['Goals can’t include “flying”.'] } }) })
     render(<AiSuggestPanel />)
