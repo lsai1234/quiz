@@ -146,6 +146,16 @@ export interface CatalogueVariant {
    */
   servings?: number | null
   /**
+   * Who set this SKU's `servings`: 'supplier' when it is PowerBody's
+   * portion_count, 'founder' when a person typed it (on the product page, or in
+   * the roster spreadsheet). Unset on older records — treated as not
+   * PowerBody's, so a pull fills a missing count but never replaces one.
+   *
+   * Like `priceSource`, this is what lets a pull refresh PowerBody's numbers
+   * without silently undoing a count somebody chose.
+   */
+  servingsSource?: 'supplier' | 'founder' | null
+  /**
    * This variant's own photograph.
    *
    * PowerBody hold one picture per SKU, and a flavour is its own SKU at their
