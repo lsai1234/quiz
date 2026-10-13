@@ -31,6 +31,12 @@ type Props = {
   payload: Payload
   onPayload: (p: Payload) => void
   onDirty: (section: string, dirty: boolean) => void
+  /**
+   * Asked before an action that leaves this page (a split lands on the new
+   * product, handing this one over lands on the other). True to go ahead —
+   * the page asks only when some section has edits not saved yet.
+   */
+  confirmLeave?: () => boolean
 }
 
 /**
@@ -58,7 +64,7 @@ type RefusalLink = { label: string; href: string }
  * The old screens spread those over three panels that each kept their own copy,
  * and a save in one put back another's stale numbers.
  */
-export function VariantsSection({ payload, onPayload, onDirty }: Props) {
+export function VariantsSection({ payload, onPayload, onDirty, confirmLeave }: Props) {
   const router = useRouter()
   const { product } = payload
   const master = masterVariant(product)
@@ -95,6 +101,7 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
   }
 
   async function split() {
+    if (confirmLeave && !confirmLeave()) return
     setBusy('split')
     setError(null)
     setErrorLink(null)
@@ -228,15 +235,9 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
 
       <ServingsBySize product={product} busy={busy} send={send} />
       <AddFlavour product={product} onPayload={onPayload} />
-      <MergeIn payload={payload} busy={busy} send={send} />
-      <Outcome done={done} error={error} />
-      {error && errorLink && (
-        <p style={META}>
-          <Link href={errorLink.href} style={{ textDecoration: 'underline' }}>
-            {errorLink.label}
-          </Link>
-        </p>
-      )}
+      <MergeIn payload={payload} busy={busy} send={send} confirmLeave={confirmLeave} />
+      {/* The link inside the alert, so a screen reader hears where to go with why. */}
+      <Outcome done={done} error={error} link={errorLink} />
     </Section>
   )
 }
@@ -813,7 +814,17 @@ function AddFlavour({ product, onPayload }: { product: CatalogueProduct; onPaylo
  * one (never on sale) is discarded, and the page moves to the product that now
  * holds them, since this one no longer exists.
  */
-function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | null; send: Send }) {
+function MergeIn({
+  payload,
+  busy,
+  send,
+  confirmLeave,
+}: {
+  payload: Payload
+  busy: string | null
+  send: Send
+  confirmLeave?: () => boolean
+}) {
   const router = useRouter()
   const { product } = payload
   const [open, setOpen] = useState(false)
@@ -829,6 +840,7 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
 
   /** Merge THIS product into `into`, then go there — this one is discarded by it. */
   async function handOver(into: { id: string; title: string }) {
+    if (confirmLeave && !confirmLeave()) return
     setHanding(true)
     setHandError(null)
     // Not `send`: its answer is the OTHER product, which must not replace this page's copy.

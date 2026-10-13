@@ -39,7 +39,14 @@ export default async function ProductItemPage({ params }: { params: Promise<{ id
   if (!(await isPortalAuthed())) return null
 
   const { id } = await params
-  const payload = await productPayload(decodeURIComponent(id), { fresh: true })
+  // A broken %-sequence in the address is no product, not a server error.
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(id)
+  } catch {
+    notFound()
+  }
+  const payload = await productPayload(decoded, { fresh: true })
   if (!payload) notFound()
   return (
     <Suspense>

@@ -103,7 +103,7 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
       <Checks payload={payload} onPayload={setPayload} />
       <ProductPreview payload={payload} />
       <ListingSection {...sectionProps} />
-      <VariantsSection {...sectionProps} />
+      <VariantsSection {...sectionProps} confirmLeave={() => dirty.size === 0 || window.confirm(leaveQuestion(dirty))} />
       <QuizSection {...sectionProps} />
       <SupplierSection {...sectionProps} />
 

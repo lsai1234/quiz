@@ -330,6 +330,15 @@ describe('the supplier section', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/ran out of time before finishing/)
   })
 
+  it('points at the supplier checks when PowerBody went quiet before anything was asked', async () => {
+    const stoppedEarly = { type: 'result', ok: false, status: 504, timedOut: true, error: 'PowerBody did not answer in time, and the pull stopped before it had asked them anything.' }
+    global.fetch = jest.fn(async () => streamed([stoppedEarly])) as unknown as typeof fetch
+    render(<SupplierSection payload={payload({ variants: [v({ id: 'a' })] })} onPayload={noop} onDirty={noop} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Pull 1 SKU from PowerBody' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/did not answer in time/)
+    expect(screen.getByRole('link', { name: 'Run the checks' })).toHaveAttribute('href', '/founderhub/settings/supplier')
+  })
+
   it('shows what changed per SKU after a pull, and what could not be found', async () => {
     const result = { type: 'result', ok: true, ...payload({}), answered: 1, filled: ['cost'], changed: { 'P-a': '30 → 33 servings' }, unresolved: [{ sku: 'P-b', message: 'Not reached this time.' }] }
     global.fetch = jest.fn(async () => streamed([result])) as unknown as typeof fetch

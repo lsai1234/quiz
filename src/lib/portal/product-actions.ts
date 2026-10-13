@@ -120,6 +120,19 @@ export async function mergeIntoProduct(
         )
       }
     }
+    // A removed source whose SKUs another product already sells (it was merged
+    // there before, or re-added) would put the same tub on two products.
+    for (const source of sources) {
+      if (!bench.isRemoved(source.id)) continue
+      const skus = source.variants.map((v) => v.sku).filter((x): x is string => Boolean(x))
+      const holder = bench.holderOf(skus, source.id)
+      if (holder && holder.state !== 'removed' && holder.product.id !== targetId) {
+        throw new ActionRefused(
+          `“${source.title}” was taken off sale and its SKUs are sold as “${holder.product.title}” now, so merging it here would list them twice.`,
+          { label: `Open ${holder.product.title}`, href: productHref(holder.product.id) },
+        )
+      }
+    }
     const check = canMerge([target, ...sources])
     if (!check.ok) throw new ActionRefused(check.reason)
 

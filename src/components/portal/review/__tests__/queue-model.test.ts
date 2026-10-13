@@ -55,6 +55,10 @@ describe('stopFor', () => {
     expect(stopFor({ ok: true, answered: 0, unresolved: [{ sku: 'P1', message: 'PowerBody did not accept our login (“bad key”).' }] })?.kind).toBe('credentials')
   })
 
+  it('carries on past a refusal the pull got round — every SKU answered in the end', () => {
+    expect(stopFor({ ok: true, answered: 2, unresolved: [], refused: { kind: 'supplier-error', message: 'PowerBody would not answer: fault' } })).toBeNull()
+  })
+
   it('goes by the refusal the pull names, whatever words it comes in', () => {
     expect(stopFor({ ok: true, answered: 0, unresolved: [], refused: { kind: 'credentials', message: 'Nope.' } })).toEqual({ kind: 'credentials', message: 'Nope.' })
     expect(stopFor({ ok: true, answered: 1, unresolved: [{ sku: 'P2', message: 'Slow down.', refusal: 'rate-limited' }] })?.kind).toBe('rate-limited')

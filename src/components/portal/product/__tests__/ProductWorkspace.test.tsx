@@ -133,6 +133,26 @@ describe('the product page', () => {
     expect(await within(variants).findByRole('button', { name: 'Saved' })).toBeDisabled()
   })
 
+  it('asks before a split leaves the page with another section’s edit unsaved', async () => {
+    const twoSizes = payload({}, {
+      variants: [
+        { id: 'whey-choc', title: 'Chocolate', flavour: 'Chocolate', size: '1kg', price: 29.99, compareAtPrice: null, available: true, sku: 'P1', servings: 33 },
+        { id: 'whey-big', title: 'Chocolate 2kg', flavour: 'Chocolate', size: '2kg', price: 49.99, compareAtPrice: null, available: true, sku: 'P3' },
+      ],
+    })
+    const ask = jest.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<ProductWorkspace initial={twoSizes} />)
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.type(within(listing).getByLabelText('Brand'), 'X')
+
+    const variants = screen.getByRole('region', { name: 'Flavours, sizes & prices' })
+    await userEvent.click(within(variants).getByRole('button', { name: /Tick the 1 × 2kg/ }))
+    await userEvent.click(within(variants).getByRole('button', { name: 'Move 1 into their own product' }))
+    expect(ask).toHaveBeenCalledWith(expect.stringMatching(/Not saved yet: Shop listing/))
+    expect(calls.some((c) => c.url.includes('/split'))).toBe(false)
+    ask.mockRestore()
+  })
+
   it('makes another SKU the master in one press', async () => {
     render(<ProductWorkspace initial={payload()} />)
     const variants = screen.getByRole('region', { name: 'Flavours, sizes & prices' })

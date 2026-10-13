@@ -205,6 +205,8 @@ describe('comfort mode', () => {
 })
 
 describe('a whole Pinpoint consult', () => {
+  // Every screen of the consult: about 4.7s on its own, so the default 5s limit
+  // failed it whenever the full suite ran beside it. Slow, not stuck — hence 20s.
   it('runs from the route choice to the handoff, and the review shows what was pinpointed', async () => {
     const onHandoff = jest.fn()
     render(<AmpConsult onHandoff={onHandoff} loadProducts={async () => MOCK_CATALOGUE} />)
@@ -229,7 +231,7 @@ describe('a whole Pinpoint consult', () => {
     pressNext()
     fireEvent.click(await screen.findByRole('button', { name: 'See my stacks' }, { timeout: 5000 }))
     expect(onHandoff).toHaveBeenCalled()
-  })
+  }, 20_000)
 
   it('resumes mid-round on exactly the same question', () => {
     const state = { ...at('pinpoint', { pinpoint: { steps: [{ kind: 'probe' as const, probe: 'eleven-pm', answer: { main: 'b' }, stage: 'pinpoint' as const }], stopped: false, started: true } }), history: ['goals' as const, 'shelf' as const] }

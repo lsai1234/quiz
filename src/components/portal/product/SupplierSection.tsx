@@ -164,7 +164,9 @@ export function SupplierSection({
       const stop = stopFor(result as PullResult)
       if (result.ok === false) {
         setError((result.error as string) ?? 'The pull failed.')
-        setLink(refusalLink(stop))
+        // The route's hard stop before anything came back: PowerBody went
+        // quiet, which the checks can show — not our server failing.
+        setLink(result.timedOut === true ? { label: 'Run the checks', href: SUPPLIER_SETTINGS_HREF } : refusalLink(stop))
         return
       }
       invalidateCatalogue()

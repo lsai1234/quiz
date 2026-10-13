@@ -130,11 +130,14 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
     if (existing && !OPEN_STATUSES.includes(existing.status)) continue
 
     const constraints = constraintsFor(subscription, answersByUser.get(userId))
-    const replacement = findReplacement({ candidates: available, line, constraints, config })
+    // The SKU this line resolved to, for lines written before they kept one —
+    // so the product now holding it (after a merge) is never its own "swap".
+    const asResolved = { ...line, sku: line.sku ?? sku }
+    const replacement = findReplacement({ candidates: available, line: asResolved, constraints, config })
     // Distinguish "the category is empty" from "nothing here is safe for you" —
     // they read very differently to someone whose plan just shrank.
     const unsafeCandidateExists =
-      replacement === null && anyCategoryCandidate({ candidates: available, line, config })
+      replacement === null && anyCategoryCandidate({ candidates: available, line: asResolved, config })
 
     const event = createChangeEvent({
       kind,

@@ -118,6 +118,14 @@ describe('undoing a merge', () => {
     await expect(undoMerge('straw')).rejects.toThrow(/no merge to undo/)
   })
 
+  it('will not merge a product that was merged away once already into a second one', async () => {
+    await seed([pb('choc', ['P-1']), pb('straw', ['P-3']), pb('van', ['P-5'])])
+    await mergeIntoProduct('choc', ['straw'])
+    await expect(mergeIntoProduct('van', ['straw'])).rejects.toThrow(/sold as “Applied Whey choc” now/)
+    const van = (await fresh()).imported.find((p) => p.id === 'van')!
+    expect(skusOf(van)).toEqual(['P-5'])
+  })
+
   it('refuses a product that is not removed', async () => {
     await seed([pb('choc', ['P-1']), pb('straw', ['P-3'])])
     await expect(undoMerge('straw')).rejects.toThrow(/not merged into anything/)

@@ -148,7 +148,12 @@ export function stopFor(result: PullResult): PullStop | null {
     if ((result.status ?? 500) >= 500) return { kind: 'server', message }
     return null
   }
-  if (result.refused) return { kind: result.refused.kind, message: result.refused.message }
+  // A refusal the pull got past is not a reason to stop. PowerBody's error on
+  // the batch of held ids does not block it — each SKU is then looked up on
+  // its own — so when every SKU answered, `refused` only records the detour.
+  // Stopping there would end a bulk run after a product that filled in full.
+  const leftBehind = (result.unresolved?.length ?? 0) > 0 || (result.answered ?? 0) === 0
+  if (result.refused && leftBehind) return { kind: result.refused.kind, message: result.refused.message }
   for (const miss of result.unresolved ?? []) {
     if (miss.refusal) return { kind: miss.refusal, message: miss.message }
     const kind = classify(miss.message)

@@ -86,3 +86,11 @@ describe('the product page, signed in', () => {
     await expect(open('no-such-product')).rejects.toThrow('NEXT_NOT_FOUND')
   })
 })
+
+describe('a broken address', () => {
+  it('is not found, not a server error', async () => {
+    isPortalAuthed.mockResolvedValue(true)
+    await expect(open('%E0%A4%A')).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(productPayload).not.toHaveBeenCalled()
+  })
+})
