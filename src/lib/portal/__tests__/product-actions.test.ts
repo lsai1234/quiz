@@ -302,6 +302,56 @@ describe('mergeIntoProduct', () => {
     await expect(mergeIntoProduct('critical-whey', ['critical-whey'])).rejects.toThrow(/Pick another product/)
   })
 
+  it('refuses to merge a product on sale into one still waiting for review, and changes nothing', async () => {
+    // The new flavour came in as its own product (pending); the founder opens it
+    // from Review and picks the live product to bring in. Done that way round,
+    // the live product would go off sale with its Top 25 place and its renewals.
+    const vanilla = pending(whey('whey-van', 'Critical Whey 2kg Vanilla', [variant({ id: 'van', flavour: 'Vanilla', sku: 'P200' })]))
+    const chocolate = whey('whey-choc', 'Critical Whey 2kg Chocolate', [variant({ id: 'choc', flavour: 'Chocolate', sku: 'P100' })])
+    await addImportedProducts([vanilla, chocolate])
+    await setTopProductIds(['whey-choc'])
+    const before = await getPersistedProducts()
+
+    const err = await refusal(mergeIntoProduct('whey-van', ['whey-choc']))
+
+    expect(err.message).toContain('“Critical Whey 2kg Chocolate” is on sale and this product is still waiting for review')
+    expect(err.message).toMatch(/open “Critical Whey 2kg Chocolate” and bring this one into it/)
+    expect(err.link).toEqual({ label: 'Open Critical Whey 2kg Chocolate', href: '/founderhub/products/item/whey-choc' })
+    expect(await getPersistedProducts()).toEqual(before)
+    expect(await getTopProductIds()).toEqual(['whey-choc'])
+    expect((await getRemovedProductIds()).has('whey-choc')).toBe(false)
+  })
+
+  it('the other way round, the waiting product joins the one on sale and is discarded', async () => {
+    const vanilla = pending(whey('whey-van', 'Critical Whey 2kg Vanilla', [variant({ id: 'van', flavour: 'Vanilla', sku: 'P200' })]))
+    const chocolate = whey('whey-choc', 'Critical Whey 2kg Chocolate', [variant({ id: 'choc', flavour: 'Chocolate', sku: 'P100' })])
+    await addImportedProducts([vanilla, chocolate])
+    await setTopProductIds(['whey-choc'])
+
+    const result = await mergeIntoProduct('whey-choc', ['whey-van'])
+
+    expect(result.discarded).toEqual(['whey-van'])
+    expect(result.removed).toEqual([])
+    expect((await stored('whey-choc'))!.variants.map((v) => v.sku)).toEqual(['P100', 'P200'])
+    expect(await stored('whey-van')).toBeUndefined()
+    expect((await getRemovedProductIds()).size).toBe(0)
+    expect(await getTopProductIds()).toEqual(['whey-choc'])
+  })
+
+  it('still combines two products that are both waiting for review', async () => {
+    await addImportedProducts([pending(criticalWhey()), pending(strawberry())])
+    const result = await mergeIntoProduct('critical-whey', ['critical-whey-strawberry'])
+    expect(result.discarded).toEqual(['critical-whey-strawberry'])
+    expect((await stored('critical-whey'))!.variants.map((v) => v.sku)).toEqual(['P100', 'P200', 'P300'])
+  })
+
+  it('lets a product waiting for review take in a removed one, which nobody can buy anyway', async () => {
+    await addImportedProducts([pending(criticalWhey()), strawberry()])
+    await markProductRemoved('critical-whey-strawberry')
+    const result = await mergeIntoProduct('critical-whey', ['critical-whey-strawberry'])
+    expect(result.removed).toEqual(['critical-whey-strawberry'])
+  })
+
   it('refuses to add flavours to a removed product', async () => {
     await addImportedProducts([criticalWhey(), strawberry()])
     await markProductRemoved('critical-whey')

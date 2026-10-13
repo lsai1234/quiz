@@ -1,13 +1,16 @@
 import {
   approved,
+  asFounders,
   asPendingReview,
   blankFillableFields,
   fieldsNeedingReview,
   isBlankValue,
   isPendingReview,
   isReviewComplete,
+  provenanceChange,
   sourcesForImport,
   withConfirmed,
+  withProvenance,
   withoutSupplierOwned,
   REVIEW_FIELDS,
 } from '@/lib/catalogue/review'
@@ -182,5 +185,48 @@ describe('blankFillableFields', () => {
     // fill would mark the whole catalogue incomplete the day the field landed.
     const keys = blankFillableFields({ ...PRODUCT, shortName: null } as unknown as CatalogueProduct).map((f) => f.key)
     expect(keys).not.toContain('shortName')
+  })
+})
+
+describe('provenance a pass carries to the write', () => {
+  const read = asPendingReview(PRODUCT, sourcesForImport(['stackSlots'], true), '2026-10-01T09:00:00.000Z')
+
+  it('is only what the pass itself changed: sources it set, fields it confirmed', () => {
+    const worked = withConfirmed({ ...read, review: { ...read.review!, sources: { ...read.review!.sources, imageUrl: 'supplier' } } }, ['imageUrl'])
+    expect(provenanceChange(read.review, worked.review)).toEqual({ sources: {}, confirmed: ['imageUrl'] })
+    const priced = withConfirmed(read, ['basePrice'], ['basePrice'])
+    expect(provenanceChange(read.review, priced.review)).toEqual({ sources: { basePrice: 'founder' }, confirmed: ['basePrice'] })
+  })
+
+  it('is nothing when the pass changed nothing about the review, or the product has none', () => {
+    expect(provenanceChange(read.review, read.review)).toBeNull()
+    expect(provenanceChange(undefined, undefined)).toBeNull()
+  })
+
+  it('lands on the review as it is NOW — an approval made meanwhile stands', () => {
+    const change = provenanceChange(read.review, withConfirmed(read, ['imageUrl'], ['imageUrl']).review)
+    // Meanwhile the founder ticked a field and approved.
+    const now = approved(withConfirmed(read, ['goals']), 'founder@chrgd.co', '2026-10-02T10:00:00.000Z')
+    const saved = withProvenance(now, change)
+    expect(saved.review).toMatchObject({ status: 'approved', approvedBy: 'founder@chrgd.co', approvedAt: '2026-10-02T10:00:00.000Z' })
+    expect(saved.review?.sources.imageUrl).toBe('founder')
+    expect(saved.review?.confirmed).toEqual(expect.arrayContaining(['goals', 'imageUrl']))
+  })
+
+  it('gives a product with no review none', () => {
+    expect(withProvenance(PRODUCT, { sources: { title: 'founder' }, confirmed: ['title'] })).toBe(PRODUCT)
+  })
+})
+
+describe('asFounders', () => {
+  it('marks the fields as the founder’s and confirms nothing', () => {
+    const read = asPendingReview(PRODUCT, sourcesForImport([], false))
+    const out = asFounders(read, ['vatRate', 'brand'])
+    expect(out.review?.sources).toMatchObject({ vatRate: 'founder', brand: 'founder', title: 'supplier' })
+    expect(out.review?.confirmed).toEqual([])
+  })
+
+  it('is the same product when there is nothing to mark', () => {
+    expect(asFounders(PRODUCT, ['vatRate'])).toBe(PRODUCT)
   })
 })

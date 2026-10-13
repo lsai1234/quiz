@@ -1,28 +1,18 @@
 import { NextResponse } from 'next/server'
-import { isPortalAuthed, getFounder } from '@/lib/portal/guard'
+import { isPortalAuthed } from '@/lib/portal/guard'
 import {
   getPendingReviewProducts,
   discardImportedProduct,
-  editStoredProduct,
   restructureProducts,
   syncPortalRuntime,
   ProductNotFound,
 } from '@/lib/portal/store'
-import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed } from '@/lib/catalogue/review'
+import { isReviewComplete, fieldsNeedingReview } from '@/lib/catalogue/review'
 import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
-import { applyPatch, type ProductPatch } from '@/lib/catalogue/patch'
-import { getSupplier } from '@/lib/supplier'
-import { pullProduct } from '@/lib/supplier/pull'
-import { saveProductChange } from '@/lib/portal/editable-products'
-import { fillBlanks } from '@/lib/portal/product-actions'
 import { PersistError } from '@/lib/portal/persist'
-import type { ResolveStep } from '@/lib/supplier/resolve-sku'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 export const dynamic = 'force-dynamic'
-// Filling from PowerBody may have to search for a SKU's id past the feed's
-// ceiling, which is minutes of throttled requests — see `supplier/pull`.
-export const maxDuration = 300
 
 /**
  * The review queue: products imported from PowerBody that are held out of the
@@ -46,12 +36,9 @@ export async function GET() {
 
 interface ReviewBody {
   id?: string
-  patch?: Partial<CatalogueProduct>
-  confirm?: string[]
-  action?: 'save' | 'approve' | 'discard' | 'combine' | 'enrich' | 'ai-fill'
+  action?: 'discard' | 'combine'
   ids?: string[]
   title?: string
-  stream?: boolean
 }
 
 function notSaved(err: unknown) {
@@ -127,133 +114,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, discarded: id })
   }
 
-  const pending = await getPendingReviewProducts()
-  const target = pending.find((p) => p.id === id)
-  if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
-
   /*
-    Fill from PowerBody. The same pull as the product page's button — see
-    `supplier/pull` for what it may write. Streams its steps when asked,
-    because finding an id past the feed ceiling can take a minute or two and a
-    screen showing nothing that long looks hung.
+    Nothing else is done here any more, and anything else is refused out loud.
+
+    This route used to save and approve with a raw `patch`: `applyPatch` over
+    the stored product with no checks at all — a negative price, a handle
+    another product already uses, a PowerBody id that is not a number, and
+    `approved` in the same request, so it went on sale with nothing checked.
+    No screen sends it now; it was a second write path beside `updateProduct`
+    that broke the queue's one rule, that nothing sells unchecked. Its other
+    two actions live where the product page and Review already call them:
+    filling from PowerBody is POST /api/portal/products/pull, filling blanks
+    with the classifier is POST /api/portal/products {action: 'fill-blanks'},
+    and saving and approving are POST /api/portal/products, which check every
+    field first.
+
+    A page left open from before the change would otherwise be told nothing,
+    or worse "saved", so it is told to reload.
   */
-  if (body.action === 'enrich') {
-    if (!target.variants.some((v) => v.sku)) {
-      return NextResponse.json({ error: 'This product has no supplier SKU, so there is nothing to look up.' }, { status: 400 })
-    }
-    type EnrichResult =
-      | { ok: true; id: string; filled: string[]; gotImage: boolean; via: string; probes: number; trace: ResolveStep[] }
-      | { ok: false; status: number; error: string; trace: ResolveStep[] }
-
-    const run = async (emit: (step: ResolveStep) => void): Promise<EnrichResult> => {
-      try {
-        const supplier = await getSupplier()
-        const result = await pullProduct(target, { supplier, budgetMs: 240_000, force: true, onStep: emit })
-        if (result.answered === 0) {
-          return {
-            ok: false,
-            status: 404,
-            trace: result.trace,
-            error: result.unresolved[0]?.message ?? 'PowerBody did not answer for this product.',
-          }
-        }
-        const confirmed = result.filled.length > 0
-          ? (() => {
-              const review = result.after.review
-              if (!review) return result.after
-              const sources = { ...review.sources }
-              for (const key of result.filled) sources[key as keyof CatalogueProduct] = 'supplier'
-              return { ...result.after, review: { ...review, sources, confirmed: [...new Set([...review.confirmed, ...result.filled])] } }
-            })()
-          : result.after
-        await saveProductChange(target, confirmed)
-        return {
-          ok: true,
-          id: target.id,
-          filled: result.filled,
-          gotImage: Boolean(confirmed.imageUrl),
-          via: 'pull',
-          probes: result.trace.reduce((n, s) => Math.max(n, s.probes), 0),
-          trace: result.trace,
-        }
-      } catch (err) {
-        return { ok: false, status: 502, trace: [], error: err instanceof Error ? err.message : 'PowerBody could not be reached.' }
-      }
-    }
-
-    if (body.stream) {
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          const write = (line: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`))
-          try {
-            const result = await run((step) => write({ type: 'step', ...step }))
-            write({ type: 'result', ...result })
-          } catch (err) {
-            write({ type: 'result', ok: false, status: 500, trace: [], error: err instanceof Error ? err.message : 'The lookup stopped unexpectedly.' })
-          }
-          controller.close()
-        },
-      })
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'application/x-ndjson; charset=utf-8',
-          'Cache-Control': 'no-store, no-transform',
-          'X-Accel-Buffering': 'no',
-        },
-      })
-    }
-    const result = await run(() => {})
-    return result.ok
-      ? NextResponse.json(result)
-      : NextResponse.json({ error: result.error, trace: result.trace }, { status: result.status })
-  }
-
-  /*
-    Fill the BLANKS with the classifier, and nothing else — recorded as the
-    model's and left unconfirmed, so a person still ticks each one.
-  */
-  if (body.action === 'ai-fill') {
-    try {
-      const { filled, source } = await fillBlanks(id)
-      return NextResponse.json({ ok: true, id, filled, source })
-    } catch (err) {
-      return NextResponse.json({ error: err instanceof Error ? err.message : 'Could not fill the blanks.' }, { status: 502 })
-    }
-  }
-
-  // Save / approve. An edited field is confirmed by the act of editing it, and
-  // its source becomes the founder — it is no longer a machine's answer.
-  const founder = body.action === 'approve' ? await getFounder() : null
-  let refusal: string[] | null = null
-  try {
-    const next = await editStoredProduct(id, (current) => {
-      if (current.review?.status !== 'pending') return null
-      const edited = Object.keys(body.patch ?? {})
-      let product = body.patch ? applyPatch(current, body.patch as ProductPatch) : current
-      product = withConfirmed(product, [...(body.confirm ?? []), ...edited], edited)
-      if (body.action === 'approve') {
-        if (!isReviewComplete(product)) {
-          // The point of the queue is that nothing sells unchecked, so this
-          // refuses rather than approving and hoping.
-          refusal = fieldsNeedingReview(product).map((f) => f.key as string)
-          return null
-        }
-        product = approved(product, founder?.email)
-      }
-      return product
-    })
-    if (refusal) {
-      return NextResponse.json({ error: 'Some fields still need checking.', remaining: refusal }, { status: 400 })
-    }
-    return NextResponse.json({
-      ok: true,
-      product: next,
-      remaining: fieldsNeedingReview(next).map((f) => f.key),
-      complete: isReviewComplete(next),
-      approved: next.review?.status === 'approved',
-    })
-  } catch (err) {
-    return notSaved(err)
-  }
+  return NextResponse.json(
+    { error: 'Not saved — this page is out of date. Reload it and make the change again on the product’s own page.' },
+    { status: 400 },
+  )
 }

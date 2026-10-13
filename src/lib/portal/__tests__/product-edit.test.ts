@@ -704,6 +704,19 @@ describe('applyEdit — a validated change, applied', () => {
     expect(changed.sort()).toEqual(['consumption', 'cost', 'imageUrl', 'minSubscriptionMonths', 'shortName', 'weightGrams'])
   })
 
+  it('makes the product’s cost and PowerBody id follow an edit to the master SKU’s own', () => {
+    const whey = importedWhey()
+    const master = whey.defaultVariantId!
+    const other = whey.variants.find((v) => v.id !== master)!.id
+    const { product } = applyEdit(whey, { variants: [{ id: master, cost: 19.4, supplierProductId: '55021' }] })
+    expect(product.cost).toBe(19.4)
+    expect(product.supplierProductId).toBe('55021')
+
+    // Another SKU's cost is its own; the product's stays the master's.
+    const second = applyEdit(product, { variants: [{ id: other, cost: 25 }] }).product
+    expect(second.cost).toBe(19.4)
+  })
+
   describe('choosing the master', () => {
     it('moves the price, “was” price, picture, cost and servings onto the product', () => {
       const whey = importedWhey()
@@ -785,6 +798,48 @@ describe('applyEdit — a validated change, applied', () => {
     })
   })
 
+  describe('who set each SKU’s serving count', () => {
+    /** As a pull leaves it: every count PowerBody's. */
+    const counted = () => {
+      const whey = importedWhey()
+      return { ...whey, variants: whey.variants.map((v) => ({ ...v, servingsSource: 'supplier' as const })) }
+    }
+
+    it('records a count typed for one SKU as the founder’s, so a pull keeps it', () => {
+      const whey = counted()
+      const { product } = applyEdit(whey, { variants: [{ id: ids(whey).vanilla, servings: 28 }] })
+      expect(product.variants.find((v) => v.id === ids(whey).vanilla)).toMatchObject({ servings: 28, servingsSource: 'founder' })
+      // The siblings are still PowerBody's.
+      expect(product.variants.find((v) => v.id === ids(whey).choc)?.servingsSource).toBe('supplier')
+      expect(product.variants.find((v) => v.id === ids(whey).big)?.servingsSource).toBe('supplier')
+    })
+
+    it('records “for every SKU of this size” as the founder’s on each SKU it changed', () => {
+      const whey = counted()
+      const { choc, vanilla, big } = ids(whey)
+      const { product } = applyEdit(whey, { variants: [{ id: choc, servings: 25 }, { id: vanilla, servings: 25 }] })
+      expect(product.variants.map((v) => [v.id, v.servings, v.servingsSource])).toEqual([
+        [choc, 25, 'founder'],
+        [vanilla, 25, 'founder'],
+        [big, 83, 'supplier'],
+      ])
+    })
+
+    it('a cleared count is nobody’s — a pull may fill it', () => {
+      const whey = counted()
+      const { product } = applyEdit(whey, { variants: [{ id: ids(whey).vanilla, servings: null }] })
+      const vanilla = product.variants.find((v) => v.id === ids(whey).vanilla)!
+      expect(vanilla).not.toHaveProperty('servings')
+      expect(vanilla).not.toHaveProperty('servingsSource')
+    })
+
+    it('leaves the record alone when a SKU’s other fields change', () => {
+      const whey = counted()
+      const { product } = applyEdit(whey, { variants: [{ id: ids(whey).vanilla, cost: 17 }] })
+      expect(product.variants.every((v) => v.servingsSource === 'supplier')).toBe(true)
+    })
+  })
+
   describe('the subscription plan follows the serving count', () => {
     it('moves with it when it was following', () => {
       const whey = importedWhey()
@@ -859,9 +914,10 @@ describe('applyEdit — a validated change, applied', () => {
       expect(product.review?.sources.title).toBe('founder')
       expect(product.review?.sources.goals).toBe('founder')
       expect(product.review?.confirmed).toEqual(expect.arrayContaining(['title', 'goals']))
-      // Not a review field, so nothing about it is recorded.
+      // Not a review field, so not confirmed — Review never asks about it —
+      // but still the founder's, so a pull leaves it alone.
       expect(product.review?.confirmed).not.toContain('brand')
-      expect(product.review?.sources.brand).toBeUndefined()
+      expect(product.review?.sources.brand).toBe('founder')
       // Everything else keeps where it came from.
       expect(product.review?.sources.stackSlots).toBe('ai')
       expect(product.review?.sources.swapGroup).toBe('heuristic')
@@ -889,6 +945,28 @@ describe('applyEdit — a validated change, applied', () => {
       const whey = pendingWhey()
       const { product } = applyEdit(whey, { variants: [{ id: ids(whey).vanilla, cost: 17 }] })
       expect(product.review).toEqual(whey.review)
+    })
+
+    it('marks every product field the founder changed as theirs — VAT, cost, weight — not only the review fields', () => {
+      // An import stamps these `supplier`, and a pull replaces whatever still
+      // says `supplier`: a zero-rated VAT left labelled that way went back to 20%.
+      const whey = pendingWhey()
+      expect(whey.review?.sources.vatRate).toBe('supplier')
+      const { product } = applyEdit(whey, { set: { vatRate: 0, cost: 18, weightGrams: 1100 } })
+      expect(product.review?.sources).toMatchObject({ vatRate: 'founder', cost: 'founder', weightGrams: 'founder' })
+      // Cost and weight are review fields, so editing them confirms them; VAT
+      // is not something Review asks about, so it is not confirmed.
+      expect(product.review?.confirmed).toEqual(['cost', 'weightGrams'])
+    })
+
+    it('does not mark a field sent back unchanged, or the SKUs and master as product fields', () => {
+      const whey = pendingWhey()
+      const { product } = applyEdit(whey, { set: { vatRate: 0.2 }, master: ids(whey).vanilla, variants: [{ id: ids(whey).big, cost: 34 }] })
+      expect(product.review?.sources.vatRate).toBe('supplier')
+      // SKU edits and the master carry their own record (per SKU), so the
+      // product-level labels stay as the import set them.
+      expect(product.review?.sources.variants).toBe('supplier')
+      expect(product.review?.sources.defaultVariantId).toBe('rule')
     })
 
     it('gives a product with no review record none', () => {

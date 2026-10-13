@@ -1,8 +1,9 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { applyPatch, diffProducts, isEmptyPatch } from '@/lib/catalogue/patch'
 import { rememberRenames } from '@/lib/catalogue/line-variant'
+import { provenanceChange, withProvenance } from '@/lib/catalogue/review'
 import { editStoredProduct } from './store'
-import { listEditableProducts } from './product-edit'
+import { listEditableProducts, normaliseServings } from './product-edit'
 
 /**
  * Reading and writing a product for the supplier pull and the price screen.
@@ -31,8 +32,26 @@ export async function editableProduct(id: string): Promise<CatalogueProduct | un
 export async function saveProductChange(before: CatalogueProduct, after: CatalogueProduct): Promise<CatalogueProduct> {
   // A pass that renames flavours (the name repair) keeps the old names on file,
   // so subscription lines written against them still find them.
-  const patch = diffProducts(before, rememberRenames(before, after))
-  if (isEmptyPatch(patch)) return before
-  // No servings spread: a pass that sets a SKU's own count means that SKU.
-  return editStoredProduct(after.id, (current) => applyPatch(current, patch, { spreadServings: false }))
+  const worked = rememberRenames(before, after)
+  /*
+    Never the review as one value. `diffProducts` compares fields whole, so a
+    pass that added one source put the ENTIRE review it read into the patch —
+    status included. A pull runs for up to four minutes and Approve is not
+    locked while it does, so a product approved meanwhile went back to pending
+    (out of the shop) the moment the pull saved, and every tick made meanwhile
+    went with it. Only the pass's own provenance travels, laid onto the review
+    as it stands at write time; see `provenanceChange`.
+  */
+  const { review: _review, ...patch } = diffProducts(before, worked)
+  void _review
+  const provenance = provenanceChange(before.review, worked.review)
+  if (isEmptyPatch(patch) && !provenance) return before
+  return editStoredProduct(after.id, (current) => {
+    // No servings spread: a pass that sets a SKU's own count means that SKU.
+    const next = withProvenance(applyPatch(current, patch, { spreadServings: false }), provenance)
+    // …but the product's count follows its master SKU's, and the plan with it
+    // when it was following — the same rule a founder's edit keeps, so a pull
+    // that brings PowerBody's real count does not leave the plan on a guess.
+    return normaliseServings(current, next, { planSet: 'consumption' in patch })
+  })
 }

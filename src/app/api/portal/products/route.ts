@@ -118,23 +118,53 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
   if (body.action === 'approve-ready') {
-    // Each one only if every review field is checked — the rest are reported.
+    /*
+      Each one only if every review field is checked — and the answer always
+      says exactly which were approved and which were not, and why.
+
+      Each approval is its own write, so by the time one fails the ones before
+      it are on sale. This used to let the first failure answer for the whole
+      batch: one product discarded or merged away in another tab (or by a
+      co-founder) turned the request into a 404, the queue said "Nothing was
+      approved", and the products before it were on sale while the page said
+      they were not — and the ones after it were never tried, silently.
+
+        gone      no longer held (discarded, merged away) — reported, the rest go on
+        failed    the store refused a write — the rest are not tried, because a
+                  store that cannot write one will not write the next; `notTried`
+                  lists them so nothing is left unaccounted for
+    */
     const ids = Array.isArray(body.ids) ? body.ids.filter((x): x is string => typeof x === 'string') : []
     if (ids.length === 0) return NextResponse.json({ error: 'No products selected.' }, { status: 400 })
+    let by: string | null
     try {
       await syncPortalRuntime()
-      const by = (await getFounder())?.email ?? null
-      const approvedIds: string[] = []
-      const notReady: Array<{ id: string; remaining: string[] }> = []
-      for (const pid of ids) {
-        const result = await approveProduct(pid, by)
-        if (result.ok) approvedIds.push(pid)
-        else notReady.push({ id: pid, remaining: result.remaining })
-      }
-      return NextResponse.json({ ok: true, approved: approvedIds, notReady })
+      by = (await getFounder())?.email ?? null
     } catch (err) {
       return failure(err)
     }
+    const approvedIds: string[] = []
+    const notReady: Array<{ id: string; remaining: string[] }> = []
+    const gone: string[] = []
+    let failed: { id: string; error: string; notTried: string[] } | null = null
+    for (const [i, pid] of ids.entries()) {
+      try {
+        const result = await approveProduct(pid, by)
+        if (result.ok) approvedIds.push(pid)
+        else notReady.push({ id: pid, remaining: result.remaining })
+      } catch (err) {
+        if (err instanceof ProductNotFound) {
+          gone.push(pid)
+          continue
+        }
+        // Nothing approved and nothing else to say: the plain failure is the whole truth.
+        if (approvedIds.length === 0 && notReady.length === 0 && gone.length === 0) return failure(err)
+        const reason = err instanceof PersistError ? `Not saved — ${err.message}` : err instanceof Error ? err.message : String(err)
+        failed = { id: pid, error: reason, notTried: ids.slice(i + 1) }
+        break
+      }
+    }
+    return NextResponse.json({ ok: true, approved: approvedIds, notReady, gone, failed })
   }
 
   if (!body.id || typeof body.id !== 'string') return NextResponse.json({ error: 'Which product? (id required)' }, { status: 400 })
@@ -177,8 +207,11 @@ export async function POST(req: Request) {
             { status: 409 },
           )
         }
-        const result = await fillBlanks(id)
-        return done(result)
+        // Under its own key: the payload carries a `source` of its own (real or
+        // sample catalogue), and spread beside it the fill's source — AI or
+        // keyword guess — was overwritten, so the page could not say which.
+        const fill = await fillBlanks(id)
+        return done({ fill })
       }
       case 'merge': {
         const result = await mergeIntoProduct(id, Array.isArray(body.from) ? body.from.filter((f) => typeof f === 'string') : [])

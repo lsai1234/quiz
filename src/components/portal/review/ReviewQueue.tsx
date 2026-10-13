@@ -21,8 +21,11 @@ interface Notice {
   text: string
   /** A way on from here — the product just made, the one still to fix. */
   links?: Array<{ href: string; label: string }>
-  /** One line per product the action could not do, each with its own link. */
-  details?: Array<{ href: string; title: string; text: string }>
+  /**
+   * One line per product the action could not do, each with its own link —
+   * except one that is no longer there to open.
+   */
+  details?: Array<{ href?: string; title: string; text: string }>
 }
 
 const LINK = { color: 'var(--accent)', fontWeight: 'var(--weight-strong)', textDecoration: 'underline', textUnderlineOffset: '0.2em' } as const
@@ -208,25 +211,56 @@ export function ReviewQueue() {
       setNotice({ tone: 'critical', text: `Nothing was approved — ${errorOf(r)}`, links: [{ href: REVIEW_HREF, label: 'Reload the queue' }] })
       return
     }
+    /*
+      Exactly what happened to each one, from the server's own lists — never
+      inferred from what was asked. Approving is one write per product, so a
+      batch can stop part-way: what was approved before that is on sale, and
+      the notice says so first, then each one that was not and why.
+    */
     const approved = Array.isArray(r.data.approved) ? (r.data.approved as string[]) : []
     const notReady = Array.isArray(r.data.notReady) ? (r.data.notReady as Array<{ id: string; remaining: string[] }>) : []
+    const gone = Array.isArray(r.data.gone) ? (r.data.gone as string[]) : []
+    const failed =
+      r.data.failed && typeof r.data.failed === 'object'
+        ? (r.data.failed as { id: string; error: string; notTried?: string[] })
+        : null
     // On sale from this moment: the shop and the quiz re-read.
     if (approved.length > 0) invalidateCatalogue()
-    const details = notReady.map((n) => ({
-      href: productHref(n.id, 'checks', { queue: true }),
-      title: titleOf(n.id),
-      text: `${plural(n.remaining.length, 'field')} still to check: ${fieldLabels(n.remaining).join(', ')}.`,
-    }))
+    const details = [
+      ...notReady.map((n) => ({
+        href: productHref(n.id, 'checks', { queue: true }),
+        title: titleOf(n.id),
+        text: `not approved — ${plural(n.remaining.length, 'field')} still to check: ${fieldLabels(n.remaining).join(', ')}.`,
+      })),
+      ...gone.map((id) => ({
+        title: titleOf(id),
+        text: 'not approved — it is no longer in the store. It was discarded or merged into another product, perhaps in another tab.',
+      })),
+      ...(failed
+        ? [failed.id, ...(failed.notTried ?? [])].map((id, i) => ({
+            href: productHref(id, 'checks', { queue: true }),
+            title: titleOf(id),
+            text: i === 0 ? `not approved — ${failed.error}` : 'not approved — not tried, because the one before it could not be saved.',
+          }))
+        : []),
+    ]
+    const why = failed
+      ? 'saving stopped part-way. Why for each is below; try the rest again in a moment'
+      : gone.length > 0
+        ? 'why for each is below'
+        : 'open each to finish it'
     setNotice({
-      tone: approved.length > 0 ? 'positive' : 'attention',
+      tone: failed ? 'critical' : approved.length > 0 ? 'positive' : 'attention',
       text:
         approved.length > 0
           ? `${plural(approved.length, 'product')} approved and on sale: ${approved.map(titleOf).join(', ')}.` +
-            (notReady.length > 0 ? ` ${notReady.length} not yet — open each to finish it:` : '')
-          : `None approved — every one still has fields to check. Open each to finish it:`,
+            (details.length > 0 ? ` ${details.length} not approved — ${why}:` : '')
+          : !failed && gone.length === 0
+            ? 'None approved — every one still has fields to check. Open each to finish it:'
+            : `Nothing was approved — ${why}:`,
       details,
     })
-    setPicked((prev) => new Set([...prev].filter((id) => !approved.includes(id))))
+    setPicked((prev) => new Set([...prev].filter((id) => !approved.includes(id) && !gone.includes(id))))
     void fetchQueue(true)
   }
 
@@ -447,11 +481,15 @@ function NoticeView({ notice }: { notice: Notice }) {
       ))}
       {notice.details && notice.details.length > 0 && (
         <ul style={{ display: 'grid', gap: 'var(--space-1)', marginTop: 'var(--space-2)' }}>
-          {notice.details.map((d) => (
-            <li key={d.href} style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)' }}>
-              <Link href={d.href} style={LINK}>
-                {d.title}
-              </Link>{' '}
+          {notice.details.map((d, i) => (
+            <li key={`${i}:${d.href ?? d.title}`} style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)' }}>
+              {d.href ? (
+                <Link href={d.href} style={LINK}>
+                  {d.title}
+                </Link>
+              ) : (
+                <span style={{ fontWeight: 'var(--weight-strong)' }}>{d.title}</span>
+              )}{' '}
               — {d.text}
             </li>
           ))}

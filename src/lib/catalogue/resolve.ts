@@ -66,3 +66,57 @@ export async function getResolvedCatalogue(): Promise<{ products: CatalogueProdu
 
   return { products: await composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock' }
 }
+
+/**
+ * A product as anyone on the internet may see it.
+ *
+ * `getResolvedCatalogue` is the catalogue as the SERVER knows it, and the hub's
+ * routes read it for everything a founder needs — including fields that are
+ * ours alone. Whatever leaves through a public route (the shop's
+ * `/api/catalogue`, fetched on every visit, or a public page's data) goes
+ * through this first. It used to send the raw product, review record and all,
+ * so every approve stamped a founder's sign-in email onto something any
+ * visitor could read in their browser's network tab.
+ *
+ * Taken out, because nothing a shopper's browser runs reads them:
+ *   review              who approved it (a founder's email — their portal
+ *                       login), the import's notes, which fields the AI wrote,
+ *                       when it was imported. Everything public is approved
+ *                       already, so `isPendingReview` reads the same without it.
+ *   supplierProductId   PowerBody's own ids, product and SKU. Only the server
+ *                       uses them (stock checks, orders, pulls), and it reads
+ *                       them from the server-side catalogue, never from here.
+ *   priceSource,        who set a SKU's price and servings — the hub's
+ *   servingsSource      bookkeeping for what a supplier pull may overwrite.
+ *
+ * Deliberately KEPT, though they look internal:
+ *   cost                the shop's own pricing (`unitCostOf` in
+ *                       stack-blueprint/pricing) keeps every discount above the
+ *                       margin floor with it, in the browser. Without it the
+ *                       browser would estimate the cost, and quote a plan price
+ *                       the checkout then does not charge.
+ *   supplierRrp         the manufacturer's RRP, public anyway.
+ *   marginPriority      the shop's merchandising and search order.
+ *   inventory           the shop's "Only N left" chip.
+ *   formerly            old product ids and flavour names, which matching a
+ *                       subscription line follows. Nothing private in them.
+ *
+ * Never use this for anything that is written back: it is a view, and a
+ * product saved from it would lose its review and its provenance.
+ */
+export function toPublicProduct(product: CatalogueProduct): CatalogueProduct {
+  const { review: _review, supplierProductId: _supplierId, ...shown } = product
+  return {
+    ...shown,
+    variants: product.variants.map((variant) => {
+      const { supplierProductId: _supplierId, priceSource: _price, servingsSource: _servings, ...rest } = variant
+      return rest
+    }),
+  }
+}
+
+/** The catalogue for public routes: `getResolvedCatalogue`, each product through `toPublicProduct`. */
+export async function getPublicCatalogue(): Promise<{ products: CatalogueProduct[]; source: DataSource; error?: string }> {
+  const resolved = await getResolvedCatalogue()
+  return { ...resolved, products: resolved.products.map(toPublicProduct) }
+}

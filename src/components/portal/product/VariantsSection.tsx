@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Badge, Button, Card, Checkbox, Input, Note } from '@/components/system'
 import { ImageField } from '@/components/portal/ImageField'
@@ -33,6 +34,19 @@ type Props = {
 }
 
 /**
+ * Small print on a tinted card.
+ *
+ * `--ink-3` at `--text-micro` is only legible on the plain surfaces (tokens.css:
+ * "--ink-3 on --surface-1 or --surface-2"). A tone card's fill is neither — it
+ * lightens whatever it sits on — and these cards sit inside the section's own
+ * card, so the warning a founder must read before a merge or split came out at
+ * about 3.9:1. `--ink-2` stays above AA on every tint here.
+ */
+const META_ON_TINT: CSSProperties = { ...META, color: 'var(--ink-2)' }
+
+type RefusalLink = { label: string; href: string }
+
+/**
  * Flavours, sizes & prices — every SKU this product sells, and the one place
  * each SKU's facts are edited.
  *
@@ -53,6 +67,10 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Where to go about a refusal ("Open Critical Whey"), when the server names somewhere.
+  const [errorLink, setErrorLink] = useState<RefusalLink | null>(null)
+  // A removed product is not split: the half moved out would go on sale on its own.
+  const canSplit = payload.state !== 'removed'
 
   // Ticks belong to the SKUs on screen; a split or merge changes them.
   useEffect(() => {
@@ -63,10 +81,12 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
     setBusy(label)
     setDone(null)
     setError(null)
+    setErrorLink(null)
     const result = await postProduct(url, body)
     setBusy(null)
     if (!result.ok) {
       setError(errorText(result))
+      setErrorLink(result.link ?? null)
       return false
     }
     onPayload(result.payload)
@@ -77,6 +97,7 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
   async function split() {
     setBusy('split')
     setError(null)
+    setErrorLink(null)
     setDone(null)
     try {
       const res = await fetch('/api/portal/products/split', {
@@ -87,6 +108,7 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error ?? `Could not split that product (HTTP ${res.status}).`)
+        setErrorLink(data.link ?? null)
         return
       }
       // Straight to the new product: naming it is the next thing to do.
@@ -143,14 +165,17 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
           <p>
             These SKUs are {sized.length} different sizes: {sized.map((g) => `${g.variants.length} × ${g.label}`).join(', ')}. A different size
             is a different unit of sale — its own price, picture and serving count — so it usually belongs on a page of its own.
+            {!canSplit && ' Restore this product before splitting them — while it is off sale, a size moved out would go on sale on its own.'}
           </p>
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            {strangers.map((g) => (
-              <Button key={g.key} variant="secondary" size="sm" onClick={() => setMoving(new Set(g.variants.map((v) => v.id)))}>
-                Tick the {g.variants.length} × {g.label}
-              </Button>
-            ))}
-          </div>
+          {canSplit && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              {strangers.map((g) => (
+                <Button key={g.key} variant="secondary" size="sm" onClick={() => setMoving(new Set(g.variants.map((v) => v.id)))}>
+                  Tick the {g.variants.length} × {g.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </Note>
       )}
 
@@ -164,6 +189,7 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
             isMaster={v.id === master?.id}
             open={open === v.id}
             onToggle={() => setOpen((o) => (o === v.id ? null : v.id))}
+            canMove={canSplit}
             moving={moving.has(v.id)}
             onMoving={(on) =>
               setMoving((all) => {
@@ -179,12 +205,12 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
         ))}
       </div>
 
-      {moving.size > 0 && (
+      {canSplit && moving.size > 0 && (
         <Card elevation={2} tone={movingAll ? 'critical' : 'attention'} className="space-y-2">
           <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
             {moving.size} SKU{moving.size === 1 ? '' : 's'} ticked to move out.
           </p>
-          <p style={META}>
+          <p style={META_ON_TINT}>
             {movingAll
               ? 'Every SKU is ticked, which is not a split — leave at least one behind.'
               : 'They become a product of their own, with this one’s description, tags and status. You will land on it to name it.'}
@@ -204,6 +230,13 @@ export function VariantsSection({ payload, onPayload, onDirty }: Props) {
       <AddFlavour product={product} onPayload={onPayload} />
       <MergeIn payload={payload} busy={busy} send={send} />
       <Outcome done={done} error={error} />
+      {error && errorLink && (
+        <p style={META}>
+          <Link href={errorLink.href} style={{ textDecoration: 'underline' }}>
+            {errorLink.label}
+          </Link>
+        </p>
+      )}
     </Section>
   )
 }
@@ -311,6 +344,7 @@ function SkuRow({
   isMaster,
   open,
   onToggle,
+  canMove,
   moving,
   onMoving,
   onPayload,
@@ -322,6 +356,7 @@ function SkuRow({
   isMaster: boolean
   open: boolean
   onToggle: () => void
+  canMove: boolean
   moving: boolean
   onMoving: (on: boolean) => void
   onPayload: (p: Payload) => void
@@ -337,7 +372,10 @@ function SkuRow({
     variant.supplierProductId ? `PowerBody ${variant.supplierProductId}` : 'no PowerBody id',
   ]
   return (
-    <Card solid padding="tight" tone={isMaster ? 'accent' : undefined} className="space-y-2">
+    // Solid, master or not: a tone here replaced the opaque row with a tint over
+    // the section card, which puts the row's small print (and the whole editor
+    // when it is open) under the contrast floor. The Master badge says which.
+    <Card solid padding="tight" className="space-y-2">
       <div className="flex items-start justify-between flex-wrap gap-2">
         <div className="min-w-0 space-y-1" style={{ flex: '1 1 14rem' }}>
           <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)', overflowWrap: 'anywhere' }}>
@@ -347,7 +385,9 @@ function SkuRow({
           <p style={{ ...META, overflowWrap: 'anywhere' }}>{facts.join(' · ')}</p>
         </div>
         <div className="flex items-center flex-wrap gap-2">
-          <Checkbox label="Move out" aria-label={`Move ${variant.sku ?? variant.title} to its own product`} checked={moving} onChange={(e) => onMoving(e.target.checked)} />
+          {canMove && (
+            <Checkbox label="Move out" aria-label={`Move ${variant.sku ?? variant.title} to its own product`} checked={moving} onChange={(e) => onMoving(e.target.checked)} />
+          )}
           <Button size="sm" variant={open ? 'secondary' : 'ghost'} aria-expanded={open} onClick={onToggle}>
             {open ? 'Close' : 'Edit'}
           </Button>
@@ -374,7 +414,7 @@ function SkuEditor({
   onPayload: (p: Payload) => void
   onDirty: (section: string, dirty: boolean) => void
 }) {
-  const { draft, set, changed, reset } = useDraft({
+  const { draft, set, changed, reset, saved } = useDraft({
     title: variant.title,
     size: variant.size ?? '',
     servings: variant.servings != null ? String(variant.servings) : '',
@@ -393,7 +433,7 @@ function SkuEditor({
   useEffect(() => onDirty(label, changed.length > 0), [changed.length, label, onDirty])
   useEffect(() => () => onDirty(label, false), [label, onDirty])
 
-  async function send(url: string, body: Record<string, unknown>, what: string, success: string) {
+  async function send(url: string, body: Record<string, unknown>, what: string, success: string, sent?: typeof draft) {
     setBusy(what)
     setDone(null)
     setError(null)
@@ -403,6 +443,8 @@ function SkuEditor({
       setError(errorText(result))
       return
     }
+    // What was sent is saved, even where the server tidied it ("12.5" for "12.50").
+    if (sent) saved(sent)
     onPayload(result.payload)
     setDone(success)
   }
@@ -415,7 +457,7 @@ function SkuEditor({
       else if (key === 'size' || key === 'imageUrl' || key === 'supplierProductId') edit[key] = value || null
       else edit[key] = value === '' ? null : Number(value)
     }
-    void send('/api/portal/products', { id: product.id, variants: [edit] }, 'save', 'Saved.')
+    void send('/api/portal/products', { id: product.id, variants: [edit] }, 'save', 'Saved.', draft)
   }
 
   const swap = nameSwap(product.title, variant.title, variant.size)
@@ -761,8 +803,18 @@ function AddFlavour({ product, onPayload }: { product: CatalogueProduct; onPaylo
  * Bring another product's SKUs here as more flavours — the fix for a flavour
  * that was imported as a product of its own. The other product is removed (or,
  * if it never went on sale, discarded), and its place on the Top 25 moves here.
+ *
+ * ── The other way round ─────────────────────────────────────────────────────
+ * The usual way in is a new flavour opened from Review: it is waiting for
+ * review, and the product to combine it with is the one already on sale. Merged
+ * in HERE, that product would leave the shop — and every member's renewals —
+ * until this one was approved, so the server refuses it. The card offers what
+ * the founder meant instead: this product's flavours go to the one on sale, this
+ * one (never on sale) is discarded, and the page moves to the product that now
+ * holds them, since this one no longer exists.
  */
 function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | null; send: Send }) {
+  const router = useRouter()
   const { product } = payload
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -770,6 +822,24 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
   const [picked, setPicked] = useState<{ id: string; title: string; state: string; warning: string | null } | null>(null)
   // The last product merged in from here, while Undo can still bring it back.
   const [merged, setMerged] = useState<{ id: string; title: string } | null>(null)
+  const [handing, setHanding] = useState(false)
+  const [handError, setHandError] = useState<{ text: string; link: RefusalLink | null } | null>(null)
+  // This product waits for review and the one picked is on sale: offer the reverse.
+  const reverse = picked !== null && payload.state === 'pending' && picked.state === 'live'
+
+  /** Merge THIS product into `into`, then go there — this one is discarded by it. */
+  async function handOver(into: { id: string; title: string }) {
+    setHanding(true)
+    setHandError(null)
+    // Not `send`: its answer is the OTHER product, which must not replace this page's copy.
+    const result = await postProduct('/api/portal/products', { id: into.id, action: 'merge', from: [product.id] })
+    if (!result.ok) {
+      setHanding(false)
+      setHandError({ text: errorText(result), link: result.link ?? null })
+      return
+    }
+    router.push(productHref(into.id, 'variants'))
+  }
 
   useEffect(() => {
     if (!open || all) return
@@ -798,6 +868,7 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
   async function pick(p: { id: string; title: string; state: string }) {
     const d = await fetch(`/api/portal/products?id=${encodeURIComponent(p.id)}`).then((r) => r.json()).catch(() => null)
     setMerged(null)
+    setHandError(null)
     setPicked({ id: p.id, title: p.title, state: p.state, warning: d?.usageWarning ?? null })
   }
 
@@ -823,12 +894,50 @@ function MergeIn({ payload, busy, send }: { payload: Payload; busy: string | nul
               </Button>
             </div>
           ))}
-          {picked && (
+          {picked && reverse && (
+            <Card elevation={2} tone="attention" className="space-y-2">
+              <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
+                “{picked.title}” is on sale, and this product is still waiting for review.
+              </p>
+              <p style={META_ON_TINT}>
+                Merged in here, “{picked.title}” would come off the shop — and its subscribers’ renewals would be held — until this one is
+                approved. Add this one’s flavours to “{picked.title}” instead: they go on sale there straight away, this product is discarded
+                (it never went on sale), and you land on “{picked.title}” to check their names and prices.
+                {payload.usageWarning ? ` ${payload.usageWarning} Those keep pointing at “${product.title}” — update them after.` : ''}
+              </p>
+              <div className="flex items-center flex-wrap gap-2">
+                <Button size="sm" variant="primary" loading={handing} disabled={busy !== null || handing} onClick={() => void handOver(picked)}>
+                  Add this one’s flavours to “{picked.title}”
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setPicked(null)
+                    setHandError(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </Card>
+          )}
+          {handError && (
+            <p role="alert" style={{ ...META, color: 'var(--tone-critical)' }}>
+              {handError.text}{' '}
+              {handError.link && (
+                <Link href={handError.link.href} style={{ textDecoration: 'underline' }}>
+                  {handError.link.label}
+                </Link>
+              )}
+            </p>
+          )}
+          {picked && !reverse && (
             <Card elevation={2} tone="attention" className="space-y-2">
               <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
                 Bring “{picked.title}” into “{product.title}”?
               </p>
-              {picked.warning && <p style={META}>{picked.warning} Those keep pointing at “{picked.title}” — update them after.</p>}
+              {picked.warning && <p style={META_ON_TINT}>{picked.warning} Those keep pointing at “{picked.title}” — update them after.</p>}
               <div className="flex items-center flex-wrap gap-2">
                 <Button
                   size="sm"

@@ -14,6 +14,7 @@ import { PowerBodySoapError } from '../powerbody/soap'
 jest.mock('@/lib/portal/supplier-index', () => ({
   readSupplierIndex: jest.fn(),
   rememberIndexed: jest.fn(async () => undefined),
+  forgetIndexed: jest.fn(async () => 0),
 }))
 jest.mock('@/lib/supplier/product-id-map', () => ({
   productIdForSku: jest.fn(() => null),
@@ -22,12 +23,14 @@ jest.mock('@/lib/supplier/resolve-sku', () => ({
   resolveProductIdForSku: jest.fn(),
 }))
 
-import { readSupplierIndex, rememberIndexed } from '@/lib/portal/supplier-index'
+import { forgetIndexed, readSupplierIndex, rememberIndexed } from '@/lib/portal/supplier-index'
+import { DetailCallSilentError, NoProductDetailError } from '../no-detail'
 import { productIdForSku } from '@/lib/supplier/product-id-map'
 import { resolveProductIdForSku, type ResolveOutcome } from '@/lib/supplier/resolve-sku'
 import { normaliseCode, quickResolve, refusalOf, resolveCode } from '../resolve-code'
 
 const remembered = rememberIndexed as jest.MockedFunction<typeof rememberIndexed>
+const forgotten = forgetIndexed as jest.MockedFunction<typeof forgetIndexed>
 const readIndex = readSupplierIndex as jest.MockedFunction<typeof readSupplierIndex>
 const mapped = productIdForSku as jest.MockedFunction<typeof productIdForSku>
 const search = resolveProductIdForSku as jest.MockedFunction<typeof resolveProductIdForSku>
@@ -75,6 +78,13 @@ function fakeSupplier(
     name?: 'mock' | 'powerbody'
     refuse?: (ids: string[]) => unknown
     throwOnEmpty?: boolean
+    /**
+     * Throw what the live client throws for an id with nothing behind it: the
+     * typed "no product detail" error — worded, as it used to be, with our
+     * theory that the account is the DEMO sandbox, and carrying `said` as
+     * PowerBody's own words when they gave any.
+     */
+    emptyAs?: { said: string | null }
     bySku?: SupplierProduct[]
   } = {},
 ): { supplier: SupplierProvider; asked: string[][]; skuCalls: string[][] } {
@@ -88,6 +98,7 @@ function fakeSupplier(
       if (refusal) throw refusal
       const found = ids.filter((id) => catalogue[id]).map((id) => pbProduct(catalogue[id], id))
       if (found.length === 0 && opts.throwOnEmpty) throw new Error('Product not found')
+      if (found.length === 0 && opts.emptyAs) throw liveEmpty(ids[0], opts.emptyAs.said)
       return found
     },
     async getProductsBySku(skus: string[]) {
@@ -96,6 +107,16 @@ function fakeSupplier(
     },
   } as unknown as SupplierProvider
   return { supplier, asked, skuCalls }
+}
+
+/** The live client's "answered with no product in it", with OUR old explanation in the message. */
+function liveEmpty(id: string, said: string | null = null) {
+  return new NoProductDetailError(
+    `PowerBody answered for product ${id} with no product detail in it — they sent nothing. ` +
+      'getProductInfo may not be enabled on this API account (new accounts start in their DEMO sandbox).',
+    id,
+    said,
+  )
 }
 
 /** A stored index: SKU → id. */
@@ -666,5 +687,98 @@ describe('quickResolve', () => {
     ])
     expect(asked).toEqual([])
     expect(readIndex).not.toHaveBeenCalled()
+  })
+})
+
+// ── An id with nothing behind it is a fact about that id ──────────────────────
+
+describe('refusalOf — classified on PowerBody’s words, never ours', () => {
+  it('reads "no product in the answer" as no product at that id, whatever our message speculates', () => {
+    const why = refusalOf(liveEmpty('44338'))
+    expect(why.kind).toBe('supplier-error')
+    expect(why.message).toMatch(/PowerBody have no product with id 44338/)
+    expect(why.message).not.toMatch(/sandbox/i)
+  })
+
+  it('still hears a rate limit when THEY said it, underscores and all', () => {
+    expect(refusalOf(liveEmpty('7816', 'TOO_MANY_REQUESTS')).kind).toBe('rate-limited')
+  })
+
+  it('calls it the sandbox only on the evidence: known products answering nothing', () => {
+    const why = refusalOf(new DetailCallSilentError('PowerBody’s detail call answered nothing even for products their own list names.', null))
+    expect(why).toMatchObject({ kind: 'sandbox', next: ['ask-powerbody', 'run-checks'] })
+  })
+})
+
+describe('resolveCode — an id with nothing behind it', () => {
+  it('goes on to SKU P+code when the bare digits are not an id, instead of calling the account a DEMO sandbox', async () => {
+    // "44338" pasted for P44338 with the P lost; id 44338 does not exist.
+    const { supplier } = fakeSupplier({ '90210': 'P44338' }, { emptyAs: { said: null } })
+    const r = await resolveCode('44338', { supplier, index: storedIndex({ P44338: '90210' }), now })
+    expect(r).toMatchObject({ status: 'found', kind: 'sku', productId: '90210' })
+    expect(r.product?.sku).toBe('P44338')
+  })
+
+  it('looks a SKU up again when its indexed id answers nothing, and drops that index entry', async () => {
+    const { supplier } = fakeSupplier({}, { emptyAs: { said: null } })
+    search.mockResolvedValue(outcome({ reason: 'deadline', probes: 4 }))
+    const r = await resolveCode('P60001', { supplier, index: storedIndex({ P60001: '777' }), now })
+    expect(search).toHaveBeenCalledTimes(1)
+    expect(r.status).toBe('not-yet')
+    expect(r.refusal).toBeUndefined()
+    expect(forgotten).toHaveBeenCalledWith([{ sku: 'P60001', productId: '777' }])
+  })
+
+  it('still stops when their own words say they are limiting us', async () => {
+    const { supplier } = fakeSupplier({}, { emptyAs: { said: 'TOO_MANY_REQUESTS' } })
+    const r = await resolveCode('P60001', { supplier, index: storedIndex({ P60001: '777' }), now })
+    expect(r).toMatchObject({ status: 'refused', refusal: 'rate-limited' })
+    expect(search).not.toHaveBeenCalled()
+    expect(forgotten).not.toHaveBeenCalled()
+  })
+
+  it('does not stop a batch of mistyped ids as if the account were refusing', async () => {
+    const { supplier } = fakeSupplier({}, { emptyAs: { said: null } })
+    const { results, refusal } = await quickResolve(['88123', '88124'], { supplier, index: storedIndex({}) })
+    expect(refusal).toBeNull()
+    expect(results.map((r) => r.status)).toEqual(['unresolved', 'unresolved'])
+  })
+
+  it('drops the known products the search found dead, so the next search does not lean on them', async () => {
+    const { supplier } = fakeSupplier({})
+    search.mockResolvedValue(outcome({ reason: 'deadline', deadAnchors: [{ sku: 'P1000', productId: 10000 }] }))
+    await resolveCode('P60001', { supplier, index: storedIndex({}), now })
+    expect(forgotten).toHaveBeenCalledWith([{ sku: 'P1000', productId: '10000' }])
+  })
+})
+
+describe('resolveCode — an all-digit code that is not an id', () => {
+  it('searches for SKU P+code, accepts the bare spelling too, and says which SKU it found', async () => {
+    // Searching for "1101" itself landed on P1101, saw a string that was not
+    // "1101", and walked past the very product it was sent for.
+    const { supplier } = fakeSupplier({ '10303': 'P1101' }, { emptyAs: { said: null } })
+    search.mockResolvedValue(outcome({ productId: 10303, reason: 'found', probes: 3 }))
+    const r = await resolveCode('1101', { supplier, index: storedIndex({}), now })
+
+    expect(search.mock.calls[0][0]).toBe('P1101')
+    expect(search.mock.calls[0][2]).toMatchObject({ alsoAccept: ['1101'] })
+    expect(r).toMatchObject({ status: 'found', kind: 'sku', via: 'search', productId: '10303' })
+    expect(r.message).toMatch(/1101 is not a PowerBody product id, but SKU P1101 is/)
+  })
+
+  it('takes a product whose SKU really is the bare digits as the same answer', async () => {
+    const { supplier } = fakeSupplier({ '10303': '1101' }, { emptyAs: { said: null } })
+    search.mockResolvedValue(outcome({ productId: 10303, reason: 'found', probes: 3 }))
+    const r = await resolveCode('1101', { supplier, index: storedIndex({}), now })
+    expect(r).toMatchObject({ status: 'found', productId: '10303' })
+    expect(r.product?.sku).toBe('1101')
+  })
+
+  it('reads a complete index under either spelling before calling it absent', async () => {
+    const { supplier } = fakeSupplier({}, { emptyAs: { said: null } })
+    search.mockResolvedValue(outcome({ reason: 'deadline' }))
+    const absent = await resolveCode('1101', { supplier, index: storedIndex({ P2: '2' }, { complete: true }), now })
+    expect(absent.status).toBe('not-on-account')
+    expect(absent.message).toMatch(/1101 \(as SKU P1101\) is not in PowerBody's product list/)
   })
 })

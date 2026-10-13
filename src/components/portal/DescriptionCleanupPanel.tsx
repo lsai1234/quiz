@@ -10,6 +10,8 @@ interface Candidate {
   id: string
   title: string
   hasMarkup: boolean
+  /** The founder wrote this description: the AI rewrite leaves it alone. */
+  founderWritten?: boolean
 }
 
 interface Scan {
@@ -147,7 +149,11 @@ export function DescriptionCleanupPanel({ onSummary, onRunningChange }: FixupPan
 
   async function run(mode: Mode) {
     if (!scan) return
-    const ids = scan.candidates.filter((c) => (mode === 'ai' ? true : c.hasMarkup)).map((c) => c.id)
+    // The AI rewrite never touches words the founder wrote — the server skips
+    // them too — so they are not sent or counted.
+    const ids = scan.candidates
+      .filter((c) => (mode === 'ai' ? !c.founderWritten : c.hasMarkup))
+      .map((c) => c.id)
     if (ids.length === 0) return
 
     setError(null)
@@ -158,6 +164,7 @@ export function DescriptionCleanupPanel({ onSummary, onRunningChange }: FixupPan
     const collected: Change[] = []
     let aiUsed = 0
     let fellBack = 0
+    let editedMeanwhile = 0
 
     try {
       // Sequential on purpose: parallel batches would race each other's writes
@@ -190,16 +197,26 @@ export function DescriptionCleanupPanel({ onSummary, onRunningChange }: FixupPan
         collected.push(...(d.changes ?? []))
         aiUsed += d.aiUsed ?? 0
         fellBack += d.fellBack ?? 0
+        editedMeanwhile += d.editedMeanwhile ?? 0
         // Batches are written as they finish, so what has already been processed
         // survives whatever happens to the rest of the run.
         setChanges([...collected])
         setProgress({ mode, done: Math.min(i + BATCH, ids.length), total: ids.length })
       }
 
+      const yours = mode === 'ai' ? scan.candidates.filter((c) => c.founderWritten).length : 0
       setDone(
-        mode === 'ai'
-          ? `${aiUsed} rewritten, ${fellBack} kept as the supplier wrote them.`
-          : `${collected.length} description${collected.length === 1 ? '' : 's'} cleaned.`,
+        [
+          mode === 'ai'
+            ? `${aiUsed} rewritten, ${fellBack} kept as the supplier wrote them.`
+            : `${collected.length} description${collected.length === 1 ? '' : 's'} cleaned.`,
+          yours > 0 ? `${yours} you wrote yourself ${yours === 1 ? 'was' : 'were'} left as ${yours === 1 ? 'it is' : 'they are'}.` : '',
+          editedMeanwhile > 0
+            ? `${editedMeanwhile} ${editedMeanwhile === 1 ? 'was' : 'were'} changed on ${editedMeanwhile === 1 ? 'its' : 'their'} product page while this ran, so ${editedMeanwhile === 1 ? 'it was' : 'they were'} left alone.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
       )
     } finally {
       setProgress(null)

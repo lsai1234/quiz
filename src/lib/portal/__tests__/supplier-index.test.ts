@@ -1,4 +1,5 @@
-import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex, mergeSweep, highestIndexedId, saveMeasurement } from '@/lib/portal/supplier-index'
+import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex, mergeSweep, highestIndexedId, saveMeasurement, rememberIndexed, forgetIndexed } from '@/lib/portal/supplier-index'
+import { mutateJson } from '@/lib/portal/persist'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 jest.mock('@/lib/portal/persist', () => {
@@ -6,6 +7,13 @@ jest.mock('@/lib/portal/persist', () => {
   return {
     readJson: jest.fn(async (name: string, fallback: unknown) => store[name] ?? fallback),
     writeJson: jest.fn(async (name: string, data: unknown) => { store[name] = data }),
+    mutateJson: jest.fn(async (name: string, fallback: unknown, change: (current: unknown) => unknown) => {
+      const out = change(JSON.parse(JSON.stringify(store[name] ?? fallback))) as { next?: unknown; result?: unknown; __mutateOutcome?: true }
+      const outcome = Boolean(out && typeof out === 'object' && '__mutateOutcome' in out)
+      store[name] = outcome ? out.next : out
+      return outcome ? out.result : undefined
+    }),
+    withResult: (next: unknown, result: unknown) => ({ next, result, __mutateOutcome: true }),
   }
 })
 
@@ -181,5 +189,34 @@ describe('resuming', () => {
     await clearSupplierIndex()
 
     expect((await readSupplierIndex()).resumeFrom).toBeNull()
+  })
+})
+
+describe('forgetting a pair PowerBody no longer answer for', () => {
+  beforeEach(async () => { await clearSupplierIndex() })
+
+  it('drops it from the crawl and from the one-at-a-time finds, so a rebuild cannot bring it back', async () => {
+    // Nothing used to remove an entry, and the id search leaned on the lowest
+    // one: once that product was delisted, every search on the account failed.
+    await mergeIntoIndex([level('P1000', '10000'), level('P1001', '10001')], { pagesRead: 1, complete: false })
+    await rememberIndexed([{ sku: 'P1000', productId: '10000' }, { sku: 'P5000', productId: '50000' }])
+
+    expect(await forgetIndexed([{ sku: 'P1000', productId: '10000' }])).toBe(2)
+    const index = await readSupplierIndex()
+    expect(index.bySku.P1000).toBeUndefined()
+    expect(index.bySku.P1001?.productId).toBe('10001')
+    expect(index.bySku.P5000?.productId).toBe('50000')
+  })
+
+  it('keeps a SKU that has since been found again under a new id', async () => {
+    await mergeIntoIndex([level('P2000', '20001')], { pagesRead: 1, complete: false })
+    expect(await forgetIndexed([{ sku: 'P2000', productId: '20000' }])).toBe(0)
+    expect((await readSupplierIndex()).bySku.P2000?.productId).toBe('20001')
+  })
+
+  it('writes nothing when it holds nothing to drop', async () => {
+    const writes = (mutateJson as jest.Mock).mock.calls.length
+    await forgetIndexed([{ sku: 'P-NOT-HELD', productId: '1' }])
+    expect((mutateJson as jest.Mock).mock.calls.length).toBe(writes)
   })
 })

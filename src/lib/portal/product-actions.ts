@@ -79,6 +79,9 @@ export async function discardProduct(id: string): Promise<void> {
  * is discarded if it never went on sale, or removed (restorable) if it did, and
  * takes its place on the Top 25 with it to the target. Pre-built bundles that
  * sold a source keep pointing at it — the caller shows `productUsage` first.
+ *
+ * A target still waiting for review takes only sources that are waiting too:
+ * one on sale would come off the shop with it (see the refusal below).
  */
 export async function mergeIntoProduct(
   targetId: string,
@@ -95,6 +98,28 @@ export async function mergeIntoProduct(
       if (!p) throw new ProductNotFound(id)
       return p
     })
+    /*
+      Never into a product still waiting for review from one on sale.
+
+      A product waiting for review is sold nowhere — the shop, the quiz and the
+      renewal orders all read only products on sale. Merging an on-sale product
+      into one would take its SKUs off the shelf with it: the source is removed,
+      its Top 25 place moves to a product that cannot fill it, and every member
+      subscribed to it renews with no SKU until somebody approves the new one.
+      Merging the other way round gets the founder what they meant — the new
+      flavour joins the product customers already buy, and the half that never
+      went on sale is the one that goes — so the refusal says that, and links
+      to the product to do it from.
+    */
+    if (target.review?.status === 'pending') {
+      const live = sources.find((s) => s.review?.status !== 'pending' && !bench.isRemoved(s.id))
+      if (live) {
+        throw new ActionRefused(
+          `“${live.title}” is on sale and this product is still waiting for review, so merging it in here would take “${live.title}” off the shop until this one is approved. Merge the other way: open “${live.title}” and bring this one into it.`,
+          { label: `Open ${live.title}`, href: productHref(live.id) },
+        )
+      }
+    }
     const check = canMerge([target, ...sources])
     if (!check.ok) throw new ActionRefused(check.reason)
 

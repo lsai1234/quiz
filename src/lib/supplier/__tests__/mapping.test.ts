@@ -40,6 +40,17 @@ describe('supplier → catalogue mapping', () => {
     expect(cp.variants[0].compareAtPrice).toBeNull()
   })
 
+  it('marks the serving count it takes from PowerBody as theirs, so a pull may refresh it but nothing typed is overwritten', () => {
+    const sp = { ...bySku('ON-CREA-634'), servings: 126 }
+    const [v] = supplierProductToCatalogue(sp).variants
+    expect(v).toMatchObject({ servings: 126, servingsSource: 'supplier' })
+
+    // No count from them, no claim about where one came from.
+    const [blank] = supplierProductToCatalogue({ ...sp, servings: null }).variants
+    expect(blank.servings).toBeUndefined()
+    expect(blank.servingsSource).toBeUndefined()
+  })
+
   it('makes a single variant for products without flavours', () => {
     const cp = supplierProductToCatalogue(bySku('ON-CREA-634'))
     expect(cp.variants).toHaveLength(1)

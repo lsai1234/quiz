@@ -172,6 +172,150 @@ describe('flavours, sizes & prices', () => {
   })
 })
 
+describe('merging another product in', () => {
+  /** The picker's list: one product on sale, one still waiting for review. */
+  const others = [
+    { state: 'live', product: { id: 'whey-choc', title: 'Whey Chocolate', variants: [v({ id: 'choc' })] } },
+    { state: 'pending', product: { id: 'whey-straw', title: 'Whey Strawberry', variants: [v({ id: 'straw' })] } },
+  ]
+
+  /** Answers like the products route; `merge` can be told to refuse. */
+  function serve(refuse?: { error: string; link: { label: string; href: string } }) {
+    global.fetch = jest.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {}
+      calls.push({ url, body })
+      if (url.includes('all=1')) return { ok: true, status: 200, json: async () => ({ products: others }) } as Response
+      if (refuse && body.action === 'merge') return { ok: false, status: 409, json: async () => ({ error: refuse.error, link: refuse.link }) } as Response
+      return { ok: true, status: 200, json: async () => ({ ok: true, ...payload({}) }) } as Response
+    }) as unknown as typeof fetch
+  }
+
+  async function choose(p: ProductPayload, title: string) {
+    const onPayload = jest.fn()
+    render(<VariantsSection payload={p} onPayload={onPayload} onDirty={noop} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    await userEvent.type(screen.getByLabelText('Find the product to bring in'), 'whey')
+    const row = (await screen.findByText(title)).closest('div')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Choose' }))
+    return onPayload
+  }
+
+  const waiting = () => ({ ...payload({ id: 'whey-van', title: 'Whey Vanilla' }), state: 'pending' as const })
+
+  it('on a product waiting for review, offers to add it to the one on sale instead — and goes there', async () => {
+    serve()
+    const onPayload = await choose(waiting(), 'Whey Chocolate')
+
+    expect(screen.queryByRole('button', { name: 'Merge it in' })).not.toBeInTheDocument()
+    expect(screen.getByText(/would come off the shop/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Add this one’s flavours to “Whey Chocolate”' }))
+
+    expect(calls.at(-1)).toEqual({ url: '/api/portal/products', body: { id: 'whey-choc', action: 'merge', from: ['whey-van'] } })
+    expect(push).toHaveBeenCalledWith('/founderhub/products/item/whey-choc#variants')
+    // The answer is the other product; this page's copy is not replaced by it.
+    expect(onPayload).not.toHaveBeenCalled()
+  })
+
+  it('says why and links on when the server still refuses the hand-over', async () => {
+    serve({ error: 'These are different sizes (2kg, 1kg).', link: { label: 'Open Whey Chocolate', href: '/founderhub/products/item/whey-choc' } })
+    await choose(waiting(), 'Whey Chocolate')
+    await userEvent.click(screen.getByRole('button', { name: 'Add this one’s flavours to “Whey Chocolate”' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('These are different sizes (2kg, 1kg).')
+    expect(screen.getByRole('link', { name: 'Open Whey Chocolate' })).toHaveAttribute('href', '/founderhub/products/item/whey-choc')
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('on a product waiting for review, still merges in another that is waiting too', async () => {
+    serve()
+    await choose(waiting(), 'Whey Strawberry')
+    await userEvent.click(screen.getByRole('button', { name: 'Merge it in' }))
+    expect(calls.at(-1)).toEqual({ url: '/api/portal/products', body: { id: 'whey-van', action: 'merge', from: ['whey-straw'] } })
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('on a product on sale, merges the other in here and offers Undo', async () => {
+    serve()
+    const onPayload = await choose(payload({}), 'Whey Chocolate')
+    await userEvent.click(screen.getByRole('button', { name: 'Merge it in' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'glycine', action: 'merge', from: ['whey-choc'] })
+    expect(onPayload).toHaveBeenCalled()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo — put “Whey Chocolate” back on its own' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey-choc', action: 'undo-merge', view: 'glycine' })
+  })
+
+  it('shows the link a refusal names, beside the reason', async () => {
+    serve({ error: '“Whey Chocolate” is on sale and this product is still waiting for review…', link: { label: 'Open Whey Chocolate', href: '/founderhub/products/item/whey-choc' } })
+    // A stale list said "waiting for review"; by the time of the merge it was on sale.
+    others[0].state = 'pending'
+    try {
+      await choose(waiting(), 'Whey Chocolate')
+      await userEvent.click(screen.getByRole('button', { name: 'Merge it in' }))
+    } finally {
+      others[0].state = 'live'
+    }
+    expect(await screen.findByRole('alert')).toHaveTextContent(/is on sale and this product is still waiting for review/)
+    expect(screen.getByRole('link', { name: 'Open Whey Chocolate' })).toHaveAttribute('href', '/founderhub/products/item/whey-choc')
+  })
+})
+
+describe('a removed product', () => {
+  const glycine = {
+    defaultVariantId: 'powder',
+    variants: [
+      v({ id: 'caps', title: '100 vcaps', flavour: null, size: '100 caps' }),
+      v({ id: 'powder', title: 'Pure Powder', flavour: null, size: '454 grams' }),
+    ],
+  }
+
+  it('offers no split — the SKUs moved out would go on sale on their own — and says to restore it first', () => {
+    render(<VariantsSection payload={{ ...payload(glycine), state: 'removed' }} onPayload={noop} onDirty={noop} />)
+    expect(screen.getByText(/2 different sizes/)).toHaveTextContent(/Restore this product before splitting them/)
+    expect(screen.queryByRole('button', { name: /^Tick the/ })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('checkbox', { name: /Move .* to its own product/ })).toHaveLength(0)
+  })
+
+  it('a product on sale keeps both ways to tick SKUs out', () => {
+    render(<VariantsSection payload={payload(glycine)} onPayload={noop} onDirty={noop} />)
+    expect(screen.getByRole('button', { name: 'Tick the 1 × 100 caps' })).toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox', { name: /Move .* to its own product/ })).toHaveLength(2)
+  })
+})
+
+describe('small print on tinted cards', () => {
+  /*
+    tokens.css: --ink-3 at --text-micro/--text-meta only on --surface-1 or
+    --surface-2. A tone card is neither, and nested in the section card the
+    merge warning measured about 3.9:1.
+  */
+  it('the split warning is set in --ink-2', async () => {
+    render(<VariantsSection payload={payload({ variants: [v({ id: 'a' }), v({ id: 'b' })] })} onPayload={noop} onDirty={noop} />)
+    await userEvent.click(screen.getAllByRole('checkbox', { name: /Move .* to its own product/ })[0])
+    expect(screen.getByText(/They become a product of their own/)).toHaveStyle({ color: 'var(--ink-2)' })
+  })
+
+  it('the merge warning is set in --ink-2', async () => {
+    global.fetch = jest.fn(async (url: string) => {
+      const data = url.includes('all=1')
+        ? { products: [{ state: 'live', product: { id: 'whey-choc', title: 'Whey Chocolate', variants: [v({ id: 'choc' })] } }] }
+        : { ...payload({}), usageWarning: 'It is in 2 pre-built bundles.' }
+      return { ok: true, status: 200, json: async () => data } as Response
+    }) as unknown as typeof fetch
+    render(<VariantsSection payload={payload({})} onPayload={noop} onDirty={noop} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open' }))
+    await userEvent.type(screen.getByLabelText('Find the product to bring in'), 'whey')
+    await userEvent.click(await screen.findByRole('button', { name: 'Choose' }))
+    expect(await screen.findByText(/It is in 2 pre-built bundles\. Those keep pointing at/)).toHaveStyle({ color: 'var(--ink-2)' })
+  })
+
+  it('the master SKU row stays a solid row, not a tint over the section', () => {
+    render(<VariantsSection payload={payload({ defaultVariantId: 'a', variants: [v({ id: 'a' }), v({ id: 'b' })] })} onPayload={noop} onDirty={noop} />)
+    const row = screen.getByText('Master').closest('.system-glass') as HTMLElement
+    expect(row.style.background).toBe('var(--surface-solid)')
+  })
+})
+
 describe('the supplier section', () => {
   it('offers nothing to pull when no SKU carries a PowerBody code', () => {
     const p = payload({ variants: [v({ id: 'a', sku: null })] })

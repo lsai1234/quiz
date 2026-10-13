@@ -40,6 +40,7 @@ import type {
 } from '../types'
 import { createSoapClient, PowerBodySoapError, type PowerBodySoapClient } from './soap'
 import { SupplierSendError } from '../errors'
+import { NoProductDetailError, noProductDetail } from '../no-detail'
 import { partitionBySkuMap } from '../product-id-map'
 import { createKvDetailStore, isStale, type DetailStore } from './detail-cache'
 import {
@@ -455,6 +456,13 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * for this exact product, so "PowerBody said X" has to reach them. Returning
    * null on a fault is what made a broken detail call look like a page that
    * simply would not fill in.
+   *
+   * **A timeout is not a shape problem.** A retryable failure (a timeout, a
+   * 503, a rate limit) on the bare id says nothing about whether the account
+   * wants the other shape, so it is thrown at once rather than spending a
+   * second full round of retries on `{product_id}`. Against a PowerBody that
+   * had stopped answering, that second round is what took one detail call past
+   * five minutes — longer than the request it ran in was allowed to live.
    */
   async function fetchDetail(id: string): Promise<PbProductInfo> {
     let firstFailure: unknown = null
@@ -466,32 +474,41 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
         if (info) return info
         lastReply = reply
       } catch (err) {
+        if (err instanceof PowerBodySoapError && err.retryable) throw err
         firstFailure ??= err
       }
     }
     if (firstFailure) throw firstFailure
-    // Say what they actually sent. Guessing at this from the outside is what
-    // cost a round of "it still doesn't work" — the reply is the diagnosis.
-    if (lastReply !== undefined) {
-      // Their own words first, when they gave any. A reply carrying
-      // `api_response` is PowerBody's error envelope — the same field
-      // `createOrder` answers with — so it says WHY, and quoting it beats
-      // guessing at a cause. Leading with the sandbox theory sent a real
-      // investigation down the wrong path for an afternoon: the account was
-      // fine and the call was being refused for another reason entirely.
-      const said = readApiResponse(lastReply)
-      if (said) {
-        throw new Error(
-          `PowerBody refused the detail call for product ${id}: "${said}". That is their own message — ` +
-            'it is usually rate limiting or a permission on the API account, not a missing product.',
-        )
-      }
-      throw new Error(
-        `PowerBody answered for product ${id} with no product detail in it — they sent ${describeReply(lastReply)}. ` +
-          'getProductInfo may not be enabled on this API account (new accounts start in their DEMO sandbox).',
+    /*
+      Say what they actually sent — and NOT why we think they sent it.
+
+      This used to end with our theory of the cause: "getProductInfo may not be
+      enabled on this API account (new accounts start in their DEMO sandbox)",
+      or for an envelope "it is usually rate limiting". The resolver classifies
+      a refusal by its words, so our theory came back as the verdict: an id
+      with simply no product behind it — a typo, a delisted product, a SKU
+      whose P was lost — was reported as a DEMO account and stopped the batch.
+
+      So the case is a typed error (`NoProductDetailError`) carrying their own
+      words separately, and the message describes the reply and leaves the
+      diagnosis to the one thing that can make it: a product their own list
+      names failing the same way (see `resolve-sku`).
+    */
+    const said = lastReply === undefined ? null : readApiResponse(lastReply)
+    if (said) {
+      throw new NoProductDetailError(
+        `PowerBody answered the detail call for product ${id} with their own message, "${said}", and no product detail.`,
+        id,
+        said,
       )
     }
-    throw new Error(`PowerBody returned no details for product ${id}.`)
+    throw new NoProductDetailError(
+      `PowerBody answered for product ${id} with no product detail in it — they sent ${describeReply(lastReply)}. ` +
+        'Either no product has that id, or this API account cannot read product detail; the supplier checks in ' +
+        'Settings → Supplier tell the two apart.',
+      id,
+      null,
+    )
   }
 
   const idOf = (item: PbProductListItem): string =>
@@ -652,7 +669,10 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     const resolved = fetched.filter((f): f is { id: string; info: PbProductInfo } => f.info !== null)
     if (resolved.length === 0) {
-      if (failures.length > 0) throw failures[0]
+      // A real refusal (a fault, a timeout, a login) says more than "no product
+      // at this id", so it is the one thrown when a batch holds both — a dead
+      // id must not hide the rate limit that stopped its neighbours.
+      if (failures.length > 0) throw failures.find((f) => !noProductDetail(f)) ?? failures[0]
       return []
     }
 

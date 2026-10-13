@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button, Checkbox, Input, Textarea } from '@/components/system'
 import { ImageField } from '@/components/portal/ImageField'
 import { DIETARY_TAGS, type DietaryTag } from '@/lib/catalogue/types'
-import { Outcome, ReviewMark, Section, META, errorText, postProduct, useDraft, type Payload } from './shared'
+import { Outcome, ReviewMark, Section, META, errorText, fillOutcome, postProduct, useDraft, type FillReport, type Payload } from './shared'
 
 const DIETARY_LABEL: Record<DietaryTag, string> = {
   vegan: 'Vegan',
@@ -36,7 +36,7 @@ export function ListingSection({
   onDirty: (section: string, dirty: boolean) => void
 }) {
   const { product } = payload
-  const { draft, set, changed, reset } = useDraft({
+  const { draft, set, changed, reset, saved } = useDraft({
     title: product.title,
     shortName: product.shortName ?? '',
     brand: product.brand ?? '',
@@ -55,7 +55,17 @@ export function ListingSection({
 
   useEffect(() => onDirty('Shop listing', changed.length > 0), [changed.length, onDirty])
 
-  async function send(body: Record<string, unknown>, label: string, success: string) {
+  /**
+   * `sent`: the draft as it was when Save was pressed, so the fields it carried
+   * take the server's tidied value once it answers (see `useDraft`). `success`
+   * may read the server's answer — "Fill the blanks" says what it really did.
+   */
+  async function send(
+    body: Record<string, unknown>,
+    label: string,
+    success: string | ((answer: Record<string, unknown>) => string),
+    sent?: typeof draft,
+  ) {
     setBusy(label)
     setDone(null)
     setError(null)
@@ -66,7 +76,8 @@ export function ListingSection({
       return false
     }
     onPayload(result.payload)
-    setDone(success)
+    if (sent) saved(sent)
+    setDone(typeof success === 'string' ? success : success(result.body))
     return true
   }
 
@@ -78,7 +89,7 @@ export function ListingSection({
       else if (key === 'shortName' || key === 'brand' || key === 'imageUrl') fields[key] = (draft[key] as string).trim() || null
       else fields[key] = draft[key]
     }
-    void send({ set: fields }, 'save', 'Saved — the shop shows it now.')
+    void send({ set: fields }, 'save', 'Saved — the shop shows it now.', draft)
   }
 
   /** Short names come from the server: the derivation and the AI pass both live there. */
@@ -227,7 +238,7 @@ export function ListingSection({
             variant="secondary"
             size="sm"
             loading={busy === 'fill'}
-            onClick={() => void send({ action: 'fill-blanks' }, 'fill', 'Filled what was blank. Each is marked as written by the model — check it.')}
+            onClick={() => void send({ action: 'fill-blanks' }, 'fill', (answer) => fillOutcome(answer.fill as FillReport | undefined))}
           >
             Fill the blanks with AI
           </Button>

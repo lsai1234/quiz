@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDataSource, getDataSourceMode } from '@/lib/data-source'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { getPublicCatalogue, getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { syncPortalRuntime } from '@/lib/portal/store'
 
 // Don't cache — the portal can flip the data source / edit products at runtime.
@@ -24,6 +24,10 @@ export async function GET(request: Request) {
     })
   }
 
-  const { products, source, error } = await getResolvedCatalogue()
+  // Public and unauthenticated — the shop fetches it on every visit — so the
+  // products go out without what is ours alone: the review record (with the
+  // approving founder's email), PowerBody's ids, price and servings provenance.
+  // `toPublicProduct` says what is taken out and why the rest stays.
+  const { products, source, error } = await getPublicCatalogue()
   return NextResponse.json({ products, source, count: products.length, ...(error ? { error } : {}) })
 }

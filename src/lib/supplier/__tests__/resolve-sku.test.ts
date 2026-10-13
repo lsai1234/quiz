@@ -1,6 +1,7 @@
 import { resolveProductIdForSku, anchorsFromFeed, supplierProbe, lastPopulatedPage } from '@/lib/supplier/resolve-sku'
 import type { SupplierProvider } from '@/lib/supplier/types'
 import { PowerBodySoapError } from '@/lib/supplier/powerbody/soap'
+import { NoProductDetailError, detailCallSilent } from '@/lib/supplier/no-detail'
 
 /**
  * A fake PowerBody whose catalogue is known, so the search can be judged on what
@@ -363,5 +364,67 @@ describe('lastPopulatedPage', () => {
       async getFeed() { return { levels: [], complete: true, pages: 1, nextPage: null } },
     } as unknown as SupplierProvider
     await expect(lastPopulatedPage(supplier)).resolves.toBe(0)
+  })
+})
+
+describe('checking the detail call against known products', () => {
+  /** Anchors as the resolver hands them over from the stored index: sorted by id, lowest first. */
+  function indexAnchors(catalogue: Map<number, string>, every = 20) {
+    return [...catalogue].filter((_, i) => i % every === 0).map(([productId, sku]) => ({ sku, productId }))
+  }
+
+  /** The catalogue with some products delisted: their ids now answer nothing, as the live client says it. */
+  function delisted(catalogue: Map<number, string>, gone: number[]): SupplierProvider {
+    return {
+      async getProductsById(ids: string[]) {
+        const id = Number(ids[0])
+        const sku = gone.includes(id) ? undefined : catalogue.get(id)
+        if (!sku) throw new NoProductDetailError(`PowerBody answered for product ${id} with no product detail in it — they sent nothing.`, String(id), null)
+        return [{ sku, productId: ids[0], name: sku, wholesalePrice: 10, rrp: 20 }]
+      },
+    } as unknown as SupplierProvider
+  }
+
+  it('still searches when the oldest product in the index has been delisted', async () => {
+    // One canary — always the lowest id — made every search on the account
+    // fail for good once that one product was gone.
+    const catalogue = buildCatalogue()
+    const anchors = indexAnchors(catalogue)
+    const supplier = delisted(catalogue, [anchors[0].productId])
+    const wantedId = [...catalogue].find(([, sku]) => sku === 'P43450')![0]
+
+    const out = await resolveProductIdForSku('P43450', supplier, { anchors })
+    expect(out).toMatchObject({ reason: 'found', productId: wantedId })
+  })
+
+  it('reports the known products it found dead, so the index can drop them', async () => {
+    const catalogue = buildCatalogue()
+    const anchors = indexAnchors(catalogue)
+    const newest = anchors.at(-1)!
+    const out = await resolveProductIdForSku('P43450', delisted(catalogue, [newest.productId]), { anchors })
+    expect(out.reason).toBe('found')
+    expect(out.deadAnchors).toEqual([newest])
+  })
+
+  it('says the account cannot look products up only when none of the known products answers', async () => {
+    const catalogue = buildCatalogue()
+    const anchors = indexAnchors(catalogue)
+    const nothing = delisted(catalogue, [...catalogue.keys()])
+
+    const err = await resolveProductIdForSku('P43450', nothing, { anchors }).catch((e: unknown) => e)
+    expect(detailCallSilent(err)).not.toBeNull()
+    expect((err as Error).message).toMatch(/DEMO sandbox/)
+  })
+
+  it('accepts another spelling of the target as the target', async () => {
+    // An all-digit code is searched for as P+code; a product whose SKU really
+    // is the bare digits is the same answer, and must not be walked past.
+    const catalogue = buildCatalogue()
+    const [id] = [...catalogue].find(([, sku]) => sku === 'P43450')!
+    catalogue.set(id, '43450')
+    const { supplier } = fakeSupplier({ catalogue })
+
+    const out = await resolveProductIdForSku('P43450', supplier, { anchors: indexAnchors(catalogue), alsoAccept: ['43450'] })
+    expect(out).toMatchObject({ reason: 'found', productId: id })
   })
 })

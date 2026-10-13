@@ -355,12 +355,87 @@ function followServings(before: CatalogueProduct, after: CatalogueProduct): Cata
   return { ...after, consumption: { ...plan, servingsPerUnit: now } }
 }
 
+/**
+ * Keep the product's serving count, and the plan that follows it, in step with
+ * its SKUs — after ANY change, not only a founder's edit.
+ *
+ * The product's serving count IS its master SKU's: what the shelf shows and what
+ * everything that reads `product.servings` should see. Servings are set per SKU
+ * (Flavours & sizes, a pull), so this keeps the product-level copy honest, and
+ * moves the subscription with it when the subscription was following.
+ *
+ * A pull is the case that made this shared. It gives the master PowerBody's 66
+ * where the import had guessed 30; written without this step the shelf said 66
+ * while `product.servings` and the plan said 30, so a daily customer was sent a
+ * tub a month that lasts two. The next unrelated edit then corrected the product
+ * but not the plan (both sides of the comparison already said 66), and the
+ * guessed 30 became a number that looked set on purpose.
+ *
+ * `planSet`: the change set the plan itself, so it is that number, not this one.
+ */
+export function normaliseServings(
+  before: CatalogueProduct,
+  after: CatalogueProduct,
+  options: { planSet?: boolean } = {},
+): CatalogueProduct {
+  let next = after
+  const masterOwn = (next.variants.find((v) => v.id === next.defaultVariantId) ?? next.variants[0])?.servings
+  if (masterOwn != null && masterOwn > 0 && masterOwn !== next.servings) next = { ...next, servings: masterOwn }
+  return options.planSet ? next : followServings(before, next)
+}
+
+/**
+ * Record who set each SKU's serving count this edit changed.
+ *
+ * A count typed on the product page — one SKU, or "for every SKU of this size"
+ * — is the founder's, and a pull must never replace it with PowerBody's
+ * `portion_count` (see `CatalogueVariant.servingsSource`). A count cleared is
+ * nobody's: "we were never told", which a pull may fill.
+ */
+function markRecounted(before: CatalogueProduct, after: CatalogueProduct): CatalogueProduct {
+  let touched = false
+  const variants = after.variants.map((v) => {
+    const was = before.variants.find((b) => b.id === v.id)
+    if (!was || (was.servings ?? null) === (v.servings ?? null)) return v
+    touched = true
+    if (v.servings != null && v.servings > 0) return { ...v, servingsSource: 'founder' as const }
+    const { servingsSource: _dropped, ...rest } = v
+    void _dropped
+    return rest
+  })
+  return touched ? { ...after, variants } : after
+}
+
+/**
+ * The product's cost and PowerBody id are its master SKU's (one cost rule — the
+ * sync and the pull both read the stored master). When an edit changes the
+ * master SKU's own cost or id, or makes another SKU the master, the product's
+ * copies follow at once — not at the next pull — so margins, readiness and the
+ * Supplier section agree with Flavours & sizes the moment it is saved.
+ */
+function followMasterFacts(before: CatalogueProduct, after: CatalogueProduct): CatalogueProduct {
+  const masterOf = (p: CatalogueProduct) => p.variants.find((v) => v.id === p.defaultVariantId) ?? p.variants[0]
+  const was = masterOf(before)
+  const now = masterOf(after)
+  if (!now) return after
+  const moved = was?.id !== now.id
+  let next = after
+  if (now.cost != null && now.cost > 0 && (moved || was?.cost !== now.cost) && next.cost !== now.cost) {
+    next = { ...next, cost: now.cost }
+  }
+  const id = now.supplierProductId
+  if (id && /^\d+$/.test(id) && (moved || was?.supplierProductId !== id) && next.supplierProductId !== id) {
+    next = { ...next, supplierProductId: id }
+  }
+  return next
+}
+
 /** Apply a validated edit to a product. Pure — the caller writes it. */
 export function applyEdit(current: CatalogueProduct, edit: ProductEdit): { product: CatalogueProduct; changed: string[] } {
   const { patch, changed, master } = validateEdit(current, edit)
   // A plan set explicitly in the same edit is the founder's number; don't move it.
   const planSet = 'consumption' in patch
-  let next = applyPatch(current, patch)
+  let next = markRecounted(current, applyPatch(current, patch))
   if (master) {
     // The master's own facts, without spreading its serving count over its
     // siblings — choosing which flavour leads is not a statement that every
@@ -371,21 +446,25 @@ export function applyEdit(current: CatalogueProduct, edit: ProductEdit): { produ
       changed.push('defaultVariantId')
     }
   }
-  // The product's serving count IS its master SKU's — what the shelf shows and
-  // what everything that reads `product.servings` should see. Servings are set
-  // per SKU (Flavours & sizes); this keeps the product-level copy honest.
-  const masterOwn = (next.variants.find((v) => v.id === next.defaultVariantId) ?? next.variants[0])?.servings
-  if (masterOwn != null && masterOwn > 0 && masterOwn !== next.servings) next = { ...next, servings: masterOwn }
-  if (!planSet) next = followServings(current, next)
+  next = normaliseServings(current, next, { planSet })
+  next = followMasterFacts(current, next)
   // A renamed flavour keeps its old name on file, so subscription lines written
   // against it still find it (see `catalogue/line-variant`).
   next = rememberRenames(current, next)
 
   const confirm = edit.confirm ?? []
   if (next.review && (changed.length > 0 || confirm.length > 0)) {
+    // EVERY product field the founder changed is now the founder's — not only
+    // the ones Review asks about. A pull replaces whatever still says it came
+    // from PowerBody, so a 0% VAT rate, a brand or a weight typed here and left
+    // labelled `supplier` went back to PowerBody's figure on the next pull, on
+    // a page that promises "nothing you wrote is overwritten". SKU edits
+    // (`variants`) and the master choice carry their own record, per SKU.
+    const edited = changed.filter((k) => k !== 'variants' && k !== 'defaultVariantId')
+    // Confirming is still only for what Review walks: ticking a VAT rate is
+    // not a step anybody is asked to take.
     const reviewKeys = new Set(REVIEW_FIELDS.map((f) => f.key as string))
-    const edited = changed.filter((k) => reviewKeys.has(k))
-    next = withConfirmed(next, [...edited, ...confirm], edited)
+    next = withConfirmed(next, [...edited.filter((k) => reviewKeys.has(k)), ...confirm], edited)
   }
   return { product: next, changed }
 }

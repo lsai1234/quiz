@@ -1,6 +1,7 @@
 import { createPowerBodyProvider, __resetPowerBodyCache } from '@/lib/supplier/powerbody/live'
 import { PowerBodySoapError, type PowerBodySoapClient } from '@/lib/supplier/powerbody/soap'
 import { sendEvidenceOf } from '@/lib/supplier/errors'
+import { noProductDetail } from '@/lib/supplier/no-detail'
 import { createMemoryDetailStore, DETAIL_TTL_MS } from '@/lib/supplier/powerbody/detail-cache'
 
 /** A fake SOAP client driven by a per-method handler map. */
@@ -229,6 +230,41 @@ describe('live PowerBody adapter', () => {
     })
   })
 
+  describe('an id with nothing behind it', () => {
+    const provider = (client: PowerBodySoapClient) =>
+      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
+
+    /**
+     * Typed, with their words apart from ours. The message used to end with
+     * our theory — "may not be enabled … (new accounts start in their DEMO
+     * sandbox)", "usually rate limiting" — and the resolver read that theory
+     * back as PowerBody's verdict on the account.
+     */
+    it('says so as a typed error, with no theory of ours in the words', async () => {
+      const { client } = fakeClient({ 'dropshipping.getProductInfo': () => null })
+      const err = await provider(client).getProductsById(['44338']).catch((e: unknown) => e)
+      expect(noProductDetail(err)).toEqual({ productId: '44338', said: null })
+      expect((err as Error).message).not.toMatch(/demo|sandbox|rate.?limit|not enabled/i)
+    })
+
+    it('carries their envelope’s own words in a field of their own', async () => {
+      const { client } = fakeClient({ 'dropshipping.getProductInfo': () => ({ api_response: 'TOO_MANY_REQUESTS', status: 'error' }) })
+      const err = await provider(client).getProductsById(['7816']).catch((e: unknown) => e)
+      expect(noProductDetail(err)).toEqual({ productId: '7816', said: 'TOO_MANY_REQUESTS' })
+      expect((err as Error).message).not.toMatch(/usually rate limiting/)
+    })
+
+    it('throws the real refusal, not the empty id, when a batch holds both', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getProductInfo': (args: unknown) => {
+          if (detailId(args) === '2') throw new PowerBodySoapError('Access denied', '2', false, false)
+          return null
+        },
+      })
+      await expect(provider(client).getProductsById(['1', '2'])).rejects.toThrow('Access denied')
+    })
+  })
+
   describe('getProductInfo argument shape', () => {
     /**
      * Their guide, page 11: "Parameters: (int) product id", with the example
@@ -262,6 +298,21 @@ describe('live PowerBody adapter', () => {
 
       expect(product.name).toBe('Whey 1kg')
       expect(calls.map((c) => c.args)).toEqual(['1', { product_id: '1' }])
+    })
+
+    /** A timeout says nothing about shape. Trying the other one after it spent a
+     *  second full round of retries — and took one call past five minutes. */
+    it('does not try the other shape after a timeout', async () => {
+      const timeout = new PowerBodySoapError('PowerBody did not answer within 30s', 'timeout', false, true)
+      const { client, calls } = fakeClient({
+        'dropshipping.getProductInfo': () => {
+          throw timeout
+        },
+      })
+      await expect(
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1']),
+      ).rejects.toBe(timeout)
+      expect(calls.filter((c) => c.path === 'dropshipping.getProductInfo')).toHaveLength(1)
     })
   })
 

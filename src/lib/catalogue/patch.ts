@@ -1,5 +1,6 @@
 import type { CatalogueProduct, CatalogueVariant } from './types'
 import { spreadServings } from './servings'
+import { asFounders } from './review'
 
 /**
  * How a change is applied to a product — the one set of rules every writer uses.
@@ -41,7 +42,7 @@ const PRODUCT_CLEARABLE = new Set<string>([
   'supplierProductId', 'contraindications', 'actives', 'rating', 'restockingSoon',
 ])
 const VARIANT_CLEARABLE = new Set<string>([
-  'inventory', 'servings', 'imageUrl', 'cost', 'priceSource', 'supplierProductId', 'formerly',
+  'inventory', 'servings', 'servingsSource', 'imageUrl', 'cost', 'priceSource', 'supplierProductId', 'formerly',
 ])
 
 /** Never stored: worked out on read. */
@@ -130,6 +131,8 @@ export function withoutDerived(product: CatalogueProduct): CatalogueProduct {
  *     read path did, so the shelf does not change when this runs.
  *   · the shelf price follows the master SKU, whose price now comes from the
  *     record and so is the fresher of the two.
+ *   · whatever the override set is recorded as the founder's, in the review's
+ *     sources and on each SKU whose count it set — see the end of this.
  */
 export function foldOverride(
   record: CatalogueProduct,
@@ -171,15 +174,56 @@ export function foldOverride(
     next = cost === null ? assign(next, { cost: null }, PRODUCT_NULL_VALUES, PRODUCT_CLEARABLE) : { ...next, cost }
   }
 
-  // Spread only onto SKUs that do not know their own count, and over the size
-  // of the STORED master. The old editor re-sent its serving count (often the
-  // guessed 30) on every save; spreading that over SKUs PowerBody had counted
-  // would make the guess permanent.
+  /*
+    Over the size of the STORED master, and how far depends on whether the
+    count was typed or only re-sent.
+
+    The old editor re-sent its serving count (often the guessed 30) on every
+    save; spreading that over SKUs PowerBody had counted would make the guess
+    permanent. A re-sent count equals the record's own, so that one fills only
+    SKUs that do not know theirs.
+
+    A count that DIFFERS from the record's was typed — a founder correcting
+    PowerBody's 12 to 20 — and the read path before the fold spread it over
+    every SKU of the master's size, so the shelf and the per-serving price said
+    20. Spreading it only onto unknown SKUs put 12 back on the shelf on deploy,
+    with nobody touching the product. Typed, it goes everywhere the read path
+    put it, and those SKUs record it as the founder's so a pull keeps it.
+  */
   if (override.servings !== undefined) {
-    const spread = spreadServings(next, next.servings, { onlyUnknown: true, storedMaster: true })
-    if (spread) next = { ...next, variants: spread }
+    const typed = override.servings != null && override.servings !== record.servings
+    const spread = spreadServings(next, next.servings, { onlyUnknown: !typed, storedMaster: true })
+    if (spread) {
+      next = {
+        ...next,
+        variants: typed
+          ? spread.map((v, i) => (v === next.variants[i] ? v : { ...v, servingsSource: 'founder' as const }))
+          : spread,
+      }
+    }
   }
-  return withoutDerived(next)
+
+  /*
+    What the override set is the founder's, and the review has to say so.
+
+    A pull refreshes any field whose source still says `supplier` — that is
+    how it keeps PowerBody's own facts current. An import stamps the picture,
+    description, category, weight and VAT `supplier`; an old-editor override
+    over them changed the value and left the label. Folded without this, the
+    next "Pull from PowerBody" put PowerBody's category back over the founder's
+    and called it theirs. Only fields that really end up different from the
+    record are marked: a field the override merely repeated is still whoever's
+    it was.
+  */
+  const a = record as unknown as Record<string, unknown>
+  const b = next as unknown as Record<string, unknown>
+  const set = [...Object.keys(rest), ...(cost !== undefined ? ['cost'] : [])].filter(
+    (key) =>
+      key !== 'review' &&
+      !(DERIVED_FIELDS as readonly string[]).includes(key) &&
+      JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null),
+  )
+  return withoutDerived(asFounders(next, set))
 }
 
 /**

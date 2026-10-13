@@ -12,6 +12,8 @@ import {
   pullSummary,
   stopFor,
   supplierGaps,
+  unanswered,
+  unansweredStop,
   type PullResult,
   type PullStop,
   type QueueEntry,
@@ -86,6 +88,9 @@ function writeTried(ids: Set<string>) {
  *                    account, login — the run stops and shows their words.
  *                    Twenty more requests into a refusal teach nothing and can
  *                    lengthen a rate limit
+ *   stops on silence two products in a row that PowerBody never finished
+ *                    answering — each waits minutes — and the run stops rather
+ *                    than spend the next hour waiting on the same silence
  *   resumable        what this browser has already asked about is remembered
  *                    for the session, so the next press carries on rather than
  *                    asking PowerBody about the same twenty again
@@ -205,6 +210,8 @@ export function PullAll({
     const log = (entry: Logged) => setRun((r) => (r ? { ...r, done: r.done + 1, log: [...r.log, entry] } : r))
 
     let ended: Ending = 'finished'
+    /** Products in a row PowerBody never finished answering for. */
+    let silent = 0
     for (let i = 0; i < batch.length; i++) {
       if (stopRef.current) {
         ended = 'stopped'
@@ -227,13 +234,42 @@ export function PullAll({
         ended = 'signed-out'
         break
       }
-      if (!result) {
-        // The stream ended without a result — the platform stopped the request,
-        // most likely on time. Not a refusal and not this product's fault, so
-        // it is left untried: the next run asks again.
-        log({ id, title, tone: 'attention', text: 'Not reached this time — the request stopped before PowerBody answered. The next run tries it again.' })
+      if (unanswered(result)) {
+        // No answer from PowerBody: the request was cut off with no result
+        // line, or the pull's own hard stop ended it (and saved what had
+        // arrived). Not a refusal and not this product's fault, so it is left
+        // untried — the next run asks again. But two in a row is PowerBody not
+        // answering at all, and every further product would wait just as long.
+        // A refusal they gave before going quiet is still a refusal, and stops
+        // the run as one.
+        const refusedFirst = result && result.ok !== false ? stopFor(result) : null
+        if (refusedFirst) {
+          if (result?.product) onPulled(id, { product: result.product, remaining: result.remaining ?? [] })
+          setRun((r) => (r ? { ...r, stop: { ...refusedFirst, steps, title } } : r))
+          ended = 'refused'
+          break
+        }
+        silent += 1
+        if (result?.product) onPulled(id, { product: result.product, remaining: result.remaining ?? [] })
+        log({
+          id,
+          title,
+          tone: 'attention',
+          text:
+            result?.message ??
+            result?.error ??
+            'Not reached this time — the request stopped before PowerBody answered. The next run tries it again.',
+        })
+        const quiet = unansweredStop(silent)
+        if (quiet) {
+          setRun((r) => (r ? { ...r, stop: { ...quiet, steps, title } } : r))
+          ended = 'refused'
+          break
+        }
         continue
       }
+      silent = 0
+      if (!result) continue
       const refused = stopFor(result)
       if (refused) {
         setRun((r) => (r ? { ...r, stop: { ...refused, steps, title } } : r))
@@ -376,11 +412,19 @@ function StopNote({ stop, done, total }: { stop: NonNullable<Run['stop']>; done:
       ? `Our server could not save “${stop.title}”, so the run stopped there (${done} of ${total} done).`
       : stop.kind === 'sample'
         ? 'The supplier is set to Sample, so nothing is being asked of PowerBody and the run stopped.'
-        : `PowerBody refused at “${stop.title}”, so the run stopped there (${done} of ${total} done). Everything before it is saved.`
+        : stop.kind === 'unanswered'
+          ? `The run stopped after “${stop.title}” (${done} of ${total} done). Everything PowerBody sent before then is saved.`
+          : `PowerBody refused at “${stop.title}”, so the run stopped there (${done} of ${total} done). Everything before it is saved.`
+  // Our words, not theirs: there is no "They said" when they said nothing.
+  const ours = stop.kind === 'server' || stop.kind === 'unanswered'
   return (
     <div style={{ marginTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
-      <Note tone={stop.kind === 'rate-limited' || stop.kind === 'sample' ? 'attention' : 'critical'} icon="alert-triangle" live="assertive">
-        {lead} {stop.kind === 'server' ? stop.message : <>They said: {stop.message}</>}{' '}
+      <Note
+        tone={stop.kind === 'rate-limited' || stop.kind === 'sample' || stop.kind === 'unanswered' ? 'attention' : 'critical'}
+        icon="alert-triangle"
+        live="assertive"
+      >
+        {lead} {ours ? stop.message : <>They said: {stop.message}</>}{' '}
         {/*
           The checks live on Settings → Supplier, beside the API user and key,
           so one link serves both "see what PowerBody are answering" and "fix
@@ -396,6 +440,7 @@ function StopNote({ stop, done, total }: { stop: NonNullable<Run['stop']>; done:
         ) : (
           <>
             {stop.kind === 'rate-limited' && <>When a minute has passed, press the fill button again — it starts with this one. </>}
+            {stop.kind === 'unanswered' && <>Press the fill button again later — it starts with the ones that were not answered. </>}
             {stop.kind === 'credentials' && <>The API user and key are set in Settings → Supplier. </>}
             <Link href={SUPPLIER_SETTINGS_HREF} style={LINK}>
               Run the checks

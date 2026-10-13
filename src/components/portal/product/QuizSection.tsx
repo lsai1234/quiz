@@ -17,7 +17,7 @@ import { GOAL_LABELS } from '@/lib/quiz-goals'
 import { liveServings } from '@/lib/catalogue/servings'
 import { masterVariant } from '@/lib/catalogue/master'
 import { labelsOf } from '@/lib/catalogue/line-variant'
-import { Outcome, ReviewMark, Section, EYEBROW, META, errorText, postProduct, useDraft, type Payload } from './shared'
+import { Outcome, ReviewMark, Section, EYEBROW, META, errorText, fillOutcome, postProduct, useDraft, type FillReport, type Payload } from './shared'
 
 const CADENCE_LABEL = { daily: 'Every day', 'per-workout': 'On training days', 'as-needed': 'When needed' } as const
 const TRIGGER_LABEL = { sweat: 'Sweating', sleep: 'Sleep', stress: 'Stress', immunity: 'Feeling run down', digestion: 'Digestion' } as const
@@ -83,7 +83,7 @@ export function QuizSection({
   onDirty: (section: string, dirty: boolean) => void
 }) {
   const { product } = payload
-  const { draft, set, setDraft, changed, reset } = useDraft(seedFor(product))
+  const { draft, set, setDraft, changed, reset, saved } = useDraft(seedFor(product))
   const [busy, setBusy] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -110,7 +110,17 @@ export function QuizSection({
       .catch(() => setOthers([]))
   }, [advanced, others, product.id])
 
-  async function send(body: Record<string, unknown>, label: string, success: string) {
+  /**
+   * `sent`: the draft as it was when Save was pressed, so the fields it carried
+   * take the server's tidied value once it answers (see `useDraft`). `success`
+   * may read the server's answer — "Fill the blanks" says what it really did.
+   */
+  async function send(
+    body: Record<string, unknown>,
+    label: string,
+    success: string | ((answer: Record<string, unknown>) => string),
+    sent?: typeof draft,
+  ) {
     setBusy(label)
     setDone(null)
     setError(null)
@@ -122,7 +132,8 @@ export function QuizSection({
     }
     setSuggested([])
     onPayload(result.payload)
-    setDone(success)
+    if (sent) saved(sent)
+    setDone(typeof success === 'string' ? success : success(result.body))
   }
 
   function save() {
@@ -154,7 +165,7 @@ export function QuizSection({
         }
       }
     }
-    void send({ set: fields }, 'save', 'Saved — the quiz uses it from the next recommendation.')
+    void send({ set: fields }, 'save', 'Saved — the quiz uses it from the next recommendation.', draft)
   }
 
   /**
@@ -201,7 +212,10 @@ export function QuizSection({
 
   const master = masterVariant(product)
   const shelf = liveServings(product)
-  const plan = draft.planServings.trim() ? Number(draft.planServings) : shelf
+  // Auto has no number of its own: it sizes a plan on the master's count. A
+  // plan of the founder's own needs a "Taken" to belong to (see the input).
+  const ownPlan = Boolean(draft.cadence) && draft.planServings.trim() !== ''
+  const plan = ownPlan ? Number(draft.planServings) : shelf
 
   return (
     <Section
@@ -260,7 +274,18 @@ export function QuizSection({
       <div className="space-y-2">
         <p style={EYEBROW}>How it is taken</p>
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))' }}>
-          <Select label="Taken" value={draft.cadence} onChange={(e) => set('cadence', e.target.value)} hint="Auto works it out from the stack slot.">
+          <Select
+            label="Taken"
+            value={draft.cadence}
+            onChange={(e) => {
+              set('cadence', e.target.value)
+              // Auto clears the plan, own number and all (`consumption: null`),
+              // so the box is emptied with it rather than left showing a number
+              // that Save would quietly throw away.
+              if (!e.target.value) set('planServings', '')
+            }}
+            hint="Auto works it out from the stack slot."
+          >
             <option value="">Auto</option>
             {(Object.keys(CADENCE_LABEL) as Array<keyof typeof CADENCE_LABEL>).map((c) => (
               <option key={c} value={c}>
@@ -301,7 +326,7 @@ export function QuizSection({
         <p style={META}>
           The shelf shows {shelf} servings — the master SKU{master ? ` (${labelsOf(master)[0]})` : ''}’s own count; change it under
           Flavours & sizes. A monthly plan is sized on {plan} servings
-          {draft.planServings.trim() ? ', your own number below.' : ', following the master.'}
+          {ownPlan ? ', your own number below.' : ', following the master.'}
         </p>
       </div>
 
@@ -312,12 +337,23 @@ export function QuizSection({
       </div>
       <div hidden={!advanced} className="space-y-3">
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))' }}>
+          {/*
+            Disabled while Taken is Auto, and says why. A number typed here under
+            Auto used to be sent as `consumption: null` — Auto means "no plan of
+            its own" — so the page said Saved and nothing was kept, while the line
+            above already claimed the plan was sized on it.
+          */}
           <Input
             label="Servings a plan is sized on"
             inputMode="decimal"
-            value={draft.planServings}
+            value={draft.cadence ? draft.planServings : ''}
+            disabled={!draft.cadence}
             onChange={(e) => set('planServings', e.target.value)}
-            hint={`Blank follows the master (${shelf}). Set it when a dose is not one scoop.`}
+            hint={
+              draft.cadence
+                ? `Blank follows the master (${shelf}). Set it when a dose is not one scoop.`
+                : `Auto sizes a plan on the master’s ${shelf} servings. To set your own number, first choose how it is taken under “Taken”.`
+            }
           />
           <Select
             label="Monthly refill product"
@@ -433,7 +469,7 @@ export function QuizSection({
             variant="secondary"
             size="sm"
             loading={busy === 'fill'}
-            onClick={() => void send({ action: 'fill-blanks' }, 'fill', 'Filled what was blank. Each is marked as written by the model — check it.')}
+            onClick={() => void send({ action: 'fill-blanks' }, 'fill', (answer) => fillOutcome(answer.fill as FillReport | undefined))}
           >
             Fill the blanks with AI
           </Button>

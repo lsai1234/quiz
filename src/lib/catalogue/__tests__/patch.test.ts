@@ -379,7 +379,9 @@ describe('foldOverride', () => {
     const out = foldOverride(record, asPatch({ shortName: null, imageUrl: null, review: null, servings: null, id: 'elsewhere' }) as Partial<CatalogueProduct>)
     expect(out).not.toHaveProperty('shortName')
     expect(out).toHaveProperty('imageUrl', null)
-    expect(out.review).toEqual(record.review)
+    // `review: null` changes nothing. The short name the founder cleared is
+    // recorded as theirs; the picture was already none, so nothing changed.
+    expect(out.review).toEqual({ ...record.review, sources: { ...record.review!.sources, shortName: 'founder' } })
     expect(out.servings).toBe(30)
     expect(out.id).toBe('pb-whey')
   })
@@ -526,10 +528,61 @@ describe('foldOverride', () => {
       expect(byId(out, 'powder')).not.toHaveProperty('servings')
     })
 
+    it('spreads a count the founder TYPED over SKUs PowerBody had counted, as the read path did', () => {
+      // PowerBody said 12 a tub; a founder corrected it to 20 in the old editor.
+      // Before the fold the shelf (and the per-serving price) said 20.
+      const record = whey({ servings: 12, variants: whey().variants.map((v) => ({ ...v, servings: v.size === '2kg' ? 24 : 12 })) })
+      const out = foldOverride(record, { servings: 20 })
+      expect(out.servings).toBe(20)
+      expect(out.variants.map((v) => v.servings)).toEqual([20, 20, 20, 24])
+      // …recorded as the founder's on each SKU it set, so a pull keeps it.
+      expect(out.variants.map((v) => v.servingsSource ?? null)).toEqual(['founder', 'founder', 'founder', null])
+      expect(out.review?.sources.servings).toBe('founder')
+    })
+
+    it('a count the old editor only re-sent fills unknown SKUs and is nobody’s', () => {
+      const record = whey({ servings: 30 })
+      const out = foldOverride(record, { servings: 30 })
+      expect(out.variants.map((v) => v.servings)).toEqual([33, 33, 33, 66])
+      expect(out.variants.every((v) => v.servingsSource === undefined)).toBe(true)
+      expect(out.review?.sources.servings).toBeUndefined()
+    })
+
     it('does not spread when the override says nothing about servings', () => {
       const record = whey({ variants: whey().variants.map((v) => ({ ...v, servings: undefined })) })
       const out = foldOverride(record, { title: 'x' })
       expect(out.variants).toEqual(record.variants)
+    })
+  })
+
+  describe('provenance', () => {
+    it('records what the override changed as the founder’s, so a pull does not put PowerBody’s back', () => {
+      const record = whey({
+        category: 'Whey Protein',
+        review: { ...whey().review!, sources: { title: 'supplier', category: 'supplier', vatRate: 'supplier', goals: 'ai' } },
+      })
+      const out = foldOverride(record, { category: 'Protein', vatRate: 0, goals: ['muscle'] })
+      expect(out.review?.sources).toEqual({ title: 'supplier', category: 'founder', vatRate: 'founder', goals: 'founder' })
+      // Nothing else about the review moves: still approved, by the same person.
+      expect(out.review).toMatchObject({ status: 'approved', approvedBy: 'founder@chrgd.co', confirmed: ['title', 'goals'] })
+    })
+
+    it('leaves a field the override only repeated as whoever’s it was', () => {
+      const record = whey({ review: { ...whey().review!, sources: { title: 'supplier' } } })
+      const out = foldOverride(record, { title: record.title, vatRate: record.vatRate })
+      expect(out.review?.sources).toEqual({ title: 'supplier' })
+    })
+
+    it('records a cost it took, and not one it dropped as an estimate', () => {
+      const taken = foldOverride(whey({ cost: 0 }), { cost: 12 }, { costRatio: RATIO })
+      expect(taken.review?.sources.cost).toBe('founder')
+      const record = whey({ cost: 0, basePrice: 30 })
+      const estimate = foldOverride(record, { cost: Math.round(30 * RATIO * 100) / 100 }, { costRatio: RATIO })
+      expect(estimate.review?.sources.cost).toBeUndefined()
+    })
+
+    it('a record with no review gets none', () => {
+      expect(foldOverride(whey({ review: undefined }), { category: 'Protein' }).review).toBeUndefined()
     })
   })
 

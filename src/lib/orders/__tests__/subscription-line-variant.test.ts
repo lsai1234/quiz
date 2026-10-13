@@ -1,7 +1,8 @@
 /**
  * @jest-environment node
  */
-import { subscriptionOrderLines } from '@/lib/orders/service'
+import { orderWeightKg, subscriptionOrderLines } from '@/lib/orders/service'
+import { stockItemsFor } from '@/lib/orders/auto-send'
 import { skuForLine } from '@/lib/changes/detect'
 import { mergeInto } from '@/lib/catalogue/merge'
 import { splitOut } from '@/lib/catalogue/split'
@@ -127,5 +128,72 @@ describe('a line keeps its SKU through a rename, a split and a merge', () => {
   it('a line that kept its SKU ships that SKU wherever it now lives', () => {
     const { kept, moved } = splitOut(whey(), ['iw-choc-2500'], { id: 'impact-whey-2-5kg' })!
     expect(skuForLine(line({ sku: 'IW-CHOC-2500', variantTitle: 'whatever it said' }), [kept, moved])).toBe('IW-CHOC-2500')
+  })
+})
+
+describe('the order line names the product that sells the SKU now', () => {
+  /*
+    The line keeps the id it was chosen under. After a merge or a split that id
+    names a product that no longer holds the SKU, and every later lookup by the
+    order line's productId — the per-SKU PowerBody id for the stock check, the
+    parcel weight, the VAT rate, the swap candidates — missed.
+  */
+  const cw = () =>
+    whey({
+      id: 'cw',
+      title: 'Critical Whey 2kg',
+      cost: 24.5,
+      weightGrams: 2150,
+      supplierProductId: '1200',
+      variants: [variant({ id: 'cw-choc', title: 'Chocolate', flavour: 'Chocolate', size: '2kg', sku: 'P100', supplierProductId: '1200' })],
+      defaultVariantId: 'cw-choc',
+    })
+  const strawberry = () =>
+    whey({
+      id: 'cw-straw',
+      title: 'Critical Whey 2kg Strawberry',
+      cost: 25.1,
+      weightGrams: 2150,
+      supplierProductId: '1300',
+      variants: [variant({ id: 'straw', title: 'Strawberry', flavour: 'Strawberry', size: '2kg', sku: 'P300' })],
+      defaultVariantId: 'straw',
+    })
+  const strawberryLine = (over: Partial<MemberSubscriptionLine> = {}) =>
+    line({ productId: 'cw-straw', productTitle: 'Critical Whey 2kg Strawberry', variantTitle: 'Strawberry · 2kg', ...over })
+
+  it.each([
+    ['by its label', {}],
+    ['by the SKU it kept', { sku: 'P300', variantTitle: 'whatever it said' }],
+  ])('after a merge, found %s: the product it joined, with that SKU’s own PowerBody id, cost and weight', (_how, over) => {
+    const merged = mergeInto(cw(), [strawberry()])
+    const [order] = subscriptionOrderLines(sub([strawberryLine(over as Partial<MemberSubscriptionLine>)]), [merged], 0)
+
+    // Still invoiced as what the member chose.
+    expect(order).toMatchObject({ sku: 'P300', productId: 'cw', title: 'Critical Whey 2kg Strawberry', supplierCost: 25.1 })
+    expect(stockItemsFor({ lines: [order] }, [merged])[0].supplierProductId).toBe('1300')
+    expect(orderWeightKg([order], [merged])).toBeCloseTo(2.15)
+  })
+
+  it('after a split, the product the size moved to — not the parent’s PowerBody id', () => {
+    const parent = whey({ supplierProductId: '501', weightGrams: 1000 })
+    const { kept, moved } = splitOut(parent, ['iw-choc-2500'], { id: 'impact-whey-2-5kg' })!
+    const big = { ...moved, weightGrams: 2500, variants: moved.variants.map((v) => ({ ...v, supplierProductId: '777' })) }
+
+    const [order] = subscriptionOrderLines(sub([line({ variantTitle: 'Chocolate · 2.5kg' })]), [kept, big], 0)
+
+    expect(order).toMatchObject({ sku: 'IW-CHOC-2500', productId: 'impact-whey-2-5kg', title: 'Impact Whey Protein' })
+    expect(stockItemsFor({ lines: [order] }, [kept, big])[0].supplierProductId).toBe('777')
+    expect(orderWeightKg([order], [kept, big])).toBeCloseTo(2.5)
+  })
+
+  it('after a merge is undone, a line written against the target follows the SKU back to its own product', () => {
+    const [order] = subscriptionOrderLines(sub([line({ productId: 'cw', productTitle: 'Critical Whey 2kg', sku: 'P300', variantTitle: 'Strawberry' })]), [cw(), strawberry()], 0)
+    expect(order).toMatchObject({ sku: 'P300', productId: 'cw-straw' })
+    expect(stockItemsFor({ lines: [order] }, [cw(), strawberry()])[0].supplierProductId).toBe('1300')
+  })
+
+  it('keeps the line’s own id when nothing on sale holds the SKU, so the order still says what it was', () => {
+    const [order] = subscriptionOrderLines(sub([strawberryLine()]), [cw()], 0)
+    expect(order).toMatchObject({ sku: null, productId: 'cw-straw', supplierCost: null })
   })
 })

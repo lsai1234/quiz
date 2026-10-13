@@ -59,14 +59,32 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
   // Leaving with typed-but-unsaved changes asks first. Several sections each
   // have their own Save, and a founder who edited two and saved one should not
   // lose the other to a misclick on the sub-nav.
+  //
+  // Two ways out, two guards. Closing the tab, reloading or going to another
+  // site unloads the page, and the browser asks (`beforeunload`). A link INSIDE
+  // the hub — the products sub-nav, "All products", the queue's "Skip for now"
+  // and "Back to the queue" — does not unload anything: Next swaps the page in
+  // place, `beforeunload` never fires, and the typed edits went with no word.
+  // So while anything is unsaved, a click on a link to another page of this
+  // site asks first. It listens on the document in the capture phase, ahead of
+  // every link's own handler, and a "Cancel" marks the click handled
+  // (`preventDefault`), which both the browser and Next's Link respect.
   useEffect(() => {
     if (dirty.size === 0) return
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ''
     }
+    const ask = (e: MouseEvent) => {
+      if (!leavesThePage(e)) return
+      if (!window.confirm(leaveQuestion(dirty))) e.preventDefault()
+    }
     window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
+    document.addEventListener('click', ask, true)
+    return () => {
+      window.removeEventListener('beforeunload', warn)
+      document.removeEventListener('click', ask, true)
+    }
   }, [dirty])
 
   const sectionProps = { payload, onPayload: setPayload, onDirty: markDirty }
@@ -96,6 +114,39 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
       )}
     </div>
   )
+}
+
+// ── Leaving with unsaved edits ──────────────────────────────────────────────
+
+/** What a founder is asked before an in-app link takes them away from unsaved edits. */
+function leaveQuestion(dirty: Set<string>): string {
+  return `Not saved yet: ${[...dirty].join(', ')}. Leave this page and lose ${dirty.size === 1 ? 'that change' : 'those changes'}? Press Cancel to stay and save first.`
+}
+
+/**
+ * Whether a click is about to take the browser to another page of this site
+ * WITHOUT unloading this one — the case `beforeunload` cannot see.
+ *
+ * Left alone: a click something else already handled; one that opens a new tab
+ * or window (modifier keys, middle button, `target="_blank"`) or downloads,
+ * since this page stays open; a link to another site, which unloads the page
+ * and so is asked about by the browser itself; and a link to a part of this
+ * page (`#listing` from Checks), which goes nowhere.
+ */
+function leavesThePage(e: MouseEvent): boolean {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false
+  const anchor = e.target instanceof Element ? e.target.closest('a[href]') : null
+  if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download')) return false
+  const target = anchor.getAttribute('target')
+  if (target && target !== '_self') return false
+  let url: URL
+  try {
+    url = new URL(anchor.href, window.location.href)
+  } catch {
+    return false
+  }
+  if (url.origin !== window.location.origin) return false
+  return url.pathname !== window.location.pathname || url.search !== window.location.search
 }
 
 // ── The review queue, one product at a time ─────────────────────────────────

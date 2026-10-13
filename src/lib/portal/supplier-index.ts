@@ -30,7 +30,7 @@
  * actually ended or merely stopped, so a SKU that is absent is only evidence of
  * absence when the crawl finished. Everything else still needs the search.
  */
-import { mutateJson, readJson, writeJson } from './persist'
+import { mutateJson, readJson, withResult, writeJson } from './persist'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 const INDEX_FILE = 'supplier-index'
@@ -304,6 +304,48 @@ export async function rememberIndexed(
     }
     return { bySku }
   })
+}
+
+/**
+ * Drop SKU → product id pairs that PowerBody have been seen to answer nothing
+ * for (or to answer for a different SKU).
+ *
+ * Nothing used to remove an entry. The index only ever merged, and a rebuild
+ * reset the crawl but merged the one-at-a-time finds back over it — so a
+ * delisted product stayed "known" for ever. That mattered more than a wasted
+ * call: the id search checks the detail call against known products, and when
+ * the one it checked against had gone, every search on the account failed.
+ *
+ * A pair is removed only while it still says what was seen to be dead — a SKU
+ * that has since been found again under a new id keeps the new one. Both
+ * documents are edited through `mutateJson`, which never writes over what it
+ * could not read and never drops a write made in between, and neither is
+ * written at all when it does not hold the pair. Best-effort, like the rest of
+ * the index: if this fails, the next lookup asks the dead id again and drops it
+ * then.
+ */
+export async function forgetIndexed(dead: Array<{ sku: string; productId: string }>): Promise<number> {
+  const pairs = dead.filter((d) => d.sku && d.productId)
+  if (pairs.length === 0) return 0
+  const holds = (bySku: Record<string, IndexedProduct> | undefined) =>
+    pairs.some((d) => bySku?.[d.sku] && String(bySku[d.sku].productId) === String(d.productId))
+  const drop = <T extends { bySku: Record<string, IndexedProduct> }>(current: T): { next: T; result: number } => {
+    const bySku = { ...(current.bySku ?? {}) }
+    let removed = 0
+    for (const d of pairs) {
+      if (bySku[d.sku] && String(bySku[d.sku].productId) === String(d.productId)) {
+        delete bySku[d.sku]
+        removed += 1
+      }
+    }
+    return withResult({ ...current, bySku }, removed)
+  }
+
+  const [crawl, found] = await Promise.all([readCrawl(), readJson<FoundPairs>(FOUND_FILE, { bySku: {} })])
+  let removed = 0
+  if (holds(found.bySku)) removed += await mutateJson<FoundPairs, number>(FOUND_FILE, { bySku: {} }, drop)
+  if (holds(crawl.bySku)) removed += await mutateJson<SupplierIndex, number>(INDEX_FILE, EMPTY, drop)
+  return removed
 }
 
 /** Record what the page probe found, for the crawl to show progress against. */

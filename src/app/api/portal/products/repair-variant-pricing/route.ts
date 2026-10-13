@@ -5,7 +5,7 @@ import { indexedProductIds } from '@/lib/portal/supplier-index'
 import { saveProductChange } from '@/lib/portal/editable-products'
 import { listEditableProducts } from '@/lib/portal/product-edit'
 import { resolveCode } from '@/lib/supplier/resolve-code'
-import { repriceVariants, sliceBySkuBudget, type SkuFacts } from '@/lib/supplier/variant-pricing'
+import { isPowerBodyId, repriceVariants, sliceBySkuBudget, type SkuFacts } from '@/lib/supplier/variant-pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 /**
@@ -58,9 +58,11 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
  * `catalogue/price`. It is an override, and a sweep that undid it would make it
  * something else.
  *
- * Servings and cost are FACTS, not decisions, so they are written wherever the
- * supplier answered — except on accessories, which have no dose and no servings
- * to be right about.
+ * Cost is a FACT, not a decision, so it is written wherever the supplier
+ * answered. A serving count is filled where a SKU has none, and refreshed where
+ * the one it has came from PowerBody — never over one somebody typed or the
+ * roster set (`servingsSource`; see `repriceVariants`). Accessories have no dose
+ * and no servings to be right about.
  *
  * GET reports what it would do and changes nothing. POST does it.
  */
@@ -216,10 +218,14 @@ async function fetchFacts(
 
   if (ids.length > 0) {
     try {
-      const detailed = await supplierDetail(ids)
+      const { products: detailed, supplierName } = await supplierDetail(ids)
       // Verified against the SKU we asked about: an index entry that has moved
       // would otherwise put another product's price on our variant.
       for (const p of detailed.filter((p) => skus.includes(p.sku))) {
+        // Only a real PowerBody id is written back — numeric, and never from
+        // the Sample supplier, whose ids ("P89490") are its own invention and
+        // would be sent to PowerBody by every later pull and stock check.
+        const id = p.productId ? String(p.productId) : known.get(p.sku) ?? null
         facts.set(p.sku, {
           cost: p.wholesalePrice > 0 ? p.wholesalePrice : null,
           rrp: p.rrp > 0 ? p.rrp : null,
@@ -229,7 +235,7 @@ async function fetchFacts(
           // product id — which at PowerBody means per SKU, so this is a
           // per-flavour photograph rather than the product's.
           image: p.imageUrl || null,
-          productId: p.productId ? String(p.productId) : known.get(p.sku) ?? null,
+          productId: supplierName !== 'mock' && isPowerBodyId(id) ? id : null,
         })
       }
     } catch (err) {
@@ -261,7 +267,7 @@ async function fetchFacts(
 /** The detail call, isolated so the route reads as one step per source. */
 async function supplierDetail(ids: string[]) {
   const supplier = await getSupplier()
-  return supplier.getProductsById(ids)
+  return { products: await supplier.getProductsById(ids), supplierName: supplier.name }
 }
 
 export async function POST(request: Request) {
@@ -338,11 +344,12 @@ async function runOn(
     ...new Set(slice.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))),
   ]
   // Ids already saved on the SKUs — and the product's own for a one-SKU product.
+  // Real PowerBody ids only: a "P89490" left by Sample mode is not one.
   const saved = new Map<string, string>()
   for (const p of slice) {
     for (const v of p.variants) {
-      if (v.sku && v.supplierProductId) saved.set(v.sku, v.supplierProductId)
-      else if (v.sku && p.variants.length === 1 && p.supplierProductId) saved.set(v.sku, p.supplierProductId)
+      if (v.sku && isPowerBodyId(v.supplierProductId)) saved.set(v.sku, v.supplierProductId)
+      else if (v.sku && p.variants.length === 1 && isPowerBodyId(p.supplierProductId)) saved.set(v.sku, p.supplierProductId)
     }
   }
   const { facts, report } = await fetchFacts(skus, saved, lookup)

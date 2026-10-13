@@ -179,9 +179,11 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
   // Only a real PowerBody id — numeric. The sample catalogue's ids look like
   // SKUs ("P12345"), and storing one would send it to PowerBody later.
   const supplierProductId = sp.productId && /^\d+$/.test(String(sp.productId)) ? String(sp.productId) : null
+  // PowerBody's portion_count, marked as theirs: a later pull may refresh a
+  // count PowerBody gave, and never one somebody typed (`servingsSource`).
   const own = {
     ...(supplierProductId ? { supplierProductId } : {}),
-    ...(sp.servings != null && sp.servings > 0 ? { servings: sp.servings } : {}),
+    ...(sp.servings != null && sp.servings > 0 ? { servings: sp.servings, servingsSource: 'supplier' as const } : {}),
   }
 
   const variants: CatalogueVariant[] =

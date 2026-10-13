@@ -173,6 +173,60 @@ describe('PullAll', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('stops when PowerBody go quiet for two products in a row, rather than waiting on every one', async () => {
+    // A dead supplier used to cost minutes per product, twenty products a run.
+    const asked: string[] = []
+    global.fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+      const { id } = JSON.parse(init!.body as string)
+      asked.push(id)
+      if (id === 'p0') return stream([{ type: 'step', message: 'Asking PowerBody…' }])
+      return stream([
+        {
+          type: 'result',
+          ok: true,
+          timedOut: true,
+          answered: 0,
+          unresolved: [{ sku: 'P1', message: 'Not reached — PowerBody stopped answering before this SKU’s turn. Pull again to carry on.' }],
+          message: 'PowerBody stopped answering, so the pull stopped before it finished. Nothing new had arrived, so nothing was changed; pull again later to carry on.',
+          product: entry({ id, title: id }).product,
+          remaining: [],
+        },
+      ])
+    }) as unknown as typeof fetch
+    const onFinished = jest.fn()
+
+    render(<PullAll entries={gappy(4)} onPulled={jest.fn()} onFinished={onFinished} paceMs={0} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Fill 4 products from PowerBody' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(asked).toEqual(['p0', 'p1'])
+    expect(alert).toHaveTextContent('The run stopped after “Product 1” (2 of 4 done)')
+    expect(alert).toHaveTextContent(/PowerBody stopped answering — 2 products in a row/)
+    expect(alert).not.toHaveTextContent('They said')
+    expect(within(alert).getByRole('link', { name: 'Run the checks' })).toBeInTheDocument()
+    // What the hard stop said about the product it was on is in the log.
+    expect(screen.getByText(/Nothing new had arrived, so nothing was changed/)).toBeInTheDocument()
+    // Neither was marked as asked about: the next press starts with them.
+    await waitFor(() => expect(onFinished).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Fill 4 products from PowerBody' })).toBeInTheDocument()
+  })
+
+  it('one quiet product between answers does not stop the run', async () => {
+    const asked: string[] = []
+    global.fetch = jest.fn(async (_url: string, init?: RequestInit) => {
+      const { id } = JSON.parse(init!.body as string)
+      asked.push(id)
+      return id === 'p0' || id === 'p2' ? stream([]) : stream([done(id)])
+    }) as unknown as typeof fetch
+    const onFinished = jest.fn()
+
+    render(<PullAll entries={gappy(4)} onPulled={jest.fn()} onFinished={onFinished} paceMs={0} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Fill 4 products from PowerBody' }))
+    await waitFor(() => expect(onFinished).toHaveBeenCalled())
+    expect(asked).toEqual(['p0', 'p1', 'p2', 'p3'])
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('says there is nothing to pull when every product is complete', () => {
     render(<PullAll entries={[entry({ id: 'a' })]} onPulled={jest.fn()} onFinished={jest.fn()} />)
     expect(screen.getByText(/nothing left to pull/)).toBeInTheDocument()

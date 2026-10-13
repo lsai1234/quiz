@@ -3,6 +3,8 @@ import { isPortalAuthed } from '@/lib/portal/guard'
 import { restructureProducts, syncPortalRuntime } from '@/lib/portal/store'
 import { listEditableProducts } from '@/lib/portal/product-edit'
 import { splitOut, freeId, normaliseSize } from '@/lib/catalogue/split'
+import { ActionRefused } from '@/lib/portal/product-actions'
+import { productHref } from '@/lib/portal/product-links'
 
 /**
  * Move some of a product's SKUs onto a product of their own.
@@ -26,9 +28,20 @@ import { splitOut, freeId, normaliseSize } from '@/lib/catalogue/split'
  * products through an override — because a direct write to a base product is
  * lost on the next feed sync.
  *
- * The two writes are separate, so the order matters: the new product is added
- * FIRST. If the second write fails, the SKUs are listed twice for a moment,
- * which is visibly wrong and fixable. The other order loses them from sale.
+ * Both halves land in one write (`restructureProducts`): the new product and
+ * the one it came out of are saved together or not at all, so a SKU is never
+ * listed twice or lost from sale by a write that half-happened.
+ *
+ * ── Not from a removed product ──────────────────────────────────────────────
+ * A product that is off sale is refused, with what to do instead. The new
+ * product is a fresh record, and nothing about a fresh record says "removed",
+ * so the SKUs moved out of a removed product went straight on sale on their
+ * own — a product taken off the shop came back in part, with no Restore to
+ * press. For a product merged into another it was worse: its SKUs are already
+ * sold there, so the split listed the same tub twice under the same variant id.
+ * Keeping the new half removed instead would leave the founder looking at a
+ * second removed product they never asked for; refusing says the one thing to
+ * do first (Restore, or undo the merge) and leaves nothing to tidy up.
  */
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +84,22 @@ export async function POST(request: Request) {
     outcome = await restructureProducts((bench) => {
       const current = bench.get(product.id)
       if (!current) return null
+      if (bench.isRemoved(current.id)) {
+        const skus = current.variants.map((v) => v.sku).filter((s): s is string => Boolean(s))
+        const holder = bench.holderOf(skus, current.id)
+        const mergedInto =
+          holder && holder.state !== 'removed' && holder.product.variants.some((v) => v.formerly?.some((f) => f.productId === current.id))
+            ? holder.product
+            : null
+        throw mergedInto
+          ? new ActionRefused(
+              `This product was merged into “${mergedInto.title}”, which sells its SKUs now — splitting it here would list them twice. Split them off “${mergedInto.title}” instead, or undo the merge first.`,
+              { label: `Open ${mergedInto.title}`, href: productHref(mergedInto.id, 'variants') },
+            )
+          : new ActionRefused(
+              'This product is off sale. Restore it first, then split it — otherwise the SKUs you move out would go on sale on their own.',
+            )
+      }
       const moving = current.variants.filter((v) => variantIds.includes(v.id))
       const sizes = new Set(moving.map((v) => normaliseSize(v.size)).filter(Boolean))
       const suffix = sizes.size === 1 ? [...sizes][0] : (moving[0]?.sku ?? 'split')
@@ -84,6 +113,7 @@ export async function POST(request: Request) {
       }
     })
   } catch (err) {
+    if (err instanceof ActionRefused) return NextResponse.json({ error: err.message, link: err.link ?? null }, { status: 409 })
     return NextResponse.json({ error: `Not split: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 })
   }
   if (!outcome) {

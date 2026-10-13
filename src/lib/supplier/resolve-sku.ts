@@ -37,6 +37,7 @@ import type { SupplierProvider } from './types'
 import { findProductIdForSku, sweepForSku, fitIdFromSku, skuNumber, type ProbeResult } from './product-id-search'
 import { productIdForSku } from './product-id-map'
 import { PowerBodySoapError } from './powerbody/soap'
+import { DetailCallSilentError, noProductDetail } from './no-detail'
 
 /** Thrown through the search when the clock runs out, so a timeout can never be
  *  mistaken for an exhausted range. Caught by `resolveProductIdForSku`. */
@@ -89,6 +90,14 @@ export interface ResolveOutcome {
    * fixes, so the real reason travels instead of being replaced by a hunch.
    */
   feedError?: string
+  /**
+   * Anchors the search saw answer nothing, or answer for another SKU, AFTER
+   * another product had proved the detail call works — so they are about that
+   * pair, not the account. The caller drops them from wherever it got them (the
+   * stored index), or the same dead pair is the first thing the next search
+   * trips over.
+   */
+  deadAnchors?: Array<{ sku: string; productId: number }>
 }
 
 /** Ids either side of the fit's prediction to search.
@@ -288,13 +297,25 @@ export function supplierProbe(supplier: SupplierProvider): {
   probe: (productId: number) => Promise<ProbeResult>
   /** The first failure seen, kept in case NOTHING ever answers. */
   firstError: () => Error | null
+  /**
+   * The first failure that was NOT simply "no product at this id" — PowerBody
+   * refusing in their own words. When nothing answers, that is what the caller
+   * is told; an empty id says nothing about why.
+   */
+  firstRefusal: () => Error | null
+  /** PowerBody's own words from an empty answer (their `api_response`), if any came. */
+  said: () => string | null
   answered: () => number
 } {
   let firstError: Error | null = null
+  let firstRefusal: Error | null = null
+  let said: string | null = null
   let answered = 0
   return {
     answered: () => answered,
     firstError: () => firstError,
+    firstRefusal: () => firstRefusal,
+    said: () => said,
     probe: async (productId: number): Promise<ProbeResult> => {
       try {
         const [found] = await supplier.getProductsById([String(productId)])
@@ -304,7 +325,11 @@ export function supplierProbe(supplier: SupplierProvider): {
         }
         return { sku: null }
       } catch (err) {
-        if (!firstError) firstError = err instanceof Error ? err : new Error(String(err))
+        const error = err instanceof Error ? err : new Error(String(err))
+        if (!firstError) firstError = error
+        const empty = noProductDetail(err)
+        if (empty) said ??= empty.said
+        else if (!firstRefusal) firstRefusal = error
         // A refusal that could pass with time — a rate limit, a 503 — is NOT an
         // empty id. Read as one, a throttle burst would end the search with
         // "not there" and send someone to check a code that was fine. It stops
@@ -375,7 +400,34 @@ export interface ResolveOptions {
   onStep?: (step: ResolveStep) => void
   /** Supplied by tests, and by a caller that already has pairs to hand. */
   anchors?: Array<{ sku: string; productId: number }>
+  /**
+   * Other spellings of the SKU that count as a hit. An all-digit code is
+   * searched for as P+code, but a product whose SKU really is the bare digits
+   * is the same answer — and without this the search lands on it, sees a
+   * string that is not the target, and walks past it.
+   */
+  alsoAccept?: string[]
   now?: () => number
+}
+
+/** How many known products to try before deciding the detail call itself is dead. */
+const CANARIES = 4
+
+/**
+ * Which known products to check the detail call against, and in what order.
+ *
+ * Spread across the id range and newest first. One canary — the lowest id —
+ * was the oldest product in the stored index, the likeliest of all to have been
+ * delisted; once it was, every search on the account failed with "refused",
+ * and rebuilding the index did not help because nothing ever removed it.
+ */
+export function canariesFrom<T extends { productId: number }>(anchors: T[], n = CANARIES): T[] {
+  const sorted = [...anchors].sort((a, b) => b.productId - a.productId)
+  if (sorted.length <= n) return sorted
+  const out: T[] = []
+  const stepSize = (sorted.length - 1) / (n - 1)
+  for (let i = 0; i < n; i += 1) out.push(sorted[Math.round(i * stepSize)])
+  return out
 }
 
 /**
@@ -441,9 +493,69 @@ export async function resolveProductIdForSku(
   }
   step('anchors', `Read ${anchors.length} known products from pages ${read.pages.join(', ') || 'supplied'} to work out where ${sku} sits.`)
 
-  const fit = fitIdFromSku(anchors)
+  const { probe, firstRefusal, said } = supplierProbe(supplier)
+  const same = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase()
+
+  /**
+   * Prove the detail call works before reading anything into its silence.
+   *
+   * An id with no product behind it and an account that cannot read product
+   * detail at all can look alike from here — both answer one id with nothing.
+   * During a search the first is normal and constant (ids are sparse, most
+   * probes land on nothing), so the second is invisible, and a permissions
+   * failure would spend the whole budget and then report the SKU missing.
+   *
+   * Counting how many probes answered does not separate them either: a bracket
+   * that happens to sit in a genuinely empty stretch of ids answers zero times
+   * while the account is perfectly healthy. So instead: probe ids we KNOW
+   * exist, because the feed or the stored index handed them to us. One that
+   * answers settles the question outright — anything after it can be trusted to
+   * mean "nothing here".
+   *
+   * Several, not one, and the first that answers wins. A product can be
+   * delisted, and while there was one canary — always the lowest id in the
+   * index, the oldest product — its delisting made every search on the account
+   * fail, for good. The ones that answered nothing before another answered are
+   * dead PAIRS, reported back so the index forgets them. Only when none of them
+   * answers is it the account — and that is the one place "their DEMO sandbox"
+   * is said, because it is the one place there is evidence for it.
+   */
+  const dead: Pair[] = []
+  let proven = false
+  for (const canary of canariesFrom(anchors)) {
+    step('canary', `Checking their detail call works, using product ${canary.productId} (${canary.sku}).`)
+    probes += 1
+    const answer = await probe(canary.productId)
+    if (answer.sku !== null) {
+      // It answered, so the call works — but if it answered as another SKU,
+      // the pair we were handed is wrong and must not shape the fit.
+      if (!same(answer.sku, canary.sku)) dead.push(canary)
+      proven = true
+      break
+    }
+    dead.push(canary)
+  }
+  if (!proven) {
+    // Their own refusal, when they gave one ("Resource path is not callable", a
+    // login) — it says more than any reading of the silence.
+    const refusal = firstRefusal()
+    if (refusal) throw refusal
+    const tried = dead.map((a) => `${a.productId} (${a.sku})`).join(', ')
+    const words = said()
+    throw new DetailCallSilentError(
+      `PowerBody's detail call answered nothing even for products their own list names — ${tried}` +
+        (words ? `; they said “${words}”` : '') +
+        '. That is what an API account still on their DEMO sandbox does: it can list products but not look them up.',
+      words,
+    )
+  }
+  const deadAnchors = dead.length > 0 ? { deadAnchors: dead } : {}
+
+  // The fit is drawn only through pairs that are still true.
+  const live = dead.length > 0 && anchors.length - dead.length >= 2 ? anchors.filter((a) => !dead.includes(a)) : anchors
+  const fit = fitIdFromSku(live)
   const predicted = fit(sku)
-  const margin = options.margin ?? marginFromResiduals(anchors, fit)
+  const margin = options.margin ?? marginFromResiduals(live, fit)
 
   // Where the known products actually end. When the target sits above every SKU
   // we can see — the ceiling case, and the whole reason this exists — monotonicity
@@ -451,7 +563,7 @@ export async function resolveProductIdForSku(
   // wasting half its budget re-walking ground the feed already covers.
   let topId = 0
   let topSkuNumber = -Infinity
-  for (const a of anchors) {
+  for (const a of live) {
     const n = skuNumber(a.sku)
     if (n !== null && n > topSkuNumber) { topSkuNumber = n; topId = a.productId }
   }
@@ -461,43 +573,17 @@ export async function resolveProductIdForSku(
   let lo = Math.max(1, aboveCeiling ? topId : centre - margin)
   let hi = Math.max(lo + 1, aboveCeiling ? Math.max(centre, topId) + margin : centre + margin)
 
-  const reach = neighbourReach(anchors)
-  const { probe, firstError } = supplierProbe(supplier)
+  const reach = neighbourReach(live)
 
-  /**
-   * Prove the detail call works before reading anything into its silence.
-   *
-   * `getProductsById` throws identically for "no product at that id" and "this
-   * method is not enabled on your account". During a search the first is normal
-   * and constant — ids are sparse, most probes land on nothing — so the second
-   * is invisible, and a permissions failure would spend the whole budget and
-   * then report the SKU missing.
-   *
-   * Counting how many probes answered does not separate them either: a bracket
-   * that happens to sit in a genuinely empty stretch of ids answers zero times
-   * while the account is perfectly healthy. So instead: probe an id we KNOW
-   * exists, because the feed just handed it to us. One call, and it settles the
-   * question outright — anything after it can be trusted to mean "nothing here".
-   */
-  const canary = anchors[0]
-  step('canary', `Checking their detail call works, using product ${canary.productId} (${canary.sku}).`)
-  probes += 1
-  const canaryResult = await probe(canary.productId)
-  if (canaryResult.sku === null) {
-    throw (
-      firstError() ??
-      new Error(
-        `PowerBody's product list names product ${canary.productId}, but their detail call returns nothing for it. ` +
-          'getProductInfo may not be enabled on this account.',
-      )
-    )
-  }
   const maxProbes = options.maxProbes ?? DEFAULT_MAX_PROBES
+  // Another spelling of the target is the target: see `alsoAccept`.
+  const aliases = new Set((options.alsoAccept ?? []).map((a) => a.trim().toUpperCase()))
   const timed = async (id: number): Promise<ProbeResult> => {
     if (now() >= expiresAt) throw new SearchExpired()
     if (probes >= maxProbes) throw new ProbeBudgetSpent()
     probes += 1
-    return probe(id)
+    const answer = await probe(id)
+    return answer.sku !== null && aliases.has(answer.sku.trim().toUpperCase()) ? { ...answer, sku } : answer
   }
 
   const remaining = () => Math.max(0, expiresAt - now())
@@ -507,7 +593,7 @@ export async function resolveProductIdForSku(
   // failure to find is genuinely about this SKU and can be reported as such.
   const fail = (reason: ResolveOutcome['reason']): ResolveOutcome => {
     step('done', `Gave up on ${sku} after ${probes} requests: ${reason}.`)
-    return { productId: null, probes, reason, anchors: anchors.length, bracket: { lo, hi }, trace }
+    return { productId: null, probes, reason, anchors: anchors.length, bracket: { lo, hi }, trace, ...deadAnchors }
   }
 
   // Everything from here spends throttled requests, and both the clock and the
@@ -618,13 +704,13 @@ export async function resolveProductIdForSku(
       })
       if (search.productId !== null) {
         step('done', `Found ${sku} at product ${search.productId} after ${probes} requests.`)
-        return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo: wideLo, hi: wideHi }, trace }
+        return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo: wideLo, hi: wideHi }, trace, ...deadAnchors }
       }
     }
 
     if (search.productId !== null) {
       step('done', `Found ${sku} at product ${search.productId} after ${probes} requests.`)
-      return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace }
+      return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace, ...deadAnchors }
     }
 
     // The bisect came back empty. Ordering is near-monotone, not monotone, so a
@@ -640,7 +726,7 @@ export async function resolveProductIdForSku(
       })
       if (swept.productId !== null) {
         step('done', `Found ${sku} at product ${swept.productId} after ${probes} requests.`)
-        return { productId: swept.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace }
+        return { productId: swept.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace, ...deadAnchors }
       }
     }
 

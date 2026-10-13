@@ -617,6 +617,82 @@ describe('Add products — from PowerBody’s spreadsheet', () => {
 })
 
 describe('Add products — from a roster spreadsheet', () => {
+  /** The roster import answering with SKUs it could not find an id for. */
+  const importWithoutIds = (withoutIds: string[]) => () =>
+    json({
+      ok: true,
+      total: 1,
+      offset: 0,
+      imported: 1,
+      refreshed: 0,
+      already: 0,
+      enriched: 0,
+      nextOffset: null,
+      withoutIds,
+      results: [{ sku: 'P7', id: 'creatine', title: 'Creatine', enriched: false, notes: [], outcome: 'added' }],
+      warnings: [],
+    })
+  const ON_CREATINE = (sku: string) => ({ id: 'creatine', title: 'Creatine', state: 'pending' as const, skus: [sku] })
+
+  async function findTheirIds(user: ReturnType<typeof userEvent.setup>) {
+    const pick = screen.getByRole('button', { name: 'Choose a roster spreadsheet' })
+    await user.upload(pick.previousElementSibling as HTMLInputElement, new File(['sku,title\nP7,Creatine\n'], 'roster.csv', { type: 'text/csv' }))
+    await user.click(await screen.findByRole('button', { name: 'Find their ids' }))
+  }
+
+  it('searches PowerBody for SKUs the roster put on a product, rather than calling them already in the catalogue', async () => {
+    // The real shape of the problem: the import reported P7 and P8 BECAUSE the
+    // index has no id for them, so the quick pass cannot answer them either —
+    // and it knows they are on the product the roster just made.
+    const { calls } = router({
+      ...STANDING,
+      'POST /api/portal/products/import-csv': importWithoutIds(['P7', 'P8']),
+      'POST /api/portal/supplier/resolve': (body) => {
+        if (body?.codes) return quickPass([quick('P7', { stored: ON_CREATINE('P7') }), quick('P8', { stored: ON_CREATINE('P8') })])
+        if (body?.code === 'P7') {
+          return ndjson([
+            [result('P7', { productId: '7', via: 'search', card: row({ sku: 'P7', productId: '7', name: 'Creatine 500g' }), stored: ON_CREATINE('P7') })],
+          ])
+        }
+        return ndjson([
+          [
+            result('P8', {
+              status: 'not-yet',
+              message: 'Searched 40 of PowerBody’s ids without finding P8 yet.',
+              next: ['search-again', 'paste-id'],
+              stored: ON_CREATINE('P8'),
+            }),
+          ],
+        ])
+      },
+    })
+    render(<AddProducts />)
+    const user = userEvent.setup()
+    await findTheirIds(user)
+
+    // Each one is searched for, in turn.
+    await waitFor(() => expect(searchesIn(calls)).toEqual(['P7', 'P8']))
+    expect(screen.queryByText(/so PowerBody were not searched for it/)).not.toBeInTheDocument()
+
+    // Found: says the id is kept and where to use it — and it is still a link
+    // to the product it is on, not something to add a second time.
+    const found = card('Creatine 500g')
+    expect(await within(found).findByText(/PowerBody id 7 found and kept\. Its “Pull from PowerBody” now brings in the picture, cost and stock without a search\./)).toBeInTheDocument()
+    expect(within(found).getByRole('link', { name: 'Open Creatine' })).toHaveAttribute('href', '/founderhub/products/item/creatine#supplier')
+    expect(within(found).getByRole('link', { name: 'Creatine →' })).toBeInTheDocument()
+    expect(within(found).queryByRole('checkbox')).not.toBeInTheDocument()
+
+    // Not found yet: the usual ways on, and still says which product it is on.
+    const p8 = await waitFor(() => {
+      const el = card('P8')
+      expect(within(el).getByText('Not found yet')).toBeInTheDocument()
+      return el
+    })
+    expect(within(p8).getByRole('button', { name: 'Search again' })).toBeInTheDocument()
+    expect(within(p8).getByRole('textbox', { name: 'PowerBody product id for P8' })).toBeInTheDocument()
+    expect(within(p8).getByRole('link', { name: 'Creatine →' })).toBeInTheDocument()
+  })
+
   it('looks up the SKUs a roster brought in without a PowerBody id', async () => {
     const { calls } = router({
       ...STANDING,

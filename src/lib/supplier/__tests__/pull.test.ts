@@ -17,7 +17,8 @@ jest.mock('@/lib/supplier/resolve-code', () => ({
 
 import { indexedProductIds } from '@/lib/portal/supplier-index'
 import { resolveCode } from '@/lib/supplier/resolve-code'
-import { pullProduct } from '../pull'
+import { pullProduct, settlePull, startPull } from '../pull'
+import { NoProductDetailError } from '../no-detail'
 
 const indexed = indexedProductIds as jest.MockedFunction<typeof indexedProductIds>
 const resolve = resolveCode as jest.MockedFunction<typeof resolveCode>
@@ -65,13 +66,14 @@ const CATALOGUE: Record<string, SupplierProduct> = {
 
 function fakeSupplier(
   catalogue: Record<string, SupplierProduct> = CATALOGUE,
-  opts: { refuse?: Error } = {},
+  opts: { refuse?: Error; name?: string; onAsk?: (ids: string[]) => void } = {},
 ): { supplier: SupplierProvider; asked: string[][] } {
   const asked: string[][] = []
   const supplier = {
-    name: 'powerbody',
+    name: opts.name ?? 'powerbody',
     async getProductsById(ids: string[]) {
       asked.push([...ids])
+      opts.onAsk?.(ids)
       if (opts.refuse) throw opts.refuse
       return ids.map((id) => catalogue[id]).filter(Boolean)
     },
@@ -437,5 +439,130 @@ describe('pullProduct — the product’s own fields', () => {
     const result = await pullProduct(product, { supplier })
     expect(result.before).toBe(product)
     expect(JSON.stringify(product)).toBe(snapshot)
+  })
+})
+
+// ── What a pull must not do ──────────────────────────────────────────────────
+
+describe('pullProduct — an id that answers nothing', () => {
+  it('looks the SKU up again instead of calling it a refusal that stops Pull all', async () => {
+    // A delisted product, a typo in the per-SKU id box: no product at that id.
+    // The live client's message once ended "…(new accounts start in their DEMO
+    // sandbox)", and that was read as the account refusing.
+    const dead = new NoProductDetailError(
+      'PowerBody answered for product 1300 with no product detail in it — they sent nothing. ' +
+        'getProductInfo may not be enabled on this API account (new accounts start in their DEMO sandbox).',
+      '1300',
+      null,
+    )
+    const single = whey({
+      supplierProductId: '1300',
+      variants: [variant({ id: 'cw-straw', title: 'Strawberry', flavour: 'Strawberry', sku: 'P300' })],
+      defaultVariantId: 'cw-straw',
+    })
+    const { supplier } = fakeSupplier(CATALOGUE, { refuse: dead })
+    const result = await pullProduct(single, { supplier })
+
+    expect(resolve).toHaveBeenCalledTimes(1)
+    expect(resolve.mock.calls[0][0]).toBe('P300')
+    expect(result.refused).toBeUndefined()
+    expect(result.trace.some((s) => /no product at id 1300 any more/.test(s.message))).toBe(true)
+    expect(result.trace.some((s) => /DEMO|would not answer:/.test(s.message))).toBe(false)
+  })
+
+  it('never asks PowerBody for an id that is not a number', async () => {
+    const product = whey({ variants: whey().variants.map((v) => ({ ...v, supplierProductId: v.id === 'cw-choc' ? 'P89490' : null })) })
+    const { supplier, asked } = fakeSupplier()
+    await pullProduct(product, { supplier })
+    expect(asked.flat()).not.toContain('P89490')
+    expect(resolve.mock.calls.map((c) => c[0])).toContain('P100')
+  })
+})
+
+describe('pullProduct — Sample mode', () => {
+  it('stores none of the sample catalogue’s ids, which only look like PowerBody’s', async () => {
+    const sample: Record<string, SupplierProduct> = { P89490: pb('P100', 'P89490') }
+    resolve.mockImplementation(async (sku) => (sku === 'P100' ? found(sample.P89490) : notYet(sku)))
+    const product = whey({ variants: whey().variants.map((v) => ({ ...v, supplierProductId: null })) })
+    const { supplier } = fakeSupplier(sample, { name: 'mock' })
+    const { after } = await pullProduct(product, { supplier })
+
+    expect(after.variants.map((v) => v.supplierProductId ?? null)).toEqual([null, null, null])
+    expect(after.supplierProductId ?? null).toBeNull()
+    // The rest of what the sample said still lands.
+    expect(after.variants[0].cost).toBe(24.5)
+  })
+})
+
+describe('pullProduct — servings somebody chose', () => {
+  it('leaves a count the founder typed, and fills one that was missing', async () => {
+    const product = whey({
+      servings: 60,
+      variants: whey().variants.map((v) =>
+        v.id === 'cw-choc' ? { ...v, servings: 60, servingsSource: 'founder' as const } : v,
+      ),
+    })
+    indexed.mockImplementation(async () => new Map([['P200', { productId: '1200', qty: 3, price: 23.9 }]]))
+    const { supplier } = fakeSupplier()
+    const { after, changed } = await pullProduct(product, { supplier })
+
+    expect(after.variants.map((v) => [v.sku, v.servings, v.servingsSource ?? null])).toEqual([
+      ['P100', 60, 'founder'],
+      ['P200', 65, 'supplier'],
+      ['P300', 64, 'supplier'],
+    ])
+    expect(after.servings).toBe(60)
+    expect(changed.P100 ?? '').not.toMatch(/servings/)
+  })
+})
+
+describe('pullProduct — the clock', () => {
+  afterEach(() => jest.restoreAllMocks())
+
+  it('looks at the budget between batches of held ids, not only between SKUs', async () => {
+    // One call for every held id was one unbounded wait.
+    let clock = 1_000_000
+    jest.spyOn(Date, 'now').mockImplementation(() => clock)
+    const many: Record<string, SupplierProduct> = {}
+    const variants: CatalogueVariant[] = []
+    for (let i = 0; i < 8; i++) {
+      many[String(2000 + i)] = pb(`P${500 + i}`, String(2000 + i))
+      variants.push(variant({ id: `v${i}`, sku: `P${500 + i}`, supplierProductId: String(2000 + i) }))
+    }
+    const { supplier, asked } = fakeSupplier(many, { onAsk: () => (clock += 9_000) })
+    const result = await pullProduct(whey({ variants, defaultVariantId: 'v0' }), { supplier, budgetMs: 10_000 })
+
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toHaveLength(6)
+    expect(result.answered).toBe(6)
+    expect(result.unresolved.map((u) => u.sku)).toEqual(['P506', 'P507'])
+    expect(result.unresolved[0].message).toMatch(/pull again/)
+  })
+})
+
+describe('settlePull — keeping what a stopped pull found', () => {
+  it('applies what PowerBody did answer and reports the rest as not reached', () => {
+    const progress = startPull()
+    progress.detail.set('P100', CATALOGUE['1100'])
+    const result = settlePull(whey(), progress, { force: false, supplierName: 'powerbody', stopped: true })
+
+    expect(result.answered).toBe(1)
+    expect(result.after.variants[0]).toMatchObject({ cost: 24.5, servings: 66, supplierProductId: '1100' })
+    expect(result.unresolved.map((u) => u.sku)).toEqual(['P200', 'P300'])
+    expect(result.unresolved[0].message).toMatch(/PowerBody stopped answering/)
+  })
+})
+
+describe('pullProduct — the answer must be this SKU', () => {
+  it('takes nothing from a product that a digits-only SKU happened to be the id of', async () => {
+    const other = pb('P77777', '44338', { name: 'Some other brand’s tub', wholesalePrice: 3 })
+    resolve.mockImplementation(async () => ({ ...found(other), kind: 'id' as const, via: 'id' as const }))
+    const product = whey({ variants: [variant({ id: 'x', sku: '44338' })], defaultVariantId: 'x' })
+    const { supplier } = fakeSupplier({})
+    const result = await pullProduct(product, { supplier })
+
+    expect(result.answered).toBe(0)
+    expect(result.after.variants[0].cost).toBeUndefined()
+    expect(result.unresolved[0].message).toMatch(/different SKU/)
   })
 })

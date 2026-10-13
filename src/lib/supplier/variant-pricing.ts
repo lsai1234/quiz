@@ -21,6 +21,7 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import { isAccessory } from '@/lib/catalogue/accessory'
 import { sizeFromName } from '@/lib/supplier/roster-import'
+import { liveServings } from '@/lib/catalogue/servings'
 
 /** What the supplier says about one SKU right now. */
 export interface SkuFacts {
@@ -96,10 +97,24 @@ export function repriceVariants(
       next = { ...next, cost: round(fact.cost) }
     }
 
-    // An accessory has no dose, so it has no servings to be right about.
-    if (!isAccessory(product) && fact.servings != null && fact.servings > 0 && next.servings !== fact.servings) {
+    /*
+      A serving count somebody chose is a decision, the same as a price.
+
+      Only two counts are PowerBody's to change: none at all, and one that came
+      from PowerBody in the first place (`servingsSource: 'supplier'`). A count
+      typed on the product page, spread by "servings for every 1kg SKU", or set
+      by the roster sheet is the founder's — and so is one on an older record
+      that says nothing about where it came from, because nothing here can tell
+      that it was not typed. Replacing those is how a founder corrected 66 to
+      60, pressed Pull for a picture, and watched the shelf go back to 66.
+
+      An accessory has no dose, so it has no servings to be right about.
+    */
+    const ownCount = next.servings != null && next.servings > 0
+    const theirsToChange = !ownCount || variant.servingsSource === 'supplier'
+    if (!isAccessory(product) && theirsToChange && fact.servings != null && fact.servings > 0 && next.servings !== fact.servings) {
       notes.push(`${next.servings ?? product.servings} → ${fact.servings} servings`)
-      next = { ...next, servings: fact.servings }
+      next = { ...next, servings: fact.servings, servingsSource: 'supplier' }
     }
 
     // A size is what tells two rows apart in the picker when the supplier's
@@ -109,7 +124,11 @@ export function repriceVariants(
       if (size) next = { ...next, size }
     }
 
-    if (fact.productId && next.supplierProductId !== fact.productId) {
+    // Only a real PowerBody id — numeric. The sample catalogue's ids look like
+    // SKUs ("P89490"), and one stored here would be sent to PowerBody later by
+    // the stock check, the nightly sync and the next pull. Import has always
+    // refused them (`mapping.ts`); a pull is the same door.
+    if (fact.productId && isPowerBodyId(fact.productId) && next.supplierProductId !== fact.productId) {
       next = { ...next, supplierProductId: fact.productId }
     }
 
@@ -132,38 +151,87 @@ export function repriceVariants(
     variants[0]
 
   /*
-    The product's own cost and RRP follow its master SKU.
+    The product's own cost, RRP and PowerBody id follow its STORED master SKU.
 
     They are what the catalogue list, readiness and Top 25 read. A pull used to
     fill every SKU's cost and leave the product's at null, so the founder
     watched the costs arrive and every screen went on saying "no cost set".
+
+    Stored, not "the first one in stock": that is the one rule every writer
+    uses — the nightly stock sync (`sync.ts`) and an absorbed price change read
+    the stored master too. This used to skip past an out-of-stock master, so a
+    pull set Vanilla's cost, the night's sync put Chocolate's back and reported
+    it as "cost moved", and the next pull flipped it again — margin figures and
+    the Supplier moved report changing with nothing changing at PowerBody. Stock
+    is a fact about today; which SKU the product IS is a decision.
   */
-  const masterFact = defaultVariant?.sku ? facts.get(defaultVariant.sku) : undefined
-  const productCost = defaultVariant?.cost != null && defaultVariant.cost > 0 ? defaultVariant.cost : product.cost
+  const storedMaster = variants.find((v) => v.id === product.defaultVariantId) ?? variants[0]
+  const masterFact = storedMaster?.sku ? facts.get(storedMaster.sku) : undefined
+  const productCost = storedMaster?.cost != null && storedMaster.cost > 0 ? storedMaster.cost : product.cost
   const productRrp = masterFact?.rrp != null && masterFact.rrp > 0 ? round(masterFact.rrp) : product.supplierRrp
-  const productId = defaultVariant?.supplierProductId ?? product.supplierProductId
+  const masterId = storedMaster?.supplierProductId
+  const productId = masterId && isPowerBodyId(masterId) ? masterId : product.supplierProductId
+
+  /*
+    …and so does its serving count, with the plan behind it.
+
+    `product.servings` is the master's own count wherever the master has one —
+    what the shelf shows (`liveServings`) and what everything that reads the
+    product sees. When this pass gave the master its first count, or refreshed
+    one PowerBody gave, the product-level copy follows, and the subscription's
+    `servingsPerUnit` follows too if it was following before (a number that
+    differed was set on purpose, and is left alone) — the same rule an edit on
+    the product page applies. Without it the shelf said 66 while the product
+    and the plan went on saying 60.
+  */
+  const masterBefore = product.variants.find((v) => v.id === product.defaultVariantId) ?? product.variants[0]
+  const masterCount = storedMaster?.servings
+  const countMoved = masterCount != null && masterCount > 0 && masterCount !== masterBefore?.servings
+  const productServings = countMoved ? masterCount : product.servings
 
   const variantsMoved = !variants.every((v, i) => v === product.variants[i])
   const productMoved =
-    productCost !== product.cost || (productRrp ?? null) !== (product.supplierRrp ?? null) || (productId ?? null) !== (product.supplierProductId ?? null)
+    productCost !== product.cost ||
+    (productRrp ?? null) !== (product.supplierRrp ?? null) ||
+    (productId ?? null) !== (product.supplierProductId ?? null) ||
+    productServings !== product.servings
   if (!variantsMoved && !productMoved) return null
   if (productCost !== product.cost && productCost != null) changed.cost = `product cost £${productCost.toFixed(2)}`
 
-  return {
-    product: {
-      ...product,
-      variants,
-      // `basePrice` is what every summary quotes, so it follows the variant the
-      // page opens on. Leaving it behind is how a product sheet and its own
-      // card disagree about the price.
-      basePrice: defaultVariant?.price ?? product.basePrice,
-      compareAtPrice: defaultVariant?.compareAtPrice ?? product.compareAtPrice,
-      ...(productCost != null ? { cost: productCost } : {}),
-      ...(productRrp != null ? { supplierRrp: productRrp } : {}),
-      ...(productId ? { supplierProductId: productId } : {}),
-    },
-    changed,
+  const next: CatalogueProduct = {
+    ...product,
+    variants,
+    // `basePrice` is what every summary quotes, so it follows the variant the
+    // page opens on. Leaving it behind is how a product sheet and its own
+    // card disagree about the price.
+    basePrice: defaultVariant?.price ?? product.basePrice,
+    compareAtPrice: defaultVariant?.compareAtPrice ?? product.compareAtPrice,
+    servings: productServings,
+    ...(productCost != null ? { cost: productCost } : {}),
+    ...(productRrp != null ? { supplierRrp: productRrp } : {}),
+    ...(productId ? { supplierProductId: productId } : {}),
   }
+  return { product: followPlan(product, next), changed }
+}
+
+/**
+ * Keep the subscription's serving count in step with the shelf's, when it was
+ * in step before — the rule the product page's edits follow (`product-edit`),
+ * so a pull that moves the count cannot leave the plan sizing a box off the
+ * old one. A plan count that differed was set on purpose and is left alone.
+ */
+function followPlan(before: CatalogueProduct, after: CatalogueProduct): CatalogueProduct {
+  const plan = after.consumption
+  if (!plan) return after
+  const was = liveServings(before)
+  const now = liveServings(after)
+  if (now === was || plan.servingsPerUnit !== was) return after
+  return { ...after, consumption: { ...plan, servingsPerUnit: now } }
+}
+
+/** A real PowerBody product id: digits only. The sample catalogue's look like SKUs. */
+export function isPowerBodyId(id: string | null | undefined): id is string {
+  return typeof id === 'string' && /^\d+$/.test(id)
 }
 
 

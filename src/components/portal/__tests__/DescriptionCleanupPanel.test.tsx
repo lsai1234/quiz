@@ -162,6 +162,26 @@ describe('DescriptionCleanupPanel', () => {
     expect(await screen.findByText(/3 rewritten, 0 kept as the supplier wrote them/i)).toBeInTheDocument()
   })
 
+  it('leaves descriptions the founder wrote out of the AI rewrite, and says what it left alone', async () => {
+    const post = jest.fn().mockReturnValue(
+      reply({ ok: true, scanned: 2, unchanged: 0, aiUsed: 1, fellBack: 0, editedMeanwhile: 1, written: true, changes: [] }),
+    )
+    const mixed = [
+      { id: 'p0', title: 'Product 0', hasMarkup: true, founderWritten: true },
+      { id: 'p1', title: 'Product 1', hasMarkup: true },
+      { id: 'p2', title: 'Product 2', hasMarkup: true },
+    ]
+    global.fetch = scanThen(scan({ candidates: mixed }), post)
+
+    render(<DescriptionCleanupPanel />)
+    await userEvent.click(await screen.findByRole('button', { name: /rewrite with ai/i }))
+
+    await waitFor(() => expect(post).toHaveBeenCalled())
+    expect(JSON.parse((post.mock.calls[0][1] as RequestInit).body as string).ids).toEqual(['p1', 'p2'])
+    expect(await screen.findByText(/1 you wrote yourself was left as it is/)).toBeInTheDocument()
+    expect(screen.getByText(/1 was changed on its product page while this ran, so it was left alone/)).toBeInTheDocument()
+  })
+
   it('reports its count and that it is running to the card around it', async () => {
     let release: () => void = () => {}
     const post = jest.fn(

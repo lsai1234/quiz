@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProductWorkspace } from '../ProductWorkspace'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
@@ -120,6 +120,19 @@ describe('the product page', () => {
     expect(calls.at(-1)?.body).toEqual({ id: 'whey', variants: [{ id: 'whey-van', servings: 30 }] })
   })
 
+  it('reads Saved after a SKU save the server tidied (12.50 comes back as 12.5)', async () => {
+    const tidied = product()
+    tidied.variants = tidied.variants.map((v) => (v.id === 'whey-van' ? { ...v, cost: 12.5 } : v))
+    answer = () => ({ ok: true, ...payload({}, { variants: tidied.variants }) })
+    render(<ProductWorkspace initial={payload()} />)
+    const variants = screen.getByRole('region', { name: 'Flavours, sizes & prices' })
+    await userEvent.click(within(variants).getAllByRole('button', { name: 'Edit' })[1])
+    await userEvent.type(within(variants).getByLabelText(/What PowerBody charge|Cost/), '12.50')
+    await userEvent.click(within(variants).getByRole('button', { name: 'Save 1 change' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', variants: [{ id: 'whey-van', cost: 12.5 }] })
+    expect(await within(variants).findByRole('button', { name: 'Saved' })).toBeDisabled()
+  })
+
   it('makes another SKU the master in one press', async () => {
     render(<ProductWorkspace initial={payload()} />)
     const variants = screen.getByRole('region', { name: 'Flavours, sizes & prices' })
@@ -161,5 +174,304 @@ describe('the product page', () => {
     await userEvent.clear(within(listing).getByLabelText('Product name'))
     await userEvent.click(within(listing).getByRole('button', { name: 'Save 1 change' }))
     expect(await within(listing).findByRole('alert')).toHaveTextContent('Name can’t be empty.')
+  })
+})
+
+// ── Saved means saved ────────────────────────────────────────────────────────
+
+describe('after a save the server tidied', () => {
+  it('clears the section once the server answers, though it stored the value in another form', async () => {
+    // "12.50" is stored as 12.5 and comes back as "12.5"; "powder,capsule"
+    // comes back as "powder, capsule". Neither may stay "Save 1 change".
+    const master = (cost: number) =>
+      product({ cost }).variants.map((v) => (v.id === 'whey-choc' ? { ...v, cost } : v))
+    answer = (_url, body) => {
+      const set = (body.set ?? {}) as Record<string, unknown>
+      if ('cost' in set) return { ok: true, ...payload({}, { cost: 12.5, variants: master(12.5) }) }
+      return { ok: true, ...payload({}, { formats: ['powder', 'capsule'] }) }
+    }
+    render(<ProductWorkspace initial={payload()} />)
+
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.type(within(supplier).getByLabelText('What PowerBody charge us (£)'), '12.50')
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Save 1 change' }))
+    expect(await within(supplier).findByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(within(supplier).getByLabelText('What PowerBody charge us (£)')).toHaveValue('12.5')
+
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    const formats = within(listing).getByLabelText('Formats')
+    await userEvent.clear(formats)
+    await userEvent.type(formats, 'powder,capsule')
+    await userEvent.click(within(listing).getByRole('button', { name: 'Save 1 change' }))
+    expect(await within(listing).findByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(formats).toHaveValue('powder, capsule')
+    await waitFor(() => expect(screen.queryByText(/Not saved yet/)).not.toBeInTheDocument())
+  })
+
+  it('clears when the server tidied the value back to what it already was', async () => {
+    // A trailing space on the brand: trimmed, so the product does not change
+    // at all — and the field must still stop reading as unsaved.
+    answer = () => ({ ok: true, ...payload({}, { brand: 'Acme' }) })
+    render(<ProductWorkspace initial={payload({}, { brand: 'Acme' })} />)
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.type(within(listing).getByLabelText('Brand'), ' ')
+    await userEvent.click(within(listing).getByRole('button', { name: 'Save 1 change' }))
+    expect(await within(listing).findByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(within(listing).getByLabelText('Brand')).toHaveValue('Acme')
+  })
+})
+
+// ── Leaving with unsaved edits ──────────────────────────────────────────────
+
+describe('leaving the page by a link inside the hub', () => {
+  /** Click a link, and report whether its navigation was stopped. */
+  function click(link: HTMLElement): boolean {
+    let stopped = false
+    // Runs after every other listener; then stops jsdom's own navigation.
+    const record = (e: Event) => {
+      stopped = e.defaultPrevented
+      e.preventDefault()
+    }
+    window.addEventListener('click', record)
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+    window.removeEventListener('click', record)
+    return stopped
+  }
+
+  let confirmSpy: jest.SpyInstance
+  beforeEach(() => {
+    confirmSpy = jest.spyOn(window, 'confirm')
+  })
+  afterEach(() => confirmSpy.mockRestore())
+
+  const withProblem = payload({
+    readiness: {
+      productId: 'whey',
+      overall: 'fail',
+      checks: [{ id: 'picture', label: 'No picture', status: 'fail', section: 'listing' } as never],
+    },
+  })
+
+  it('asks before a link drops unsaved edits, and stays when told to', async () => {
+    confirmSpy.mockReturnValue(false)
+    render(<ProductWorkspace initial={withProblem} />)
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.type(within(listing).getByLabelText('Brand'), 'Acme')
+
+    expect(click(screen.getByRole('link', { name: /All products/ }))).toBe(true)
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/^Not saved yet: Shop listing\. Leave this page and lose that change\?/))
+    expect(within(listing).getByLabelText('Brand')).toHaveValue('CHRGDAcme')
+
+    // A link to a part of this page goes nowhere, so it is not asked about.
+    confirmSpy.mockClear()
+    expect(click(screen.getByRole('link', { name: 'Fix in Shop listing' }))).toBe(false)
+    expect(confirmSpy).not.toHaveBeenCalled()
+  })
+
+  it('lets the link go when the founder says leave, and never asks when nothing is unsaved', async () => {
+    confirmSpy.mockReturnValue(true)
+    render(<ProductWorkspace initial={payload()} />)
+    expect(click(screen.getByRole('link', { name: /All products/ }))).toBe(false)
+    expect(confirmSpy).not.toHaveBeenCalled()
+
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.type(within(listing).getByLabelText('Brand'), 'Acme')
+    expect(click(screen.getByRole('link', { name: /All products/ }))).toBe(false)
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('covers links outside the page too — the products sub-nav', async () => {
+    confirmSpy.mockReturnValue(false)
+    render(
+      <>
+        <nav>
+          <a href="/founderhub/products/review">Review</a>
+        </nav>
+        <ProductWorkspace initial={payload()} />
+      </>,
+    )
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.type(within(supplier).getByLabelText('Shipped weight (g)'), '900')
+    expect(click(screen.getByRole('link', { name: 'Review' }))).toBe(true)
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Not saved yet: Supplier.'))
+  })
+})
+
+// ── Supplier: the master SKU's cost and id ───────────────────────────────────
+
+describe('the supplier section', () => {
+  const onMaster = (over: Record<string, unknown>) =>
+    product().variants.map((v) => (v.id === 'whey-choc' ? { ...v, ...over } : v))
+
+  it('shows the master SKU’s own cost and id, and saves them to the master as well as the product', async () => {
+    render(<ProductWorkspace initial={payload({}, { cost: undefined, supplierProductId: undefined, variants: onMaster({ cost: 12, supplierProductId: '111' }) })} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    const cost = within(supplier).getByLabelText('What PowerBody charge us (£)')
+    const id = within(supplier).getByLabelText('PowerBody product id')
+    expect(cost).toHaveValue('12')
+    expect(id).toHaveValue('111')
+
+    await userEvent.clear(cost)
+    await userEvent.type(cost, '14')
+    await userEvent.clear(id)
+    await userEvent.type(id, '999')
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Save 2 changes' }))
+    expect(calls.at(-1)?.body).toEqual({
+      id: 'whey',
+      set: { cost: 14, supplierProductId: '999' },
+      variants: [{ id: 'whey-choc', cost: 14, supplierProductId: '999' }],
+    })
+  })
+
+  it('leaves the SKUs alone when only the weight or VAT changes', async () => {
+    render(<ProductWorkspace initial={payload()} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.type(within(supplier).getByLabelText('VAT rate (%)'), '0')
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Save 1 change' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', set: { vatRate: 0 } })
+  })
+})
+
+// ── Supplier: a refused pull ─────────────────────────────────────────────────
+
+/** A streamed reply, the way the pull answers — jsdom has no Response streams. */
+function streamed(lines: unknown[]) {
+  const chunks = lines.map((l) => new TextEncoder().encode(`${JSON.stringify(l)}\n`))
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/x-ndjson' },
+    body: {
+      getReader: () => ({
+        read: async () => (chunks.length > 0 ? { value: chunks.shift(), done: false } : { value: undefined, done: true }),
+      }),
+    },
+  } as unknown as Response
+}
+
+describe('pulling from PowerBody on the product page', () => {
+  function pullAnswers(result: Record<string, unknown>) {
+    global.fetch = jest.fn(async () =>
+      streamed([{ type: 'step', message: 'Asking PowerBody about 2 SKUs.' }, { type: 'result', ok: true, ...payload(), ...result }]),
+    ) as unknown as typeof fetch
+  }
+  const skus = { variants: product().variants }
+
+  it('shows a refusal in PowerBody’s words with the way to the checks — never “nothing had changed”', async () => {
+    const refusal = 'PowerBody did not accept our login (“Access denied”). Check the API user and key in Settings → Supplier.'
+    pullAnswers({
+      answered: 0,
+      changed: {},
+      filled: [],
+      unresolved: [
+        { sku: 'P1', message: refusal, refusal: 'credentials' },
+        { sku: 'P2', message: refusal, refusal: 'credentials' },
+      ],
+      refused: { kind: 'credentials', message: refusal },
+    })
+    render(<ProductWorkspace initial={payload({}, skus)} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Pull 2 SKUs from PowerBody' }))
+
+    const alert = await within(supplier).findByRole('alert')
+    expect(alert).toHaveTextContent(`Nothing was pulled, so nothing changed. ${refusal}`)
+    expect(within(alert).getByRole('link', { name: 'Run the checks' })).toHaveAttribute('href', '/founderhub/settings/supplier')
+    expect(within(supplier).queryByText(/nothing had changed/)).not.toBeInTheDocument()
+    expect(within(supplier).queryByRole('status')).not.toBeInTheDocument()
+    // Said once, not once more per SKU.
+    expect(within(supplier).getAllByText(/did not accept our login/)).toHaveLength(1)
+  })
+
+  it('says what did arrive before PowerBody refused the rest', async () => {
+    const limit = 'PowerBody are limiting how fast we can ask (“TOO_MANY_REQUESTS”). It passes on its own — wait a minute, then carry on.'
+    pullAnswers({
+      answered: 1,
+      changed: { P1: 'cost £12.00' },
+      filled: [],
+      unresolved: [{ sku: 'P2', message: limit, refusal: 'rate-limited' }],
+      refused: { kind: 'rate-limited', message: limit },
+    })
+    render(<ProductWorkspace initial={payload({}, skus)} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Pull 2 SKUs from PowerBody' }))
+
+    const alert = await within(supplier).findByRole('alert')
+    expect(alert).toHaveTextContent(`PowerBody answered for 1 of 2 SKUs (1 SKU updated, and saved) but not for the rest. ${limit}`)
+    expect(within(alert).getByRole('link', { name: 'Run the checks' })).toBeInTheDocument()
+    expect(within(supplier).getByText('P1: cost £12.00')).toBeInTheDocument()
+  })
+
+  it('still says so plainly when PowerBody answered and nothing had changed', async () => {
+    pullAnswers({ answered: 2, changed: {}, filled: [], unresolved: [] })
+    render(<ProductWorkspace initial={payload({}, skus)} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Pull 2 SKUs from PowerBody' }))
+    expect(await within(supplier).findByRole('status')).toHaveTextContent('PowerBody answered for 2 SKUs — nothing had changed.')
+  })
+})
+
+// ── Quiz: the plan's own serving count ──────────────────────────────────────
+
+describe('the plan’s own serving count', () => {
+  it('cannot be typed while Taken is Auto, which would throw it away, and says why', async () => {
+    render(<ProductWorkspace initial={payload()} />)
+    const quiz = screen.getByRole('region', { name: 'Quiz & subscription' })
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Show the finer settings' }))
+    const own = within(quiz).getByLabelText('Servings a plan is sized on')
+    expect(own).toBeDisabled()
+    expect(within(quiz).getByText(/To set your own number, first choose how it is taken/)).toBeInTheDocument()
+
+    await userEvent.selectOptions(within(quiz).getByLabelText('Taken'), 'daily')
+    expect(own).toBeEnabled()
+    await userEvent.type(own, '15')
+    expect(within(quiz).getByText(/sized on 15 servings, your own number below/)).toBeInTheDocument()
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Save 2 changes' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', set: { consumption: { cadence: 'daily', servingsPerUnit: 15 } } })
+  })
+
+  it('is emptied with the plan when Taken goes back to Auto, so nothing unsaved is left behind', async () => {
+    render(<ProductWorkspace initial={payload()} />)
+    const quiz = screen.getByRole('region', { name: 'Quiz & subscription' })
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Show the finer settings' }))
+    await userEvent.selectOptions(within(quiz).getByLabelText('Taken'), 'daily')
+    await userEvent.type(within(quiz).getByLabelText('Servings a plan is sized on'), '15')
+    await userEvent.selectOptions(within(quiz).getByLabelText('Taken'), '')
+    expect(within(quiz).getByLabelText('Servings a plan is sized on')).toHaveValue('')
+    expect(within(quiz).getByRole('button', { name: 'Saved' })).toBeDisabled()
+    expect(within(quiz).getByText(/following the master/)).toBeInTheDocument()
+  })
+})
+
+// ── Fill the blanks: what it really did ─────────────────────────────────────
+
+describe('fill the blanks', () => {
+  const pending = payload({ state: 'pending', remaining: [] }, { shortReason: '', dietaryTags: [], review: { status: 'pending', sources: {}, confirmed: [], importedAt: '2026-10-01' } })
+
+  it('says when nothing was filled', async () => {
+    answer = () => ({ ok: true, fill: { filled: [], source: 'ai' }, ...pending })
+    render(<ProductWorkspace initial={pending} />)
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.click(within(listing).getByRole('button', { name: 'Fill the blanks with AI' }))
+    expect(await within(listing).findByRole('status')).toHaveTextContent(/^Nothing was filled/)
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', action: 'fill-blanks' })
+  })
+
+  it('says which fields were keyword guesses when the AI was not available', async () => {
+    answer = () => ({ ok: true, fill: { filled: ['shortReason', 'dietaryTags'], source: 'heuristic' }, ...pending })
+    render(<ProductWorkspace initial={pending} />)
+    const quiz = screen.getByRole('region', { name: 'Quiz & subscription' })
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Fill the blanks with AI' }))
+    const status = await within(quiz).findByRole('status')
+    expect(status).toHaveTextContent(/with keyword guesses — the AI was not available/)
+    expect(status).toHaveTextContent(/“Keyword guess”/)
+    expect(status).not.toHaveTextContent(/Written by AI/)
+  })
+
+  it('names what the model filled', async () => {
+    answer = () => ({ ok: true, fill: { filled: ['goals'], source: 'ai' }, ...pending })
+    render(<ProductWorkspace initial={pending} />)
+    const quiz = screen.getByRole('region', { name: 'Quiz & subscription' })
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Fill the blanks with AI' }))
+    expect(await within(quiz).findByRole('status')).toHaveTextContent(/^Filled Goals\. Each is marked “Written by AI”/)
   })
 })

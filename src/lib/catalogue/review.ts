@@ -230,12 +230,70 @@ export function withConfirmed(
   keys: string[],
   edited: string[] = [],
 ): CatalogueProduct {
-  const review = product.review
+  const review = asFounders(product, edited).review
   if (!review) return product
   const confirmed = new Set([...review.confirmed, ...keys])
+  return { ...product, review: { ...review, confirmed: [...confirmed] } }
+}
+
+/**
+ * Mark fields as the founder's, without confirming anything.
+ *
+ * For every writer that changes a field on a person's say-so. `sources` is not
+ * only the review screen's labels: a pull refreshes a field whose source is
+ * `supplier` and leaves everything else alone, so a VAT rate, a brand or a
+ * description the founder changed and that still says `supplier` is put back
+ * to PowerBody's on the next "Pull from PowerBody".
+ */
+export function asFounders(product: CatalogueProduct, keys: string[]): CatalogueProduct {
+  const review = product.review
+  if (!review || keys.length === 0) return product
   const sources = { ...review.sources }
-  for (const key of edited) sources[key as keyof CatalogueProduct] = 'founder'
-  return { ...product, review: { ...review, confirmed: [...confirmed], sources } }
+  for (const key of keys) sources[key as keyof CatalogueProduct] = 'founder'
+  return { ...product, review: { ...review, sources } }
+}
+
+/** What a pass changed about where fields came from and which were checked. */
+export interface ProvenanceChange {
+  sources: Partial<Record<keyof CatalogueProduct, FieldSource>>
+  confirmed: string[]
+}
+
+/**
+ * The provenance a pass added between reading a product and saving it.
+ *
+ * A pass (a pull, a price) reads a product, works for anything from a moment to
+ * four minutes, and saves. Writing back the review it READ would put back
+ * everything about the review as it was then: an approval made meanwhile undone
+ * (the product leaves the shop), ticks made meanwhile lost. So only what the
+ * pass itself changed travels — sources it set, fields it confirmed — and is
+ * laid onto the review as it stands at write time (`withProvenance`). Never the
+ * status, never who approved it or when: no pass decides those.
+ */
+export function provenanceChange(before: ProductReview | undefined, after: ProductReview | undefined): ProvenanceChange | null {
+  if (!after) return null
+  const was = before?.sources ?? {}
+  const sources: ProvenanceChange['sources'] = {}
+  for (const [key, source] of Object.entries(after.sources) as Array<[keyof CatalogueProduct, FieldSource | undefined]>) {
+    if (source !== undefined && was[key] !== source) sources[key] = source
+  }
+  const had = new Set(before?.confirmed ?? [])
+  const confirmed = after.confirmed.filter((key) => !had.has(key))
+  return Object.keys(sources).length > 0 || confirmed.length > 0 ? { sources, confirmed } : null
+}
+
+/** Lay a pass's provenance onto a product's review as it is now. A product with no review gets none. */
+export function withProvenance(product: CatalogueProduct, change: ProvenanceChange | null): CatalogueProduct {
+  const review = product.review
+  if (!review || !change) return product
+  return {
+    ...product,
+    review: {
+      ...review,
+      sources: { ...review.sources, ...change.sources },
+      confirmed: [...new Set([...review.confirmed, ...change.confirmed])],
+    },
+  }
 }
 
 /** Approve a product: it becomes sellable from this moment. */

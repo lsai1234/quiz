@@ -412,6 +412,37 @@ describe('siblings that are not the same product', () => {
     expect(powder.size).toBe('454 grams')
   })
 
+  it('records each SKU’s count as PowerBody’s or the sheet’s, so a pull knows which it may refresh', () => {
+    const { product } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, facts)
+    const [caps, powder] = product.variants
+    // The sheet typed 33 for the capsules: a person's number, the founder's.
+    expect(caps).toMatchObject({ servings: 33, servingsSource: 'founder' })
+    // The bag is another size the sheet said nothing about: PowerBody's own count.
+    expect(powder).toMatchObject({ servings: 454, servingsSource: 'supplier' })
+  })
+
+  it('puts the sheet’s count on every SKU of the main one’s size, over PowerBody’s', () => {
+    const flavours = row(
+      'P10,B,"Whey, Chocolate - 1kg",protein-whey,,,28,1000,10,powder,,False,,whey 24g,True,"P10,P11",x',
+    ).rows[0]
+    const sameSize = new Map<string, VariantFacts>([
+      ['P10', { qty: 5, name: 'Whey, Chocolate - 1kg', servings: 33 }],
+      ['P11', { qty: 5, name: 'Whey, Vanilla - 1kg', servings: 30 }],
+    ])
+    const { product } = rosterRowToProduct(flavours, { ...SUPPLIER, sku: 'P10', name: 'Whey, Chocolate - 1kg' }, sameSize)
+    expect(product.servings).toBe(28)
+    expect(product.variants.map((v) => [v.servings, v.servingsSource])).toEqual([[28, 'founder'], [28, 'founder']])
+  })
+
+  it('leaves the SKUs to PowerBody when the sheet has no count — the assumed 30 is a guess a pull should replace', () => {
+    const blank = row('P20,B,Whey,protein-whey,,,,1000,10,powder,,False,,whey 24g,True,"P20,P21",x').rows[0]
+    const counted = new Map<string, VariantFacts>([['P20', { qty: 5, servings: 66 }]])
+    const { product } = rosterRowToProduct(blank, null, counted)
+    expect(product.variants[0]).toMatchObject({ servings: 66, servingsSource: 'supplier' })
+    expect(product.variants[1]).not.toHaveProperty('servings')
+    expect(product.variants[1]).not.toHaveProperty('servingsSource')
+  })
+
   it('says out loud that the merged SKUs are different things', () => {
     const { notes } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, facts)
     expect(notes.some((n) => n.includes('not the same product'))).toBe(true)

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { getPublicCatalogue } from '@/lib/catalogue/resolve'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { groupByCategory } from '@/lib/shop/categories'
 import { allGuides, guideFor } from '@/lib/shop/guides'
@@ -28,7 +28,7 @@ interface PageProps {
 /** The shelf this guide is about, if the catalogue has one right now. */
 async function shelfFor(slugs: string[]) {
   await syncPortalRuntime()
-  const { products } = await getResolvedCatalogue()
+  const { products } = await getPublicCatalogue()
   const section = groupByCategory(products).find((c) => slugs.includes(c.slug))
   return section ?? null
 }

@@ -69,6 +69,35 @@ function noAnswer(code: string, message: string, next: NextStep[] = ['search-aga
 }
 
 /**
+ * A roster SKU whose PowerBody id a search has just found.
+ *
+ * The card already says which of our products the SKU is on, and a found card
+ * shows no message of its own — so without this, the one thing the founder
+ * pressed "Find their ids" for would be a number in the small print. The id is
+ * kept where every later lookup looks first (the stored index), which is what
+ * makes the product's own "Pull from PowerBody" instant now; so the note says
+ * that, and links to the place to press it.
+ */
+function withIdKept(card: CodeCard, answer: SearchResult): CodeCard {
+  const id = answer.productId ?? answer.card?.productId
+  const stored = card.stored
+  if (answer.status !== 'found' || !stored || !id) return card
+  const then =
+    stored.state === 'removed'
+      ? 'Restore the product, then its “Pull from PowerBody” brings in the picture, cost and stock without a search.'
+      : 'Its “Pull from PowerBody” now brings in the picture, cost and stock without a search.'
+  return {
+    ...card,
+    note: {
+      tone: 'positive',
+      text: `PowerBody id ${id} found and kept. ${then}`,
+      href: productHref(stored.id, 'supplier'),
+      hrefLabel: `Open ${stored.title}`,
+    },
+  }
+}
+
+/**
  * The lookup, run one code at a time.
  *
  * ── Why one at a time ──────────────────────────────────────────────────────
@@ -350,7 +379,11 @@ export function useLookup(options: {
 
         limitedInARow.current = 0
         dequeue(job)
-        updateCard(job.cardKey, (c) => withAnswer({ ...c, lastAsk: job.ask }, answer))
+        const fromRoster = groupsRef.current.find((g) => g.cards.some((c) => c.key === job.cardKey))?.source === 'roster'
+        updateCard(job.cardKey, (c) => {
+          const answered = withAnswer({ ...c, lastAsk: job.ask }, answer)
+          return fromRoster ? withIdKept(answered, answer) : answered
+        })
         if (answer.status === 'refused' && (answer.refusal === 'sandbox' || answer.refusal === 'credentials')) {
           if (answer.refusal === 'sandbox') optionsRef.current.onSupplier?.({ demo: true })
           breakCircuit(answer.refusal, answer.message)
@@ -473,6 +506,16 @@ export function useLookup(options: {
       const toSearch: Job[] = []
       const refusedBatch =
         quick.refusal && (quick.refusal.kind === 'sandbox' || quick.refusal.kind === 'credentials') ? quick.refusal : null
+      /*
+        The roster's "Find their ids" asks about SKUs that are ALREADY ours —
+        the import has just put every one of them on a product, and the quick
+        pass says so. For a pasted code, "already ours" ends the lookup: there
+        is nothing to add, so nothing to search for. For these it is the whole
+        point, because the id is what is missing. Holding them instead (as this
+        used to) answered every one "Already in your catalogue" and searched for
+        none, so the button that promised to find their ids found nothing.
+      */
+      const findingIds = new Set(fresh.filter((g) => g.source === 'roster').flatMap((g) => g.cards.map((c) => c.key)))
 
       for (const card of newCards) {
         const r = byCode.get(card.code)
@@ -481,12 +524,13 @@ export function useLookup(options: {
           continue
         }
         if (r.status === 'found') {
-          updateCard(card.key, (c) => withAnswer(c, { ...r, type: 'result', status: 'found', next: [] }))
+          const answer: SearchResult = { ...r, type: 'result', status: 'found', next: [] }
+          updateCard(card.key, (c) => (findingIds.has(card.key) ? withIdKept(withAnswer(c, answer), answer) : withAnswer(c, answer)))
         } else if (r.status === 'not-on-account') {
           updateCard(card.key, (c) =>
             withAnswer(c, { ...r, type: 'result', status: 'not-on-account', next: notOnAccountNext(quick.source) }),
           )
-        } else if (r.stored) {
+        } else if (r.stored && !findingIds.has(card.key)) {
           // We already sell it, so there is nothing to search PowerBody for —
           // the answer is a link to our own product (or a Restore).
           const stored = r.stored
@@ -501,10 +545,17 @@ export function useLookup(options: {
           updateCard(card.key, (c) => ({
             ...c,
             status: 'stopped',
+            stored: r.stored ?? c.stored,
             message: 'Not looked up — PowerBody refused the batch (see above). “Try the rest again” carries on once it is sorted.',
             lastAsk: { code: c.code },
           }))
         } else {
+          // Searched — and a roster SKU keeps its link to the product it is on
+          // while it waits, so the card still says where it lives.
+          if (r.stored) {
+            const stored = r.stored
+            updateCard(card.key, (c) => ({ ...c, stored }))
+          }
           toSearch.push({ cardKey: card.key, ask: { code: card.code } })
         }
       }

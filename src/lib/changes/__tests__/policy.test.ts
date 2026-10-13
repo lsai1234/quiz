@@ -94,6 +94,17 @@ describe('findReplacement', () => {
     expect(found?.id).toBe('whey-c')
   })
 
+  it('never offers the product that now holds the line’s own SKU (after a merge) as its replacement', () => {
+    const holder = product({ id: 'whey-family', swapGroup: 'protein-whey', price: 30 })
+    holder.variants = holder.variants.map((v, i) => (i === 0 ? { ...v, sku: 'P-WHEY-A' } : v))
+    const found = findReplacement({
+      candidates: [holder, product({ id: 'whey-c', swapGroup: 'protein-whey', price: 31 })],
+      line: { ...current, sku: 'P-WHEY-A' },
+      constraints: NO_CONSTRAINTS,
+    })
+    expect(found?.id).toBe('whey-c')
+  })
+
   it('rejects anything outside the price tolerance in either direction', () => {
     // 15% of £30 = £4.50, so £36 (too dear) and £20 (a downgrade) both fail.
     const found = findReplacement({

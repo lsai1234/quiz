@@ -99,7 +99,7 @@ export interface ReplacementOptions {
   /** Candidates already narrowed to in-stock products (the caller owns stock). */
   candidates: CatalogueProduct[]
   /** The line being replaced. */
-  line: Pick<MemberSubscriptionLine, 'productId' | 'swapGroup' | 'quantity' | 'pricePerDelivery'>
+  line: Pick<MemberSubscriptionLine, 'productId' | 'swapGroup' | 'quantity' | 'pricePerDelivery' | 'sku'>
   constraints: SafetyConstraints
   config?: PricingConfig
 }
@@ -121,6 +121,9 @@ export function findReplacement(opts: ReplacementOptions): CatalogueProduct | nu
 
   const eligible = opts.candidates.filter((p) => {
     if (p.id === opts.line.productId) return false
+    // After a merge the line still names the product it was bought from, but
+    // its SKU now sits on another one — which is the same tub, not a swap.
+    if (opts.line.sku && p.variants.some((v) => v.sku === opts.line.sku)) return false
     if (p.swapGroup !== opts.line.swapGroup) return false
     if (p.isSubscriptionOnly || !p.subscriptionEligible) return false
     if (!meetsSafetyConstraints(p, opts.constraints)) return false

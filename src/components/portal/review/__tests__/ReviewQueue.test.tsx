@@ -178,6 +178,38 @@ describe('ReviewQueue', () => {
     expect(invalidateCatalogue).toHaveBeenCalled()
   })
 
+  it('says which were approved when the batch stopped part-way, and every one that was not', async () => {
+    // One had been discarded in another tab; then the store stopped saving.
+    // What was approved is on sale and must be said first — never "Nothing
+    // was approved" — and each of the rest says why.
+    const queue = { current: [VANILLA, BAR, WHEY] }
+    serve(queue, {
+      '/api/portal/products': () => {
+        queue.current = [BAR, WHEY]
+        return {
+          body: {
+            ok: true,
+            approved: ['whey-van'],
+            notReady: [],
+            gone: ['gone-one'],
+            failed: { id: 'bar', error: 'Not saved — the database is not answering.', notTried: ['whey-choc'] },
+          },
+        }
+      },
+    })
+    render(<ReviewQueue />)
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Tick all 3/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Approve the 2 ticked/ }))
+
+    const notice = (await screen.findByText(/1 product approved and on sale: Impact Whey Vanilla\./)).closest<HTMLElement>('[role="alert"]')!
+    expect(notice).toHaveTextContent('3 not approved — saving stopped part-way. Why for each is below; try the rest again in a moment:')
+    expect(within(notice).getByText(/no longer in the store/)).toBeInTheDocument()
+    expect(within(notice).getByRole('link', { name: 'Protein Bar' })).toBeInTheDocument()
+    expect(within(notice).getByText(/the database is not answering/)).toBeInTheDocument()
+    expect(within(notice).getByText(/not tried, because the one before it could not be saved/)).toBeInTheDocument()
+    expect(invalidateCatalogue).toHaveBeenCalled()
+  })
+
   it('with nothing ticked, approves only the ones that look ready', async () => {
     const calls = serve({ current: [WHEY, VANILLA] }, {
       '/api/portal/products': () => ({ body: { ok: true, approved: ['whey-van'], notReady: [] } }),

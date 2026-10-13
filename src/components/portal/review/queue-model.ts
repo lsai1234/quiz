@@ -73,12 +73,18 @@ export interface PullResult {
   filled?: string[]
   changed?: Record<string, string>
   answered?: number
-  unresolved?: Array<{ sku: string; message: string; refusal?: Exclude<StopKind, 'sample' | 'server'> }>
+  unresolved?: Array<{ sku: string; message: string; refusal?: RefusalStop }>
   /** PowerBody's refusal, with its kind, when the pull met one. */
-  refused?: { kind: Exclude<StopKind, 'sample' | 'server'>; message: string } | null
+  refused?: { kind: RefusalStop; message: string } | null
   trace?: Array<{ message?: string }>
   product?: CatalogueProduct
   remaining?: string[]
+  /**
+   * PowerBody stopped answering and the route's hard stop ended the pull: what
+   * they had sent is saved, the rest is "not reached", and `message` says so.
+   */
+  timedOut?: boolean
+  message?: string
 }
 
 /**
@@ -90,12 +96,17 @@ export interface PullResult {
  *   supplier-error  PowerBody would not answer, in their words
  *   sample          the supplier is set to Sample, so nothing reaches PowerBody
  *   server          our own server could not save — the next one would fail too
+ *   unanswered      PowerBody stopped answering: two products in a row ended
+ *                   with no answer (see `unansweredStop`)
  *
  * Every one of these is true of the NEXT product as much as this one, which is
  * the whole reason to stop: twenty more requests into a refusal teach nothing
  * and can lengthen a rate limit.
  */
-export type StopKind = 'rate-limited' | 'sandbox' | 'credentials' | 'supplier-error' | 'sample' | 'server'
+export type StopKind = 'rate-limited' | 'sandbox' | 'credentials' | 'supplier-error' | 'sample' | 'server' | 'unanswered'
+
+/** What PowerBody themselves can refuse with — the kinds a pull reports. */
+type RefusalStop = Exclude<StopKind, 'sample' | 'server' | 'unanswered'>
 
 export interface PullStop {
   kind: StopKind
@@ -109,7 +120,7 @@ export interface PullStop {
   carry only a sentence — the product route's own errors, the Sample supplier,
   an older server — and follow the wording of the resolver's `refusalOf`.
 */
-const REFUSALS: Array<[Exclude<StopKind, 'server'>, RegExp]> = [
+const REFUSALS: Array<[Exclude<StopKind, 'server' | 'unanswered'>, RegExp]> = [
   ['rate-limited', /limiting how fast|rate.?limit|too many requests|\b429\b|throttl/i],
   ['sandbox', /\bDEMO\b|sandbox/],
   ['credentials', /did not accept our login|access denied|invalid session|not authori[sz]ed/i],
@@ -117,7 +128,7 @@ const REFUSALS: Array<[Exclude<StopKind, 'server'>, RegExp]> = [
   ['supplier-error', /^PowerBody would not answer:|could not be reached/i],
 ]
 
-function classify(message: string): Exclude<StopKind, 'server'> | null {
+function classify(message: string): Exclude<StopKind, 'server' | 'unanswered'> | null {
   for (const [kind, pattern] of REFUSALS) if (pattern.test(message)) return kind
   return null
 }
@@ -153,6 +164,32 @@ export function stopFor(result: PullResult): PullStop | null {
     }
   }
   return null
+}
+
+/**
+ * A pull PowerBody never finished answering: no result line at all (the
+ * platform cut the request off), or the pull route's own hard stop.
+ */
+export function unanswered(result: PullResult | null): boolean {
+  return result === null || result.timedOut === true
+}
+
+/** Products in a row that may go unanswered before a bulk fill stops. */
+export const UNANSWERED_LIMIT = 2
+
+/**
+ * Whether a run should stop after `streak` products in a row went unanswered.
+ *
+ * One is one slow product, and the next may be fine. Two in a row is PowerBody
+ * not answering — and every further product costs minutes of waiting for the
+ * same silence: twenty of them was an hour and a half of hung requests.
+ */
+export function unansweredStop(streak: number): PullStop | null {
+  if (streak < UNANSWERED_LIMIT) return null
+  return {
+    kind: 'unanswered',
+    message: `PowerBody stopped answering — ${streak} products in a row ran out of time waiting for them, so their service may be down or very slow.`,
+  }
 }
 
 /** One line for what a pull did to a product, for the run's log. */

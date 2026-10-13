@@ -25,7 +25,7 @@ import { listPriceFor } from '@/lib/pricing/list-price'
 import { rhythmForSwap, classifySupplierProduct } from './mapping'
 import { variantLabels, commonProductName } from './variant-labels'
 import { putNamesRightWayRound } from './variant-naming'
-import { sizeFromName } from '@/lib/catalogue/split'
+import { normaliseSize, sizeFromName } from '@/lib/catalogue/split'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -211,7 +211,7 @@ export function rosterRowToProduct(
     as one of its flavours — the two ends swapped over.
   */
   const sharedName = commonProductName(siblingNames.filter((n): n is string => Boolean(n)))
-  const variants: CatalogueVariant[] = variantSkus.map((sku, index) => {
+  const fromSupplier: CatalogueVariant[] = variantSkus.map((sku, index) => {
     // Per-SKU stock when the crawl reached this flavour; the parent's otherwise.
     // Falling back rather than defaulting to zero is deliberate: an unknown
     // flavour showing as out of stock hides a product we can probably sell,
@@ -245,10 +245,35 @@ export function rosterRowToProduct(
       // Its own picture when PowerBody sent one for this SKU. Absent falls back
       // to the product's, which is what every variant used to show.
       ...(facts?.imageUrl ? { imageUrl: facts.imageUrl } : {}),
-      ...(variantServings !== null ? { servings: variantServings } : {}),
+      // PowerBody's own count for this SKU, and recorded as theirs, so a later
+      // pull may bring their corrected figure (see `servingsSource`).
+      ...(variantServings !== null ? { servings: variantServings, servingsSource: 'supplier' as const } : {}),
       ...(variantCost > 0 ? { cost: variantCost } : {}),
     }
   })
+  /*
+    A serving count typed in the sheet is a person's judgement — the same as
+    one typed on the product page — so it goes on the SKUs it describes and is
+    recorded as the founder's.
+
+    It describes the row's main SKU, so it goes on every SKU of that size: a
+    flavour of the same tub is the same number of scoops, while a different
+    size (the 454g bag beside the capsules) keeps PowerBody's own count. Left
+    on the product alone it was a number the shelf never showed — the shop
+    reads each SKU's own count first — and the first pull to give the SKUs
+    PowerBody's count then moved the product, and the plan with it, off the
+    sheet's figure. A row with no count leaves the SKUs alone: the 30 assumed
+    above is a guess, and a pull should replace it.
+  */
+  const sheetServings = !accessory && row.servings && row.servings > 0 ? row.servings : null
+  const main = fromSupplier.find((v) => v.sku === row.sku) ?? fromSupplier[0]
+  const mainSize = normaliseSize(main?.size)
+  const variants: CatalogueVariant[] =
+    sheetServings === null
+      ? fromSupplier
+      : fromSupplier.map((v) =>
+          normaliseSize(v.size) === mainSize ? { ...v, servings: sheetServings, servingsSource: 'founder' as const } : v,
+        )
   /*
     Say which flavours are still showing a code. It is the one import fault a
     founder cannot diagnose from the review screen — "P45757" looks like data

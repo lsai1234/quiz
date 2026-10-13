@@ -1,4 +1,5 @@
 import { repriceVariants, type SkuFacts } from '../variant-pricing'
+import { applyStockLevels } from '../sync'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 /**
@@ -62,7 +63,10 @@ describe('repriceVariants — the product follows its master', () => {
     expect(repriceVariants(p, facts([['P100', { cost: 11.12, rrp: 15.5, productId: '4401' }], ['P200', { cost: 11.5, productId: '4402' }]]), false)).toBeNull()
   })
 
-  it('reads the master past one that is out of stock, the way the shop does', () => {
+  it('keeps cost, RRP and id on the STORED master when it is out of stock — only the price follows the one on sale', () => {
+    // The nightly sync reads the stored master. A pull that skipped past an
+    // out-of-stock master set Vanilla's cost; the sync put Chocolate's back
+    // and reported "cost moved"; the next pull flipped it again.
     const p = whey({
       cost: undefined,
       variants: [
@@ -71,7 +75,41 @@ describe('repriceVariants — the product follows its master', () => {
       ],
     })
     const out = repriceVariants(p, facts([['P100', { cost: 11.12, rrp: 15.5, productId: '4401' }], ['P200', { cost: 11.5, rrp: 16, productId: '4402' }]]), false)!
-    expect(out.product).toMatchObject({ cost: 11.5, supplierRrp: 16, supplierProductId: '4402', basePrice: 22.99 })
+    expect(out.product).toMatchObject({ cost: 11.12, supplierRrp: 15.5, supplierProductId: '4401', basePrice: 22.99 })
+  })
+
+  it('agrees with the nightly sync about the cost, so neither flips it back', () => {
+    const p = whey({
+      cost: 11.12,
+      supplierRrp: 15.5,
+      variants: [
+        variant({ id: 'choc', sku: 'P100', price: 21.99, available: false, cost: 11.12, inventory: 0 }),
+        variant({ id: 'van', sku: 'P200', price: 22.99, cost: 11.5, inventory: 9 }),
+      ],
+    })
+    const pulled = repriceVariants(p, facts([['P100', { cost: 11.12, rrp: 15.5 }], ['P200', { cost: 11.5, rrp: 16 }]]), false)
+    const after = pulled?.product ?? p
+    expect(after.cost).toBe(11.12)
+
+    const night = applyStockLevels([after], [
+      { sku: 'P100', productId: '4401', stock: 0, inStock: false, wholesalePrice: 11.12, rrp: 15.5, updatedAt: '' },
+      { sku: 'P200', productId: '4402', stock: 9, inStock: true, wholesalePrice: 11.5, rrp: 16, updatedAt: '' },
+    ])
+    expect(night.products[0].cost).toBe(11.12)
+    expect(night.changes.some((c) => 'costWas' in c)).toBe(false)
+  })
+
+  it('never takes a non-numeric id from the master — the sample catalogue’s look like SKUs', () => {
+    const p = whey({
+      supplierProductId: null,
+      variants: [
+        variant({ id: 'choc', sku: 'P100', price: 21.99, supplierProductId: 'P89490' }),
+        variant({ id: 'van', sku: 'P200', price: 22.99 }),
+      ],
+    })
+    const out = repriceVariants(p, facts([['P100', { cost: 11.12, productId: 'P89490' }], ['P200', { cost: 11.5, productId: 'P12345' }]]), false)!
+    expect(out.product.supplierProductId ?? null).toBeNull()
+    expect(out.product.variants[1].supplierProductId).toBeUndefined()
   })
 
   it('keeps the product’s RRP when the master’s SKU said none', () => {

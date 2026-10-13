@@ -315,7 +315,14 @@ describe('setProductOverride', () => {
     expect(outcome).toMatchObject({ status: 'added', id: 'pb-future' })
 
     const { imported, overrides } = await fresh()
-    expect(imported[0]).toMatchObject({ id: 'pb-future', shortName: 'Future', title: 'Future Whey', review: PENDING })
+    // Still waiting for review — and what the patch set is recorded as the
+    // founder's, so a pull does not put PowerBody's title back over it.
+    expect(imported[0]).toMatchObject({
+      id: 'pb-future',
+      shortName: 'Future',
+      title: 'Future Whey',
+      review: { ...PENDING, sources: { title: 'founder', shortName: 'founder' } },
+    })
     expect(overrides).toEqual({})
   })
 })

@@ -1,4 +1,4 @@
-import { fieldLabels, needsPull, pullSummary, stopFor, supplierGaps } from '../queue-model'
+import { fieldLabels, needsPull, pullSummary, stopFor, supplierGaps, unanswered, unansweredStop } from '../queue-model'
 import { pendingProduct } from './fixtures'
 
 describe('needsPull', () => {
@@ -92,5 +92,19 @@ describe('pullSummary', () => {
 describe('fieldLabels', () => {
   it('names review fields the way the product page does', () => {
     expect(fieldLabels(['stackSlots', 'shortReason', 'mystery'])).toEqual(['Stack slots', 'Card copy', 'mystery'])
+  })
+})
+
+describe('unanswered', () => {
+  it('is a pull with no result line, or one the route had to stop', () => {
+    expect(unanswered(null)).toBe(true)
+    expect(unanswered({ ok: true, timedOut: true, answered: 2 })).toBe(true)
+    expect(unanswered({ ok: false, status: 504, timedOut: true, error: 'PowerBody did not answer in time' })).toBe(true)
+    expect(unanswered({ ok: true, answered: 0, unresolved: [] })).toBe(false)
+  })
+
+  it('stops a run at the second in a row, not the first', () => {
+    expect(unansweredStop(1)).toBeNull()
+    expect(unansweredStop(2)).toMatchObject({ kind: 'unanswered', message: expect.stringMatching(/stopped answering/) })
   })
 })

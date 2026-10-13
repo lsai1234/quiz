@@ -1,8 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import Link from 'next/link'
 import { Badge, Button, Card } from '@/components/system'
 import type { FieldSource } from '@/lib/catalogue/types'
+import { REVIEW_FIELDS } from '@/lib/catalogue/review'
 import type { ProductPayload } from '@/lib/portal/product-edit'
 import type { ProductSection } from '@/lib/portal/product-links'
 import { invalidateCatalogue } from '@/lib/catalogue/load'
@@ -220,20 +222,33 @@ export function Section({
 
   return (
     <section id={id} aria-labelledby={`${id}-title`} style={{ scrollMarginTop: 'var(--space-8)' }}>
-      <Card elevation={1} tone={tone} className="space-y-3">
+      {/*
+        The section's own card stays untinted. A tinted fill is neither surface
+        the small-text contrast rule is measured on (tokens.css), and the cards
+        nested inside it — SKU rows, confirm panels — put their grey meta text
+        below AA on it. What needs doing is said by a badge beside the title.
+      */}
+      <Card elevation={1} className="space-y-3">
         <div className="flex items-start justify-between flex-wrap" style={{ gap: 'var(--space-2)' }}>
           <div className="min-w-0 space-y-1" style={{ flex: '1 1 16rem' }}>
-            <h2
-              id={`${id}-title`}
-              style={{
-                fontSize: 'var(--text-lead)',
-                fontWeight: 'var(--weight-strong)',
-                fontFamily: 'var(--font-display)',
-                color: 'var(--ink-1)',
-              }}
-            >
-              {title}
-            </h2>
+            <div className="flex items-center flex-wrap" style={{ gap: 'var(--space-2)' }}>
+              <h2
+                id={`${id}-title`}
+                style={{
+                  fontSize: 'var(--text-lead)',
+                  fontWeight: 'var(--weight-strong)',
+                  fontFamily: 'var(--font-display)',
+                  color: 'var(--ink-1)',
+                }}
+              >
+                {title}
+              </h2>
+              {tone === 'attention' && (
+                <Badge tone="attention" dot>
+                  Needs a look
+                </Badge>
+              )}
+            </div>
             {summary && <div style={META}>{summary}</div>}
           </div>
           <div className="flex items-center flex-wrap" style={{ gap: 'var(--space-2)' }}>
@@ -260,36 +275,76 @@ export function Section({
  * left as they typed it. Dirtiness is measured against the value a field was
  * seeded from, not against the latest product — otherwise a save elsewhere
  * would light up this section's Save and send back yesterday's value.
+ *
+ * ── Saved means saved ───────────────────────────────────────────────────────
+ * A section calls `saved(sent)` — `sent` being the draft as it was when Save was
+ * pressed — once the server has answered with the product. Every field that
+ * still reads as it was sent then takes the server's value, whatever form that
+ * is in. Without this, a field the server tidied stayed "changed" for good:
+ * "12.50" is stored as 12.5 and comes back as "12.5", "powder,capsule" comes
+ * back as "powder, capsule", a description loses its last blank line — and the
+ * section said "Saved." beside a live "Save 1 change", the page said "Not saved
+ * yet", and leaving asked whether to throw away an edit that was in the shop.
+ * Pressing Save again sent the same thing and changed nothing, so it never
+ * cleared. A field typed into again while the save was on its way no longer
+ * reads as sent, so it is left as typed — that is a newer edit, still unsaved.
+ *
+ * Runs on the next seed or on its own, whichever comes: a save the server
+ * normalised back to the value already on file leaves the seed unchanged, and
+ * still has to clear.
  */
 export function useDraft<T extends Record<string, unknown>>(seed: T) {
   const [seeded, setSeeded] = useState<T>(seed)
   const [draft, setDraft] = useState<T>(seed)
+  const [saves, setSaves] = useState(0)
+  const sentRef = useRef<Partial<T> | null>(null)
   const seedKey = JSON.stringify(seed)
 
   useEffect(() => {
     const next = JSON.parse(seedKey) as T
+    const sent = sentRef.current
+    sentRef.current = null
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
     setDraft((current) => {
       const out = { ...current }
       for (const key of Object.keys(next) as Array<keyof T>) {
-        if (JSON.stringify(current[key]) === JSON.stringify(seeded[key])) out[key] = next[key]
+        const untouched = same(current[key], seeded[key])
+        const justSaved = sent !== null && key in sent && same(current[key], sent[key])
+        if (untouched || justSaved) out[key] = next[key]
       }
       return out
     })
     setSeeded(next)
     // `seeded` is deliberately the value from before this seed arrived.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedKey])
+  }, [seedKey, saves])
 
   const set = useCallback(<K extends keyof T>(key: K, value: T[K]) => setDraft((d) => ({ ...d, [key]: value })), [])
+  const saved = useCallback((sent: Partial<T>) => {
+    sentRef.current = sent
+    setSaves((n) => n + 1)
+  }, [])
   const changed = (Object.keys(draft) as Array<keyof T>).filter(
     (k) => JSON.stringify(draft[k]) !== JSON.stringify(seeded[k]),
   )
   const reset = useCallback(() => setDraft(seeded), [seeded])
-  return { draft, set, setDraft, changed, reset, seeded }
+  return { draft, set, setDraft, changed, reset, seeded, saved }
 }
 
-/** Shows a section's outcome: what was saved, or why not. */
-export function Outcome({ done, error }: { done: string | null; error: string | null }) {
+/**
+ * Shows a section's outcome: what was saved, or why not — and, with `link`,
+ * where to go to put the "why not" right (Settings → Supplier for a PowerBody
+ * refusal, say).
+ */
+export function Outcome({
+  done,
+  error,
+  link,
+}: {
+  done: string | null
+  error: string | null
+  link?: { label: string; href: string } | null
+}) {
   return (
     <>
       {done && (
@@ -300,10 +355,47 @@ export function Outcome({ done, error }: { done: string | null; error: string | 
       {error && (
         <p role="alert" style={{ ...META, color: 'var(--tone-critical)' }}>
           {error}
+          {link && (
+            <>
+              {' '}
+              <Link href={link.href} style={{ textDecoration: 'underline' }}>
+                {link.label}
+              </Link>
+            </>
+          )}
         </p>
       )}
     </>
   )
+}
+
+// ── Fill the blanks ──────────────────────────────────────────────────────────
+
+/** What `POST /api/portal/products {action: 'fill-blanks'}` says it did, under `fill`. */
+export interface FillReport {
+  filled: string[]
+  source: FieldSource
+}
+
+/**
+ * One sentence for what "Fill the blanks" actually did — read from the server's
+ * answer, never assumed.
+ *
+ * It used to say "Filled what was blank. Each is marked as written by the
+ * model" whatever happened: when every blank was already filled and nothing was
+ * written, and when no model was available and the fields were keyword guesses.
+ * A founder told a model checked their product, when nothing or a word-match
+ * did, approves on the strength of it.
+ */
+export function fillOutcome(fill: FillReport | null | undefined): string {
+  if (!fill || !Array.isArray(fill.filled)) return 'Done — check the fields marked for review below.'
+  if (fill.filled.length === 0) {
+    return 'Nothing was filled: every field it can answer already has a value, or it had no answer for the blank ones. Fill any still blank by hand.'
+  }
+  const labels = fill.filled.map((key) => REVIEW_FIELDS.find((f) => f.key === key)?.label ?? key).join(', ')
+  return fill.source === 'ai'
+    ? `Filled ${labels}. Each is marked “${SOURCE_LABEL.ai}” and still needs your check before it can be approved.`
+    : `Filled ${labels} with keyword guesses — the AI was not available. Each is marked “${SOURCE_LABEL.heuristic}”; check each one before approving.`
 }
 
 /** "Product X: 3 problems" → one sentence per problem. */

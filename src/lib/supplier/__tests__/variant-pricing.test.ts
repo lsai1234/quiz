@@ -165,6 +165,60 @@ describe('repriceVariants', () => {
     expect(fixed.variants.every((v) => v.servings == null)).toBe(true)
   })
 
+  describe('servings somebody chose', () => {
+    // A 1kg tub PowerBody count at 66, which the founder corrected.
+    const FACT = new Map<string, SkuFacts>([['P100', { cost: 11.12, rrp: 15.5, servings: 66, name: 'Whey - 1kg' }]])
+    const one = (over: Partial<CatalogueVariant>, extra: Partial<CatalogueProduct> = {}) =>
+      product({ variants: [variant({ id: 'caps', sku: 'P100', ...over })], defaultVariantId: 'caps', ...extra })
+
+    it('never replaces a count the founder typed', () => {
+      const out = repriceVariants(one({ servings: 60, servingsSource: 'founder', cost: 11.12 }, { servings: 60, cost: 11.12, supplierRrp: 15.5 }), FACT, true)
+      expect(out?.product.variants[0].servings ?? 60).toBe(60)
+      expect(out?.product.servings ?? 60).toBe(60)
+    })
+
+    it('never replaces a count on an older record that does not say where it came from', () => {
+      // Nothing can tell that one was not typed — so it is treated as if it was.
+      const out = repriceVariants(one({ servings: 40, cost: 11.12 }, { servings: 40, cost: 11.12, supplierRrp: 15.5 }), FACT, false)
+      expect(out?.product.variants[0].servings ?? 40).toBe(40)
+    })
+
+    it('fills a SKU with no count, and marks it as PowerBody’s', () => {
+      const { product: fixed, changed } = repriceVariants(one({}), FACT, false)!
+      expect(fixed.variants[0]).toMatchObject({ servings: 66, servingsSource: 'supplier' })
+      expect(changed.P100).toContain('66 servings')
+    })
+
+    it('refreshes a count PowerBody gave in the first place', () => {
+      const { product: fixed } = repriceVariants(one({ servings: 60, servingsSource: 'supplier' }), FACT, false)!
+      expect(fixed.variants[0]).toMatchObject({ servings: 66, servingsSource: 'supplier' })
+    })
+
+    it('moves the product’s count and the plan with the master’s, when the plan was following it', () => {
+      const p = one({ servings: 60, servingsSource: 'supplier' }, {
+        servings: 60,
+        consumption: { cadence: 'daily', servingsPerUnit: 60 },
+      })
+      const { product: fixed } = repriceVariants(p, FACT, false)!
+      expect(fixed.servings).toBe(66)
+      expect(fixed.consumption?.servingsPerUnit).toBe(66)
+
+      // A plan count set apart from the shelf's was set on purpose.
+      const own = repriceVariants({ ...p, consumption: { cadence: 'daily', servingsPerUnit: 45 } }, FACT, false)!
+      expect(own.product.servings).toBe(66)
+      expect(own.product.consumption?.servingsPerUnit).toBe(45)
+    })
+  })
+
+  it('never stores a non-numeric id — the sample catalogue’s ids look like SKUs', () => {
+    const sample = new Map<string, SkuFacts>([
+      ['P100', { ...FACTS.get('P100')!, productId: 'P89490' }],
+      ['P200', { ...FACTS.get('P200')!, productId: '4402' }],
+    ])
+    const { product: fixed } = repriceVariants(product(), sample, false)!
+    expect(fixed.variants.map((v) => v.supplierProductId ?? null)).toEqual([null, '4402'])
+  })
+
   it('ignores a SKU the supplier never answered for', () => {
     const partial = new Map<string, SkuFacts>([['P100', FACTS.get('P100')!]])
     const { product: fixed } = repriceVariants(product(), partial, true)!

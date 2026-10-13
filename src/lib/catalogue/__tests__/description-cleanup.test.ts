@@ -40,6 +40,21 @@ function product(id: string, description: string): CatalogueProduct {
   return { ...MOCK_CATALOGUE[0], id, title: id, description }
 }
 
+/** With an import's review record: the description is PowerBody's. */
+function reviewed(p: CatalogueProduct, status: 'pending' | 'approved' = 'approved'): CatalogueProduct {
+  return {
+    ...p,
+    review: { status, sources: { description: 'supplier', title: 'supplier' }, confirmed: ['description'], importedAt: '2026-10-01T09:00:00.000Z' },
+  }
+}
+
+/** …and one whose description the founder wrote on the product page. */
+function founders(p: CatalogueProduct): CatalogueProduct {
+  const r = reviewed(p)
+  return { ...r, review: { ...r.review!, sources: { ...r.review!.sources, description: 'founder' } } }
+}
+
+
 beforeEach(() => {
   store.imported = []
   addImportedProducts.mockClear()
@@ -59,6 +74,12 @@ describe('scanDescriptions', () => {
     expect(scan.candidates.find((c) => c.id === 'a')?.hasMarkup).toBe(true)
     expect(scan.candidates.find((c) => c.id === 'b')?.hasMarkup).toBe(false)
     expect(addImportedProducts).not.toHaveBeenCalled()
+  })
+
+  it('says which descriptions the founder wrote, so the rewrite can leave them out', async () => {
+    store.imported = [product('a', 'PowerBody copy.'), founders(product('b', 'Our own words.'))]
+    const scan = await scanDescriptions()
+    expect(scan.candidates.map((c) => [c.id, c.founderWritten])).toEqual([['a', false], ['b', true]])
   })
 
   it('does not offer a product with no description as a candidate', async () => {
@@ -168,5 +189,100 @@ describe('cleanupDescriptions', () => {
     const result = await cleanupDescriptions({ ids: ['a', 'ghost'], write: true })
     expect(result.scanned).toBe(1)
     expect(result.changes).toHaveLength(1)
+  })
+
+  describe('the founder’s own words', () => {
+    it('the AI rewrite leaves a description the founder wrote alone, and says so', async () => {
+      store.imported = [founders(product('mine', 'Our own words about this whey.')), reviewed(product('theirs', 'PowerBody copy.'))]
+      rewriteDescription.mockResolvedValue({ text: 'A rewrite.', source: 'ai' })
+
+      const result = await cleanupDescriptions({ ids: ['mine', 'theirs'], ai: true, write: true })
+
+      expect(store.imported.find((p) => p.id === 'mine')?.description).toBe('Our own words about this whey.')
+      expect(store.imported.find((p) => p.id === 'theirs')?.description).toBe('A rewrite.')
+      expect(result.founderWritten).toBe(1)
+      expect(result.changes.map((c) => c.id)).toEqual(['theirs'])
+      // Not even asked: the model is never sent the founder's text.
+      expect(rewriteDescription).toHaveBeenCalledTimes(1)
+    })
+
+    it('the markup strip still cleans it — it keeps every word, and they stay the founder’s', async () => {
+      store.imported = [founders(product('mine', DIRTY))]
+      const result = await cleanupDescriptions({ ids: ['mine'], write: true })
+      expect(store.imported[0].description).toBe(CLEANED)
+      expect(store.imported[0].review?.sources.description).toBe('founder')
+      expect(result.founderWritten).toBe(0)
+    })
+
+    it('…but does not reflow the founder’s paragraphs when there is no markup to strip', async () => {
+      const typed = 'First paragraph.\n\nSecond paragraph,   spaced as typed.'
+      store.imported = [founders(product('mine', typed))]
+      const result = await cleanupDescriptions({ ids: ['mine'], write: true })
+      expect(store.imported[0].description).toBe(typed)
+      expect(result).toMatchObject({ changes: [], founderWritten: 1, written: false })
+    })
+  })
+
+  describe('where the description came from, after', () => {
+    it('a kept rewrite is the model’s, so a pull does not put the supplier’s copy back', async () => {
+      store.imported = [reviewed(product('a', DIRTY))]
+      rewriteDescription.mockResolvedValueOnce({ text: 'A 700 ml blue shaker.', source: 'ai' })
+      await cleanupDescriptions({ ids: ['a'], ai: true, write: true })
+      expect(store.imported[0].review?.sources.description).toBe('ai')
+      // On sale already: approving confirmed everything, and that stands.
+      expect(store.imported[0].review?.confirmed).toEqual(['description'])
+    })
+
+    it('a rewrite on a product still waiting for review has to be checked again', async () => {
+      store.imported = [reviewed(product('a', DIRTY), 'pending')]
+      rewriteDescription.mockResolvedValueOnce({ text: 'A 700 ml blue shaker.', source: 'ai' })
+      await cleanupDescriptions({ ids: ['a'], ai: true, write: true })
+      expect(store.imported[0].review?.sources.description).toBe('ai')
+      expect(store.imported[0].review?.confirmed).toEqual([])
+    })
+
+    it('the plain clean keeps the source — PowerBody’s words, cleaned as the import cleans them', async () => {
+      store.imported = [reviewed(product('a', DIRTY))]
+      await cleanupDescriptions({ ids: ['a'], write: true })
+      expect(store.imported[0].description).toBe(CLEANED)
+      expect(store.imported[0].review?.sources.description).toBe('supplier')
+    })
+  })
+
+  describe('a description changed while the batch was working', () => {
+    it('is not overwritten with a rewrite of the old text', async () => {
+      store.imported = [reviewed(product('a', DIRTY))]
+      rewriteDescription.mockImplementationOnce(async () => {
+        // The founder saves a new description in Shop listing meanwhile.
+        store.imported = store.imported.map((p) => ({
+          ...p,
+          description: 'Founder wrote this just now.',
+          review: { ...p.review!, sources: { ...p.review!.sources, description: 'founder' as const } },
+        }))
+        return { text: 'AI rewrite of the old text.', source: 'ai' }
+      })
+
+      const result = await cleanupDescriptions({ ids: ['a'], ai: true, write: true })
+
+      expect(store.imported[0].description).toBe('Founder wrote this just now.')
+      expect(store.imported[0].review?.sources.description).toBe('founder')
+      // Reported as it happened: nothing rewritten, one left because it moved.
+      expect(result).toMatchObject({ changes: [], aiUsed: 0, editedMeanwhile: 1, written: false })
+    })
+
+    it('still saves the rest of the batch', async () => {
+      store.imported = [product('a', DIRTY), product('b', DIRTY)]
+      rewriteDescription.mockImplementationOnce(async () => {
+        store.imported = store.imported.map((p) => (p.id === 'a' ? { ...p, description: 'Changed meanwhile.' } : p))
+        return { text: 'Rewrite of a.', source: 'ai' }
+      })
+      rewriteDescription.mockResolvedValueOnce({ text: 'Rewrite of b.', source: 'ai' })
+
+      const result = await cleanupDescriptions({ ids: ['a', 'b'], ai: true, write: true })
+
+      expect(store.imported.map((p) => p.description)).toEqual(['Changed meanwhile.', 'Rewrite of b.'])
+      expect(result).toMatchObject({ aiUsed: 1, editedMeanwhile: 1, written: true })
+      expect(result.changes.map((c) => c.id)).toEqual(['b'])
+    })
   })
 })

@@ -266,12 +266,26 @@ export function subscriptionOrderLines(
     const variant = found?.variant
     return {
       sku: variant?.sku ?? null,
-      productId: line.productId,
+      /*
+        The product that sells this SKU NOW, not the one the line was written
+        against. A subscription line keeps the id it was chosen under, and after
+        a merge or a split that id names a product that no longer holds the SKU
+        — removed, or the parent a size was split off. Everything downstream
+        finds the order line's product by this id: the per-SKU PowerBody id the
+        stock check asks with (`supplierIdFor`), the parcel weight, the VAT rate
+        and the swap candidates for an out-of-stock line. With the stale id each
+        of those missed, so a renewal was checked by the slow SKU search, sent
+        without a weight, charged standard VAT and offered no swaps. The title
+        stays what the member chose and sees on their invoice.
+      */
+      productId: product?.id ?? line.productId,
       title: line.productTitle,
       variantTitle: line.variantTitle || null,
       quantity: line.quantity,
       unitPrice: round(line.pricePerDelivery / Math.max(1, line.quantity)),
-      supplierCost: product?.cost ?? null,
+      // The SKU's own cost where it knows one: once SKUs from several products
+      // share one, the product's cost is only its master's.
+      supplierCost: variant?.cost ?? product?.cost ?? null,
     }
   })
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { getPublicCatalogue } from '@/lib/catalogue/resolve'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { ProductPageView } from '@/components/shop/ProductPageView'
 
@@ -28,7 +28,7 @@ interface PageProps {
 
 async function findProduct(handle: string) {
   await syncPortalRuntime()
-  const { products } = await getResolvedCatalogue()
+  const { products } = await getPublicCatalogue()
   return { product: products.find((p) => p.handle === handle) ?? null, products }
 }
 
