@@ -360,7 +360,21 @@ async function runOn(
 
   const repaired: Repair[] = []
 
-  for (const product of slice) {
+  /*
+    Priced against each product as it stands NOW, not as it was read before
+    PowerBody were asked.
+
+    Asking takes time — a batch of SKUs under their rate limit, or minutes when
+    one product's missing ids are looked up — and the founder may be editing
+    the same product meanwhile. Priced against the earlier copy, a serving
+    count (or a price) they had just typed still looked like PowerBody's to
+    refresh, and the save put PowerBody's back over it. Read again here, the
+    rules in `repriceVariants` see what the founder chose and leave it.
+  */
+  const current = new Map((await listEditableProducts()).map((e) => [e.product.id, e.product]))
+
+  for (const read of slice) {
+    const product = current.get(read.id) ?? read
     const result = repriceVariants(product, facts, force)
     if (!result) continue
 

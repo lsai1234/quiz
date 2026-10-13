@@ -260,7 +260,16 @@ export function AddProducts() {
             // One lookup takes 200 codes. A longer list goes 200 at a time —
             // each press takes the next 200 not already on the page — and the
             // group says how many are left, so none is silently left behind.
-            const onPage = new Set(lookup.groups.flatMap((g) => g.cards.map((c) => c.code)))
+            //
+            // "On the page" means in a roster group, where this press looks
+            // for the id. A code pasted earlier sits in its own group, and
+            // there a SKU already on one of our products is answered "Already
+            // in …" without asking PowerBody — right for a paste, where there
+            // is nothing to add, and no answer at all to "what is its id?".
+            // Counting that card as done skipped the very SKU the roster
+            // needs; looked up here instead, it moves into this group and is
+            // searched.
+            const onPage = new Set(lookup.groups.filter((g) => g.source === 'roster').flatMap((g) => g.cards.map((c) => c.code)))
             const all = splitCodes(skus.join('\n'))
             const todo = all.filter((code) => !onPage.has(code))
             const next = (todo.length > 0 ? todo : all).slice(0, MAX_CODES)

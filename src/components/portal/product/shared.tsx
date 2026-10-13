@@ -378,6 +378,16 @@ export interface FillReport {
 }
 
 /**
+ * Fields the fill writes when blank that Review does not walk, so they have no
+ * review label: named as the product page names them, never by their code name
+ * ("effectOnset"). The words are the edit rules' own (`PRODUCT_FIELDS`).
+ */
+const FILL_ONLY_LABEL: Record<string, string> = {
+  recommendationBasis: 'Keep-or-change advice',
+  effectOnset: 'When it is felt',
+}
+
+/**
  * One sentence for what "Fill the blanks" actually did — read from the server's
  * answer, never assumed.
  *
@@ -392,7 +402,7 @@ export function fillOutcome(fill: FillReport | null | undefined): string {
   if (fill.filled.length === 0) {
     return 'Nothing was filled: every field it can answer already has a value, or it had no answer for the blank ones. Fill any still blank by hand.'
   }
-  const labels = fill.filled.map((key) => REVIEW_FIELDS.find((f) => f.key === key)?.label ?? key).join(', ')
+  const labels = fill.filled.map((key) => REVIEW_FIELDS.find((f) => f.key === key)?.label ?? FILL_ONLY_LABEL[key] ?? key).join(', ')
   return fill.source === 'ai'
     ? `Filled ${labels}. Each is marked “${SOURCE_LABEL.ai}” and still needs your check before it can be approved.`
     : `Filled ${labels} with keyword guesses — the AI was not available. Each is marked “${SOURCE_LABEL.heuristic}”; check each one before approving.`

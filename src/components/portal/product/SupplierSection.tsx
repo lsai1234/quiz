@@ -71,8 +71,12 @@ export function SupplierSection({
 
   useEffect(() => onDirty('Supplier', changed.length > 0), [changed.length, onDirty])
 
-  /** `sent`: the draft as it was when Save was pressed (see `useDraft`). */
-  async function send(body: Record<string, unknown>, label: string, success: string, sent?: typeof draft) {
+  /**
+   * `sent`: the draft as it was when Save was pressed (see `useDraft`).
+   * `mirror`: the master SKU's name, when the edit carries the same cost or id
+   * for it as for the product (see `save`).
+   */
+  async function send(body: Record<string, unknown>, label: string, success: string, sent?: typeof draft, mirror?: string) {
     setBusy(label)
     setDone(null)
     setError(null)
@@ -80,7 +84,15 @@ export function SupplierSection({
     const result = await postProduct('/api/portal/products', { id: product.id, ...body })
     setBusy(null)
     if (!result.ok) {
-      setError(errorText(result))
+      /*
+        The cost and the id go to the product and to its master SKU, and the
+        server checks each copy, so a bad one came back twice: "PowerBody
+        product id must be PowerBody’s numeric product id. P1: powerbody
+        product id must be …". The SKU's copy is the same value under the same
+        rule, so its sentence is dropped and the founder reads each problem once.
+      */
+      const once = mirror ? result.problems?.filter((p) => !p.startsWith(`${mirror}: `)) : undefined
+      setError(errorText(once && once.length > 0 ? { ...result, problems: once } : result))
       setLink(result.link ?? null)
       return
     }
@@ -106,7 +118,13 @@ export function SupplierSection({
     const body: Record<string, unknown> = { set: fields }
     const toMaster = master != null && Object.keys(onMaster).length > 0
     if (toMaster) body.variants = [{ id: master.id, ...onMaster }]
-    void send(body, 'save', toMaster ? 'Saved — on the master SKU too, so its prices and orders use it.' : 'Saved.', draft)
+    void send(
+      body,
+      'save',
+      toMaster ? 'Saved — on the master SKU too, so its prices and orders use it.' : 'Saved.',
+      draft,
+      toMaster ? (master.sku ?? master.title) : undefined,
+    )
   }
 
   /**
@@ -160,7 +178,12 @@ export function SupplierSection({
       const asked = answered + report.unresolved.length
       const n = Object.keys(report.changed).length
       const updated = `${n} SKU${n === 1 ? '' : 's'} updated${report.filled.length ? `; filled ${report.filled.join(', ')}` : ''}`
-      if (stop) {
+      // A refusal the pull got past is not one. PowerBody's own error on the
+      // batch of ids we hold does not stop it — each SKU is then looked up on
+      // its own — and when every one of them answered, `refused` only records
+      // what happened on the way. Read as a refusal, a full answer came out red
+      // as "answered for 2 of 2 SKUs … but not for the rest".
+      if (stop && report.unresolved.length > 0) {
         /*
           PowerBody refused — rate limit, DEMO sandbox, login, their error. The
           route still answers ok (it saves whatever did arrive), and this used

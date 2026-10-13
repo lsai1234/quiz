@@ -693,6 +693,37 @@ describe('Add products — from a roster spreadsheet', () => {
     expect(within(p8).getByRole('link', { name: 'Creatine →' })).toBeInTheDocument()
   })
 
+  it('searches a roster SKU even when a pasted lookup already answered it “Already in your catalogue”', async () => {
+    // A pasted code the roster has put on a product is held, unsearched — right
+    // for a paste, where there is nothing to add. "Find their ids" must not take
+    // that held card as the code's answer and skip it: the id is still missing.
+    const { calls } = router({
+      ...STANDING,
+      'POST /api/portal/products/import-csv': importWithoutIds(['P7', 'P8']),
+      'POST /api/portal/supplier/resolve': (body) => {
+        if (Array.isArray(body?.codes)) return quickPass((body.codes as string[]).map((c) => quick(c, { stored: ON_CREATINE(c) })))
+        const code = String(body?.code)
+        return ndjson([[result(code, { productId: code.slice(1), via: 'search', card: row({ sku: code, productId: code.slice(1), name: `Creatine ${code}` }), stored: ON_CREATINE(code) })]])
+      },
+    })
+    render(<AddProducts />)
+    const user = userEvent.setup()
+
+    await lookUp(user, 'P7')
+    // Held: a link to the product, and PowerBody not asked.
+    expect(await screen.findByRole('link', { name: 'Creatine →' })).toBeInTheDocument()
+    expect(searchesIn(calls)).toEqual([])
+
+    await findTheirIds(user)
+
+    // Both are searched — the held P7 included — and each one found says its id is kept.
+    await waitFor(() => expect(searchesIn(calls)).toEqual(['P7', 'P8']))
+    expect(await screen.findByText(/PowerBody id 7 found and kept/)).toBeInTheDocument()
+    expect(await screen.findByText(/PowerBody id 8 found and kept/)).toBeInTheDocument()
+    // One card per code: the roster's search replaced the held one rather than sitting beside it.
+    expect(screen.getAllByRole('link', { name: 'Creatine →' })).toHaveLength(2)
+  })
+
   it('looks up the SKUs a roster brought in without a PowerBody id', async () => {
     const { calls } = router({
       ...STANDING,

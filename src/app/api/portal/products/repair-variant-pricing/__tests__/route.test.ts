@@ -94,6 +94,24 @@ describe('POST /api/portal/products/repair-variant-pricing — one product', () 
     expect((saved.mock.calls[0][1] as CatalogueProduct).variants[0].supplierProductId).toBe('1100')
   })
 
+  it('prices the product as it stands after PowerBody answered, so a count typed meanwhile survives', async () => {
+    // Read before PowerBody were asked: PowerBody's own 66. While the lookup
+    // runs, the founder corrects it to 60 on the product page.
+    const asRead = product({ supplierProductId: '1100', servings: 66, servingsSource: 'supplier' })
+    const typedMeanwhile = product({ supplierProductId: '1100', servings: 60, servingsSource: 'founder' })
+    ;(listEditableProducts as jest.Mock)
+      .mockResolvedValueOnce([{ product: asRead, state: 'live' }])
+      .mockResolvedValue([{ product: typedMeanwhile, state: 'live' }])
+    const { provider } = supplier('powerbody', { '1100': pb('P100', '1100', 70) })
+    ;(getSupplier as jest.Mock).mockResolvedValue(provider)
+
+    await repair()
+    expect(saved).toHaveBeenCalledTimes(1)
+    const [before, after] = saved.mock.calls[0] as [CatalogueProduct, CatalogueProduct]
+    expect(before).toBe(typedMeanwhile)
+    expect(after.variants[0]).toMatchObject({ servings: 60, servingsSource: 'founder', cost: 20 })
+  })
+
   it('leaves a serving count the founder typed', async () => {
     ;(listEditableProducts as jest.Mock).mockResolvedValue([
       { product: product({ supplierProductId: '1100', servings: 60, servingsSource: 'founder' }), state: 'live' },

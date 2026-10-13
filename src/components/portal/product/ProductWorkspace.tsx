@@ -99,7 +99,7 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
         </Link>
       )}
 
-      <Header payload={payload} onPayload={setPayload} queueMode={queueMode} onGone={(next) => router.push(next)} />
+      <Header payload={payload} onPayload={setPayload} queueMode={queueMode} unsaved={dirty} onGone={(next) => router.push(next)} />
       <Checks payload={payload} onPayload={setPayload} />
       <ProductPreview payload={payload} />
       <ListingSection {...sectionProps} />
@@ -121,6 +121,17 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
 /** What a founder is asked before an in-app link takes them away from unsaved edits. */
 function leaveQuestion(dirty: Set<string>): string {
   return `Not saved yet: ${[...dirty].join(', ')}. Leave this page and lose ${dirty.size === 1 ? 'that change' : 'those changes'}? Press Cancel to stay and save first.`
+}
+
+/**
+ * What a founder is asked before Approve, in the queue, moves on with unsaved
+ * edits. It is the one way off the page that is not a link — the queue goes to
+ * the next product by `router.push` — so the click guard never saw it: the typed
+ * edit went with no word, and the product went on sale as last saved.
+ */
+function approveQuestion(dirty: Set<string>): string {
+  const one = dirty.size === 1
+  return `Not saved yet: ${[...dirty].join(', ')}. Approving moves on to the next product and ${one ? 'that change is' : 'those changes are'} lost — it goes on sale as last saved. Approve anyway? Press Cancel to stay and save first.`
 }
 
 /**
@@ -209,11 +220,14 @@ function Header({
   payload,
   onPayload,
   queueMode,
+  unsaved,
   onGone,
 }: {
   payload: Payload
   onPayload: (p: Payload) => void
   queueMode: boolean
+  /** Sections with typed-but-unsaved edits. */
+  unsaved: Set<string>
   onGone: (href: string) => void
 }) {
   const { product, state } = payload
@@ -224,6 +238,10 @@ function Header({
   const [done, setDone] = useState<string | null>(null)
 
   async function act(action: 'approve' | 'remove' | 'restore' | 'discard' | 'undo-merge') {
+    // Only in the queue: outside it Approve keeps the page, and the edit, where
+    // they are. A discard needs no question — the product, edits and all, is
+    // what is being thrown away, and it has its own "Confirm".
+    if (action === 'approve' && queueMode && unsaved.size > 0 && !window.confirm(approveQuestion(unsaved))) return
     setBusy(action)
     setError(null)
     setLink(null)

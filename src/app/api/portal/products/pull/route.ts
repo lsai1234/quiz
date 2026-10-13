@@ -4,7 +4,7 @@ import { getSupplier } from '@/lib/supplier'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getEditableProduct, productPayload } from '@/lib/portal/product-edit'
 import { saveProductChange } from '@/lib/portal/editable-products'
-import { pullProduct, settlePull, startPull, type PullResult } from '@/lib/supplier/pull'
+import { pullProduct, settlePull, startPull } from '@/lib/supplier/pull'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ResolveStep } from '@/lib/supplier/resolve-sku'
 
@@ -58,24 +58,44 @@ export async function POST(req: Request) {
     after the stop has answered cannot write over what the stop saved.
   */
   const progress = startPull()
-  let read: { product: CatalogueProduct; force: boolean; supplierName: string } | null = null
+  let read: { product: CatalogueProduct; supplierName: string } | null = null
   let saver: 'run' | 'stop' | null = null
 
-  const save = async (product: CatalogueProduct, result: PullResult) => {
+  /*
+    What PowerBody sent is settled onto the product AS IT STANDS NOW, not as it
+    was read when the pull began.
+
+    A pull runs for minutes, and Pull all works through the Review queue while
+    the founder is reviewing those same products. Settled against the copy read
+    at the start, a SKU the founder had meanwhile set to 60 servings (or given a
+    price of their own) still looked like PowerBody's to refresh, and the save
+    put PowerBody's 66 back over it — the "my servings change saved and then
+    undid itself" complaint, by a different road. Read again here, the pricing
+    rules see the founder's count and leave it, and the save carries only what
+    the pull itself changed.
+  */
+  const save = async (held: { product: CatalogueProduct; supplierName: string }, stopped: boolean) => {
+    const entry = await getEditableProduct(id)
+    const product = entry?.product ?? held.product
+    const force = body.force === true || (entry ? entry.state === 'pending' : false)
+    const result = settlePull(product, progress, { force, supplierName: held.supplierName, stopped })
     // What PowerBody answered for is confirmed BY them — nobody needs to
     // re-check a picture that came straight from the supplier.
     const after = confirmFromSupplier(result.after, result.filled)
     await saveProductChange(product, after)
     const payload = await productPayload(id)
     return {
-      ok: true as const,
-      ...(payload ?? {}),
-      filled: result.filled,
-      changed: result.changed,
-      answered: result.answered,
-      unresolved: result.unresolved,
-      refused: result.refused ?? null,
-      trace: result.trace,
+      result,
+      reply: {
+        ok: true as const,
+        ...(payload ?? {}),
+        filled: result.filled,
+        changed: result.changed,
+        answered: result.answered,
+        unresolved: result.unresolved,
+        refused: result.refused ?? null,
+        trace: result.trace,
+      },
     }
   }
 
@@ -88,8 +108,10 @@ export async function POST(req: Request) {
     }
     const supplier = await getSupplier()
     const force = body.force === true || entry.state === 'pending'
-    read = { product: entry.product, force, supplierName: supplier.name }
-    const result = await pullProduct(entry.product, {
+    read = { product: entry.product, supplierName: supplier.name }
+    // The result settled here is against the product as read; `save` settles
+    // what was gathered again, onto the product as it is by then.
+    await pullProduct(entry.product, {
       supplier,
       budgetMs: PULL_BUDGET_MS,
       force,
@@ -98,12 +120,12 @@ export async function POST(req: Request) {
     })
     if (saver) return null // the hard stop has answered, and saved what was here
     saver = 'run'
-    return save(entry.product, result)
+    return (await save(read, false)).reply
   }
 
   /** The hard stop's answer: save what PowerBody did answer, and say so. */
   const stopped = async (): Promise<PullReply> => {
-    const held = read as { product: CatalogueProduct; force: boolean; supplierName: string } | null
+    const held = read as { product: CatalogueProduct; supplierName: string } | null
     if (!held) {
       return {
         ok: false as const,
@@ -114,8 +136,7 @@ export async function POST(req: Request) {
           'try again in a few minutes, and if it keeps happening run the supplier checks in Settings → Supplier.',
       }
     }
-    const result = settlePull(held.product, progress, { force: held.force, supplierName: held.supplierName, stopped: true })
-    const reply = await save(held.product, result)
+    const { result, reply } = await save(held, true)
     const kept = result.answered
     const total = kept + result.unresolved.length
     return {

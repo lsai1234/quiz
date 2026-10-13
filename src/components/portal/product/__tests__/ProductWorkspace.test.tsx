@@ -295,6 +295,47 @@ describe('leaving the page by a link inside the hub', () => {
     expect(click(screen.getByRole('link', { name: 'Review' }))).toBe(true)
     expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Not saved yet: Supplier.'))
   })
+
+  it('asks before Approve in the queue moves on and drops an unsaved edit — the one way out that is not a link', async () => {
+    // In the queue, Approve goes straight on to the next product (router.push),
+    // which no click guard sees: the typed brand went with no word, and the
+    // product went on sale without it.
+    query = new URLSearchParams('queue=review')
+    const ready = payload({ state: 'pending', remaining: [] }, { review: { status: 'pending', sources: {}, confirmed: [], importedAt: '2026-10-01' } })
+    render(<ProductWorkspace initial={ready} />)
+    const listing = screen.getByRole('region', { name: 'Shop listing' })
+    await userEvent.type(within(listing).getByLabelText('Brand'), 'Acme')
+
+    confirmSpy.mockReturnValue(false)
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and put on sale' }))
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/^Not saved yet: Shop listing\. Approving moves on to the next product/))
+    expect(calls.some((c) => c.body.action === 'approve')).toBe(false)
+    expect(push).not.toHaveBeenCalled()
+    expect(within(listing).getByLabelText('Brand')).toHaveValue('CHRGDAcme')
+
+    confirmSpy.mockReturnValue(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and put on sale' }))
+    await waitFor(() => expect(push).toHaveBeenCalled())
+    expect(calls.some((c) => c.body.action === 'approve')).toBe(true)
+  })
+
+  it('does not ask before Approve when nothing is unsaved, or when the page stays put', async () => {
+    confirmSpy.mockReturnValue(false)
+    const ready = payload({ state: 'pending', remaining: [] }, { review: { status: 'pending', sources: {}, confirmed: [], importedAt: '2026-10-01' } })
+    // Outside the queue Approve keeps the page, and the edit, where they are.
+    const { unmount } = render(<ProductWorkspace initial={ready} />)
+    await userEvent.type(within(screen.getByRole('region', { name: 'Shop listing' })).getByLabelText('Brand'), 'Acme')
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and put on sale' }))
+    expect(calls.some((c) => c.body.action === 'approve')).toBe(true)
+    unmount()
+
+    calls = []
+    query = new URLSearchParams('queue=review')
+    render(<ProductWorkspace initial={ready} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and put on sale' }))
+    await waitFor(() => expect(push).toHaveBeenCalled())
+    expect(confirmSpy).not.toHaveBeenCalled()
+  })
 })
 
 // ── Supplier: the master SKU's cost and id ───────────────────────────────────
@@ -329,6 +370,28 @@ describe('the supplier section', () => {
     await userEvent.type(within(supplier).getByLabelText('VAT rate (%)'), '0')
     await userEvent.click(within(supplier).getByRole('button', { name: 'Save 1 change' }))
     expect(calls.at(-1)?.body).toEqual({ id: 'whey', set: { vatRate: 0 } })
+  })
+
+  it('says what is wrong with a refused cost or id once, not once for the product and again for the master', async () => {
+    // The server's real checks, on the edit the section really sends: the
+    // product's copy and the master SKU's each fail the same check.
+    const { validateEdit, EditRejected } = jest.requireActual('@/lib/portal/product-edit') as typeof import('@/lib/portal/product-edit')
+    answer = (_url, body) => {
+      try {
+        validateEdit(product(), body as never)
+        return { ok: true, ...payload() }
+      } catch (err) {
+        if (!(err instanceof EditRejected)) throw err
+        return { ok: false, error: err.message, problems: err.problems }
+      }
+    }
+    render(<ProductWorkspace initial={payload()} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.type(within(supplier).getByLabelText('PowerBody product id'), 'abc')
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Save 1 change' }))
+    expect(calls.at(-1)?.body).toEqual({ id: 'whey', set: { supplierProductId: 'abc' }, variants: [{ id: 'whey-choc', supplierProductId: 'abc' }] })
+    const alert = await within(supplier).findByRole('alert')
+    expect(alert).toHaveTextContent(/^PowerBody product id must be PowerBody’s numeric product id\.$/)
   })
 })
 
@@ -401,6 +464,25 @@ describe('pulling from PowerBody on the product page', () => {
     expect(within(supplier).getByText('P1: cost £12.00')).toBeInTheDocument()
   })
 
+  it('is good news when PowerBody refused once but every SKU was then found — there is no “rest”', async () => {
+    // Their error on the batch of held ids does not stop the pull: each SKU is
+    // then looked up on its own, and here every one answered. `refused` still
+    // says what happened on the way; it must not turn a full answer red.
+    const theirs = 'PowerBody would not answer: Internal error.'
+    pullAnswers({
+      answered: 2,
+      changed: { P1: 'cost £12.00' },
+      filled: [],
+      unresolved: [],
+      refused: { kind: 'supplier-error', message: theirs },
+    })
+    render(<ProductWorkspace initial={payload({}, skus)} />)
+    const supplier = screen.getByRole('region', { name: 'Supplier' })
+    await userEvent.click(within(supplier).getByRole('button', { name: 'Pull 2 SKUs from PowerBody' }))
+    expect(await within(supplier).findByRole('status')).toHaveTextContent('PowerBody answered for 2 SKUs. 1 SKU updated.')
+    expect(within(supplier).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('still says so plainly when PowerBody answered and nothing had changed', async () => {
     pullAnswers({ answered: 2, changed: {}, filled: [], unresolved: [] })
     render(<ProductWorkspace initial={payload({}, skus)} />)
@@ -465,6 +547,18 @@ describe('fill the blanks', () => {
     expect(status).toHaveTextContent(/with keyword guesses — the AI was not available/)
     expect(status).toHaveTextContent(/“Keyword guess”/)
     expect(status).not.toHaveTextContent(/Written by AI/)
+  })
+
+  it('names fields outside the review in words too, never by their code name', async () => {
+    // The fill also writes "when it is felt" and the keep-or-change advice when
+    // they are blank; neither is a review field, so neither has a review label.
+    answer = () => ({ ok: true, fill: { filled: ['goals', 'recommendationBasis', 'effectOnset'], source: 'ai' }, ...pending })
+    render(<ProductWorkspace initial={pending} />)
+    const quiz = screen.getByRole('region', { name: 'Quiz & subscription' })
+    await userEvent.click(within(quiz).getByRole('button', { name: 'Fill the blanks with AI' }))
+    const status = await within(quiz).findByRole('status')
+    expect(status).toHaveTextContent(/^Filled Goals, Keep-or-change advice, When it is felt\./)
+    expect(status).not.toHaveTextContent(/effectOnset|recommendationBasis/)
   })
 
   it('names what the model filled', async () => {

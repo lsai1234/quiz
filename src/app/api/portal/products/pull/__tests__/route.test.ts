@@ -113,6 +113,36 @@ describe('POST /api/portal/products/pull — the hard stop', () => {
     expect(saved).not.toHaveBeenCalled()
   })
 
+  it('settles onto the product as it stands when the pull ends, so a count the founder typed meanwhile is kept', async () => {
+    // Read at the start: every SKU on PowerBody's 66. While the pull runs the
+    // founder corrects the first to 60 — Pull all works through the Review
+    // queue while they review those very products.
+    const asRead = sevenSkus()
+    asRead.variants = asRead.variants.map((v) => ({ ...v, servings: 66, servingsSource: 'supplier' as const }))
+    const typedMeanwhile: CatalogueProduct = {
+      ...asRead,
+      variants: asRead.variants.map((v, i) => (i === 0 ? { ...v, servings: 60, servingsSource: 'founder' as const } : v)),
+    }
+    editable
+      .mockResolvedValueOnce({ product: asRead, state: 'live' } as never)
+      .mockResolvedValue({ product: typedMeanwhile, state: 'live' } as never)
+    supplierFor.mockResolvedValue({
+      name: 'powerbody',
+      async getProductsById(ids: string[]) {
+        return ids.map((id) => pb(`P${Number(id) - 900}`, id)) // portion_count 30
+      },
+    } as unknown as SupplierProvider)
+
+    const out = await lines(await post(), 0)
+    expect(out.at(-1)).toMatchObject({ type: 'result', ok: true, answered: 7 })
+
+    const [before, after] = saved.mock.calls[0] as [CatalogueProduct, CatalogueProduct]
+    expect(before).toBe(typedMeanwhile)
+    expect(after.variants[0]).toMatchObject({ servings: 60, servingsSource: 'founder' })
+    // …while the counts that are still PowerBody's are refreshed as usual.
+    expect(after.variants[1]).toMatchObject({ servings: 30, servingsSource: 'supplier' })
+  })
+
   it('a pull that finishes in time answers as usual, saves once, and leaves no timer behind', async () => {
     supplierFor.mockResolvedValue({
       name: 'powerbody',
