@@ -26,7 +26,7 @@ import { StackDeck } from './StackDeck'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
-import { PartnerCodeBox, checkDiscountCode, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
+import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
 import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
 import { StarterDeliveryForm } from './StarterDeliveryForm'
@@ -655,9 +655,18 @@ export function StackReviewPage() {
     return null
   }, [promo, planType, pricing.subscriptionTotal, pricing.oneOffSubtotal])
 
-  // The deadline passed with the page open. Take the code off now, rather than
-  // let the checkout refuse it after somebody has pressed pay.
-  const promoEnded = useCallback(() => {
+  /*
+   * Taking the advertised code off — by the customer, or because its deadline
+   * passed with the page open.
+   *
+   * The referral cookie goes too when it holds this code. Somebody who arrived
+   * on an ad's `?ref=LAUNCH25` link carries it, and left there it would put the
+   * code straight back: the code box re-applies it as it remounts, and the
+   * checkout falls back to it server-side (`resolveCheckoutCode`). The box's
+   * own Remove has always done this; the card has to as well.
+   */
+  const removePromo = useCallback(() => {
+    if (promo) forgetReferral(promo.code)
     setPartnerCode((current) => (current && promo && current.code === promo.code ? null : current))
   }, [promo])
 
@@ -945,13 +954,15 @@ export function StackReviewPage() {
               scope={promoPrices.scope}
               applied={promoApplied}
               onApply={applyPromo}
-              onRemove={() => setPartnerCode(null)}
-              onEnded={promoEnded}
+              onRemove={removePromo}
+              onEnded={removePromo}
             />
           )}
           {/* The advertised code carries its own applied state and Remove, so the
-              box steps aside while it is on rather than saying it twice. */}
-          {!promoApplied && (
+              box steps aside while the card is showing it rather than saying it
+              twice. Only then: during a claim there is no card, and the box is
+              the one place a typed code can be seen and taken off. */}
+          {!(showPromo && promoApplied) && (
             <div className="mb-3 flex flex-col">
               <PartnerCodeBox
                 subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}

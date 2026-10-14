@@ -99,8 +99,14 @@ function cookieValue(name: string): string | null {
  * checkout still went through attributed to the partner, on this purchase and
  * on every purchase for the next thirty days.
  */
-function forgetReferral(): void {
+export function forgetReferral(onlyIf?: string): void {
   if (typeof document === 'undefined') return
+  // `onlyIf`: forget it only when it is this code — taking an advertised code
+  // off should not also wipe a partner's link that has nothing to do with it.
+  if (onlyIf !== undefined) {
+    const held = cookieValue(REFERRAL_COOKIE)
+    if (!held || held.trim().toUpperCase() !== onlyIf.trim().toUpperCase()) return
+  }
   document.cookie = `${REFERRAL_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 

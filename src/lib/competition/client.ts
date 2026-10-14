@@ -76,10 +76,18 @@ async function postBonus(entry: RememberedEntry): Promise<void> {
       body: JSON.stringify({ id: entry.id, kind: 'share' }),
     })
     if (!res.ok) return
-    const json = (await res.json()) as { tickets?: number }
+    const json = (await res.json()) as { tickets?: number; followed?: boolean }
     write(SHARED_KEY, null)
     shareEvents.competitionBonus()
-    rememberEntry({ ...entry, shared: true, tickets: json.tickets ?? entry.tickets })
+    // Read again: a follow may have been credited while this was in flight, and
+    // writing back the entry as it was when this started would lose it.
+    const latest = rememberedEntry(entry.campaign) ?? entry
+    rememberEntry({
+      ...latest,
+      shared: true,
+      followed: latest.followed === true || json.followed === true,
+      tickets: json.tickets ?? latest.tickets,
+    })
   } catch {
     /* network — the flag stays, and the next share or entry tries again */
   }
@@ -103,11 +111,16 @@ export async function noteFollowed(campaign: string): Promise<boolean> {
       body: JSON.stringify({ id: entry.id, kind: 'follow' }),
     })
     if (!res.ok) return false
-    const json = (await res.json()) as { tickets?: number }
+    const json = (await res.json()) as { tickets?: number; shared?: boolean }
     // Read again: a share may have been credited while this was in flight.
     const latest = rememberedEntry(campaign) ?? entry
     shareEvents.competitionBonus({ kind: 'follow' })
-    rememberEntry({ ...latest, followed: true, tickets: json.tickets ?? latest.tickets })
+    rememberEntry({
+      ...latest,
+      followed: true,
+      shared: latest.shared || json.shared === true,
+      tickets: json.tickets ?? latest.tickets,
+    })
     return true
   } catch {
     return false

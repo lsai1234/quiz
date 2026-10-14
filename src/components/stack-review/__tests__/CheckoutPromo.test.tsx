@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CheckoutPromo, type Promo } from '../CheckoutPromo'
@@ -71,4 +72,39 @@ it('stops offering the code the moment it ends, and tells the page once', () => 
   expect(props.onEnded).toHaveBeenCalledTimes(1)
   expect(screen.getByRole('status')).toHaveTextContent('LAUNCH25 has ended, so it’s been taken off your order.')
   expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument()
+})
+
+it('says what happened as the code goes on and comes off, and moves focus to what undoes it', async () => {
+  function Harness() {
+    const [applied, setApplied] = useState(false)
+    return (
+      <CheckoutPromo
+        promo={LAUNCH}
+        before={97.56}
+        after={77.97}
+        scope="order"
+        applied={applied}
+        onApply={async () => { setApplied(true); return null }}
+        onRemove={() => setApplied(false)}
+        onEnded={() => {}}
+      />
+    )
+  }
+  render(<Harness />)
+
+  await userEvent.click(screen.getByRole('button', { name: /apply launch25 now/i }))
+  expect(screen.getByRole('status')).toHaveTextContent('LAUNCH25 applied. Your total is now £77.97.')
+  expect(screen.getByRole('button', { name: /remove code/i })).toHaveFocus()
+
+  await userEvent.click(screen.getByRole('button', { name: /remove code/i }))
+  expect(screen.getByRole('status')).toHaveTextContent('LAUNCH25 removed.')
+  expect(screen.getByRole('button', { name: /apply launch25 now/i })).toHaveFocus()
+})
+
+it('calls it a launch offer only when it is one', () => {
+  const { unmount } = setup()
+  expect(screen.getByText('Launch offer')).toBeInTheDocument()
+  unmount()
+  setup({ promo: { code: 'AUTUMN15', percent: 15, endsAt: LAUNCH.endsAt } })
+  expect(screen.getByText('Limited-time offer')).toBeInTheDocument()
 })

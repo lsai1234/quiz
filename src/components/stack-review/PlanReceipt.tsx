@@ -358,7 +358,7 @@ export function PlanReceipt({
                   {it.title}
                 </span>
                 {(it.note ?? it.role) && (
-                  <span className="block text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                  <span className="block text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
                     {it.note ?? it.role}
                   </span>
                 )}
@@ -523,7 +523,7 @@ export function PlanReceipt({
                     <span className="block text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                       Subscribe &amp; save up to {subscriptionDiscountPct}%
                     </span>
-                    <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-2)' }}>
                       {formatGBP(subscriptionTotal)}/mo ·{' '}
                       {subscriptionMinMonths > 1 ? `${subscriptionMinMonths}-month minimum` : 'pause or cancel anytime'}
                     </span>

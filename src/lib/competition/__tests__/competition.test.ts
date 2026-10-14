@@ -371,3 +371,21 @@ describe('entering by email', () => {
     expect(await entryCounts('counted')).toMatchObject({ emails: 2, shared: 1, followed: 1, tickets: 15, test: 1 })
   })
 })
+
+describe('two bonuses claimed together', () => {
+  it('counts both in whichever answer comes back second, even when the claims overlap', async () => {
+    const res = await enterWithEmail({ campaign: 'overlap', email: 'both@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    // Fired together, as a share credit and a tap on Follow can be.
+    const [shared, followed] = await Promise.all([
+      claimShareBonus(res.entry.id, 'overlap'),
+      claimFollowBonus(res.entry.id, 'overlap'),
+    ])
+    const counts = [ticketsFor(shared!), ticketsFor(followed!)]
+    // Each answer reflects the row after its own write, so the later of the two
+    // always holds the whole count.
+    expect(Math.max(...counts)).toBe(1 + SHARE_BONUS + FOLLOW_BONUS)
+    const [entry] = await listEntries('overlap')
+    expect(ticketsFor(entry)).toBe(1 + SHARE_BONUS + FOLLOW_BONUS)
+  })
+})

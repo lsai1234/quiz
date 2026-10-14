@@ -142,10 +142,40 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
   const ref = useRef<HTMLElement>(null)
   const reduced = useReducedMotion()
   const seen = useRevealOnScroll(ref)
-  const revealed = seen || applied
+  // Tabbing into the card reveals it too: the reveal is for the eye, and a
+  // keyboard user reaching the Apply button should not land on an invisible one.
+  const [focused, setFocused] = useState(false)
+  const revealed = seen || applied || focused
   const { text, settled } = useDecode(promo.code, revealed, reduced)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  /*
+   * Applying or removing swaps the card's whole layout, so the button that was
+   * pressed is gone by the time it has worked. Focus goes to the control that
+   * undoes it, and a live region that outlives both layouts says what happened —
+   * otherwise a keyboard or screen-reader user is dropped on <body> in silence.
+   */
+  const [announcement, setAnnouncement] = useState('')
+  const applyRef = useRef<HTMLButtonElement>(null)
+  const removeRef = useRef<HTMLButtonElement>(null)
+  const focusNext = useRef<'apply' | 'remove' | null>(null)
+  const prevApplied = useRef(applied)
+  const endedRef = useRef(false)
+  useEffect(() => {
+    if (prevApplied.current === applied) return
+    prevApplied.current = applied
+    // Taken off because the deadline passed: the ended message says so already.
+    if (endedRef.current) return
+    setAnnouncement(
+      applied
+        ? `${promo.code} applied. ${scope === 'first month' ? 'Your first month is' : 'Your total is'} now ${formatGBP(after)}.`
+        : `${promo.code} removed.`,
+    )
+    const target = focusNext.current === 'remove' ? removeRef.current : focusNext.current === 'apply' ? applyRef.current : null
+    focusNext.current = null
+    target?.focus()
+  }, [applied, promo.code, scope, after])
 
   const now = useNow(promo.endsAt !== null)
   const left = promo.endsAt ? timeLeft(promo.endsAt, now) : null
@@ -153,25 +183,32 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
 
   // Told once, the moment it happens, so the page can take an applied code off.
   // Whether it was on is kept, because taking it off changes `applied`.
-  const endedRef = useRef(false)
   const [wasApplied, setWasApplied] = useState(false)
   useEffect(() => {
     if (ended && !endedRef.current) {
       endedRef.current = true
       setWasApplied(applied)
+      setAnnouncement(`${promo.code} has ended${applied ? ', so it’s been taken off your order' : ''}.`)
       onEnded()
     }
-  }, [ended, applied, onEnded])
+  }, [ended, applied, onEnded, promo.code])
 
   const saving = Math.round((before - after) * 100) / 100
   const deadline = promo.endsAt ? describeDeadline(promo.endsAt, now) : null
 
+  const live = (
+    <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
+  )
+
   if (ended) {
     return (
-      <p className="mb-3 flex items-center gap-2 text-[11px] leading-snug" style={{ color: 'var(--color-muted)' }} role="status">
-        <Icon name="clock" size={14} className="shrink-0" />
-        {promo.code} has ended{wasApplied ? ', so it’s been taken off your order' : ''}.
-      </p>
+      <>
+        {live}
+        <p className="mb-3 flex items-center gap-2 text-[11px] leading-snug" style={{ color: 'var(--color-muted)' }}>
+          <Icon name="clock" size={14} className="shrink-0" />
+          {promo.code} has ended{wasApplied ? ', so it’s been taken off your order' : ''}.
+        </p>
+      </>
     )
   }
 
@@ -179,10 +216,24 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
     if (applying) return
     setApplying(true)
     setError(null)
+    // Set before the call: the page applies the code inside it, and the swap to
+    // the applied layout can render before this function resumes.
+    focusNext.current = 'remove'
     const reason = await onApply()
     setApplying(false)
-    if (reason) setError(reason)
+    if (reason) {
+      focusNext.current = null
+      setError(reason)
+    }
   }
+
+  function remove() {
+    focusNext.current = 'apply'
+    onRemove()
+  }
+
+  /** "Launch offer" for a launch code; otherwise only what is true of any code. */
+  const eyebrow = /launch/i.test(promo.code) ? 'Launch offer' : promo.endsAt ? 'Limited-time offer' : 'Offer'
 
   const clock = left && (
     <span
@@ -203,6 +254,8 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
 
   if (applied) {
     return (
+      <>
+      {live}
       <section
         ref={ref}
         aria-label={`${promo.code} offer`}
@@ -234,19 +287,24 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
           </p>
         )}
         <button
-          onClick={onRemove}
+          ref={removeRef}
+          onClick={remove}
           className="text-[11px] font-semibold underline mt-2"
-          style={{ color: 'var(--color-muted)' }}
+          style={{ color: 'var(--color-text-2)' }}
         >
           Remove code
         </button>
       </section>
+      </>
     )
   }
 
   return (
+    <>
+    {live}
     <section
       ref={ref}
+      onFocus={() => setFocused(true)}
       aria-label={`${promo.code}: ${promo.percent}% off`}
       data-revealed={revealed || undefined}
       className="promo-card relative mb-3 overflow-hidden rounded-2xl p-4"
@@ -272,22 +330,24 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
           style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
         >
           <Icon name="bolt" size={13} />
-          Launch offer
+          {eyebrow}
         </span>
-        <span style={{ visibility: revealed ? 'visible' : 'hidden' }}>{clock}</span>
+        <span style={{ opacity: revealed ? 1 : 0 }}>{clock}</span>
       </div>
 
-      <div className="mt-3 flex items-center gap-3.5">
+      {/* Wraps, so a long code (they can be 24 characters) pushes the headline
+          under it on a narrow phone rather than off the edge. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3.5 gap-y-2">
         {/* The code, on a dashed coupon edge, under a foil that wipes away. */}
         <span
-          className="relative inline-flex shrink-0 items-center rounded-xl px-3.5 py-2.5"
+          className="relative inline-flex max-w-full items-center rounded-xl px-3.5 py-2.5"
           style={{
             border: '1.5px dashed color-mix(in srgb, var(--color-accent) 70%, transparent)',
             background: 'color-mix(in srgb, var(--color-accent) 7%, var(--color-bg))',
           }}
         >
           <span
-            className="text-xl font-black tabular-nums"
+            className="text-xl font-black tabular-nums break-all"
             style={{
               fontFamily: MONO,
               letterSpacing: '0.12em',
@@ -320,11 +380,16 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
       </div>
 
       {/* Laid out from the start and only shown on reveal, so the card does not
-          grow under somebody's thumb and push the receipt down mid-scroll. */}
-      <div style={{ visibility: revealed ? 'visible' : 'hidden' }} className={revealed ? 'promo-on' : undefined}>
+          grow under somebody's thumb and push the receipt down mid-scroll.
+          Transparent rather than hidden, so the button stays in the tab order
+          and the accessibility tree; taps wait for the reveal. */}
+      <div
+        style={{ opacity: revealed ? 1 : 0, pointerEvents: revealed ? undefined : 'none' }}
+        className={revealed ? 'promo-on' : undefined}
+      >
         {saving > 0.005 && (
           <p className="promo-rise mt-3.5 flex flex-wrap items-baseline gap-x-2 gap-y-1" style={{ ['--d' as string]: '520ms' }}>
-            <span className="text-xs line-through tabular-nums" style={{ color: 'var(--color-muted)' }}>{formatGBP(before)}</span>
+            <span className="text-xs line-through tabular-nums" style={{ color: 'var(--color-text-2)' }}>{formatGBP(before)}</span>
             <span className="text-lg font-black tabular-nums leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
               {formatGBP(after)}
             </span>
@@ -335,7 +400,7 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
         )}
 
         <div className="promo-rise mt-3.5" style={{ ['--d' as string]: '640ms' }}>
-          <Button variant="primary" size="md" fullWidth loading={applying} onClick={() => void apply()} iconRight="arrow-right">
+          <Button ref={applyRef} variant="primary" size="md" fullWidth loading={applying} onClick={() => void apply()} iconRight="arrow-right">
             {applying ? 'Applying…' : `Apply ${promo.code} now`}
           </Button>
         </div>
@@ -352,5 +417,6 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
         )}
       </div>
     </section>
+    </>
   )
 }

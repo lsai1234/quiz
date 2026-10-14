@@ -272,12 +272,25 @@ export async function claimShareBonus(
   if (!row) return null
   if (Number(row.bonus_entries ?? 0) >= SHARE_BONUS) return toEntry(row)
 
-  const sharedAt = now()
   await db.run(
     'UPDATE competition_entries SET bonus_entries = ?, shared_at = ? WHERE id = ?',
-    [SHARE_BONUS, sharedAt, id],
+    [SHARE_BONUS, now(), id],
   )
-  return toEntry({ ...row, bonus_entries: SHARE_BONUS, shared_at: sharedAt })
+  return reread(id, row)
+}
+
+/**
+ * The row as it stands after a bonus was written.
+ *
+ * Read again rather than patched from the row read before the update: the two
+ * bonuses are claimed by separate requests that can land together, and a count
+ * built from the earlier read would leave out whichever one the other request
+ * had just added — "4 entries" coming back for somebody who holds fourteen.
+ */
+async function reread(id: string, fallback: Row): Promise<CompetitionEntry> {
+  const db = await getEngine()
+  const row = await db.get<Row>('SELECT * FROM competition_entries WHERE id = ?', [id])
+  return toEntry(row ?? fallback)
 }
 
 /**
@@ -300,12 +313,11 @@ export async function claimFollowBonus(
   if (!row) return null
   if (Number(row.follow_entries ?? 0) >= FOLLOW_BONUS) return toEntry(row)
 
-  const followedAt = now()
   await db.run(
     'UPDATE competition_entries SET follow_entries = ?, followed_at = ? WHERE id = ?',
-    [FOLLOW_BONUS, followedAt, id],
+    [FOLLOW_BONUS, now(), id],
   )
-  return toEntry({ ...row, follow_entries: FOLLOW_BONUS, followed_at: followedAt })
+  return reread(id, row)
 }
 
 /** Set an entry's follow bonus outright — the Founders Hub's "remove follow bonus". */
