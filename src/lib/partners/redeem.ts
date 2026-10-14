@@ -19,6 +19,7 @@
 import { checkCode, normaliseCode } from './codes'
 import * as repo from './repo'
 import { isHousePartner } from './house'
+import { ensureDailyCodes } from '@/lib/store-codes/daily'
 import type { Partner, PartnerCode } from './types'
 
 /**
@@ -117,6 +118,10 @@ export async function redeemPartnerCode(
   if (!typed) return { ok: false, reason: 'Enter a code.' }
 
   const eligible = worksOn(context.channel)
+
+  // Today's 25% code is a store code like any other, but made on demand — so
+  // make sure it exists before looking it up, whichever checkout is asking.
+  await ensureDailyCodes(context.now)
 
   /*
     A TYPED code on an ineligible channel is refused before the lookup, so the

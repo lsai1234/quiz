@@ -35,6 +35,12 @@ export interface Promo {
   /** Whole percent, e.g. 25. */
   percent: number
   endsAt: string | null
+  /**
+   * `daily`: today's code, replaced by a new one at midnight. What ends is the
+   * CODE, so that is all the card says ends — the 25% comes back tomorrow under
+   * another name, and "25% off ends tonight" would be a false deadline.
+   */
+  kind?: 'daily' | 'store'
 }
 
 interface Props {
@@ -233,7 +239,10 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
   }
 
   /** "Launch offer" for a launch code; otherwise only what is true of any code. */
-  const eyebrow = /launch/i.test(promo.code) ? 'Launch offer' : promo.endsAt ? 'Limited-time offer' : 'Offer'
+  const daily = promo.kind === 'daily'
+  const eyebrow = daily
+    ? 'Today’s code'
+    : /launch/i.test(promo.code) ? 'Launch offer' : promo.endsAt ? 'Limited-time offer' : 'Offer'
 
   const clock = left && (
     <span
@@ -283,7 +292,7 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
         </div>
         {deadline && left && (
           <p className="text-[11px] leading-snug mt-2" style={{ color: 'var(--color-text-2)' }}>
-            Ends {deadline} — check out before then to keep it.
+            {daily ? 'This code expires' : 'Ends'} {deadline} — check out before then to keep it.
           </p>
         )}
         <button
@@ -411,8 +420,8 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
 
         {deadline && left && (
           <p className="promo-rise mt-2.5 text-center text-[11px] leading-snug" style={{ color: 'var(--color-text-2)', ['--d' as string]: '760ms' }}>
-            Ends {deadline} —{' '}
-            <strong style={{ color: 'var(--color-text)' }}>{wordsLeft(left)} left</strong> to apply it.
+            {daily ? 'This code expires' : 'Ends'} {deadline} —{' '}
+            <strong style={{ color: 'var(--color-text)' }}>{wordsLeft(left)} left</strong>{daily ? '.' : ' to use it.'}
           </p>
         )}
       </div>

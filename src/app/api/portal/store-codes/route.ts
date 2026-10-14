@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import {
-  createStoreCode, deleteStoreCode, listStoreCodes, setCheckoutPromo, setStoreCodeEnd,
+  createStoreCode, dailyCodeStatus, deleteStoreCode, listStoreCodes, setCheckoutPromo, setStoreCodeEnd,
 } from '@/lib/store-codes'
+import { setDailyCodesEnabled } from '@/lib/store-codes/daily'
 
 /**
  * Store discount codes, from the Founders Hub.
@@ -16,7 +17,7 @@ import {
 export const dynamic = 'force-dynamic'
 
 async function payload() {
-  return { codes: await listStoreCodes() }
+  return { codes: await listStoreCodes(), daily: await dailyCodeStatus() }
 }
 
 export async function GET() {
@@ -60,6 +61,13 @@ export async function POST(req: Request) {
     const ends = body.ends === null || body.ends === 'none' ? null : String(body.ends ?? '')
     const result = await setStoreCodeEnd(code, ends)
     if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 })
+    return NextResponse.json(await payload())
+  }
+
+  if (action === 'daily') {
+    // The daily codes' switch. Off hides the card at checkout; a code already
+    // handed out keeps working until its own midnight.
+    await setDailyCodesEnabled(body.enabled !== false)
     return NextResponse.json(await payload())
   }
 

@@ -38,7 +38,7 @@ it('shows this basket’s price with the code, and how long is left to apply it'
   setup()
   expect(screen.getByText('£77.97')).toBeInTheDocument()
   expect(screen.getByText(/£19\.59 less/i)).toBeInTheDocument()
-  expect(screen.getByText(/ends tonight at midnight/i)).toHaveTextContent('8h 0m left to apply it')
+  expect(screen.getByText(/ends tonight at midnight/i)).toHaveTextContent('8h 0m left to use it')
   expect(screen.getByText('LAUNCH25', { selector: '.sr-only' })).toBeInTheDocument()
 })
 
@@ -107,4 +107,11 @@ it('calls it a launch offer only when it is one', () => {
   unmount()
   setup({ promo: { code: 'AUTUMN15', percent: 15, endsAt: LAUNCH.endsAt } })
   expect(screen.getByText('Limited-time offer')).toBeInTheDocument()
+})
+
+it('for today’s code, says the code expires — never that the discount ends', () => {
+  setup({ promo: { code: 'SPARK25', percent: 25, endsAt: LAUNCH.endsAt, kind: 'daily' } })
+  expect(screen.getByText('Today’s code')).toBeInTheDocument()
+  expect(screen.getByText(/this code expires tonight at midnight/i)).toHaveTextContent('8h 0m left.')
+  expect(screen.queryByText(/offer ends|ends tonight/i)).not.toBeInTheDocument()
 })

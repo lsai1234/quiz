@@ -26,10 +26,14 @@
  * Server-only.
  */
 import { kvGet, kvSet } from '@/lib/db/kv'
+import { ensureHousePartner } from './house-account'
+import { DAILY_CODES, dailyCodeFor, dailyCodesEnabled, ensureDailyCodes, isDailyCode } from './daily'
 import { isExpired, normaliseCode } from '@/lib/partners/codes'
-import { HOUSE_PARTNER_EMAIL, HOUSE_PARTNER_ID } from '@/lib/partners/house'
+import { HOUSE_PARTNER_ID } from '@/lib/partners/house'
 import * as repo from '@/lib/partners/repo'
 import type { CodeTerms, PartnerCode } from '@/lib/partners/types'
+
+export { ensureHousePartner } from './house-account'
 import { isIsoDate, londonDate, londonEndOfDay } from './deadline'
 
 /** The deepest a store code may go — the same ceiling a partner code has. */
@@ -73,41 +77,14 @@ function storeCodeTerms(): CodeTerms {
 }
 
 /**
- * Make sure the house account exists. Idempotent, and safe to race: two first
- * calls both try the insert, one hits the unique key, and both then read back
- * the same row.
+ * Every store code, newest first — ended ones included, marked as such.
+ *
+ * Not the daily codes: there are forty-eight of them and they run themselves,
+ * so they are summarised separately (`dailyCodeStatus`) rather than burying
+ * the founders' own codes.
  */
-export async function ensureHousePartner(): Promise<void> {
-  if (await repo.getPartner(HOUSE_PARTNER_ID)) return
-  try {
-    await repo.createPartner({
-      id: HOUSE_PARTNER_ID,
-      email: HOUSE_PARTNER_EMAIL,
-      name: 'Store',
-      kind: 'affiliate',
-      // Active so its codes pass `checkCode`. It has no password, so nobody can
-      // sign in as it.
-      status: 'active',
-      data: { notes: 'Owns the store discount codes. Earns no commission.' },
-    })
-    await repo.addTerms({
-      partnerId: HOUSE_PARTNER_ID,
-      firstOrderPct: 0,
-      renewalPct: 0,
-      renewalMonths: 0,
-      payout: { cadence: 'monthly', minimum: 0, selfBilled: false, chargesVat: false },
-      effectiveFrom: new Date(0).toISOString(),
-      note: 'Store codes — no commission.',
-      createdBy: null,
-    })
-  } catch (err) {
-    if (!(await repo.getPartner(HOUSE_PARTNER_ID))) throw err
-  }
-}
-
-/** Every store code, newest first — ended ones included, marked as such. */
 export async function listStoreCodes(): Promise<StoreCode[]> {
-  const codes = await repo.listCodes(HOUSE_PARTNER_ID)
+  const codes = (await repo.listCodes(HOUSE_PARTNER_ID)).filter((c) => !isDailyCode(c.code))
   const promoted = await promotedCode()
   return codes.map((c) => toStoreCode(c, promoted))
 }
@@ -225,6 +202,8 @@ export interface CheckoutPromo {
   percent: number
   /** The real end the countdown runs to, or null — in which case there is no countdown. */
   endsAt: string | null
+  /** `daily`: today's code, a new one tomorrow. `store`: a code chosen in the hub. */
+  kind: 'daily' | 'store'
 }
 
 /**
@@ -238,10 +217,49 @@ export interface CheckoutPromo {
  * a false "limited time" claim, which UK consumer law bans outright.
  */
 export async function liveCheckoutPromo(now = new Date()): Promise<CheckoutPromo | null> {
+  // Today's code first, while the schedule runs and the switch is on.
+  const daily = await liveDailyCode(now)
+  if (daily) return daily
+
   const name = await promotedCode()
   if (!name) return null
   const code = await storeCode(name)
   if (!code || code.status !== 'active' || isExpired(code, now)) return null
   if (code.terms.startsAt && now < new Date(code.terms.startsAt)) return null
-  return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt }
+  return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt, kind: 'store' }
+}
+
+/** Today's code, if the schedule covers today, the switch is on, and the code really works. */
+async function liveDailyCode(now: Date): Promise<CheckoutPromo | null> {
+  const today = dailyCodeFor(now)
+  if (!today || !(await dailyCodesEnabled())) return null
+  await ensureDailyCodes(now)
+  const code = await storeCode(today.code)
+  // A partner holding the word, or a founder having paused or deleted the code,
+  // means no card today rather than a card for a code checkout would refuse.
+  if (!code || code.status !== 'active' || isExpired(code, now)) return null
+  if (code.terms.startsAt && now < new Date(code.terms.startsAt)) return null
+  return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt, kind: 'daily' }
+}
+
+export interface DailyCodeStatus {
+  enabled: boolean
+  /** Today's code, or null outside the schedule. */
+  today: { code: string; endsAt: string } | null
+  /** The next few, so a founder can plan posts. */
+  upcoming: Array<{ date: string; code: string }>
+  /** The last day the schedule covers. */
+  lastDay: string
+}
+
+/** What the Founders Hub shows about the daily codes. */
+export async function dailyCodeStatus(now = new Date()): Promise<DailyCodeStatus> {
+  const today = dailyCodeFor(now)
+  const from = londonDate(now)
+  return {
+    enabled: await dailyCodesEnabled(),
+    today: today ? { code: today.code, endsAt: today.endsAt } : null,
+    upcoming: DAILY_CODES.filter((d) => d.date > from).slice(0, 7).map((d) => ({ date: d.date, code: d.code })),
+    lastDay: DAILY_CODES[DAILY_CODES.length - 1].date,
+  }
 }

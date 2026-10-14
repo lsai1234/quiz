@@ -32,6 +32,13 @@ interface Row {
   atCheckout: boolean
 }
 
+interface Daily {
+  enabled: boolean
+  today: { code: string; endsAt: string } | null
+  upcoming: Array<{ date: string; code: string }>
+  lastDay: string
+}
+
 /** How far ahead the end-day picker reaches. A longer campaign can run with no end. */
 const END_DAYS = 14
 
@@ -81,6 +88,7 @@ const meta = {
 
 export function StoreCodes() {
   const [codes, setCodes] = useState<Row[] | null>(null)
+  const [daily, setDaily] = useState<Daily | null>(null)
   const [name, setName] = useState('')
   const [percent, setPercent] = useState(10)
   const [busy, setBusy] = useState<string | null>(null)
@@ -93,8 +101,9 @@ export function StoreCodes() {
     try {
       const res = await fetch('/api/portal/store-codes')
       if (!res.ok) return
-      const data: { codes: Row[] } = await res.json()
+      const data: { codes: Row[]; daily?: Daily } = await res.json()
       setCodes(data.codes)
+      setDaily(data.daily ?? null)
     } catch {
       /* the screen renders empty rather than broken */
     }
@@ -117,6 +126,7 @@ export function StoreCodes() {
         return false
       }
       setCodes(json.codes)
+      setDaily(json.daily ?? null)
       return true
     } catch {
       setError('Could not reach the hub. Try again.')
@@ -149,6 +159,55 @@ export function StoreCodes() {
 
   return (
     <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+      {/* ── Today's code ── */}
+      {daily && (
+        <Card elevation={1} as="section">
+          <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <div className="flex items-center" style={{ gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <span className="min-w-0 flex-1">
+                <span className="block" style={{ ...eyebrow, marginBottom: 'var(--space-1)' }}>Daily code at checkout</span>
+                {daily.today ? (
+                  <span
+                    className="block"
+                    style={{ fontSize: 'var(--text-body)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}
+                  >
+                    Today: {daily.today.code}
+                  </span>
+                ) : (
+                  <span className="block" style={meta}>The schedule ran to {shortDay(daily.lastDay)}. Nothing is shown today.</span>
+                )}
+                {daily.today && (
+                  <span className="block" style={{ ...meta, marginTop: 'var(--space-1)' }}>
+                    25% off · expires {describeDeadline(daily.today.endsAt)}
+                  </span>
+                )}
+              </span>
+              {daily.enabled ? <Badge tone="accent">At checkout</Badge> : <Badge tone="neutral">Off</Badge>}
+              <Button
+                size="sm"
+                variant={daily.enabled ? 'ghost' : 'secondary'}
+                disabled={busy !== null}
+                onClick={() => void post({ action: 'daily', enabled: !daily.enabled }, 'daily')}
+              >
+                {daily.enabled ? 'Turn off' : 'Turn on'}
+              </Button>
+            </div>
+            {daily.upcoming.length > 0 && (
+              <p style={meta}>
+                Next: {daily.upcoming.map((d) => `${shortDay(d.date)} ${d.code}`).join(' · ')}
+              </p>
+            )}
+            <p style={meta}>
+              A different 25% code every day until {shortDay(daily.lastDay)}, each working from midnight to
+              midnight and replacing the bundle deal like any code. The results page shows today’s with a
+              countdown to midnight, and says the <em>code</em> expires — never that 25% off ends, because
+              tomorrow there is another. While it is on, it takes the place of a code chosen with “Show at
+              checkout” below; codes you make here keep working wherever they are typed.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* ── Making one ── */}
       <Card elevation={1} as="section">
         <form

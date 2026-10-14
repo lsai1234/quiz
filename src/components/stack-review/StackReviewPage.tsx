@@ -613,12 +613,16 @@ export function StackReviewPage() {
    * is not an offer.
    */
   const [promo, setPromo] = useState<Promo | null>(null)
+  /** Bumped when a code ends with the page open, to ask for the next day's. */
+  const [promoAsk, setPromoAsk] = useState(0)
   useEffect(() => {
     let live = true
     fetch('/api/checkout-promo', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { promo?: Promo | null } | null) => {
-        if (live && d?.promo) setPromo(d.promo)
+        // Only a different code replaces the one on screen: the card that has
+        // just ended says so, and asking again must not bring it back.
+        if (live && d?.promo) setPromo((current) => (current?.code === d.promo!.code ? current : d.promo!))
       })
       .catch(() => {
         /* No offer is the safe answer to a question we could not ask. */
@@ -626,7 +630,7 @@ export function StackReviewPage() {
     return () => {
       live = false
     }
-  }, [])
+  }, [promoAsk])
   const promoApplied = promo !== null && partnerCode?.code === promo.code
   const promoPrices = useMemo(() => {
     if (!promo || claiming || founderKind || (partnerCode && partnerCode.code !== promo.code)) return null
@@ -669,6 +673,13 @@ export function StackReviewPage() {
     if (promo) forgetReferral(promo.code)
     setPartnerCode((current) => (current && promo && current.code === promo.code ? null : current))
   }, [promo])
+
+  // A daily code ran out with the page open: take it off, then ask for the
+  // next one a moment later — after the server's clock has passed midnight too.
+  const promoEnded = useCallback(() => {
+    removePromo()
+    if (promo?.kind === 'daily') window.setTimeout(() => setPromoAsk((n) => n + 1), 3000)
+  }, [removePromo, promo])
 
   /*
    * ── The bar gets out of the receipt's way ────────────────────────────────
@@ -948,6 +959,7 @@ export function StackReviewPage() {
           {/* Above the receipt, so the totals below already include it. */}
           {showPromo && promo && promoPrices && (
             <CheckoutPromo
+              key={promo.code}
               promo={promo}
               before={promoPrices.before}
               after={promoPrices.after}
@@ -955,7 +967,7 @@ export function StackReviewPage() {
               applied={promoApplied}
               onApply={applyPromo}
               onRemove={removePromo}
-              onEnded={removePromo}
+              onEnded={promoEnded}
             />
           )}
           {/* The advertised code carries its own applied state and Remove, so the
