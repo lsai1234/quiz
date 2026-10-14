@@ -355,4 +355,10 @@ export interface CreateOrderInput {
   billedAmount?: number | null
   /** The plan behind this delivery — see `Order.subscription`. */
   subscription?: OrderSubscriptionContext | null
+  /**
+   * An offer the order was sold under, for its audit trail — e.g. the
+   * last-chance single-product offer and the discount it carried. Written as an
+   * event, where the hub already reads why an order is priced as it is.
+   */
+  offer?: string | null
 }

@@ -113,6 +113,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     events: [
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
+      ...(input.offer ? [event('offer', input.offer)] : []),
       // On the audit trail rather than only in a column: a £0.00 order needs to
       // say, in the same place every other transition is recorded, why it was
       // free.

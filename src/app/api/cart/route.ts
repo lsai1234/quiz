@@ -25,6 +25,7 @@ import {
 } from '@/lib/partner-starter/redeem'
 import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
 import { deliveryOptions } from '@/lib/pricing/delivery'
+import { offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
@@ -137,6 +138,7 @@ export async function POST(req: Request) {
     partnerCode?: unknown
     claimStarter?: unknown
     shippingAddress?: unknown
+    lastChance?: unknown
   }
   try {
     body = await req.json()
@@ -227,7 +229,16 @@ export async function POST(req: Request) {
   // What they typed, or failing that the code their link left in a cookie. The
   // server does this so no journey can lose a referral by not having rendered
   // the code box — "Buy now" goes straight to Stripe without one.
-  const code = await resolveCheckoutCode(typedCode)
+  /*
+    The last-chance offer is sold without codes, typed or referred. Its price is
+    already the deepest the order can take at a profit (`quoteOffer`), so a code
+    could only replace it with a discount the floor never checked — and a
+    referral would add a partner's commission (up to 15% of the goods) the floor
+    did not count either. The partner keeps the credit for the stack they
+    referred somebody to; this is a separate, smaller sale.
+  */
+  const wantsOffer = body.lastChance != null
+  const code = wantsOffer ? null : await resolveCheckoutCode(typedCode)
   // The channel decides eligibility as well as reporting: codes work on stacks
   // and bundles, not on single products off the shop shelf (`worksOn`). Read
   // from the line attributes, which the client sends — but a client claiming to
@@ -278,7 +289,7 @@ export async function POST(req: Request) {
    * session cookie and takes nothing. Only once it says yes is an address
    * required, and only then is the claim actually taken.
    */
-  const available = body.claimStarter === true ? await starterForSession({ channel }) : null
+  const available = body.claimStarter === true && !wantsOffer ? await starterForSession({ channel }) : null
   if (available && !available.ok) {
     return NextResponse.json({ error: available.reason, codeRejected: true }, { status: 400 })
   }
@@ -329,7 +340,7 @@ export async function POST(req: Request) {
   }
   const starter = starterClaim?.ok ? starterClaim : null
 
-  const founderClaim = starter ? null : await claimFounderCodeForCheckout(typedCode, { channel })
+  const founderClaim = starter || wantsOffer ? null : await claimFounderCodeForCheckout(typedCode, { channel })
   if (founderClaim && !founderClaim.ok) {
     return NextResponse.json({ error: founderClaim.reason, codeRejected: true }, { status: 400 })
   }
@@ -415,6 +426,49 @@ export async function POST(req: Request) {
    * and the number on the card now come from here.
    */
   const config = getPricingConfig()
+
+  /**
+   * The last-chance offer — one product, at a discount the SERVER works out.
+   *
+   * The browser says which variant it is buying and what it was shown; it never
+   * says what to charge. `quoteOffer` runs again here on the catalogue's own
+   * price and cost, so a tampered request can at most ask for the offer that
+   * already exists. It is an offer for one product bought on its own, so any
+   * other basket shape is refused rather than discounted.
+   *
+   * Its rate goes through `priceOneOffLines` the way a code's would: the deeper
+   * of it, the bundle tier and any partner code wins, never the three compounded,
+   * and the margin floor still applies underneath.
+   */
+  let lastChance: { rate: number; note: string } | null = null
+  if (body.lastChance != null) {
+    const want = (typeof body.lastChance === 'object' ? body.lastChance : {}) as {
+      variantId?: unknown
+      expectedPrice?: unknown
+    }
+    const only = matched.length === 1 && matched[0].quantity === 1 ? matched[0] : null
+    if (!only || only.variant.id !== want.variantId || founder || starter) {
+      await releaseClaim()
+      return NextResponse.json({ error: 'That offer is for one product on its own.' }, { status: 400 })
+    }
+    const quote = quoteOffer(offerProductFor(only.product, only.variant, config), {}, config)
+    if (!quote.viable) {
+      return NextResponse.json({ error: 'This offer isn’t available any more.', offerChanged: true }, { status: 409 })
+    }
+    // Shown one price and about to be charged a higher one: stop and say so. A
+    // lower one is only ever good news and goes ahead.
+    if (typeof want.expectedPrice === 'number' && quote.offerPrice > want.expectedPrice + 0.009) {
+      return NextResponse.json(
+        { error: `The price has changed to ${formatGBP(quote.offerPrice)}.`, offerChanged: true, quote },
+        { status: 409 },
+      )
+    }
+    lastChance = {
+      rate: quote.rate,
+      note: `last-chance offer: ${quote.discountPct}% off ${only.product.title} (list ${formatGBP(quote.listPrice)})`,
+    }
+  }
+
   /**
    * A founder code REPLACES this pricing rather than discounting it.
    *
@@ -430,7 +484,7 @@ export async function POST(req: Request) {
     ? priceStarterOrder(pricedLines, config)
     : founder
     ? priceAtFounderTerms(founder.kind, pricedLines, config)
-    : priceOneOffLines(pricedLines, config, partnerPct)
+    : priceOneOffLines(pricedLines, config, Math.max(partnerPct, lastChance?.rate ?? 0))
 
   const orderLines: OrderLine[] = matched.map((m, i) => ({
     sku: m.variant.sku ?? null,
@@ -491,13 +545,20 @@ export async function POST(req: Request) {
    * customer rate, which is often free. Selling the goods at cost and shipping
    * them on our own promotional postage would put the loss back in one line
    * below where it was just taken out.
+   *
+   * Banded on the SUBTOTAL — what the basket is worth before its discount —
+   * because that is what every screen promises: the receipt, the basket and
+   * the bundle pages all say free delivery qualifies "on what the basket is
+   * worth" (`qualifiesForFreeDelivery`), so a basket cannot lose the perk by
+   * earning a discount. Banding on the discounted total had a £103.96 stack
+   * shown "Free delivery" at £95.64 and then charged £2.95 by Stripe.
    */
   const supplierValue = round(pricedLines.reduce((sum, l) => sum + l.cost * Math.max(1, l.quantity), 0))
   const options = starter
     ? starterDeliveryOptions(priced.total, config)
     : founder
     ? founderDeliveryOptions(founder.kind, { supplierValue, orderValue: priced.total }, config)
-    : deliveryOptions(priced.total, config)
+    : deliveryOptions(priced.subtotal, config)
   // What we book against the order up front. Stripe's real figure — including a
   // Highlands surcharge if they pick it — replaces this on the webhook.
   const mainlandCharge = options[0]?.price ?? 0
@@ -616,6 +677,7 @@ export async function POST(req: Request) {
         email: user?.email ?? null,
         partnerCode: redemption?.ok ? redemption.code.code : null,
         partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
+        offer: lastChance?.note ?? null,
         ...founderFields,
       })
     } catch (err) {
@@ -679,6 +741,7 @@ export async function POST(req: Request) {
       shipping: mainlandCharge,
       partnerCode: redemption?.ok ? redemption.code.code : null,
       partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
+      offer: lastChance?.note ?? null,
       ...founderFields,
     })
   } catch (err) {

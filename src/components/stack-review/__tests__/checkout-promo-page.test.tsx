@@ -70,7 +70,8 @@ it('applies the advertised code, and the receipt comes to the price the card pro
 
   await userEvent.click(within(card).getByRole('button', { name: /apply launch25 now/i }))
 
-  const now = await screen.findByText(/your total is now/i)
+  // The visible line, not the live region announcing the same words.
+  const now = await screen.findByText(/your total is now/i, { selector: 'p:not([role="status"])' })
   const promised = now.textContent!.match(/£\d[\d,]*\.\d{2}/)![0]
   expect(receiptTotal()).toContain(promised)
   expect(screen.getByText(/LAUNCH25 · 25% off/)).toBeInTheDocument()

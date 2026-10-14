@@ -64,6 +64,12 @@ export const SHOP_EVENTS = [
      rather than rescuing abandons. */
   'stack_shop_alacarte',
   'stack_return',
+  /* The last-chance offer at the foot of the results page: seen (once, when it
+     reveals) and bought from (the tap that starts its checkout). Read against
+     `stack_reveal_view` and `purchase` to see whether a smaller yes is being
+     won from people who would otherwise leave — or taken from the stack. */
+  'last_chance_view',
+  'last_chance_buy',
   'product_open',
   'add_to_basket',
   'basket_open',

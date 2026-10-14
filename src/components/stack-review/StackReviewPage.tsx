@@ -28,6 +28,7 @@ import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
+import { LastChance } from './LastChance'
 import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
 import { StarterDeliveryForm } from './StarterDeliveryForm'
 import type { SupplierAddress } from '@/lib/supplier/types'
@@ -710,7 +711,27 @@ export function StackReviewPage() {
     return () => io.disconnect()
   }, [ctaEl])
 
-  const showStickyBar = !swapSlot && !journeyOpen && !shareOpen && !ctaOnScreen
+  /*
+    The last-chance offer has its own buy button at the very foot of the page.
+    While it is on screen the bar would be a second, different purchase sitting
+    on top of it — the whole stack, over the one product — so it steps aside
+    there too.
+  */
+  const [offerCtaEl, setOfferCtaEl] = useState<HTMLButtonElement | null>(null)
+  const [offerCtaOnScreen, setOfferCtaOnScreen] = useState(false)
+  useEffect(() => {
+    if (!offerCtaEl || typeof IntersectionObserver === 'undefined') {
+      setOfferCtaOnScreen(false)
+      return
+    }
+    const io = new IntersectionObserver(([entry]) => setOfferCtaOnScreen(entry.isIntersecting), {
+      rootMargin: '0px 0px -96px 0px',
+    })
+    io.observe(offerCtaEl)
+    return () => io.disconnect()
+  }, [offerCtaEl])
+
+  const showStickyBar = !swapSlot && !journeyOpen && !shareOpen && !ctaOnScreen && !offerCtaOnScreen
     && checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
@@ -1100,6 +1121,24 @@ export function StackReviewPage() {
               sharing the card above is the bonus. Renders nothing unless a
               competition is open. */}
           <GiveawayEntry payload={sharePayload} onShare={() => setShareOpen(true)} />
+
+          {/*
+            The last word: for somebody who scrolled past the whole stack without
+            buying it, the one product that will do the most for them, at a
+            price the order can afford (`lib/last-chance`). Not during a claim or
+            with a founder code — those are already the deal this visit is about.
+          */}
+          {!claiming && !founderKind && (
+            <div className="pb-10">
+              <LastChance
+                slots={activeSlots}
+                products={products}
+                subscriptionPlan={subscriptionPlan}
+                onBackToStack={() => document.getElementById('scene-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                onCtaRef={setOfferCtaEl}
+              />
+            </div>
+          )}
         </div>
       </div>
 
