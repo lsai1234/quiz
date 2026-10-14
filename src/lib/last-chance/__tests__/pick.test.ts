@@ -6,8 +6,8 @@ import { CLAIMS } from '@/lib/consult/claims'
 /**
  * Picking the one product, and what may be said about it.
  *
- * It has to be the stack's best fit that can be sold on its own at a profit —
- * one that can carry a discount wherever one exists — and everything it says
+ * It has to be the stack's best fit that can be sold on its own on a real deal
+ * at a profit — never a full price dressed up as an offer — and everything it says
  * has to come from a safe source: their own goal words, GB-register claim
  * wording verbatim (or nothing), and facts. docs/ORDER_CONFIRMATION_SPEC.md §5.
  */
@@ -57,18 +57,17 @@ it('takes the best-fitting product the business can sell on its own', () => {
     [slot('a', { confidenceScore: 60 }), slot('b', { confidenceScore: 80 }), slot('cheap', { confidenceScore: 99, required: true })],
     [product('a'), product('b'), cheap('cheap')],
   )
-  // "cheap" fits best but loses money alone, so it is skipped rather than discounted.
+  // "cheap" fits best but has no deal it can afford alone, so it is skipped rather than shown at full price.
   expect(hero?.product.id).toBe('b')
   expect(hero?.quote.viable).toBe(true)
 })
 
-it('prefers a product that can carry a discount over a better fit that cannot', () => {
-  // £17.99 at a £9 cost clears the floor only at full price; £34.99 has room.
-  const tight = product('tight', { cost: 9, variants: [{ id: 'v-tight', price: 17.99, available: true, cost: 9 }] as never })
-  const roomy = product('roomy')
-  const hero = pickHeroOffer([slot('tight', { confidenceScore: 95 }), slot('roomy', { confidenceScore: 40 })], [tight, roomy])
-  expect(hero?.product.id).toBe('roomy')
-  expect(hero?.quote.discountPct).toBeGreaterThan(0)
+it('puts a real deal on the card, delivery first', () => {
+  const hero = pickHeroOffer([slot('a'), slot('b', { confidenceScore: 10 })], [product('a'), product('b')])
+  expect(hero?.quote.totalSaving).toBeGreaterThan(0)
+  expect(hero?.quote.deliveryCharge).toBeLessThan(hero!.quote.standardDelivery)
+  // A percentage only ever comes on top of free delivery.
+  if (hero!.quote.discountPct > 0) expect(hero?.quote.deliveryCharge).toBe(0)
 })
 
 it('says what it does only in register wording, verbatim — or not at all', () => {

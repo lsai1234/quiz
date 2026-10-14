@@ -1,190 +1,291 @@
 /**
- * What the last-chance offer can afford to take off — per product, never a
- * flat rate.
+ * The deal the last-chance offer makes on one product — worked out for that
+ * product, never a flat rate, and never at a loss.
  *
- * ── Why the discount is worked out, not chosen ──────────────────────────────
+ * ── Why it is worked out ────────────────────────────────────────────────────
  * A single product ships alone, and alone is the worst case this business has:
- * PowerBody charge us £6.50 to post an order under £50 of wholesale and we
- * collect £4.95 (or £2.95 from £40), so the parcel itself loses money before
- * the goods are counted. Run through `unitEconomics` — VAT, the goods, both
- * sides of delivery, card fees and the returns provision — a £34.99 protein
- * makes about £8 at full price, a £19.99 creatine about £3, and a £12.99
- * vitamin well under £1. A flat 25% would sell the cheap end at a loss.
+ * PowerBody charge us £6.50 to post an order under £50 of wholesale, whatever
+ * we charge the customer. Run through `unitEconomics` — the goods, both sides
+ * of delivery, card fees, the returns provision and (when the switch in
+ * settings says we pay it) VAT — a £29.99 product makes a healthy margin with
+ * postage charged, a £19.99 one makes a few pounds, and a £12.99 one almost
+ * nothing. A flat "25% off" would sell the cheap end at a loss.
  *
- * So the offer walks down a short ladder and takes the deepest rung that still
- * leaves the order above the floor — and offers nothing off when even full
- * price does not clear it. The figure on the card is therefore a promise the
- * checkout can keep: the server re-runs this same function before charging.
+ * ── The order the levers are pulled in ──────────────────────────────────────
+ * 1. Delivery goes first. Free delivery is the easiest thing to say yes to and
+ *    the thing that most often stops a small order, so it is the lead.
+ * 2. Then a percentage off the product: the deepest whole percent that still
+ *    clears the floor, up to `maxDiscountPct`. Below `minDiscountPct` it is
+ *    left off — "free delivery" reads as a deal, "free delivery and 2% off"
+ *    reads as a rounding error.
+ * 3. Where free delivery would sell at a loss, delivery is REDUCED instead, to
+ *    the lowest of a few real-looking prices (£0.99, £1.49, …) that clears the
+ *    floor. No percentage on top: delivery is the lever that matters most.
+ * 4. If even that does not clear the floor — or full price itself does not —
+ *    there is no deal, and the offer is not made.
+ *
+ * ── Priced on its own ───────────────────────────────────────────────────────
+ * Nothing on the page above changes it: no bundle tier, no daily code, no
+ * partner's code. The offer is its own price, and the checkout bills exactly
+ * this figure and this delivery (the server re-runs this same function first).
  *
  * ── The floor ───────────────────────────────────────────────────────────────
- * At least £3.00 of contribution AND at least 10% of what we keep. The pound
- * figure protects cheap products, where a percentage of very little is very
- * little; the percentage protects dear ones, where £3 would be giving most of
- * the margin away.
+ * `config.lastChance`: at least `minContribution` (£) AND at least
+ * `minMarginPct` of what we keep. The pound figure protects cheap products,
+ * where a percentage of very little is very little; the percentage protects
+ * dear ones, where a few pounds would be giving most of the margin away.
  *
  * ── Unknown costs ───────────────────────────────────────────────────────────
  * A product with no supplier cost on file is costed at the site-wide estimate
- * (`defaultCostRatio`, deliberately pessimistic), and its discount is capped at
- * 10% on top — a guess is not a number to spend 20% against.
+ * (`defaultCostRatio`, deliberately pessimistic) and its percentage is capped
+ * at `uncostedMaxDiscountPct` — a guess is not a number to spend 25% against.
  *
  * Pure and client-safe: the card quotes with it and the server enforces with it.
  */
-import { getPricingConfig, priceOneOffLines, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import {
+  getPricingConfig,
+  priceOneOffLines,
+  unitCostOf,
+  type OneOffPricing,
+  type PricingConfig,
+} from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
-import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { customerDeliveryCharge, deliveryOptions, type DeliveryOption } from '@/lib/pricing/delivery'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
-/** The rungs, deepest first. Never 25%: that is the daily code's, and this sells alone. */
-export const OFFER_LADDER = [0.2, 0.15, 0.1, 0.05] as const
+export type OfferSettings = PricingConfig['lastChance']
 
-export interface OfferFloor {
-  /** Minimum contribution per order (£). */
-  minContribution: number
-  /** Minimum contribution as a share of net revenue (0–1). */
-  minMarginPct: number
-}
-
-export const OFFER_FLOOR: OfferFloor = { minContribution: 3, minMarginPct: 0.1 }
-
-/** The deepest a product with no cost on file may go. */
-export const UNCOSTED_MAX_DISCOUNT = 0.1
+/**
+ * What a reduced delivery charge may be, cheapest first — prices a shop would
+ * actually print, rather than the £1.27 the arithmetic lands on.
+ */
+export const REDUCED_DELIVERY_PRICES = [0.99, 1.49, 1.99, 2.49, 2.99, 3.49, 3.99] as const
 
 export interface OfferProduct {
   /** Shelf price of the variant being offered (£ inc VAT). */
   price: number
   /** What PowerBody charge us for it (£ ex VAT), or null when unknown. */
   supplierCost: number | null
-  /**
-   * The cost the checkout's margin floor reads (`unitCostOf`). Usually the same
-   * figure; kept separate so the quote prices through `priceOneOffLines`
-   * exactly as `/api/cart` will. Defaults to `supplierCost`, then an estimate.
-   */
-  floorCost?: number
   grams?: number | null
   vatRate?: number | null
 }
 
 /** The offer inputs for a catalogue variant — the same fields the checkout and the order read. */
 export function offerProductFor(
-  product: Pick<CatalogueProduct, 'cost' | 'basePrice' | 'weightGrams' | 'vatRate'>,
+  product: Pick<CatalogueProduct, 'cost' | 'weightGrams' | 'vatRate'>,
   variant: Pick<CatalogueVariant, 'price'> & { cost?: number | null },
-  config: PricingConfig = getPricingConfig(),
 ): OfferProduct {
   return {
     price: variant.price,
     supplierCost: variant.cost ?? product.cost ?? null,
-    floorCost: unitCostOf(product, variant.price, config),
     grams: product.weightGrams ?? null,
     vatRate: product.vatRate ?? null,
   }
 }
 
+/**
+ * What this product costs bought on its own through the ordinary checkout —
+ * the shop's automatic bundle tier included (a £50+ product earns it alone).
+ *
+ * The deal has to beat THIS, not just the shelf price, or a £59.99 tub on a
+ * small percentage could come out dearer than simply adding it to a basket.
+ */
+export function ordinaryPriceOf(product: OfferProduct, config: PricingConfig = getPricingConfig()): number {
+  const cost = product.supplierCost ?? unitCostOf({ basePrice: product.price }, product.price, config)
+  return priceOneOffLines([{ price: round(product.price), cost, quantity: 1 }], config, 0).total
+}
+
+/**
+ * What the deal does to delivery.
+ * - `free` — we waive the mainland charge this product would carry alone.
+ * - `reduced` — we cut it.
+ * - `included` — at this price delivery is free anyway; nothing to waive.
+ * - `standard` — no deal on delivery (only ever on a quote that is not viable).
+ */
+export type DeliveryDeal = 'free' | 'reduced' | 'included' | 'standard'
+
 export interface OfferQuote {
   listPrice: number
-  /** What the product sells for in this offer (£ inc VAT). */
+  /** What the product sells for in this deal (£ inc VAT). */
   offerPrice: number
-  /** Whole percent off, e.g. 15. 0 when no rung clears the floor. */
+  /** Whole percent off the product, e.g. 15. 0 when the deal is delivery alone. */
   discountPct: number
-  /** The ladder rung used (0–1) — what the checkout applies, as a code's rate would be. */
+  /** discountPct as a fraction (0–1). */
   rate: number
+  /** Off the product (£). */
   saving: number
-  /** What the customer pays for delivery on this order (UK mainland). */
+  /** What mainland delivery would cost on this product alone, at full price (£). */
+  standardDelivery: number
+  /** What mainland delivery costs in this deal (£). The Highlands surcharge still applies up there. */
   deliveryCharge: number
-  /** offerPrice + deliveryCharge. */
+  deliveryDeal: DeliveryDeal
+  /** standardDelivery − deliveryCharge (£). */
+  deliverySaving: number
+  /** listPrice + standardDelivery: what it costs delivered without the deal (£). */
+  normalTotal: number
+  /** offerPrice + deliveryCharge: what it costs delivered with it (£). */
   total: number
   /**
-   * What the whole order costs less than at full price, delivery included. The
-   * same as `saving` while delivery is banded on the list price, as it is; kept
-   * separate so a change there can never turn a headline saving into none.
+   * What the ordinary checkout would charge for it delivered — its own bundle
+   * tier included (£). The deal is only made when it beats this by at least
+   * £1, so it is never worse than just buying the product.
    */
+  ordinaryTotal: number
+  /** normalTotal − total (£). */
   totalSaving: number
-  /** What the business keeps after every cost, at the offer price (£). */
+  /** What the business keeps after every cost, in this deal (£). */
   contribution: number
   /** contribution ÷ net revenue. */
   marginPct: number
   /** The floor this order had to clear (£). */
   floor: number
   /**
-   * False when the order cannot be made at a profit — even full price is under
-   * the floor — or is under the checkout's minimum order. The offer is not made.
+   * True only when there IS a deal — something comes off the delivered price —
+   * and the order still clears the floor and the checkout's minimum. False
+   * means no offer is made.
    */
   viable: boolean
   costKnown: boolean
 }
 
 /** The contribution an order has to clear: the larger of the pound and percentage floors. */
-export function floorFor(netRevenue: number, floor: OfferFloor = OFFER_FLOOR): number {
-  return round(Math.max(floor.minContribution, floor.minMarginPct * netRevenue))
+export function floorFor(netRevenue: number, settings: OfferSettings = getPricingConfig().lastChance): number {
+  return round(Math.max(settings.minContribution, settings.minMarginPct * netRevenue))
 }
 
-/**
- * The deepest safe discount on one product, and the order it makes.
- *
- * Delivery is charged — and modelled — on the list price, which is what the
- * checkout bands on (the undiscounted subtotal), so the postage on the card is
- * the postage on the charge and a discount can never be eaten by a higher band.
- */
+/** The best deal on one product that still leaves the business a profit. */
 export function quoteOffer(
   product: OfferProduct,
-  opts: { floor?: OfferFloor; ladder?: readonly number[] } = {},
   config: PricingConfig = getPricingConfig(),
+  settings: OfferSettings = config.lastChance,
 ): OfferQuote {
-  const floor = opts.floor ?? OFFER_FLOOR
-  const ladder = [...(opts.ladder ?? OFFER_LADDER)].sort((a, b) => b - a)
   const costKnown = product.supplierCost != null && product.supplierCost > 0
   const listPrice = round(product.price)
+  const standardDelivery = listPrice > 0 ? customerDeliveryCharge(listPrice, 'uk-1', config) : 0
+  const normalTotal = round(listPrice + standardDelivery)
+  const ordinaryTotal = listPrice > 0 ? round(ordinaryPriceOf(product, config) + standardDelivery) : 0
 
-  const floorCost = product.floorCost ?? product.supplierCost ?? round(listPrice * config.defaultCostRatio)
-
-  const at = (rate: number): OfferQuote => {
-    // Priced by the checkout's own function, so the bundle tier and the margin
-    // floor land exactly as they will on the card charge: a one-product order
-    // over the tier line earns the tier anyway, and the deeper of the two wins.
-    const offerPrice = priceOneOffLines([{ price: listPrice, cost: floorCost, quantity: 1 }], config, rate).total
+  const at = (pct: number, deliveryCharge: number, deliveryDeal: DeliveryDeal): OfferQuote => {
+    const offerPrice = round(listPrice * (1 - pct / 100))
     const econ = unitEconomics(
       {
         shelfPrice: offerPrice,
         supplierCost: costKnown ? product.supplierCost : null,
         grams: product.grams ?? null,
         vatRate: product.vatRate ?? null,
-        // The checkout bands delivery on the undiscounted subtotal — for one
-        // product, its list price — so the discount never moves the postage.
-        freeDeliveryBasis: listPrice,
+        customerDelivery: deliveryCharge,
       },
       config,
     )
-    const deliveryCharge = customerDeliveryCharge(listPrice, 'uk-1', config)
-    const fullTotal = round(listPrice + customerDeliveryCharge(listPrice, 'uk-1', config))
-    const need = floorFor(econ.netRevenue, floor)
+    const total = round(offerPrice + deliveryCharge)
     return {
       listPrice,
       offerPrice,
-      discountPct: listPrice > 0 ? Math.round(((listPrice - offerPrice) / listPrice) * 100) : 0,
-      rate,
+      discountPct: pct,
+      rate: pct / 100,
       saving: round(listPrice - offerPrice),
+      standardDelivery,
       deliveryCharge,
-      total: round(offerPrice + deliveryCharge),
-      totalSaving: round(fullTotal - (offerPrice + deliveryCharge)),
+      deliveryDeal,
+      deliverySaving: round(standardDelivery - deliveryCharge),
+      normalTotal,
+      total,
+      ordinaryTotal,
+      totalSaving: round(normalTotal - total),
       contribution: econ.contribution,
       marginPct: econ.marginPct,
-      floor: need,
-      viable: econ.contribution >= need && offerPrice >= config.minOrderValue,
+      floor: floorFor(econ.netRevenue, settings),
+      viable: false,
       costKnown,
     }
   }
+  const clears = (q: OfferQuote) => q.contribution >= q.floor && q.offerPrice >= config.minOrderValue
+  // A deal is a deal: something comes off, and it beats the ordinary checkout
+  // by at least a pound.
+  const deal = (q: OfferQuote): OfferQuote => ({
+    ...q,
+    viable: clears(q) && q.totalSaving > 0 && q.ordinaryTotal - q.total >= 1,
+  })
 
-  if (listPrice <= 0) return { ...at(0), viable: false }
+  const full = at(0, standardDelivery, 'standard')
+  // Nothing to give away when the order does not pay its way at full price.
+  if (listPrice <= 0 || !clears(full)) return full
 
-  for (const rate of ladder) {
-    if (rate <= 0) continue
-    if (!costKnown && rate > UNCOSTED_MAX_DISCOUNT) continue
-    const quote = at(rate)
-    // A discount has to be worth having on the order as a whole — at least £1
-    // and most of what it says — or it is a headline, not an offer.
-    const worthIt = quote.totalSaving >= Math.max(1, quote.saving * 0.75)
-    if (quote.viable && worthIt) return quote
+  // 1. Delivery first.
+  let deliveryDeal: DeliveryDeal
+  if (standardDelivery <= 0) {
+    deliveryDeal = 'included'
+  } else if (clears(at(0, 0, 'free'))) {
+    deliveryDeal = 'free'
+  } else {
+    // 3. Free would lose money: cut it as far as the floor allows, and stop there.
+    const reduced = REDUCED_DELIVERY_PRICES.filter((p) => p < standardDelivery)
+      .map((p) => at(0, p, 'reduced'))
+      .find(clears)
+    return reduced ? deal(reduced) : full
   }
-  return at(0)
+
+  // 2. Then the deepest whole percent off that still clears the floor.
+  const cap = Math.floor(
+    Math.min(settings.maxDiscountPct, costKnown ? 1 : settings.uncostedMaxDiscountPct) * 100 + 1e-9,
+  )
+  const least = Math.max(1, Math.ceil(settings.minDiscountPct * 100 - 1e-9))
+  for (let pct = cap; pct >= least; pct--) {
+    const q = at(pct, 0, deliveryDeal)
+    if (clears(q)) return deal(q)
+  }
+  return deal(at(0, 0, deliveryDeal))
+}
+
+/** The deal in a few words — for the order's audit trail and analytics. */
+export function describeDeal(q: Pick<OfferQuote, 'deliveryDeal' | 'discountPct' | 'deliveryCharge' | 'standardDelivery'>): string {
+  const parts: string[] = []
+  if (q.deliveryDeal === 'free') parts.push(`free delivery (was £${q.standardDelivery.toFixed(2)})`)
+  if (q.deliveryDeal === 'reduced') parts.push(`delivery £${q.deliveryCharge.toFixed(2)} (was £${q.standardDelivery.toFixed(2)})`)
+  if (q.discountPct > 0) parts.push(`${q.discountPct}% off`)
+  return parts.join(' + ') || 'no deal'
+}
+
+/** A quote without the business's own figures — what may go back to a browser. */
+export type PublicOfferQuote = Omit<OfferQuote, 'contribution' | 'marginPct' | 'floor' | 'costKnown'>
+
+export function publicQuote(q: OfferQuote): PublicOfferQuote {
+  const { contribution: _c, marginPct: _m, floor: _f, costKnown: _k, ...rest } = q
+  return rest
+}
+
+/**
+ * The order's pricing, from the deal alone — no tier, no code, no floor but
+ * the deal's own. The same shape `priceOneOffLines` returns, so the checkout
+ * bills from one object whichever path priced it.
+ */
+export function priceOfferOrder(q: OfferQuote): OneOffPricing {
+  return {
+    lines: [{ unitPrice: q.listPrice, discountedUnitPrice: q.offerPrice, quantity: 1, lineTotal: q.offerPrice }],
+    subtotal: q.listPrice,
+    total: q.offerPrice,
+    discount: round(q.listPrice - q.offerPrice),
+    tierPct: 0,
+    tierLabel: null,
+    partnerPct: 0,
+    combinedPct: q.rate,
+  }
+}
+
+/**
+ * The delivery choices on an offer order: the deal's mainland charge, and the
+ * same plus the Highlands surcharge up there — our cost in Zone 2 never goes
+ * away, which is why the surcharge applies to the free band everywhere else too.
+ */
+export function offerDeliveryOptions(q: OfferQuote, config: PricingConfig = getPricingConfig()): DeliveryOption[] {
+  return deliveryOptions(q.listPrice, config).map((o) => {
+    const price = round(q.deliveryCharge + (o.zone === 'uk-2' ? config.delivery.zone2Surcharge : 0))
+    return {
+      ...o,
+      price,
+      label: o.zone === 'uk-1' && price === 0 ? 'Free UK mainland delivery' : o.label,
+    }
+  })
 }

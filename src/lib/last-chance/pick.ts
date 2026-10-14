@@ -16,11 +16,12 @@
  * pick towards exactly the kinds of product we can make no claim about.
  *
  * ── The filter, before any of that ──────────────────────────────────────────
- * Buyable on its own at a profit: in stock, not an accessory, not a
- * subscription-only refill, not ruled out for this person by a hard gate, and
- * `quoteOffer` viable. A product that can carry a discount beats one that
- * cannot — the section is an offer — and only when none can is the best
- * full-price product shown instead.
+ * Buyable on its own on a real deal at a profit: in stock, not an accessory,
+ * not a subscription-only refill, not ruled out for this person by a hard
+ * gate, and `quoteOffer` viable — which means something genuinely comes off
+ * the delivered price. A product with no deal is never shown at full price
+ * under a "one-time offer" heading; if nothing in the stack has one, the
+ * section does not render.
  *
  * ── What the card may say (docs/ORDER_CONFIRMATION_SPEC.md §5) ──────────────
  * - Why you: built here from the goals they gave us (OC-C-004) — never the
@@ -163,8 +164,8 @@ function fitFor(product: CatalogueProduct, slot: StackSlotEntry, answers: QuizAn
 }
 
 /**
- * The hero, or null when no product in the stack can be sold on its own at a
- * profit — in which case the section does not render at all.
+ * The hero, or null when no product in the stack can be sold on its own on a
+ * real deal at a profit — in which case the section does not render at all.
  */
 export function pickHeroOffer(
   slots: readonly StackSlotEntry[],
@@ -188,7 +189,7 @@ export function pickHeroOffer(
     if (!variant) continue
     const fit = fitFor(product, slot, answers)
     if (fit === -Infinity) continue
-    const quote = quoteOffer(offerProductFor(product, variant, config), {}, config)
+    const quote = quoteOffer(offerProductFor(product, variant), config)
     if (!quote.viable) continue
     const claim = claimFor(product, ordered)
     const score =
@@ -212,18 +213,14 @@ export function pickHeroOffer(
   }
   if (candidates.length === 0) return null
 
-  // An offer that offers something, wherever one exists.
-  const discounted = candidates.filter((c) => c.quote.discountPct > 0)
-  const pool = discounted.length > 0 ? discounted : candidates
-
-  pool.sort(
+  candidates.sort(
     (a, b) =>
       b.score - a.score ||
       Number(b.quote.costKnown) - Number(a.quote.costKnown) ||
+      b.quote.totalSaving - a.quote.totalSaving ||
       a.order - b.order ||
-      b.quote.contribution - a.quote.contribution ||
-      a.quote.total - b.quote.total,
+      b.quote.contribution - a.quote.contribution,
   )
-  const { order: _order, ...hero } = pool[0]
+  const { order: _order, ...hero } = candidates[0]
   return hero
 }

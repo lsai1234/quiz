@@ -3,14 +3,15 @@
 import { useCallback, useRef, useState } from 'react'
 import { track } from '@/lib/analytics/events'
 import { LAST_CHANCE_SOURCE } from '@/lib/last-chance/source'
-import type { OfferQuote } from '@/lib/last-chance/economics'
+import type { PublicOfferQuote } from '@/lib/last-chance/economics'
 
 /**
  * Buying the last-chance offer: one product, straight to payment.
  *
  * The shop's checkout state machine (`useShopCheckout`), aimed at one line and
- * carrying the offer. The browser says which variant and what price it showed;
- * `/api/cart` works the price out again and refuses to charge more than that.
+ * carrying the offer. The browser says which variant, and the price and the
+ * delivery it showed; `/api/cart` works the deal out again and refuses to
+ * charge more than either.
  * Guest checkout, so there is no account or consent gate between the tap and
  * the payment page.
  */
@@ -20,7 +21,7 @@ export type OfferCheckoutState =
   | { status: 'redirecting' }
   | { status: 'error'; message: string }
   /** The server's price moved since the card was drawn — show the new one. */
-  | { status: 'changed'; message: string; quote: OfferQuote | null }
+  | { status: 'changed'; message: string; quote: PublicOfferQuote | null }
 
 const INITIATION_TIMEOUT_MS = 10_000
 
@@ -32,14 +33,14 @@ export function useOfferCheckout() {
   const buy = useCallback(async (offer: {
     variantId: string
     productTitle: string
-    quote: OfferQuote
+    quote: PublicOfferQuote
     /** The register claim shown on the card, kept with the order (OC-C-006). */
     claimId?: string | null
   }) => {
     if (inFlight.current) return
     inFlight.current = true
     setState({ status: 'loading' })
-    track('last_chance_buy', { discountPct: offer.quote.discountPct, value: offer.quote.total })
+    track('last_chance_buy', { discountPct: offer.quote.discountPct, delivery: offer.quote.deliveryDeal, value: offer.quote.total })
     track('checkout_start', { source: 'last_chance', items: 1, value: offer.quote.total })
 
     const controller = new AbortController()
@@ -59,7 +60,11 @@ export function useOfferCheckout() {
               ...(offer.claimId ? [{ key: 'claim', value: offer.claimId }] : []),
             ],
           }],
-          lastChance: { variantId: offer.variantId, expectedPrice: offer.quote.offerPrice },
+          lastChance: {
+            variantId: offer.variantId,
+            expectedPrice: offer.quote.offerPrice,
+            expectedDelivery: offer.quote.deliveryCharge,
+          },
         }),
       })
       const data: {
@@ -67,7 +72,7 @@ export function useOfferCheckout() {
         orderId?: string
         error?: string
         offerChanged?: boolean
-        quote?: OfferQuote
+        quote?: PublicOfferQuote
       } | null = await res.json().catch(() => null)
 
       if (res.status === 409 && data?.offerChanged) {

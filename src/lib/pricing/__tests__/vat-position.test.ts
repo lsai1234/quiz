@@ -6,8 +6,17 @@ import type { Order, OrderStatus } from '@/lib/orders/types'
 const NOW = new Date('2026-08-15T12:00:00.000Z')
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString()
 
-const unregistered: PricingConfig = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false } }
-const registered: PricingConfig = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: true } }
+/**
+ * Pinned to PowerBody charging us VAT (`supplierChargesVat`, which ships OFF).
+ * Most of this file is about the two-sided trade — input VAT reclaimed against
+ * output VAT handed over — and with the switch off there is no input side, so
+ * those tests would pass or fail for the wrong reason. The switch-off reading
+ * has its own block at the bottom.
+ */
+const unregistered: PricingConfig = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: true } }
+const registered: PricingConfig = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: true, supplierChargesVat: true } }
+/** The shipped default: unregistered, and PowerBody's invoices carry no VAT. */
+const noSupplierVat: PricingConfig = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: false } }
 
 function order(total: number, days: number, status: OrderStatus = 'paid'): Order {
   return {
@@ -151,5 +160,52 @@ describe('what registering is worth', () => {
     expect(p.costPerOrder).toBe(0)
     expect(p.repriceFactor).toBe(1)
     expect(p.pctOfThreshold).toBe(0)
+  })
+})
+
+describe('when PowerBody charge us no VAT', () => {
+  /** Anything that would tell a founder PowerBody's VAT is a cost to us. */
+  const CLAIMS_SUPPLIER_VAT = /VAT PowerBody charge us|can't be reclaimed|cannot reclaim|claim it back/i
+
+  it('is how the business ships', () => {
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    expect(build(spread(10, 50, 300), PRICING_CONFIG).supplierChargesVat).toBe(false)
+  })
+
+  it('has nothing to reclaim, so registering costs the whole of the VAT on sales', () => {
+    const p = build(spread(50, 100, 300), noSupplierVat)
+    expect(p.supplierChargesVat).toBe(false)
+    expect(p.inputVatLost).toBe(0)
+    expect(p.outputVatOwed).toBeGreaterThan(0)
+    // No input side to set against it: the net cost IS the output VAT.
+    expect(p.netCostOfRegistering).toBeCloseTo(p.outputVatOwed, 0)
+    // And more than the two-sided figure, for exactly that reason.
+    expect(p.netCostOfRegistering).toBeGreaterThan(build(spread(50, 100, 300)).netCostOfRegistering)
+  })
+
+  it('does not say PowerBody charge us VAT, below the threshold', () => {
+    const p = build(spread(50, 100, 300), noSupplierVat)
+    expect(p.verdict.tone).toBe('ok')
+    expect(p.verdict.detail).not.toMatch(CLAIMS_SUPPLIER_VAT)
+    expect(p.verdict.detail).toMatch(/PowerBody don't charge us VAT/)
+    expect(p.verdict.detail).toMatch(/reclaim nothing/)
+  })
+
+  it('does not say it approaching the threshold or over it either', () => {
+    // These two are the verdicts the dashboard surfaces as notices.
+    const watch = build(spread(100, 800, 300), noSupplierVat)
+    const act = build(spread(100, 1000, 300), noSupplierVat)
+    expect(watch.verdict.tone).toBe('watch')
+    expect(act.verdict.tone).toBe('act')
+    for (const p of [watch, act]) {
+      expect(p.verdict.detail).not.toMatch(CLAIMS_SUPPLIER_VAT)
+      expect(p.verdict.detail).toMatch(/nothing to reclaim/)
+    }
+  })
+
+  it('does not say it once registered', () => {
+    const p = build(spread(50, 100, 300), { ...noSupplierVat, vat: { ...noSupplierVat.vat, registered: true } })
+    expect(p.verdict.headline).toMatch(/Registered/)
+    expect(p.verdict.detail).not.toMatch(/the VAT PowerBody charge us is reclaimed/)
   })
 })

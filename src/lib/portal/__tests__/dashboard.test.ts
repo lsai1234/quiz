@@ -1,5 +1,6 @@
 import { buildDashboard, moneyWindow } from '../dashboard'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { buildVatPosition } from '@/lib/pricing/vat-position'
 import type { Order, OrderLine, OrderStatus } from '@/lib/orders/types'
 import type { SubscriptionSummary } from '@/lib/changes/health'
 
@@ -125,11 +126,21 @@ describe('money windows', () => {
   })
 
   it('costs the supplier’s VAT in when we cannot reclaim it', () => {
-    const w = moneyWindow(ago(24), [order()], PRICING_CONFIG) // the shipped default
+    // Unregistered, as shipped — with PowerBody charging us VAT pinned on,
+    // because that VAT is the subject (`supplierChargesVat` ships off).
+    const charged = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: true } }
+    const w = moneyWindow(ago(24), [order()], charged)
     // Not registered: we keep the whole £40, but the £12 of goods costs £14.40.
     expect(w.netRevenue).toBe(40)
     expect(w.vat).toBe(0)
     expect(w.cogs).toBeCloseTo(14.4, 2)
+  })
+
+  it('costs the goods at their quoted price when PowerBody charge us no VAT', () => {
+    const w = moneyWindow(ago(24), [order()], PRICING_CONFIG) // the shipped default
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    expect(w.netRevenue).toBe(40)
+    expect(w.cogs).toBe(12)
   })
 
   it('does not count money we gave back as revenue', () => {
@@ -207,6 +218,29 @@ describe('dashboard summary', () => {
     const d = buildDashboard({ ...base, orders: [abandoned], subscriptions: [] })
     expect(d.orders.failed).toBe(0)
     expect(d.actionRequired.some((a) => a.label.includes('failed to reach the supplier'))).toBe(false)
+  })
+
+  it('raises the VAT notice in words that follow the PowerBody-charge-us-VAT switch', () => {
+    // ~£80k over the last ten months: close enough to the threshold to surface.
+    const orders = Array.from({ length: 100 }, (_, i) => order({ total: 800, createdAt: ago(24 * 3 * i) }))
+    const notice = (config: typeof PRICING_CONFIG) =>
+      buildDashboard({
+        ...base,
+        orders: [],
+        subscriptions: [],
+        vat: buildVatPosition({ orders, config, averageCostRatio: 0.4, now: NOW }).verdict,
+      }).notices[0]
+
+    // As shipped, their invoices carry no VAT — so the notice never says they do.
+    const off = notice(PRICING_CONFIG)
+    expect(off.id).toBe('vat')
+    expect(off.tone).toBe('watch')
+    expect(off.detail).toMatch(/PowerBody don't charge us VAT/)
+    expect(off.detail).not.toMatch(/VAT PowerBody charge us|can't be reclaimed|cannot reclaim/i)
+
+    // Switched on, the two-sided reading is back.
+    const on = notice({ ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, supplierChargesVat: true } })
+    expect(on.detail).not.toMatch(/don't charge us VAT/)
   })
 
   it('is all zeroes rather than NaN on a brand-new business', () => {

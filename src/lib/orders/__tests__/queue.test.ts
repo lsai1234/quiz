@@ -172,6 +172,20 @@ describe('the daily queue', () => {
     expect(q.undeliverable).toBe(0)
   })
 
+  it('judges a Highlands order against the rate checkout actually offered it', () => {
+    const north = { ...ADDRESS, postcode: 'IV30 1AA', city: 'Elgin' }
+    // A free-delivery offer: the Highlands option was the surcharge alone.
+    const offer = at('2026-08-03', { shippingAddress: north, subtotal: 27.99, shipping: 2.95, deliveryDue: { 'uk-1': 0, 'uk-2': 2.95 } })
+    // The same order picking the mainland's free rate is short by the surcharge.
+    const cheeky = at('2026-08-03', { shippingAddress: north, subtotal: 27.99, shipping: 0, deliveryDue: { 'uk-1': 0, 'uk-2': 2.95 } })
+    // An order from before the rates were recorded falls back to the bands.
+    const older = at('2026-08-03', { shippingAddress: north, subtotal: 27.99, shipping: 4.95 })
+    const rows = buildFulfilmentQueue([offer, cheeky, older]).days[0].orders
+    expect(rows.find((o) => o.id === offer.id)?.deliveryShortfall).toBeNull()
+    expect(rows.find((o) => o.id === cheeky.id)?.deliveryShortfall).toBe(2.95)
+    expect(rows.find((o) => o.id === older.id)?.deliveryShortfall).toBe(2.95)
+  })
+
   it('treats an order written before the queue existed as needing review', () => {
     const legacy = at('2026-07-01')
     delete (legacy as Partial<Order>).review

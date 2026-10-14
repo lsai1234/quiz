@@ -122,10 +122,13 @@ describe('what a code does to the money', () => {
   })
 
   it('charges cost price INCLUDING the VAT we cannot reclaim', () => {
-    // Unregistered is the position the business is in, and PowerBody's VAT is
-    // money that leaves the account for good — a "cost price" that ignored it
-    // would still lose us a fifth of the goods.
+    // Unregistered is the position the business is in, and when PowerBody's
+    // invoices carry VAT it is money that leaves the account for good — a "cost
+    // price" that ignored it would still lose us a fifth of the goods. Pinned
+    // on, because `supplierChargesVat` ships off and this would pass trivially.
     expect(PRICING_CONFIG.vat.registered).toBe(false)
+    setPricingOverrides({ vat: { ...PRICING_CONFIG.vat, supplierChargesVat: true } })
+    expect(costFromSupplierPrice(10)).toBe(12)
     const priced = priceAtFounderTerms('cost', lines)
     expect(priced.lines[0].discountedUnitPrice).toBe(costFromSupplierPrice(10))
     expect(priced.lines[1].discountedUnitPrice).toBe(costFromSupplierPrice(4))
@@ -133,8 +136,17 @@ describe('what a code does to the money', () => {
   })
 
   it('drops the VAT gross-up the day we register', () => {
-    setPricingOverrides({ vat: { ...PRICING_CONFIG.vat, registered: true } })
+    setPricingOverrides({ vat: { ...PRICING_CONFIG.vat, registered: true, supplierChargesVat: true } })
     expect(priceAtFounderTerms('cost', lines).lines[0].discountedUnitPrice).toBe(10)
+  })
+
+  it('charges the quoted price when PowerBody charge us no VAT', () => {
+    // The shipped default: their invoices carry no VAT, so cost is the ex-VAT
+    // figure — anything more would be charging ourselves a tax we don't pay.
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    const priced = priceAtFounderTerms('cost', lines)
+    expect(priced.lines[0].discountedUnitPrice).toBe(10)
+    expect(priced.lines[1].discountedUnitPrice).toBe(4)
   })
 
   it('ignores the margin floor entirely, in both directions', () => {
@@ -147,9 +159,9 @@ describe('what a code does to the money', () => {
     expect(priceAtFounderTerms('free', lines).total).toBe(0)
 
     // And a floor set ABOVE cost price does not drag a cost-price order up to
-    // it either. (With the shipped 15% floor and 20% irrecoverable VAT the two
-    // happen to sit the other way round, which is exactly why this asserts the
-    // rule rather than today's arithmetic.)
+    // it either. (With the shipped 15% floor and 20% irrecoverable VAT, when
+    // PowerBody charge it, the two happen to sit the other way round, which is
+    // exactly why this asserts the rule rather than today's arithmetic.)
     setPricingOverrides({ marginFloorPct: 0.9 })
     expect(priceAtFounderTerms('cost', lines).lines[0].discountedUnitPrice).toBe(costFromSupplierPrice(10))
     expect(priceOneOffLines(lines, undefined, 1).lines[0].discountedUnitPrice).toBe(19)

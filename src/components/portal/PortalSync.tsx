@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { setDataSourceOverride, type DataSourceMode } from '@/lib/data-source'
 import { setPricingOverrides } from '@/lib/stack-blueprint/pricing'
+import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
 import { setQuizArm } from '@/lib/experiments/client'
 import { isHeroOffer } from '@/lib/experiments/consult'
 import { setMetaPixelId } from '@/lib/analytics/meta-pixel'
@@ -35,7 +36,10 @@ export function PortalSync() {
       }) => {
         setMetaPixelId(typeof data.metaPixelId === 'string' ? data.metaPixelId : null)
         if (data.dataSourceMode) setDataSourceOverride(data.dataSourceMode)
-        if (data.pricingOverrides) setPricingOverrides(data.pricingOverrides)
+        if (data.pricingOverrides) {
+          setPricingOverrides(data.pricingOverrides)
+          window.dispatchEvent(new Event(PRICING_SYNCED_EVENT))
+        }
         if (data.quizArm === 'v1' || data.quizArm === 'v2') {
           setQuizArm({
             arm: data.quizArm,

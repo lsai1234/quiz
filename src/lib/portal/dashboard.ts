@@ -92,8 +92,9 @@ export interface DashboardSummary {
 
 function orderCost(order: Order, config: PricingConfig): { cogs: number; delivery: number; known: boolean } {
   const known = order.lines.length > 0 && order.lines.every((l) => l.supplierCost != null)
-  // Supplier prices are ex VAT; what they actually cost depends on whether we
-  // can reclaim (see lib/pricing/vat.ts).
+  // Supplier prices are ex VAT; what they actually cost depends on whether
+  // PowerBody charge us VAT and whether we can reclaim it (`supplierVatIsCost`
+  // in lib/pricing/vat.ts).
   const cogs = costFromSupplierPrice(
     order.lines.reduce((s, l) => s + (l.supplierCost ?? 0) * l.quantity, 0),
     config,
@@ -230,6 +231,9 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
     },
     actionRequired,
     // Only surfaced once it's actionable — a threshold six years away is noise.
+    // The words are the VAT position's verdict, verbatim, so they follow
+    // `vat.supplierChargesVat`: with it off they never speak of reclaiming VAT
+    // PowerBody don't charge.
     notices:
       input.vat && input.vat.tone !== 'ok'
         ? [{ id: 'vat', label: input.vat.headline, detail: input.vat.detail, href: '/founderhub/pricing', tone: input.vat.tone }]

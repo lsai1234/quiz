@@ -1,98 +1,214 @@
-import { OFFER_FLOOR, UNCOSTED_MAX_DISCOUNT, floorFor, offerProductFor, quoteOffer } from '../economics'
+import {
+  REDUCED_DELIVERY_PRICES,
+  describeDeal,
+  floorFor,
+  offerDeliveryOptions,
+  offerProductFor,
+  ordinaryPriceOf,
+  priceOfferOrder,
+  publicQuote,
+  quoteOffer,
+  type OfferQuote,
+} from '../economics'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
-import { getPricingConfig, priceOneOffLines } from '@/lib/stack-blueprint/pricing'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 
 /**
- * The last-chance offer's discount. One promise matters above every other: the
- * order it quotes makes money after every cost the business models, so these
- * tests check the quote against `unitEconomics` directly rather than against
- * numbers copied out of it.
+ * The last-chance deal. One promise matters above every other: the order it
+ * quotes makes money after every cost the business models — so these tests
+ * check the quote against `unitEconomics` directly rather than against
+ * numbers copied out of it, and hold whichever way the VAT switch is set.
  */
 
-function contributionAt(price: number, supplierCost: number | null, listPrice = price) {
-  return unitEconomics({ shelfPrice: price, supplierCost, freeDeliveryBasis: listPrice }).contribution
-}
+const config = getPricingConfig()
 
-describe('the discount it picks', () => {
-  it('goes as deep as the floor allows on a product with room, and no deeper', () => {
-    const q = quoteOffer({ price: 34.99, supplierCost: 12 })
-    expect(q.discountPct).toBeGreaterThan(0)
-    expect(q.viable).toBe(true)
-    expect(q.contribution).toBeGreaterThanOrEqual(q.floor)
-    // The next rung down the ladder would have broken the floor, or there is none.
-    const deeper = [20, 15, 10, 5].filter((d) => d > q.discountPct)
-    for (const d of deeper) {
-      const price = Math.round(34.99 * (1 - d / 100) * 100) / 100
-      expect(contributionAt(price, 12, 34.99)).toBeLessThan(floorFor(unitEconomics({ shelfPrice: price, supplierCost: 12, freeDeliveryBasis: 34.99 }).netRevenue))
+/** What an order really makes at this price and mainland delivery charge. */
+function made(price: number, supplierCost: number | null, deliveryCharge: number) {
+  return unitEconomics({ shelfPrice: price, supplierCost, customerDelivery: deliveryCharge })
+}
+function clears(price: number, supplierCost: number | null, deliveryCharge: number) {
+  const e = made(price, supplierCost, deliveryCharge)
+  return e.contribution >= floorFor(e.netRevenue) && price >= config.minOrderValue
+}
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+/** Every price × cost pairing worth asking about, from a cheap tub to a big one. */
+const GRID: Array<[number, number]> = []
+for (const price of [12.99, 15.99, 17.99, 19.99, 22.99, 24.99, 29.99, 34.99, 39.99, 44.99, 49.99, 59.99, 79.99, 109.99]) {
+  for (const ratio of [0.3, 0.4, 0.5, 0.55, 0.62, 0.7]) GRID.push([price, r2(price * ratio)])
+}
+const quotes = GRID.map(([price, cost]) => ({ price, cost, q: quoteOffer({ price, supplierCost: cost }) }))
+
+describe('the order the levers are pulled in', () => {
+  it('waives delivery before it takes anything off the product', () => {
+    for (const { q } of quotes.filter(({ q }) => q.viable && q.discountPct > 0)) {
+      expect(q.deliveryCharge).toBe(0)
+      expect(['free', 'included']).toContain(q.deliveryDeal)
     }
   })
 
-  it('never quotes an order that loses money, across a spread of prices and costs', () => {
-    for (const price of [9.99, 12.99, 17.99, 24.99, 29.99, 34.99, 44.99, 59.99, 89.99]) {
-      for (const ratio of [0.3, 0.45, 0.55, 0.7]) {
-        const cost = Math.round(price * ratio * 100) / 100
-        const q = quoteOffer({ price, supplierCost: cost })
-        // Re-derived independently: what the order really makes at the offer price.
-        const made = contributionAt(q.offerPrice, cost, price)
-        expect(made).toBe(q.contribution)
-        // An offer is only made when viable, and a viable one always clears the floor.
-        if (q.viable) expect(made).toBeGreaterThanOrEqual(Math.max(OFFER_FLOOR.minContribution, q.floor))
+  it('goes as deep as the floor allows once delivery is free, and no deeper', () => {
+    const cap = Math.round(config.lastChance.maxDiscountPct * 100)
+    for (const { price, cost, q } of quotes.filter(({ q }) => q.viable && q.discountPct > 0)) {
+      expect(clears(q.offerPrice, cost, 0)).toBe(true)
+      if (q.discountPct < cap) expect(clears(r2(price * (1 - (q.discountPct + 1) / 100)), cost, 0)).toBe(false)
+    }
+  })
+
+  it('reduces delivery instead when free delivery would lose money — and adds nothing off on top', () => {
+    const reduced = quotes.filter(({ q }) => q.viable && q.deliveryDeal === 'reduced')
+    expect(reduced.length).toBeGreaterThan(0)
+    for (const { price, cost, q } of reduced) {
+      expect(q.discountPct).toBe(0)
+      expect(q.offerPrice).toBe(price)
+      expect(REDUCED_DELIVERY_PRICES).toContain(q.deliveryCharge)
+      expect(q.deliveryCharge).toBeLessThan(q.standardDelivery)
+      // Free would not have cleared, and nor would the next price down.
+      expect(clears(price, cost, 0)).toBe(false)
+      const lower = REDUCED_DELIVERY_PRICES.filter((p) => p < q.deliveryCharge)
+      if (lower.length) expect(clears(price, cost, lower[lower.length - 1])).toBe(false)
+    }
+  })
+
+  it('offers free delivery on its own when there is no worthwhile percentage on top', () => {
+    const least = Math.round(config.lastChance.minDiscountPct * 100)
+    for (const { q } of quotes) expect(q.discountPct === 0 || q.discountPct >= least).toBe(true)
+    expect(quotes.some(({ q }) => q.viable && q.deliveryDeal === 'free' && q.discountPct === 0)).toBe(true)
+    expect(quotes.some(({ q }) => q.viable && q.deliveryDeal === 'free' && q.discountPct > 0)).toBe(true)
+  })
+
+  it('takes a percentage off a product whose delivery is free anyway', () => {
+    const q = quoteOffer({ price: 109.99, supplierCost: 40 })
+    expect(q.standardDelivery).toBe(0)
+    expect(q.deliveryDeal).toBe('included')
+    expect(q.discountPct).toBeGreaterThan(0)
+  })
+})
+
+describe('it never sells at a loss', () => {
+  it('quotes exactly what the order makes, and every deal clears the floor', () => {
+    for (const { cost, q } of quotes) {
+      const e = made(q.offerPrice, cost, q.deliveryCharge)
+      expect(q.contribution).toBe(e.contribution)
+      if (q.viable) {
+        expect(q.contribution).toBeGreaterThanOrEqual(q.floor)
+        expect(q.floor).toBeGreaterThanOrEqual(config.lastChance.minContribution)
       }
     }
   })
 
-  it('quotes exactly what the checkout will charge, tier and margin floor included', () => {
-    for (const [price, cost] of [[24.99, 11], [54.99, 22], [79.99, 30]] as const) {
-      const q = quoteOffer({ price, supplierCost: cost })
-      const rate = q.discountPct / 100
-      // /api/cart prices a one-line order with priceOneOffLines and the rate applied as a code.
-      const charged = priceOneOffLines([{ price, cost, quantity: 1 }], getPricingConfig(), rate).total
-      expect(Math.abs(charged - q.offerPrice)).toBeLessThan(0.02)
-    }
+  it('makes no deal on a product that does not pay its way at full price', () => {
+    const q = quoteOffer({ price: 11.99, supplierCost: 6 })
+    expect(q.viable).toBe(false)
+    expect(q.totalSaving).toBe(0)
   })
 
   it('will not offer an order the checkout would refuse as under the minimum', () => {
-    const q = quoteOffer({ price: 14.99, supplierCost: 3 })
-    expect(q.offerPrice).toBeLessThan(getPricingConfig().minOrderValue)
-    expect(q.viable).toBe(false)
+    for (const { q } of quotes.filter(({ q }) => q.viable)) expect(q.offerPrice).toBeGreaterThanOrEqual(config.minOrderValue)
   })
 
-  it('reads its inputs from the catalogue the way the order does', () => {
-    const input = offerProductFor({ cost: 9, basePrice: 30, weightGrams: 900, vatRate: null }, { price: 29.99, cost: 11 })
-    expect(input).toMatchObject({ price: 29.99, supplierCost: 11, floorCost: 9, grams: 900 })
-  })
-
-  it('offers nothing off a cheap product that barely pays at full price', () => {
-    const q = quoteOffer({ price: 11.99, supplierCost: 6 })
-    expect(q.discountPct).toBe(0)
-    expect(q.viable).toBe(false)
-  })
-
-  it('caps the discount when the cost is only an estimate', () => {
-    const q = quoteOffer({ price: 59.99, supplierCost: null })
+  it('caps the percentage when the cost is only an estimate', () => {
+    const q = quoteOffer({ price: 79.99, supplierCost: null })
     expect(q.costKnown).toBe(false)
-    expect(q.discountPct / 100).toBeLessThanOrEqual(UNCOSTED_MAX_DISCOUNT)
+    expect(q.discountPct / 100).toBeLessThanOrEqual(config.lastChance.uncostedMaxDiscountPct)
   })
 
-  it('never goes to 25%, which is the daily code’s', () => {
-    expect(quoteOffer({ price: 99.99, supplierCost: 10 }).discountPct).toBeLessThanOrEqual(20)
+  it('never goes past the deepest percentage in settings', () => {
+    const q = quoteOffer({ price: 99.99, supplierCost: 10 })
+    expect(q.discountPct).toBe(Math.round(config.lastChance.maxDiscountPct * 100))
+  })
+
+  it('follows the floor in settings: a smaller floor buys a better deal', () => {
+    const tight = quoteOffer({ price: 34.99, supplierCost: 14 })
+    const loose = quoteOffer({ price: 34.99, supplierCost: 14 }, config, { ...config.lastChance, minContribution: 1, minMarginPct: 0 })
+    expect(loose.total).toBeLessThanOrEqual(tight.total)
+    expect(loose.contribution).toBeGreaterThanOrEqual(1)
   })
 })
 
 describe('what the customer is told', () => {
-  it('charges delivery on the list price, as checkout does, so the discount is never eaten by postage', () => {
-    // £42.99 is in the £2.95 band; 10% off takes the price under £40, but the
-    // band is read on what the order is worth, so postage stays £2.95.
-    const q = quoteOffer({ price: 42.99, supplierCost: 14 }, { ladder: [0.1] })
-    expect(q.offerPrice).toBe(38.69)
-    expect(q.deliveryCharge).toBe(2.95)
-    expect(q.total).toBe(41.64)
-    expect(q.saving).toBe(4.3)
-    expect(q.totalSaving).toBe(4.3)
+  it('is always better than buying it the ordinary way, by at least £1', () => {
+    for (const { price, cost, q } of quotes.filter(({ q }) => q.viable)) {
+      const ordinary = ordinaryPriceOf({ price, supplierCost: cost }) + customerDeliveryCharge(price, 'uk-1')
+      expect(r2(ordinary - q.total)).toBeGreaterThanOrEqual(1)
+      expect(q.totalSaving).toBeGreaterThan(0)
+    }
+  })
+
+  it('adds up: product plus delivery is the total, and the savings are the difference', () => {
+    for (const { q } of quotes) {
+      expect(q.total).toBe(r2(q.offerPrice + q.deliveryCharge))
+      expect(q.normalTotal).toBe(r2(q.listPrice + q.standardDelivery))
+      expect(q.totalSaving).toBe(r2(q.normalTotal - q.total))
+      expect(r2(q.saving + q.deliverySaving)).toBe(q.totalSaving)
+    }
+  })
+
+  it('reads its inputs from the catalogue the way the order does', () => {
+    const input = offerProductFor({ cost: 9, weightGrams: 900, vatRate: null }, { price: 29.99, cost: 11 })
+    expect(input).toEqual({ price: 29.99, supplierCost: 11, grams: 900, vatRate: null })
   })
 
   it('uses the larger of the pound and percentage floors', () => {
-    expect(floorFor(20)).toBe(3)
-    expect(floorFor(80)).toBe(8)
+    const s = { ...config.lastChance, minContribution: 3, minMarginPct: 0.1 }
+    expect(floorFor(20, s)).toBe(3)
+    expect(floorFor(80, s)).toBe(8)
+  })
+
+  it('says the deal in a few words', () => {
+    const base = { standardDelivery: 4.95, deliveryCharge: 0 }
+    expect(describeDeal({ ...base, deliveryDeal: 'free', discountPct: 15 })).toBe('free delivery (was £4.95) + 15% off')
+    expect(describeDeal({ ...base, deliveryDeal: 'reduced', deliveryCharge: 1.49, discountPct: 0 })).toBe('delivery £1.49 (was £4.95)')
+    expect(describeDeal({ ...base, standardDelivery: 0, deliveryDeal: 'included', discountPct: 20 })).toBe('20% off')
+  })
+})
+
+describe('what the checkout bills', () => {
+  const free = quotes.find(({ q }) => q.viable && q.deliveryDeal === 'free' && q.discountPct > 0)!.q
+  const cut = quotes.find(({ q }) => q.viable && q.deliveryDeal === 'reduced')!.q
+
+  it('prices the order from the deal alone — no tier, no code', () => {
+    const priced = priceOfferOrder(free)
+    expect(priced.lines).toEqual([{ unitPrice: free.listPrice, discountedUnitPrice: free.offerPrice, quantity: 1, lineTotal: free.offerPrice }])
+    expect(priced.total).toBe(free.offerPrice)
+    expect(priced.subtotal).toBe(free.listPrice)
+    expect(priced.tierPct).toBe(0)
+    expect(priced.partnerPct).toBe(0)
+  })
+
+  it('offers its own delivery: the deal on the mainland, plus the surcharge up north', () => {
+    const surcharge = config.delivery.zone2Surcharge
+    const [mainland, highlands] = offerDeliveryOptions(free)
+    expect(mainland).toMatchObject({ id: 'uk-mainland', price: 0, label: 'Free UK mainland delivery' })
+    expect(highlands).toMatchObject({ id: 'uk-highlands', price: surcharge })
+    const [m2, h2] = offerDeliveryOptions(cut)
+    expect(m2.price).toBe(cut.deliveryCharge)
+    expect(h2.price).toBe(r2(cut.deliveryCharge + surcharge))
+  })
+
+  it('sends a browser the deal but none of our own figures', () => {
+    const pub = publicQuote(free) as Partial<OfferQuote>
+    expect(pub.total).toBe(free.total)
+    expect(pub).not.toHaveProperty('contribution')
+    expect(pub).not.toHaveProperty('marginPct')
+    expect(pub).not.toHaveProperty('floor')
+    expect(pub).not.toHaveProperty('costKnown')
+  })
+})
+
+describe('unitEconomics with a deal’s own delivery', () => {
+  it('models the standard charge exactly as the bands do', () => {
+    for (const price of [19.99, 44.99, 120]) {
+      const banded = unitEconomics({ shelfPrice: price, supplierCost: price / 2 })
+      const set = unitEconomics({ shelfPrice: price, supplierCost: price / 2, customerDelivery: customerDeliveryCharge(price, 'uk-1') })
+      expect(set.deliveryCharged).toBe(banded.deliveryCharged)
+      expect(set.contribution).toBe(banded.contribution)
+    }
+  })
+
+  it('still collects the Highlands surcharge, blended, when the mainland is free', () => {
+    const e = unitEconomics({ shelfPrice: 29.99, supplierCost: 15, customerDelivery: 0 })
+    expect(e.deliveryCharged).toBe(r2(config.delivery.zone2SharePct * config.delivery.zone2Surcharge))
   })
 })

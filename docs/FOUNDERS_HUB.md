@@ -116,6 +116,17 @@ unregistered are genuinely different businesses. **It ships as `false`**, which
 is the phase the business is in. Flip it the day registration takes effect and
 the whole hub reprices. Per-product `vatRate` covers the zero-rated items.
 
+`vat.supplierChargesVat` — **"PowerBody charge us VAT"** under Pricing → Rules →
+VAT, shown only while unregistered — says whether PowerBody's invoices to us
+carry VAT. **It ships as `false`**, because the founder says we are not paying
+VAT at the moment: supplier costs are their prices as quoted, ex VAT, on goods
+and delivery. On, their 20% is a cost we cannot reclaim and every supplier price
+is grossed up by it. `supplierVatIsCost` (charged *and* unregistered) is the one
+place that is decided; `costFromSupplierPrice` and `priceForMargin` both read it,
+so margins, cut-offs, the last-chance offer and cost-price codes move together.
+If their invoices do carry VAT and this is left off, all of those are about a
+fifth of cost too generous.
+
 The **VAT tab** answers the three questions in the order they get asked.
 
 **1. Am I required to register yet?** Rolling 12-month taxable turnover from real
@@ -126,10 +137,10 @@ threshold is on *any rolling 12 months*, not a tax year, so it can be crossed by
 one good quarter; HMRC expect registration within 30 days of the end of that
 month.
 
-**2. What would it cost?** This is the part that needs care. PowerBody are
-VAT-registered, so while we aren't we eat the VAT on everything they charge us —
-a big, visible, annoying number that makes registering look attractive. It's a
-trap, and the arithmetic settles it. Holding prices:
+**2. What would it cost?** This is the part that needs care. When PowerBody's
+invoices carry VAT, then while we aren't registered we eat it on everything they
+charge us — a big, visible, annoying number that makes registering look
+attractive. It's a trap, and the arithmetic settles it. Holding prices:
 
 ```
 unregistered:  contribution = P − C(1+v)
@@ -142,6 +153,14 @@ only wins when costs exceed net revenue — i.e. when you're already losing mone
 So the panel shows *both* sides (what we'd reclaim, what we'd hand over) and the
 net, because either one alone misleads. At a £45 average order and a 40% cost
 ratio that's roughly £776/yr, or +8.7% on prices to stand still.
+
+With "PowerBody charge us VAT" off there is no input side: C carries no VAT
+either way, there is nothing to reclaim, and registering costs the whole of the
+VAT on sales. The panel drops the "We'd claim back" card rather than showing £0,
+and the verdict — which the dashboard repeats as its VAT notice — says PowerBody
+don't charge us VAT instead of talking about VAT we can't reclaim. Expect the net
+cost and the reprice figure to be much larger in that reading (the reprice is
+just over the VAT rate itself).
 
 The reprice figure is deliberately **bigger** than the per-order cost: raising a
 price also raises the VAT and card fee on the increment, so it has to be grossed
@@ -442,10 +461,12 @@ actually want to do with our own storefront. All of them are **single-use** and
 ### Why cost price moves delivery *upwards*
 
 The two halves move in opposite directions, and that is the point. Goods drop
-from the shelf price to `unitCostOf` — and then **up again by the VAT we cannot
-reclaim**, because while `vat.registered` is false PowerBody's VAT is money that
-genuinely leaves the account (`costFromSupplierPrice`). A "cost price" that
-ignored it would still lose us a fifth of the goods.
+from the shelf price to `unitCostOf` — and, when PowerBody charge us VAT, **up
+again by the VAT we cannot reclaim**, because while `vat.registered` is false
+that VAT is money that genuinely leaves the account (`costFromSupplierPrice`). A
+"cost price" that ignored it would still lose us a fifth of the goods. With
+"PowerBody charge us VAT" off — as shipped — there is none, and cost price is
+their ex-VAT figure.
 
 Delivery goes the other way. Our customer ladder is free over £100 and
 subsidised below it; PowerBody charge us £3.25–£5.17 a parcel with **no

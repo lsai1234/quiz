@@ -18,10 +18,12 @@
  *
  * REGISTERED OR NOT IS A DIFFERENT BUSINESS
  * ─────────────────────────────────────────
- * Registered: we add VAT to the shelf price and hand it over, but reclaim the
+ * Registered: we add VAT to the shelf price and hand it over, but reclaim any
  * VAT PowerBody charged us — costs are net.
  * Not registered: we keep the whole shelf price (no VAT to hand over) but
- * cannot reclaim, so PowerBody's VAT is a real, permanent cost.
+ * cannot reclaim, so whatever VAT PowerBody charge us is a real, permanent
+ * cost. Whether they charge any is `config.vat.supplierChargesVat` — off by
+ * default, because the founder says we are not paying VAT at the moment.
  *
  * Below the registration threshold the second is usually better; above it there
  * is no choice. `config.vat.registered` picks, and it changes both sides of the
@@ -71,16 +73,30 @@ export function revenueFromShelfPrice(
 }
 
 /**
+ * Whether PowerBody's VAT is a cost to us: they charge it
+ * (`vat.supplierChargesVat`) and we cannot reclaim it (not registered).
+ *
+ * The one place that decision is made. Anything that grosses a supplier price
+ * up — or solves for a price that will be — reads this, so the switch in the
+ * hub moves every margin together.
+ */
+export function supplierVatIsCost(config: PricingConfig = getPricingConfig()): boolean {
+  return config.vat.supplierChargesVat && !config.vat.registered
+}
+
+/**
  * What a supplier's ex-VAT price really costs us.
  *
- * Registered, we reclaim their VAT, so the cost is the ex-VAT figure we were
- * quoted. Unregistered, we can't, so the cost is what we actually pay them —
- * the ex-VAT price plus VAT at the standard rate. PowerBody's rate card is
- * quoted ex VAT throughout, so this applies to delivery as much as to goods.
+ * When their VAT is a cost (`supplierVatIsCost`: they charge it and we are not
+ * registered to reclaim it), the cost is what we actually pay them — the ex-VAT
+ * price plus VAT at the standard rate. Otherwise it is the ex-VAT figure we were
+ * quoted: registered, we reclaim their VAT; with `supplierChargesVat` off, there
+ * is none to pay. PowerBody's rate card is quoted ex VAT throughout, so this
+ * applies to delivery as much as to goods.
  */
 export function costFromSupplierPrice(
   exVat: number,
   config: PricingConfig = getPricingConfig(),
 ): number {
-  return config.vat.registered ? round(exVat) : round(exVat * (1 + config.vat.standardRate))
+  return supplierVatIsCost(config) ? round(exVat * (1 + config.vat.standardRate)) : round(exVat)
 }

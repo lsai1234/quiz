@@ -14,6 +14,12 @@ import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricin
 import type { Order, OrderLine } from '@/lib/orders/types'
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
+/**
+ * PowerBody's VAT as an irrecoverable cost — the treatment the guard's measured
+ * figures below were taken under. `supplierChargesVat` ships off, and with it off
+ * these orders are healthy enough that the guard has nothing to do.
+ */
+const supplierVat = (): PricingConfig => cfg({ vat: { ...PRICING_CONFIG.vat, supplierChargesVat: true } })
 
 function order(lines: Partial<OrderLine>[], subtotal?: number): Pick<Order, 'lines' | 'subtotal'> {
   const full = lines.map((l, i) => ({
@@ -86,7 +92,7 @@ describe('the contribution guard', () => {
     // Highlands surcharge blended over the orders that pay one. The cap still
     // binds — the guard is doing its job either way — it just binds less hard.
     const thin = order([{ unitPrice: 60, supplierCost: 40 }])
-    const calc = commissionFor(thin, 0.15, cfg())
+    const calc = commissionFor(thin, 0.15, supplierVat())
 
     expect(calc.contribution).toBeGreaterThan(0)
     expect(calc.uncapped).toBeGreaterThan(calc.contribution)
@@ -99,7 +105,7 @@ describe('the contribution guard', () => {
     // Not the guard rescuing a bad order — the deepest stacked rung is a known
     // acquisition cost (D2). It is refusing to make it worse.
     const losing = order([{ unitPrice: 20, supplierCost: 15 }])
-    const calc = commissionFor(losing, 0.15, cfg())
+    const calc = commissionFor(losing, 0.15, supplierVat())
     expect(calc.contribution).toBeLessThan(0)
     expect(calc.amount).toBe(0)
   })

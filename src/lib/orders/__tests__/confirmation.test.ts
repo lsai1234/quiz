@@ -97,6 +97,22 @@ describe('minimal disclosure (OC-F-020, OC-F-021, OC-D-006)', () => {
     expect(serialised).not.toContain('lewis@gmail.com')
   })
 
+  it('shows what a last-chance deal took off, and still adds up to what was paid', async () => {
+    const order = await createOrderFromCheckout({
+      channel: 'quiz',
+      status: 'paid',
+      lines: [{ ...line, quantity: 1, unitPrice: 25.49 }],
+      shipping: 0,
+      lastChance: { listPrice: 29.99, offerPrice: 25.49, discountPct: 15, standardDelivery: 4.95, deliveryCharge: 0, deliveryDeal: 'free' },
+    })
+    const { totals } = toConfirmationOrder(order)
+    expect(totals.subtotal).toBe(2999)
+    expect(totals.discount).toBe(450)
+    expect(totals.shipping).toBe(0)
+    expect(totals.total).toBe(2549)
+    expect(totals.subtotal - totals.discount + totals.shipping).toBe(totals.total)
+  })
+
   it('generates references that do not leak order volume', () => {
     // Sequential references tell anyone who buys twice how many orders you take,
     // and let a stranger walk the range (OC-E-007).

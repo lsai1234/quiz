@@ -95,7 +95,7 @@ export default function PricingPage() {
   if (!draft || !cutOffs || !ladder || !typicalBox) return <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
-  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'>(
+  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing' | 'lastChance'>(
     key: K,
     patch: Partial<PricingConfig[K]>,
   ) => set({ [key]: { ...draft[key], ...patch } })
@@ -257,6 +257,19 @@ export default function PricingPage() {
               onRemove={(i) => set({ bundleTiers: draft.bundleTiers.filter((_, idx) => idx !== i) })} />
           </Section>
 
+          <Section title="Last-chance offer" desc="One product from the stack at the foot of the results page, on a deal worked out for it: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with the bundle tiers or a code.">
+            <Num label="Keep at least (£ per order)" value={draft.lastChance.minContribution} suffix="£" step={0.5} onChange={(n) => setNested('lastChance', { minContribution: n })}
+              help="After every cost — the goods, both sides of delivery, card fees and returns. No deal is offered that keeps less." />
+            <Num label="And at least (% of what we keep)" value={pct(draft.lastChance.minMarginPct)} suffix="%" onChange={(n) => setNested('lastChance', { minMarginPct: n / 100 })}
+              help="Of the net sale. Protects dear products, where the pound floor above is a thin share." />
+            <Num label="Deepest % off the product" value={pct(draft.lastChance.maxDiscountPct)} suffix="%" onChange={(n) => setNested('lastChance', { maxDiscountPct: n / 100 })}
+              help="The cap, however much room a product's margin leaves." />
+            <Num label="Smallest % worth adding to free delivery" value={pct(draft.lastChance.minDiscountPct)} suffix="%" onChange={(n) => setNested('lastChance', { minDiscountPct: n / 100 })}
+              help="Below it, the offer is free delivery alone." />
+            <Num label="Deepest % on a product with no cost on file" value={pct(draft.lastChance.uncostedMaxDiscountPct)} suffix="%" onChange={(n) => setNested('lastChance', { uncostedMaxDiscountPct: n / 100 })}
+              help="Its cost is a guess from the assumed cost ratio, so it gets less room than one we have the invoice for." />
+          </Section>
+
           <Section
             title="First month"
             desc={
@@ -351,12 +364,38 @@ export default function PricingPage() {
             <Toggle label="Partners charge us VAT" value={draft.partners.partnersChargeVat} onChange={(v) => setNested('partners', { partnersChargeVat: v })} />
           </Section>
 
-          <Section title="VAT" desc="Our prices include VAT; PowerBody quote us without it. Not registered today, so their VAT is a real cost we can't reclaim.">
+          {/* Neither line may say PowerBody's VAT is a cost unless the switch
+              below says they charge it — with it off, the costs on this page
+              carry no VAT and the copy has to agree with them. */}
+          <Section
+            title="VAT"
+            desc={
+              draft.vat.registered
+                ? 'Our prices include VAT and we hand it over; PowerBody quote us without it, and any VAT they charge us is reclaimed.'
+                : draft.vat.supplierChargesVat
+                  ? "Our prices include VAT; PowerBody quote us without it. Not registered today, so their VAT is a real cost we can't reclaim."
+                  : 'Our prices include VAT; PowerBody quote us without it. Not registered today, and their invoices carry no VAT for us, so costs are their prices as quoted.'
+            }
+          >
             <Toggle label="VAT-registered" value={draft.vat.registered} onChange={(v) => setNested('vat', { registered: v })}
-              help="On: we hand over VAT on sales and reclaim what PowerBody charge. Off: we keep the whole shelf price but their VAT is a cost. Genuinely different businesses." />
+              help={
+                draft.vat.supplierChargesVat
+                  ? 'On: we hand over VAT on sales and reclaim what PowerBody charge. Off: we keep the whole shelf price but their VAT is a cost. Genuinely different businesses.'
+                  : 'On: we hand over VAT on sales and reclaim any VAT PowerBody charge. Off: we keep the whole shelf price and hand nothing over. Genuinely different businesses.'
+              } />
+            {/* Only a question while we can't reclaim: registered, their VAT
+                comes back either way, so the switch would change nothing. */}
+            {!draft.vat.registered && (
+              <Toggle label="PowerBody charge us VAT" value={draft.vat.supplierChargesVat} onChange={(v) => setNested('vat', { supplierChargesVat: v })}
+                help={
+                  draft.vat.supplierChargesVat
+                    ? "Their 20% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered."
+                    : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Right while their invoices to us carry no VAT. If they do, turn this on — otherwise every margin here, the last-chance offer and cost-price codes are about a fifth of cost too generous."
+                } />
+            )}
             <Num label="Standard rate" value={pct(draft.vat.standardRate)} suffix="%" onChange={(n) => setNested('vat', { standardRate: n / 100 })} />
             <Num label="Registration threshold" value={draft.vat.registrationThreshold} suffix="£" onChange={(n) => setNested('vat', { registrationThreshold: n })} help="HMRC's figure — £90,000 since April 2024." />
-            <div className="pt-3"><VatPanel registered={draft.vat.registered} /></div>
+            <div className="pt-3"><VatPanel registered={draft.vat.registered} supplierChargesVat={draft.vat.supplierChargesVat} /></div>
           </Section>
 
           <Section title="Bundles & budgets" desc="How big a stack the quiz builds, and the most it may cost.">
@@ -658,7 +697,7 @@ function SettingRow({ label, help, children }: { label: string; help?: string; c
   )
 }
 
-function Num({ label, value, onChange, suffix, help }: { label: string; value: number; onChange: (n: number) => void; suffix?: string; help?: string }) {
+function Num({ label, value, onChange, suffix, help, step }: { label: string; value: number; onChange: (n: number) => void; suffix?: string; help?: string; step?: number }) {
   return (
     <SettingRow label={label} help={help}>
       <Input
@@ -667,6 +706,7 @@ function Num({ label, value, onChange, suffix, help }: { label: string; value: n
         align="right"
         className="w-24"
         type="number"
+        step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
       />

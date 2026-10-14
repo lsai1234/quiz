@@ -17,6 +17,12 @@ const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_
  */
 const withCard = (): PricingConfig =>
   cfg({ introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } } })
+/**
+ * PowerBody's VAT as an irrecoverable cost (`supplierChargesVat`, which ships
+ * off). The card's outcomes were tuned — and the too-small box measured — under
+ * it; with it off the goods cost about a fifth less and both stop losing.
+ */
+const VAT_ON_COSTS = { ...PRICING_CONFIG.vat, supplierChargesVat: true }
 /** A typical three-item quiz box, priced by the rule. */
 const BOX = { listPrice: 90, supplierCost: 45, sharedParcelItems: 3 }
 
@@ -40,7 +46,7 @@ describe('the scenario check', () => {
   it('lets the rare top card lose without failing the product', () => {
     // The whole point: one scenario is MEANT to lose. Marking it promotional is
     // what stops "this product is broken" firing on a working intro offer.
-    const check = checkScenarios(BOX, withCard())
+    const check = checkScenarios(BOX, { ...withCard(), vat: VAT_ON_COSTS })
     const top = check.scenarios.find((s) => s.id === 'top-card')!
     expect(top.promotional).toBe(true)
     expect(top.keeps).toBeLessThan(0)
@@ -84,7 +90,7 @@ describe('the scenario check', () => {
   })
 
   it('fails a box too small to carry its parcel', () => {
-    const check = checkScenarios({ listPrice: 8, supplierCost: 4, sharedParcelItems: 1 }, cfg())
+    const check = checkScenarios({ listPrice: 8, supplierCost: 4, sharedParcelItems: 1 }, cfg({ vat: VAT_ON_COSTS }))
     expect(check.ok).toBe(false)
     expect(check.problems.length).toBeGreaterThan(0)
     // …and never blames the promotional card for it.

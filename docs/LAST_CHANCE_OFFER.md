@@ -2,57 +2,81 @@
 
 At the very foot of the quiz results page, below the plan, the small print and
 the giveaway, somebody who has scrolled past their whole stack without buying
-it gets one more, smaller, yes: **the single product from their stack that will
-do the most for them, at a price the business can afford, one tap from paying.**
+it gets one more, smaller, yes: **a one-time deal on the single product from
+their stack that fits them best: free delivery first, then as much off as the
+business can afford while still making a little, one tap from paying.**
 
-Review every state at `/styleguide/last-chance`.
+Review every state at `/styleguide/last-chance`. Tune it in the Founders Hub:
+Pricing → Rules → Last-chance offer.
 
 ---
 
 ## What the customer sees
 
 > **NOT READY FOR THE WHOLE STACK?**
-> **If you only get one thing, make it this.**
+> **Then here's a one-time deal on your top pick.**
+> Worked out for your stack, just now. It only exists on this page: it isn't
+> in the shop, and no code unlocks it.
 
 A spotlight card that arrives once as it scrolls into view, then stays still:
 
-- **Your top pick**: the product from their stack that fits them best, lifting
-  into a beam of light while a ring charges round it, with a **−10% OFF** stamp
-  pressed on.
+- **One-time offer**: their best-fitting product lifts into a beam of light
+  while a ring charges round it. A **FREE DELIVERY** ribbon sits across it, and
+  a **−15% OFF** stamp is pressed on when there is a percentage too.
 - **Why it's theirs**: in terms of the goal they gave us, e.g. *You told us
   your top goal is "Build muscle". Of the 3 products in your stack, this is
-  the one built around it. It's the core of your stack.*
+  the one built around it.*
 - **What it does**: one claim from the GB register, verbatim
-  (`lib/consult/claims.ts`), e.g. *Protein contributes to a growth in muscle
-  mass.* Kinds of product with no authorised claim (pre-workouts, probiotics,
-  greens, collagen, …) get no "what it does" row at all.
+  (`lib/consult/claims.ts`), or no row at all.
 - **What you get**: facts only. *30 servings, £1.11 each, lasts about a month
-  at your usage.* Shown only when the servings are actually recorded.
-- **The price falls** from list to offer as it arrives, with delivery and the
-  all-in total stated plainly, and one button: **Get it for £33.29 →**.
-- "Just this, once. No subscription. Pay on the next screen." and a way back
-  to the full stack.
+  at your usage.*
+- **Your deal · only on this page**: the deal assembles line by line as it
+  arrives:
+  - Free delivery, with ~~£4.95~~ struck through.
+  - 15% off, with ~~£29.99~~ struck through, now £25.49.
+  - The delivered price counts down from £34.94 to **£25.49**, with **You save
+    £9.45**.
+- One button: **Get it for £25.49 →**, the delivered price. Below it: "Just
+  this, once. No subscription. Pay on the next screen." and the Highlands
+  surcharge, stated.
+
+**"One-time", honestly.** Everything the card claims about the deal is true by
+construction:
+
+- It is worked out here, for this stack.
+- It is not in the shop.
+- No code unlocks it.
+- It is one product, once.
+
+There is no countdown and no "ends tonight", because there is no deadline to
+state, so none is invented (a false "only available for a very limited time"
+is a banned practice under UK consumer law). Every saving is against the
+product's real shelf price and the delivery it would really be charged. The
+deal must also beat buying the product the ordinary way, its own bundle tier
+included, by at least £1.
 
 **What it never says** (`docs/ORDER_CONFIRMATION_SPEC.md` §5): no timeframes
-for results, no outcomes, no "% match", nothing generated at runtime. The first
-draft had a "When you'll notice it" row; it was dropped because a timeframe
-next to a sale breaks OC-C-003. The claim id rides on the order line
-(`claim` attribute), per OC-C-006.
+for results, no outcomes, nothing generated at runtime. The claim id rides on
+the order line (`claim` attribute), per OC-C-006.
 
-**Reveal or straight to buy?** Both, without a gate: it reveals itself on
+**Reveal or straight to buy?** Both, without a gate. It reveals itself on
 scroll, and the one remaining tap buys. A "tap to reveal" button would spend a
-tap at the point attention is lowest. Nothing loops, and reduced motion gets
-the finished card.
+tap at the point attention is lowest. It takes about a second and a half, then
+the card is still. Reduced motion gets the finished card.
 
 **Seamless:** one-off orders are guest checkout, so there is no account and no
-consent gate. The tap goes straight to Stripe's payment page (in mock mode,
-straight to the order confirmation). While the card's button is on screen, the
-page's sticky "Checkout" bar steps aside, so there are never two buy buttons.
+consent gate. The tap goes straight to Stripe's payment page, where the deal's
+own delivery rates are the choices (for example "Free UK mainland delivery").
+While the card's button is on screen, the page's sticky "Checkout" bar steps
+aside, so there are never two buy buttons.
 
-**When it doesn't show:** during a claim, once any code is applied (a
-founder's, a partner's referral or the day's code; that is already this
-visit's deal, and showing a second price would only confuse), for a stack of
-one product, or when nothing in the stack can be sold alone at a profit.
+**When it doesn't show:**
+- during a claim;
+- once any code is applied (a founder's, a partner's referral or the day's
+  code). That is already this visit's deal, and showing a second price beside
+  it would only confuse;
+- for a stack of one product;
+- when nothing in the stack has a deal it can afford.
 
 ---
 
@@ -70,80 +94,142 @@ one product, or when nothing in the stack can be sold alone at a profit.
 Founders' priority and Top 25 rank are already inside `scoreProduct`, so they
 are not added twice.
 
-Only products that can be **sold on their own at a profit** are eligible: in
-stock, not an accessory, not a subscription-only refill, not ruled out for
-this person by a hard gate, and passing the economics below. A product that
-can carry a discount beats one that can't, because the section is an offer. A
-full-price product is shown only when none can. A cheap product whose parcel
-costs more than it makes is skipped, not discounted harder.
+Only products that can carry **a real deal at a profit** are eligible. They
+must be:
+- in stock;
+- not an accessory;
+- not a subscription-only refill;
+- not ruled out for this person by a hard gate;
+- given a deal by the economics below.
+
+A cheap product whose parcel costs more than it makes is skipped, not
+discounted harder. Ties go to the bigger saving.
 
 ---
 
-## The money — why the discount is worked out, not chosen
+## The money — why the deal is worked out, not chosen
 
-A product sold alone is this business's worst case. PowerBody charge us **£6.50**
-to post an order under £50 of wholesale (£5.50 from £50 to £99), and we collect
-**£4.95** under £40 or **£2.95** from £40 to £100 — so the parcel loses money
-before the goods are counted. We are not VAT-registered, so PowerBody's VAT is a
-real cost (every supplier figure × 1.2).
+A product sold alone is this business's worst case. PowerBody charge us
+**£6.50** to post an order under £50 of wholesale (£5.50 from £50 to £99),
+whatever we charge the customer. We collect **£4.95** under £40 or **£2.95**
+from £40 to £100. So the parcel loses money before the goods are counted.
 
-So every offer is run through the same `unitEconomics` waterfall the Founders
-Hub pricing pages use — VAT, goods, **both sides of delivery**, card fees (1.5% +
-20p) and the returns provision — and takes the **deepest rung of 20 / 15 / 10 /
-5% that still leaves at least £3.00, and at least 10% of what we keep**. If even
-full price doesn't clear that, no offer is made. Never 25%: that's the daily
-code's.
+Every deal is run through the same `unitEconomics` waterfall the Founders Hub
+pricing pages use: the goods, **both sides of delivery**, card fees (1.5% +
+20p), the returns provision and, if the switch says we pay it, VAT. The levers
+are pulled in this order:
 
-Worked across the catalogue's pricing rule (list = 2 × cost):
+1. **Delivery first: free.** It is the easiest thing to say yes to, and the
+   thing that most often stops a small order.
+2. **Then a percentage off the product**: the deepest whole percent that still
+   clears the floor, up to 25%. Under 5% it is left off, because "free delivery
+   + 2% off" reads as a rounding error.
+3. **Where free delivery would lose money, delivery is reduced instead**, to
+   the lowest of £0.99 / £1.49 / £1.99 / … that clears the floor. There is no
+   percentage on top.
+4. **Otherwise no deal and no card.** A full price is never dressed up as an
+   offer.
 
-| List price | Our cost (ex VAT) | Offer | Customer pays | We keep at full price | We keep with offer |
-|---|---|---|---|---|---|
-| £11.99 | £6.00 | not offered | — | £1.22 | — |
-| £17.99 | £9.00 | full price | £22.94 (incl. £4.95 delivery) | £3.53 | £3.53 |
-| £19.99 | £10.00 | 5% off → £18.99 | £23.94 (incl. £4.95 delivery) | £4.30 | £3.32 |
-| £23.99 | £12.00 | 10% off → £21.59 | £26.54 (incl. £4.95 delivery) | £5.84 | £3.48 |
-| £29.99 | £15.00 | 15% off → £25.49 | £30.44 (incl. £4.95 delivery) | £8.15 | £3.72 |
-| £35.99 | £18.00 | 15% off → £30.59 | £35.54 (incl. £4.95 delivery) | £10.46 | £5.15 |
-| £39.99 | £20.00 | 20% off → £31.99 | £36.94 (incl. £4.95 delivery) | £12.00 | £4.12 |
-| £49.99 | £25.00 | 15% off → £42.49 | £45.44 (incl. £2.95 delivery) | £13.88 | £6.50 |
-| £59.99 | £30.00 | 20% off → £47.99 | £50.94 (incl. £2.95 delivery) | £17.73 | £5.91 |
-| £79.99 | £40.00 | 20% off → £63.99 | £66.94 (incl. £2.95 delivery) | £25.43 | £9.67 |
+**The floor:** every deal still keeps at least **£3.00**, and at least **10%**
+of what we take. The pound figure protects cheap products, where a percentage
+of very little is very little. The percentage protects dear ones, where £3
+would give most of the margin away.
+
+**Priced on its own:**
+- It is never combined with the bundle tier, the daily code or a partner's
+  code.
+- Checkout bills exactly the deal's price and the deal's delivery. The
+  Highlands surcharge (£2.95) still applies up there, as it does on free
+  delivery everywhere else, because our cost there never goes away.
+
+Worked across the catalogue's pricing rule (list = 2 × cost), as the engine
+quotes it. With VAT ignored (the switch's current setting):
+
+| List price | Our cost | The deal | Customer pays, delivered | Instead of | We keep at full price | We keep with the deal |
+|---|---|---|---|---|---|---|
+| £11.99 | £6.00 | no deal (under the £15 minimum) | — | £16.94 | £3.78 | — |
+| £15.99 | £8.00 | delivery £2.49 (was £4.95) | £18.48 | £20.94 | £5.72 | £3.30 |
+| £17.99 | £9.00 | delivery £1.49 (was £4.95) | £19.48 | £22.94 | £6.69 | £3.29 |
+| £19.99 | £10.00 | delivery £0.99 (was £4.95) | £20.98 | £24.94 | £7.66 | £3.76 |
+| £23.99 | £12.00 | free delivery + 7% off | £22.31 | £28.94 | £9.60 | £3.07 |
+| £29.99 | £15.00 | free delivery + 15% off | £25.49 | £34.94 | £12.51 | £3.21 |
+| £34.99 | £17.50 | free delivery + 20% off | £27.99 | £39.94 | £14.94 | £3.17 |
+| £39.99 | £20.00 | free delivery + 23% off | £30.79 | £44.94 | £17.36 | £3.43 |
+| £49.99 | £25.00 | free delivery + 25% off | £37.49 | £52.94 | £20.24 | £5.03 |
+| £59.99 | £30.00 | free delivery + 25% off | £44.99 | £62.94 | £25.09 | £7.41 |
+| £79.99 | £40.00 | free delivery + 25% off | £59.99 | £82.94 | £34.79 | £12.19 |
+| £109.99 | £55.00 | 25% off (delivery already free) | £82.49 | £109.99 | £47.44 | £20.35 |
+
+If PowerBody's invoices do carry VAT, turn the switch on and every figure
+tightens by itself. For example, £29.99 becomes free delivery alone, and
+£19.99 and under get no deal.
 
 Further guards:
 
 - **A product with no cost on file** is costed at the site-wide pessimistic
   estimate and capped at 10% off.
-- **Under the £15 minimum order** — no offer (checkout would refuse it).
-- **A saving has to be real on the whole order** — at least £1 and most of the
-  headline — so a discount can never be eaten by postage.
-- **Over £50, the 8% bundle tier** already applies to a single product; the
-  offer replaces it (the deeper wins), never stacks.
+- **Under the £15 minimum order** there is no deal (checkout would refuse it).
+- **The deal must beat the ordinary checkout** (the product's own bundle tier
+  included) by at least £1. So it is never worse than just buying the product.
 
-The floor (`OFFER_FLOOR`) and the ladder (`OFFER_LADDER`) are two constants in
-`lib/last-chance/economics.ts`, so they're easy to tune. The trade-off to decide: the
-offer gives away margin to win a sale that otherwise doesn't happen (e.g. a
-£39.99 product keeps £4.12 at 20% off instead of £12.00 at full price).
+Every number above is a setting: Founders Hub → Pricing → Rules → Last-chance
+offer. The settings are the floor (£ and %), the deepest percentage, the
+smallest percentage worth adding, and the cap for uncosted products. The
+trade-off they set: the deal gives away margin to win a sale that otherwise
+doesn't happen. For example, a £29.99 product keeps £3.21 on the deal instead
+of £12.51 at full price.
+
+---
+
+## VAT on our costs: a switch
+
+Founders Hub → Pricing → Rules → VAT → **PowerBody charge us VAT**. It is shown
+while we are not VAT-registered.
+
+- **Off (the default, as the founder asked):** costs are PowerBody's prices as
+  quoted, ex VAT, on goods and delivery.
+- **On:** their 20% counts as a cost we can't reclaim.
+
+It moves every margin in the hub, not just this offer: the pricing pages, the
+dashboard's cost of goods and the cost-price founder codes.
+
+**Check before relying on it:** the codebase's own notes record PowerBody as
+VAT-registered, with prices quoted "+ VAT". If their invoices to us carry VAT,
+turn it on.
 
 ---
 
 ## How it can't be gamed
 
-The browser never sends a price to charge. It sends the variant and the price it
-was shown; `/api/cart` re-runs `quoteOffer` on the catalogue's own price and cost
-and bills that.
+The browser never sends a price to charge. It sends three things: the variant,
+the product price it was shown, and the delivery it was shown. `/api/cart`
+re-runs `quoteOffer` on the catalogue's own price and cost and bills that.
 
-- A request showing a lower price than the server's is stopped (the card shows
-  the new price and asks again). A higher one goes ahead — good news only.
-- The offer is for **one product on its own**: any other basket shape is
+- **If the server's price or delivery is higher than shown**, the order is
+  stopped and the card shows the new deal ("This deal has changed: it's now
+  £X delivered") and asks again. Lower goes ahead, because that is only good
+  news.
+- **A request that doesn't say what delivery it was shown** is held to the
+  ordinary charge, so leaving the field out can never loosen the check.
+- **The deal is for one product on its own.** Any other basket shape is
   refused, not discounted.
-- **No codes on offer orders**, typed or referred: a code could replace the
-  checked price with an unchecked one, and a partner referral would add up to
-  15% commission the floor didn't count. In practice a referred visitor never
-  sees the offer: their partner's code is applied to the stack automatically,
-  and the offer steps aside whenever a code is applied. *(Reversible: see
-  `wantsOffer` in `/api/cart`.)*
-- The order's audit trail records it: `last-chance offer: 15% off CHRGD
-  Pre-Workout (list £29.99)`.
+- **No codes on offer orders**, typed or referred:
+  - A code could replace the checked price with an unchecked one.
+  - A partner referral would add up to 15% commission the floor didn't count.
+  - In practice a referred visitor never sees the offer, because their
+    partner's code is applied to the stack automatically and the offer steps
+    aside whenever a code is applied. *(Reversible: see `wantsOffer` in
+    `/api/cart`.)*
+- **A 409 shows only the deal.** Contribution, margin and floor stay on the
+  server.
+- **The order records the deal three ways:**
+  - **Audit trail:** `last-chance offer: free delivery (was £4.95) + 15% off on
+    CHRGD Pre-Workout (list £29.99, £25.49 delivered)`.
+  - **`lastChance` snapshot:** lets the receipt show "Discount" and "Delivery:
+    FREE".
+  - **`deliveryDue`:** what each zone was offered at, so the fulfilment queue
+    judges a Highlands order against the rate it was actually given rather
+    than re-banding it.
 
 ---
 
@@ -162,7 +248,8 @@ the honest version of what was already advertised.)*
 
 ## Measuring it
 
-Two new events: `last_chance_view` (it revealed) and `last_chance_buy` (the tap),
+Two new events, `last_chance_view` (it revealed) and `last_chance_buy` (the
+tap), both carrying `discountPct` and `delivery` (free / reduced / included),
 plus `checkout_start` / `checkout_error` with `source: last_chance`, and orders
 on the `quiz` channel carrying the `offer` audit event. Read `last_chance_buy`
 against `stack_reveal_view` and `purchase` — the question is whether it wins
@@ -170,9 +257,13 @@ sales from people who would have left, or takes them from the full stack.
 
 ## Files
 
-- `src/lib/last-chance/economics.ts` — the safe-discount engine (`quoteOffer`).
+- `src/lib/last-chance/economics.ts` — the deal engine (`quoteOffer`), its
+  billing (`priceOfferOrder`, `offerDeliveryOptions`) and `publicQuote`.
 - `src/lib/last-chance/pick.ts` — choosing the product (`pickHeroOffer`).
 - `src/app/api/cart/route.ts` — server enforcement (`lastChance`), delivery basis.
+- `src/lib/stack-blueprint/pricing.ts` — `lastChance` settings; `vat.supplierChargesVat`.
+- `src/lib/orders/` — `lastChance` snapshot and `deliveryDue` on the order; the
+  receipt's discount line; the queue's Highlands check.
 - `src/hooks/useOfferCheckout.ts` — the one-tap checkout.
 - `src/components/stack-review/LastChance.tsx`, `LastChanceView.tsx` — the card.
 - `src/app/styleguide/last-chance/` — every state.

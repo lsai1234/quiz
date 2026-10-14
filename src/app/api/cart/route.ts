@@ -25,10 +25,18 @@ import {
 } from '@/lib/partner-starter/redeem'
 import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
 import { deliveryOptions } from '@/lib/pricing/delivery'
-import { offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
+import {
+  describeDeal,
+  offerDeliveryOptions,
+  offerProductFor,
+  priceOfferOrder,
+  publicQuote,
+  quoteOffer,
+  type OfferQuote,
+} from '@/lib/last-chance/economics'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierAddress } from '@/lib/supplier/types'
-import type { OrderChannel, OrderLine } from '@/lib/orders/types'
+import type { LastChanceSnapshot, OrderChannel, OrderLine } from '@/lib/orders/types'
 import { supplierIdFor } from '@/lib/catalogue/master'
 
 /**
@@ -230,8 +238,8 @@ export async function POST(req: Request) {
   // server does this so no journey can lose a referral by not having rendered
   // the code box — "Buy now" goes straight to Stripe without one.
   /*
-    The last-chance offer is sold without codes, typed or referred. Its price is
-    already the deepest the order can take at a profit (`quoteOffer`), so a code
+    The last-chance offer is sold without codes, typed or referred. Its deal is
+    already the best the order can take at a profit (`quoteOffer`), so a code
     could only replace it with a discount the floor never checked — and a
     referral would add a partner's commission (up to 15% of the goods) the floor
     did not count either. The partner keeps the credit for the stack they
@@ -428,44 +436,64 @@ export async function POST(req: Request) {
   const config = getPricingConfig()
 
   /**
-   * The last-chance offer — one product, at a discount the SERVER works out.
+   * The last-chance offer — one product, on a deal the SERVER works out.
    *
-   * The browser says which variant it is buying and what it was shown; it never
-   * says what to charge. `quoteOffer` runs again here on the catalogue's own
-   * price and cost, so a tampered request can at most ask for the offer that
-   * already exists. It is an offer for one product bought on its own, so any
-   * other basket shape is refused rather than discounted.
+   * The browser says which variant it is buying and the price and delivery it
+   * was shown; it never says what to charge. `quoteOffer` runs again here on
+   * the catalogue's own price and cost, so a tampered request can at most ask
+   * for the deal that already exists. It is a deal for one product bought on
+   * its own, so any other basket shape is refused rather than discounted.
    *
-   * Its rate goes through `priceOneOffLines` the way a code's would: the deeper
-   * of it, the bundle tier and any partner code wins, never the three compounded,
-   * and the margin floor still applies underneath.
+   * Priced on its own (`priceOfferOrder`): no bundle tier, no code, and its
+   * own delivery (`offerDeliveryOptions`) — free or reduced on the mainland,
+   * the Highlands surcharge still on top up there.
    */
-  let lastChance: { rate: number; note: string } | null = null
+  let lastChance: { quote: OfferQuote; note: string; snapshot: LastChanceSnapshot } | null = null
   if (body.lastChance != null) {
     const want = (typeof body.lastChance === 'object' ? body.lastChance : {}) as {
       variantId?: unknown
       expectedPrice?: unknown
+      expectedDelivery?: unknown
     }
     const only = matched.length === 1 && matched[0].quantity === 1 ? matched[0] : null
     if (!only || only.variant.id !== want.variantId || founder || starter) {
       await releaseClaim()
       return NextResponse.json({ error: 'That offer is for one product on its own.' }, { status: 400 })
     }
-    const quote = quoteOffer(offerProductFor(only.product, only.variant, config), {}, config)
+    const quote = quoteOffer(offerProductFor(only.product, only.variant), config)
     if (!quote.viable) {
       return NextResponse.json({ error: 'This offer isn’t available any more.', offerChanged: true }, { status: 409 })
     }
-    // Shown one price and about to be charged a higher one: stop and say so. A
-    // lower one is only ever good news and goes ahead.
-    if (typeof want.expectedPrice === 'number' && quote.offerPrice > want.expectedPrice + 0.009) {
+    // Shown one price and about to be charged a higher one — for the product
+    // or for its delivery: stop and say so. Lower is only ever good news and
+    // goes ahead. A request that never said what delivery it was shown is held
+    // to what delivery would have been without the deal, so leaving the field
+    // out can never loosen the check.
+    const shownDelivery =
+      typeof want.expectedDelivery === 'number' ? want.expectedDelivery : quote.standardDelivery
+    const pricier = typeof want.expectedPrice === 'number' && quote.offerPrice > want.expectedPrice + 0.009
+    const postage = quote.deliveryCharge > shownDelivery + 0.009
+    if (pricier || postage) {
       return NextResponse.json(
-        { error: `The price has changed to ${formatGBP(quote.offerPrice)}.`, offerChanged: true, quote },
+        {
+          error: `This deal has changed: it’s now ${formatGBP(quote.total)} delivered.`,
+          offerChanged: true,
+          quote: publicQuote(quote),
+        },
         { status: 409 },
       )
     }
     lastChance = {
-      rate: quote.rate,
-      note: `last-chance offer: ${quote.discountPct}% off ${only.product.title} (list ${formatGBP(quote.listPrice)})`,
+      quote,
+      note: `last-chance offer: ${describeDeal(quote)} on ${only.product.title} (list ${formatGBP(quote.listPrice)}, ${formatGBP(quote.total)} delivered)`,
+      snapshot: {
+        listPrice: quote.listPrice,
+        offerPrice: quote.offerPrice,
+        discountPct: quote.discountPct,
+        standardDelivery: quote.standardDelivery,
+        deliveryCharge: quote.deliveryCharge,
+        deliveryDeal: quote.deliveryDeal,
+      },
     }
   }
 
@@ -484,7 +512,9 @@ export async function POST(req: Request) {
     ? priceStarterOrder(pricedLines, config)
     : founder
     ? priceAtFounderTerms(founder.kind, pricedLines, config)
-    : priceOneOffLines(pricedLines, config, Math.max(partnerPct, lastChance?.rate ?? 0))
+    : lastChance
+    ? priceOfferOrder(lastChance.quote)
+    : priceOneOffLines(pricedLines, config, partnerPct)
 
   const orderLines: OrderLine[] = matched.map((m, i) => ({
     sku: m.variant.sku ?? null,
@@ -493,7 +523,9 @@ export async function POST(req: Request) {
     variantTitle: m.variant.flavour || m.variant.size || null,
     quantity: m.quantity,
     unitPrice: priced.lines[i].discountedUnitPrice,
-    supplierCost: m.product.cost ?? null,
+    // The variant's own cost where it has one — what the offer was quoted on,
+    // and what PowerBody actually charge for that size.
+    supplierCost: m.variant.cost ?? m.product.cost ?? null,
   }))
 
   // The minimum order, enforced SERVER-SIDE.
@@ -558,7 +590,14 @@ export async function POST(req: Request) {
     ? starterDeliveryOptions(priced.total, config)
     : founder
     ? founderDeliveryOptions(founder.kind, { supplierValue, orderValue: priced.total }, config)
+    : lastChance
+    ? offerDeliveryOptions(lastChance.quote, config)
     : deliveryOptions(priced.subtotal, config)
+  // Recorded on the order: what each zone was offered at, so the fulfilment
+  // queue judges a Highlands order against the rate it was actually given.
+  const deliveryDue = Object.fromEntries(
+    options.filter((o) => o.zone === 'uk-1' || o.zone === 'uk-2').map((o) => [o.zone, o.price]),
+  ) as Partial<Record<'uk-1' | 'uk-2', number>>
   // What we book against the order up front. Stripe's real figure — including a
   // Highlands surcharge if they pick it — replaces this on the webhook.
   const mainlandCharge = options[0]?.price ?? 0
@@ -678,6 +717,8 @@ export async function POST(req: Request) {
         partnerCode: redemption?.ok ? redemption.code.code : null,
         partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
         offer: lastChance?.note ?? null,
+        lastChance: lastChance?.snapshot ?? null,
+        deliveryDue,
         ...founderFields,
       })
     } catch (err) {
@@ -742,6 +783,8 @@ export async function POST(req: Request) {
       partnerCode: redemption?.ok ? redemption.code.code : null,
       partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
       offer: lastChance?.note ?? null,
+      lastChance: lastChance?.snapshot ?? null,
+      deliveryDue,
       ...founderFields,
     })
   } catch (err) {

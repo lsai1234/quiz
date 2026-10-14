@@ -310,6 +310,18 @@ export interface Order {
    * defensively so those still render, just without the plan detail.
    */
   subscription?: OrderSubscriptionContext | null
+  /**
+   * What each delivery zone was offered at when the order was placed (£).
+   *
+   * Checkout picks the rate, so this is the only record of what a Highlands
+   * order was SUPPOSED to pay — re-banding the subtotal afterwards gets it wrong
+   * whenever the checkout set its own rate (a free-delivery offer) or banded on
+   * something else (the undiscounted basket). Absent on older orders; readers
+   * fall back to the bands.
+   */
+  deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
+  /** The last-chance deal this order was sold on — see `LastChanceSnapshot`. */
+  lastChance?: LastChanceSnapshot | null
   // ── Audit ──
   events: OrderEvent[]
   createdAt: string
@@ -361,4 +373,27 @@ export interface CreateOrderInput {
    * event, where the hub already reads why an order is priced as it is.
    */
   offer?: string | null
+  /** See `Order.deliveryDue`. */
+  deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
+  /** See `Order.lastChance`. */
+  lastChance?: LastChanceSnapshot | null
+}
+
+/**
+ * The last-chance deal an order was sold on, as it stood at checkout — so the
+ * receipt can show what came off, and the hub what it was sold at, without
+ * re-running a quote against prices that have since moved.
+ */
+export interface LastChanceSnapshot {
+  /** Shelf price of the product (£). */
+  listPrice: number
+  /** What the product was sold at (£). */
+  offerPrice: number
+  /** Whole percent off the product. */
+  discountPct: number
+  /** What mainland delivery would have cost without the deal (£). */
+  standardDelivery: number
+  /** What mainland delivery cost in the deal (£). */
+  deliveryCharge: number
+  deliveryDeal: 'free' | 'reduced' | 'included' | 'standard'
 }

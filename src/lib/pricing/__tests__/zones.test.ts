@@ -104,10 +104,19 @@ describe('a postcode beats an assumed zone', () => {
   })
 
   it('costs their VAT in while we are not registered', () => {
-    // Default config is unregistered, so their £6.50 really costs us £7.80.
-    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, c).supplierCost).toBeCloseTo(7.8, 2)
-    const registered = { ...c, vat: { ...c.vat, registered: true } }
+    // Pinned to PowerBody charging us VAT (`supplierChargesVat`, off by
+    // default): this is about what that VAT costs an unregistered business, so
+    // their £6.50 really costs us £7.80.
+    const charged = { ...c, vat: { ...c.vat, registered: false, supplierChargesVat: true } }
+    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, charged).supplierCost).toBeCloseTo(7.8, 2)
+    const registered = { ...charged, vat: { ...charged.vat, registered: true } }
     expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, registered).supplierCost).toBe(6.5)
+  })
+
+  it('costs delivery at their quoted price when their invoices carry no VAT', () => {
+    // The shipped default: `supplierChargesVat` off, so £6.50 is £6.50.
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, c).supplierCost).toBe(6.5)
   })
 
   it('overrides an explicitly-passed zone when a postcode is given', () => {

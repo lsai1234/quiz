@@ -3,21 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SLOT_LABELS, type CatalogueProduct, type StackSlot } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
-import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { Goal, QuizAnswers } from '@/lib/types'
 import { pickHeroOffer } from '@/lib/last-chance/pick'
-import type { OfferQuote } from '@/lib/last-chance/economics'
+import type { PublicOfferQuote } from '@/lib/last-chance/economics'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
 import { track } from '@/lib/analytics/events'
+import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
 import { LastChanceView } from './LastChanceView'
 
 /**
  * The last-chance offer at the foot of the results page: choosing the product,
  * watching for the scroll that reveals it, and buying it.
  *
- * Renders nothing when no product in the stack can be sold on its own at a
+ * Renders nothing when no product in the stack can carry a real deal at a
  * profit (`pickHeroOffer` returns null) — an offer the business cannot afford
- * is not made, rather than made smaller.
+ * is not made, and a full price is never dressed up as one.
  */
 export function LastChance({ slots, products, answers, primaryGoal, usage, blocked, onBackToStack, onCtaRef }: {
   slots: StackSlotEntry[]
@@ -33,14 +34,23 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
   onBackToStack: () => void
   onCtaRef?: (el: HTMLButtonElement | null) => void
 }) {
+  // Re-worked when the founders' pricing settings land in the browser, so a
+  // deal is never shown on the defaults the server will not honour.
+  const [pricingVersion, setPricingVersion] = useState(0)
+  useEffect(() => {
+    const bump = () => setPricingVersion((v) => v + 1)
+    window.addEventListener(PRICING_SYNCED_EVENT, bump)
+    return () => window.removeEventListener(PRICING_SYNCED_EVENT, bump)
+  }, [])
   const hero = useMemo(
     () => pickHeroOffer(slots, products, { answers, primaryGoal, usage }),
-    [slots, products, answers, primaryGoal, usage],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pricingVersion stands in for the module-level config
+    [slots, products, answers, primaryGoal, usage, pricingVersion],
   )
 
   const { state, buy } = useOfferCheckout()
   // When the server says the price moved, show its figure and buy at that.
-  const [override, setOverride] = useState<OfferQuote | null>(null)
+  const [override, setOverride] = useState<PublicOfferQuote | null>(null)
   useEffect(() => {
     if (state.status === 'changed' && state.quote) setOverride(state.quote)
   }, [state])
@@ -55,7 +65,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
       setPhase('go')
       if (!told.current && hero) {
         told.current = true
-        track('last_chance_view', { slot: hero.slotType, discountPct: hero.quote.discountPct })
+        track('last_chance_view', { slot: hero.slotType, discountPct: hero.quote.discountPct, delivery: hero.quote.deliveryDeal })
       }
     }
     if (typeof IntersectionObserver === 'undefined') {
@@ -72,7 +82,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
     return () => io.disconnect()
   }, [section, phase, hero])
 
-  const quote = override ?? hero?.quote ?? null
+  const quote: PublicOfferQuote | null = override ?? hero?.quote ?? null
   const onBuy = useCallback(() => {
     if (!hero || !quote || blocked) return
     void buy({ variantId: hero.variant.id, productTitle: hero.product.title, quote, claimId: hero.claim?.id ?? null })
@@ -90,12 +100,8 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
       claim={hero.claim?.wording ?? null}
       servings={hero.servings}
       packMonths={hero.packMonths}
-      listPrice={quote.listPrice}
-      offerPrice={quote.offerPrice}
-      discountPct={quote.discountPct}
-      saving={quote.totalSaving}
-      deliveryCharge={quote.deliveryCharge}
-      total={quote.total}
+      deal={quote}
+      remoteSurcharge={getPricingConfig().delivery.zone2Surcharge}
       status={state.status}
       message={state.status === 'error' || state.status === 'changed' ? state.message : null}
       blocked={blocked}

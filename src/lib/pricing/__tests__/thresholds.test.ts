@@ -89,9 +89,13 @@ describe('the settings that enforce them', () => {
   })
 
   it('catches a minimum order value that lets losing orders through', () => {
-    const t = at('one-off', cfg({ minOrderValue: 5 }))
+    // £5 sits under the one-off floor while PowerBody's VAT is a cost (~£9).
+    // With `supplierChargesVat` off — as shipped — the floor is ~£4.50 and £5
+    // clears it, so the VAT is pinned on for the check to have a case to catch.
+    const vat = { ...PRICING_CONFIG.vat, supplierChargesVat: true }
+    const t = at('one-off', cfg({ minOrderValue: 5, vat }))
     expect(t.enforcedBy!.ok).toBe(false)
-    expect(pricingThresholds(cfg({ minOrderValue: 5 })).allEnforced).toBe(false)
+    expect(pricingThresholds(cfg({ minOrderValue: 5, vat })).allEnforced).toBe(false)
   })
 
   it('catches a subscription minimum below what a plan needs to survive', () => {

@@ -259,6 +259,29 @@ export const PRICING_CONFIG = {
   minOrderValue: 15,
 
   /**
+   * The last-chance offer at the foot of the results page: one product from the
+   * stack, on a deal worked out for it (`lib/last-chance/economics.ts`).
+   *
+   * Priced on its own, never with the bundle tiers or a code. Free delivery
+   * comes first, then a percentage off the product as far as these allow; where
+   * free delivery would sell at a loss, delivery is reduced instead. Every deal
+   * still keeps at least `minContribution`, and at least `minMarginPct` of what
+   * we keep, after VAT, the goods, both sides of delivery, card fees and returns.
+   */
+  lastChance: {
+    /** Least the order may make after every cost (£). */
+    minContribution: 3,
+    /** Least it may make as a share of net revenue (0–1). Protects dear products. */
+    minMarginPct: 0.1,
+    /** Deepest percentage off the product (0–1). */
+    maxDiscountPct: 0.25,
+    /** Smallest percentage worth offering on top of free delivery (0–1). Below it, free delivery alone. */
+    minDiscountPct: 0.05,
+    /** Deepest a product with no cost on file may go: its cost is a guess. */
+    uncostedMaxDiscountPct: 0.1,
+  },
+
+  /**
    * Cheapest a product may be and still be offered as a stack line in the quiz
    * (£ inc VAT).
    *
@@ -336,14 +359,31 @@ export const PRICING_CONFIG = {
      * Registered: we charge VAT on sales and hand it over, but reclaim the VAT
      * on what PowerBody charges us — so costs are net.
      * Not registered: we charge no VAT (keeping the whole shelf price) but
-     * CANNOT reclaim, so PowerBody's VAT is a real cost. These are genuinely
-     * different businesses, not a display toggle, which is why it lives here.
+     * CANNOT reclaim, so any VAT PowerBody charge us is a real cost — see
+     * `supplierChargesVat`. These are genuinely different businesses, not a
+     * display toggle, which is why it lives here.
      *
      * Defaults to FALSE: a new business is below the threshold and not
      * registered, and that is the phase this is being built in. Flip it the day
      * registration takes effect and the whole hub reprices.
      */
     registered: false,
+    /**
+     * Whether PowerBody's invoices to us carry VAT that we cannot reclaim while
+     * unregistered.
+     *
+     * On: their 20% on goods and delivery is a cost, so every supplier price is
+     * grossed up by the standard rate (`costFromSupplierPrice`). Off: costs are
+     * their prices as quoted, ex VAT. Irrelevant once `registered` is true —
+     * registered, any VAT they charge is reclaimed either way.
+     *
+     * Defaults to FALSE because the founder says we are not paying VAT at the
+     * moment. If their invoices do carry VAT, flip it on in Founders Hub →
+     * Pricing → Rules → VAT — left off when they do, every margin, the
+     * last-chance offer and cost-price codes are about a fifth of cost too
+     * generous.
+     */
+    supplierChargesVat: false,
     /**
      * HMRC's compulsory registration threshold — taxable turnover over any
      * rolling 12 months (£). Public figure, £90,000 since April 2024.
@@ -676,7 +716,8 @@ export const PRICING_CONFIG = {
      * What we multiply the supplier's price by to get our shelf price.
      *
      * 2.0 keeps roughly a fifth of a subscriber's order as contribution after
-     * VAT-on-costs, postage, card fees and returns. Below about 1.9 the margin
+     * postage, card fees, returns and — when PowerBody charge it — the VAT on
+     * our costs (`vat.supplierChargesVat`). Below about 1.9 the margin
      * gets thin enough that a single bad delivery band wipes it out; much above
      * 2.1 and most of the catalogue prices above what the brands themselves
      * recommend, which is the thing customers can check in ten seconds.
@@ -872,6 +913,7 @@ export type PricingConfig = typeof PRICING_CONFIG
 type NestedKeys =
   | 'introOffer' | 'delivery' | 'goodPricing' | 'vat'
   | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'
+  | 'lastChance'
 
 export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
   [K in NestedKeys]?: Partial<PricingConfig[K]>
@@ -899,6 +941,7 @@ function recomputeConfig() {
     supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
     partners: { ...PRICING_CONFIG.partners, ...(_overrides.partners ?? {}) },
     listPricing: { ...PRICING_CONFIG.listPricing, ...(_overrides.listPricing ?? {}) },
+    lastChance: { ...PRICING_CONFIG.lastChance, ...(_overrides.lastChance ?? {}) },
     orderMix: {
       ...PRICING_CONFIG.orderMix,
       ...(_overrides.orderMix ?? {}),

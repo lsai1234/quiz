@@ -40,6 +40,22 @@ describe('pricing config overrides', () => {
     setPricingOverrides({ introOffer: { firstMonthDiscount: 0.3 } })
     expect(getPricingConfig().introOffer.firstMonthDiscount).toBe(0.3)
   })
+
+  it('gives a VAT override saved before `supplierChargesVat` existed the default', () => {
+    // The hub saves the whole `vat` block, so every existing database holds one
+    // without the new key. It must read as the default (off), not as undefined.
+    setPricingOverrides({ vat: { standardRate: 0.2, registered: false, registrationThreshold: 90_000, deregistrationThreshold: 88_000 } })
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    expect(getPricingConfig().vat.supplierChargesVat).toBe(false)
+    expect(getPricingConfig().vat.registered).toBe(false)
+  })
+
+  it('lets an explicit `supplierChargesVat` win over the default', () => {
+    setPricingOverrides({ vat: { registered: false, supplierChargesVat: true } })
+    expect(getPricingConfig().vat.supplierChargesVat).toBe(true)
+    // …and only that key: the rest of the block keeps its defaults.
+    expect(getPricingConfig().vat.standardRate).toBe(PRICING_CONFIG.vat.standardRate)
+  })
 })
 
 describe('product overrides store', () => {

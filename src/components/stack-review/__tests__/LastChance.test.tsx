@@ -3,14 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { LastChance } from '../LastChance'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
+import { offerProductFor, publicQuote, quoteOffer } from '@/lib/last-chance/economics'
 
 jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
 
 /**
  * The last-chance card at the foot of the results page. What it shows has to
- * be the quote the server will honour, and what it sends has to be a variant
- * and the price it showed — never a price to charge.
+ * be the deal the server will honour, and what it sends has to be a variant and
+ * the price and delivery it showed — never a price to charge.
  */
 
 function product(id: string, price: number, cost: number, over: Partial<CatalogueProduct> = {}): CatalogueProduct {
@@ -37,17 +37,30 @@ afterEach(() => jest.restoreAllMocks())
 
 it('shows the quote for the stack’s best product, and says only what is allowed', () => {
   render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} primaryGoal="energy" onBackToStack={() => {}} />)
-  expect(screen.getByRole('heading', { name: /if you only get one thing, make it this/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /one-time deal on your top pick/i })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'CHRGD pre' })).toBeInTheDocument()
   expect(screen.getByText(/you told us your top goal is “more energy”/i)).toBeInTheDocument()
   // A pre-workout has no authorised claim: no "what it does", and none of the engine's free text.
   expect(screen.queryByText(/what it does/i)).not.toBeInTheDocument()
   expect(screen.queryByText(/picked for your evening sessions/i)).not.toBeInTheDocument()
   expect(document.body.textContent).not.toMatch(/notice it|right away|within a few weeks/i)
-  expect(screen.getByRole('button', { name: new RegExp(`get it for £${quote.offerPrice.toFixed(2)}`, 'i') })).toBeInTheDocument()
-  expect(quote.discountPct).toBeGreaterThan(0)
+  // The price on the button is the delivered price — what they will actually pay.
+  expect(screen.getByRole('button', { name: new RegExp(`get it for £${quote.total.toFixed(2)}`, 'i') })).toBeInTheDocument()
   // Said plainly for screen readers while the big figure counts down to it.
-  expect(screen.getByText(`£${quote.offerPrice.toFixed(2)}, down from £${quote.listPrice.toFixed(2)}`)).toBeInTheDocument()
+  expect(screen.getByText(`£${quote.total.toFixed(2)} delivered, down from £${quote.normalTotal.toFixed(2)}`)).toBeInTheDocument()
+})
+
+it('leads with free delivery, then the percentage, and says the deal is only here', () => {
+  expect(quote.deliveryDeal).toBe('free')
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
+  expect(screen.getByText(`Free delivery to the UK mainland, instead of £${quote.standardDelivery.toFixed(2)}.`)).toBeInTheDocument()
+  if (quote.discountPct > 0) {
+    expect(screen.getByText(`${quote.discountPct}% off: £${quote.offerPrice.toFixed(2)} instead of £${quote.listPrice.toFixed(2)}.`)).toBeInTheDocument()
+  }
+  expect(screen.getByText(/only on this page/i)).toBeInTheDocument()
+  expect(screen.getByText(/isn’t in the shop, and no code unlocks it/i)).toBeInTheDocument()
+  // No invented deadline.
+  expect(document.body.textContent).not.toMatch(/ends|tonight|hurry|left to|expires/i)
 })
 
 it('sends the variant and the price it showed, nothing to charge', async () => {
@@ -59,24 +72,25 @@ it('sends the variant and the price it showed, nothing to charge', async () => {
   const [url, init] = fetchMock.mock.calls[0]
   expect(url).toBe('/api/cart')
   const body = JSON.parse(init.body)
-  expect(body.lastChance).toEqual({ variantId: 'v-pre', expectedPrice: quote.offerPrice })
+  expect(body.lastChance).toEqual({ variantId: 'v-pre', expectedPrice: quote.offerPrice, expectedDelivery: quote.deliveryCharge })
   expect(body.lines).toEqual([expect.objectContaining({ variantId: 'v-pre', quantity: 1 })])
   expect(body.lines[0].attributes).toContainEqual({ key: 'source', value: 'quiz-last-chance' })
   expect(body).not.toHaveProperty('partnerCode')
 })
 
-it('shows the server’s new price when it moved, and says so', async () => {
-  const moved = { ...quote, offerPrice: quote.offerPrice + 1, total: quote.total + 1 }
+it('shows the server’s new deal when it moved, and says so', async () => {
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const moved = { ...publicQuote(quote), offerPrice: r2(quote.offerPrice + 1), total: r2(quote.total + 1) }
   global.fetch = jest.fn().mockResolvedValue({
-    ok: false, status: 409, json: async () => ({ error: `The price has changed to £${moved.offerPrice.toFixed(2)}.`, offerChanged: true, quote: moved }),
+    ok: false, status: 409, json: async () => ({ error: `This deal has changed: it’s now £${moved.total.toFixed(2)} delivered.`, offerChanged: true, quote: moved }),
   }) as unknown as typeof fetch
   render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
   await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
-  expect(await screen.findByRole('alert')).toHaveTextContent(/price has changed/i)
-  expect(screen.getByRole('button', { name: new RegExp(`get it for £${moved.offerPrice.toFixed(2)}`, 'i') })).toBeInTheDocument()
+  expect(await screen.findByRole('alert')).toHaveTextContent(/deal has changed/i)
+  expect(screen.getByRole('button', { name: new RegExp(`get it for £${moved.total.toFixed(2)}`, 'i') })).toBeInTheDocument()
 })
 
-it('renders nothing when no product in the stack pays on its own', () => {
+it('renders nothing when no product in the stack has a deal it can afford', () => {
   const cheap = (id: string) => product(id, 11.99, 6)
   const { container } = render(
     <LastChance slots={[slot('a', 90), slot('b', 80)]} products={[cheap('a'), cheap('b')]} onBackToStack={() => {}} />,

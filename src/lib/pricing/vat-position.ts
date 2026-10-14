@@ -3,10 +3,11 @@
  *
  * THE INTUITION THIS EXISTS TO CORRECT
  * ────────────────────────────────────
- * PowerBody are VAT-registered (VAT Reg 940 5412 46), so they charge us VAT on
- * both goods and delivery. While we are NOT registered we cannot reclaim a penny
- * of it, and that shows up as a big, visible, annoying number. The natural
- * reaction is "we should register so we can claim that back".
+ * PowerBody are VAT-registered (VAT Reg 940 5412 46). When their invoices to us
+ * carry VAT on goods and delivery (`vat.supplierChargesVat`), then while we are
+ * NOT registered we cannot reclaim a penny of it, and that shows up as a big,
+ * visible, annoying number. The natural reaction is "we should register so we
+ * can claim that back".
  *
  * That reaction is usually wrong, and the arithmetic says so cleanly. Holding
  * shelf prices constant:
@@ -22,6 +23,11 @@
  * Which is why this module reports BOTH sides and the net: the input VAT we're
  * currently eating (the number that tempts you) next to the output VAT we'd owe
  * (the number that settles it). One without the other misleads.
+ *
+ * With `supplierChargesVat` off — the shipped default, because the founder says
+ * we are not paying VAT at the moment — C carries no VAT either way, input VAT
+ * is zero, and registering costs the whole of the output VAT. The verdict says
+ * so rather than talking about VAT PowerBody don't charge.
  *
  * WHAT THIS IS NOT
  * ────────────────
@@ -45,6 +51,9 @@ const EARNED = new Set(['paid', 'submitted_to_supplier', 'supplier_confirmed', '
 
 export interface VatPosition {
   registered: boolean
+  /** Whether PowerBody's invoices carry VAT (`vat.supplierChargesVat`). Off,
+   *  there is nothing to reclaim and `inputVatLost` is zero. */
+  supplierChargesVat: boolean
   rate: number
 
   // ── Where we are against the threshold ──
@@ -173,7 +182,9 @@ export function buildVatPosition(input: VatPositionInput): VatPosition {
     contributionRegistered += reg.contribution
     contributionUnregistered += unreg.contribution
     outputVatOwed += reg.vat
-    // The VAT premium we pay PowerBody and cannot claim back.
+    // The VAT premium we pay PowerBody and cannot claim back — zero when their
+    // invoices carry none (`supplierChargesVat` off), because then the two
+    // configs cost the goods and delivery identically.
     inputVatLost += unreg.productCost - reg.productCost + (unreg.deliveryCost - reg.deliveryCost)
   }
 
@@ -201,6 +212,7 @@ export function buildVatPosition(input: VatPositionInput): VatPosition {
 
   return {
     registered: config.vat.registered,
+    supplierChargesVat: config.vat.supplierChargesVat,
     rate,
     rollingTurnover,
     threshold,
@@ -218,6 +230,7 @@ export function buildVatPosition(input: VatPositionInput): VatPosition {
     orderCount: window.length,
     verdict: verdictFor({
       registered: config.vat.registered,
+      supplierChargesVat: config.vat.supplierChargesVat,
       mustRegister,
       pctOfThreshold: threshold > 0 ? rollingTurnover / threshold : 0,
       monthsToThreshold,
@@ -230,6 +243,7 @@ export function buildVatPosition(input: VatPositionInput): VatPosition {
 
 function verdictFor(p: {
   registered: boolean
+  supplierChargesVat: boolean
   mustRegister: boolean
   pctOfThreshold: number
   monthsToThreshold: number | null
@@ -238,13 +252,18 @@ function verdictFor(p: {
   rate: number
 }): VatPosition['verdict'] {
   const risePct = Math.round((p.repriceFactor - 1) * 1000) / 10
+  const perYear = `£${Math.abs(p.netCostOfRegistering).toFixed(0)}`
+  // With the switch off the figure is the whole of the VAT on sales, which is
+  // bigger than it would be with input VAT to set against it — so it names the
+  // assumption it rests on and where to change it.
+  const nothingToReclaim = `PowerBody don't charge us VAT (Pricing → Rules → VAT), so there is nothing to reclaim against it`
 
   if (p.registered) {
     return {
       tone: 'ok',
       headline: 'Registered — VAT is handled',
       detail:
-        'Shelf prices include VAT and we hand it over; the VAT PowerBody charge us is reclaimed, so their prices cost us the ex-VAT figure. Every margin in the hub already accounts for this.',
+        'Shelf prices include VAT and we hand it over; any VAT PowerBody charge us is reclaimed, so their prices cost us the ex-VAT figure. Every margin in the hub already accounts for this.',
     }
   }
 
@@ -252,7 +271,9 @@ function verdictFor(p: {
     return {
       tone: 'act',
       headline: 'Over the threshold — registration is compulsory',
-      detail: `Rolling 12-month turnover has passed the threshold, so registering is no longer a choice. HMRC expect it within 30 days of the end of the month you crossed in. Holding prices, that costs about £${Math.abs(p.netCostOfRegistering).toFixed(0)} a year; raising prices by ${risePct}% would hold the margin. Switch the toggle in the rules once you're registered so the whole hub reprices.`,
+      detail: p.supplierChargesVat
+        ? `Rolling 12-month turnover has passed the threshold, so registering is no longer a choice. HMRC expect it within 30 days of the end of the month you crossed in. Holding prices, that costs about ${perYear} a year; raising prices by ${risePct}% would hold the margin. Switch the toggle in the rules once you're registered so the whole hub reprices.`
+        : `Rolling 12-month turnover has passed the threshold, so registering is no longer a choice. HMRC expect it within 30 days of the end of the month you crossed in. Holding prices, that costs about ${perYear} a year — ${nothingToReclaim}; raising prices by ${risePct}% would hold the margin. Switch the toggle in the rules once you're registered so the whole hub reprices.`,
     }
   }
 
@@ -260,13 +281,17 @@ function verdictFor(p: {
     return {
       tone: 'watch',
       headline: 'Approaching the threshold',
-      detail: `Close enough to plan for. When it lands, the choice is absorb roughly £${Math.abs(p.netCostOfRegistering).toFixed(0)} a year or raise prices by about ${risePct}%. Deciding now beats deciding in the 30 days HMRC give you.`,
+      detail: p.supplierChargesVat
+        ? `Close enough to plan for. When it lands, the choice is absorb roughly ${perYear} a year or raise prices by about ${risePct}%. Deciding now beats deciding in the 30 days HMRC give you.`
+        : `Close enough to plan for. When it lands, the choice is absorb roughly ${perYear} a year or raise prices by about ${risePct}% — ${nothingToReclaim}. Deciding now beats deciding in the 30 days HMRC give you.`,
     }
   }
 
   return {
     tone: 'ok',
     headline: 'Not registered, and not required to be',
-    detail: `Staying unregistered is worth about £${Math.abs(p.netCostOfRegistering).toFixed(0)} a year at this run rate. The VAT PowerBody charge us can't be reclaimed — but registering to claim it back would mean handing over more on sales than we'd get back on costs, so it would cost us, not save us.`,
+    detail: p.supplierChargesVat
+      ? `Staying unregistered is worth about ${perYear} a year at this run rate. The VAT PowerBody charge us can't be reclaimed — but registering to claim it back would mean handing over more on sales than we'd get back on costs, so it would cost us, not save us.`
+      : `PowerBody don't charge us VAT (Pricing → Rules → VAT), so registering would reclaim nothing and hand over about ${perYear} a year — the VAT on every sale, at this run rate. Staying unregistered keeps it.`,
   }
 }

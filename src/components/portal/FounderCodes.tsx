@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, Note } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
+import { supplierVatIsCost } from '@/lib/pricing/vat'
+import { PRICING_CONFIG, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import {
   FOUNDER_CODE_LABELS,
   type FounderCode,
@@ -38,22 +40,35 @@ interface Row extends FounderCode {
 
 const ORDER: FounderCodeKind[] = ['free', 'cost', 'unlock']
 
-/** What each code is worth spelling out where it is being issued, not just named. */
-const DETAIL: Record<FounderCodeKind, string[]> = {
-  free: [
-    'Every line at £0.00 and no delivery charge.',
-    'Nothing is taken from a card — the order is raised as paid because there was nothing to pay.',
-    'It still lands in the review queue. Free to us is not free of PowerBody.',
-  ],
-  cost: [
-    'Products at what PowerBody charge us, including the VAT we cannot reclaim while we are unregistered.',
-    'Delivery goes UP, to what PowerBody actually charge to ship the parcel — not our customer rate, which is often free.',
-    'A product with no recorded supplier cost falls back to the modelled cost ratio, so it is an estimate rather than the invoice.',
-  ],
-  unlock: [
-    'Ordinary prices, ordinary delivery. Nothing comes off.',
-    'It only waives the minimum order, so a single cheap item can be bought on its own.',
-  ],
+/**
+ * What each code is worth spelling out where it is being issued, not just named.
+ *
+ * The cost-price line follows `supplierVatIsCost`, the same rule that prices the
+ * code (`priceAtFounderTerms` → `costFromSupplierPrice`), so the screen never
+ * promises a VAT gross-up the order does not apply — or hides one it does.
+ */
+function detailFor(kind: FounderCodeKind, vatIsCost: boolean): string[] {
+  switch (kind) {
+    case 'free':
+      return [
+        'Every line at £0.00 and no delivery charge.',
+        'Nothing is taken from a card — the order is raised as paid because there was nothing to pay.',
+        'It still lands in the review queue. Free to us is not free of PowerBody.',
+      ]
+    case 'cost':
+      return [
+        vatIsCost
+          ? 'Products at what PowerBody charge us, including the VAT we cannot reclaim while we are unregistered.'
+          : 'Products at what PowerBody charge us, ex VAT — their invoices carry no VAT for us (Pricing → Rules → VAT).',
+        'Delivery goes UP, to what PowerBody actually charge to ship the parcel — not our customer rate, which is often free.',
+        'A product with no recorded supplier cost falls back to the modelled cost ratio, so it is an estimate rather than the invoice.',
+      ]
+    case 'unlock':
+      return [
+        'Ordinary prices, ordinary delivery. Nothing comes off.',
+        'It only waives the minimum order, so a single cheap item can be bought on its own.',
+      ]
+  }
 }
 
 const STATE_TONE: Record<FounderCodeState, 'positive' | 'neutral' | 'critical'> = {
@@ -154,6 +169,18 @@ export function FounderCodes() {
     }
   }
 
+  /**
+   * Whether the cost-price code adds PowerBody's VAT, read from the runtime
+   * config that `PortalSync` keeps in step with the hub's saved pricing rules.
+   *
+   * Read after mount rather than during render: the server's copy of those
+   * rules and the browser's can differ until `PortalSync` lands, and a sentence
+   * that differs between the two is a hydration error. Re-read when the codes
+   * arrive and on the minute tick, by which time the sync has landed.
+   */
+  const [vatIsCost, setVatIsCost] = useState(() => supplierVatIsCost(PRICING_CONFIG))
+  useEffect(() => { setVatIsCost(supplierVatIsCost(getPricingConfig())) }, [codes, now])
+
   const live = (codes ?? []).filter((c) => c.state === 'live')
   const past = (codes ?? []).filter((c) => c.state !== 'live')
 
@@ -191,7 +218,7 @@ export function FounderCodes() {
                   {FOUNDER_CODE_LABELS[kind].title}
                 </h3>
                 <ul style={{ display: 'grid', gap: 'var(--space-1)', margin: 0, padding: 0, listStyle: 'none' }}>
-                  {DETAIL[kind].map((line) => (
+                  {detailFor(kind, vatIsCost).map((line) => (
                     <li
                       key={line}
                       style={{

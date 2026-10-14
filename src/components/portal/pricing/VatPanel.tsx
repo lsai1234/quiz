@@ -23,8 +23,12 @@ interface Payload {
  * is the part that needs care — the input VAT we're currently eating is a big
  * visible number that makes registering look attractive, and it is a trap. Both
  * sides are shown together so the net answer is unavoidable.
+ *
+ * Unless there is no input VAT: with `vat.supplierChargesVat` off PowerBody's
+ * invoices carry none, so there is nothing to claim back and the panel says that
+ * in words rather than showing a "We'd claim back £0" card beside the real one.
  */
-export function VatPanel({ registered }: { registered: boolean }) {
+export function VatPanel({ registered, supplierChargesVat }: { registered: boolean; supplierChargesVat: boolean }) {
   const [data, setData] = useState<Payload | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,8 +37,8 @@ export function VatPanel({ registered }: { registered: boolean }) {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError('Could not load the VAT position.'))
-    // Re-read when the registered toggle flips, so the panel matches the rules.
-  }, [registered])
+    // Re-read when either VAT toggle flips, so the panel matches the rules.
+  }, [registered, supplierChargesVat])
 
   if (!data) return <p className="text-sm text-[var(--ink-3)]">{error ?? 'Loading…'}</p>
 
@@ -42,6 +46,10 @@ export function VatPanel({ registered }: { registered: boolean }) {
   const tone = TONE[p.verdict.tone]
   const risePct = Math.round((p.repriceFactor - 1) * 1000) / 10
   const barPct = Math.min(100, p.pctOfThreshold * 100)
+  // Whether there is any input VAT to set against the output VAT. Read from the
+  // position rather than the prop so the words and the figures always describe
+  // the same config.
+  const reclaims = p.supplierChargesVat
 
   return (
     <div className="space-y-4">
@@ -102,18 +110,21 @@ export function VatPanel({ registered }: { registered: boolean }) {
           What registering is worth
         </p>
         <p className="text-[11px] text-[var(--ink-3)] mb-3 leading-snug">
-          Both sides, because one on its own misleads. Annualised at the current run rate, holding shelf prices where
-          they are.
+          {reclaims
+            ? 'Both sides, because one on its own misleads. Annualised at the current run rate, holding shelf prices where they are.'
+            : 'PowerBody don’t charge us VAT, so there is nothing to claim back — only what we’d hand over. Annualised at the current run rate, holding shelf prices where they are.'}
         </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="rounded-xl p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
-            <p className="text-[10px] uppercase font-bold text-[var(--ink-3)]">We&apos;d claim back</p>
-            <p className="text-xl font-black" style={{ color: 'var(--tone-positive)', fontFamily: 'var(--font-display)' }}>{money(p.inputVatLost)}</p>
-            <p className="text-[10px] text-[var(--ink-3)] leading-snug">
-              VAT PowerBody charge us on goods and delivery that we currently can&apos;t reclaim.
-            </p>
-          </div>
+        <div className={`grid ${reclaims ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-3`}>
+          {reclaims && (
+            <div className="rounded-xl p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
+              <p className="text-[10px] uppercase font-bold text-[var(--ink-3)]">We&apos;d claim back</p>
+              <p className="text-xl font-black" style={{ color: 'var(--tone-positive)', fontFamily: 'var(--font-display)' }}>{money(p.inputVatLost)}</p>
+              <p className="text-[10px] text-[var(--ink-3)] leading-snug">
+                VAT PowerBody charge us on goods and delivery that we currently can&apos;t reclaim.
+              </p>
+            </div>
+          )}
           <div className="rounded-xl p-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
             <p className="text-[10px] uppercase font-bold text-[var(--ink-3)]">We&apos;d hand over</p>
             <p className="text-xl font-black" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>{money(p.outputVatOwed)}</p>
@@ -132,12 +143,25 @@ export function VatPanel({ registered }: { registered: boolean }) {
               {money(p.netCostOfRegistering)}<span className="text-xs">/yr</span>
             </p>
           </div>
-          <p className="text-[10px] text-[var(--ink-3)] mt-1 leading-relaxed">
-            {money2(Math.abs(p.costPerOrder))} per order. The reason the two numbers don&apos;t cancel is that VAT is
-            charged on the whole shelf price but reclaimed only on costs — so registering costs you the VAT rate times
-            your <em>margin</em>. Claiming back input VAT only wins if your costs exceed your net revenue, i.e. if
-            you&apos;re losing money anyway.
-          </p>
+          {reclaims ? (
+            <p className="text-[10px] text-[var(--ink-3)] mt-1 leading-relaxed">
+              {money2(Math.abs(p.costPerOrder))} per order. The reason the two numbers don&apos;t cancel is that VAT is
+              charged on the whole shelf price but reclaimed only on costs — so registering costs you the VAT rate times
+              your <em>margin</em>. Claiming back input VAT only wins if your costs exceed your net revenue, i.e. if
+              you&apos;re losing money anyway.
+            </p>
+          ) : (
+            <p className="text-[10px] text-[var(--ink-3)] mt-1 leading-relaxed">
+              {money2(Math.abs(p.costPerOrder))} per order. With no VAT on our costs there is nothing to set against the
+              VAT on sales, so registering would cost all of it.
+              {!p.registered && (
+                <>
+                  {' '}If PowerBody&apos;s invoices do carry VAT, switch on &ldquo;PowerBody charge us VAT&rdquo; above and
+                  this becomes the smaller, two-sided figure.
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         {risePct > 0 && (

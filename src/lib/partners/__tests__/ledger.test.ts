@@ -15,7 +15,7 @@ import {
   summariseBalance,
 } from '@/lib/partners/ledger'
 import * as repo from '@/lib/partners/repo'
-import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { PRICING_CONFIG, resetPricingOverrides, setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 import { createOrderFromCheckout } from '@/lib/orders/service'
 import { refundOrder } from '@/lib/orders/service'
 import type { Order } from '@/lib/orders/types'
@@ -128,16 +128,23 @@ describe('accruing on a paid order', () => {
   })
 
   it('earns nothing on an order that was already losing money', async () => {
-    const partner = await createPartner({ email: 'thin@example.com', name: 'Thin Person' })
-    const order = await createOrderFromCheckout({
-      channel: 'shop',
-      status: 'paid',
-      lines: [{ sku: 's', productId: 'p', title: 'Loss', quantity: 1, unitPrice: 20, supplierCost: 15 }],
-      partnerCode: partner.codes[0].code,
-    })
-    const result = await accrueForOrder(order, {})
-    expect(result.commission).toBeNull()
-    expect(result.reason).toMatch(/nothing to share/)
+    // £20 at a £15 cost loses money once PowerBody's VAT is an irrecoverable
+    // cost — the treatment pinned here, since `supplierChargesVat` ships off.
+    setPricingOverrides({ vat: { supplierChargesVat: true } })
+    try {
+      const partner = await createPartner({ email: 'thin@example.com', name: 'Thin Person' })
+      const order = await createOrderFromCheckout({
+        channel: 'shop',
+        status: 'paid',
+        lines: [{ sku: 's', productId: 'p', title: 'Loss', quantity: 1, unitPrice: 20, supplierCost: 15 }],
+        partnerCode: partner.codes[0].code,
+      })
+      const result = await accrueForOrder(order, {})
+      expect(result.commission).toBeNull()
+      expect(result.reason).toMatch(/nothing to share/)
+    } finally {
+      resetPricingOverrides()
+    }
   })
 })
 

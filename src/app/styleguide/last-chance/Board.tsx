@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LastChanceView, type LastChanceViewProps } from '@/components/stack-review/LastChanceView'
+import { LastChanceView, type LastChanceDeal, type LastChanceViewProps } from '@/components/stack-review/LastChanceView'
 
 /**
  * Every state of the last-chance card, each in its own phone-width frame, so
@@ -11,21 +11,39 @@ import { LastChanceView, type LastChanceViewProps } from '@/components/stack-rev
 
 const noop = () => {}
 
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+/** A deal's figures from its levers, the way `quoteOffer` derives them. */
+function deal(listPrice: number, pct: number, standardDelivery: number, deliveryCharge: number, deliveryDeal: LastChanceDeal['deliveryDeal']): LastChanceDeal {
+  const offerPrice = r2(listPrice * (1 - pct / 100))
+  const normalTotal = r2(listPrice + standardDelivery)
+  const total = r2(offerPrice + deliveryCharge)
+  return {
+    listPrice,
+    offerPrice,
+    discountPct: pct,
+    saving: r2(listPrice - offerPrice),
+    standardDelivery,
+    deliveryCharge,
+    deliveryDeal,
+    deliverySaving: r2(standardDelivery - deliveryCharge),
+    normalTotal,
+    total,
+    totalSaving: r2(normalTotal - total),
+  }
+}
+
 const BASE: LastChanceViewProps = {
   title: 'CHRGD Pre-Workout',
   role: 'Energy / Pre-Workout',
   imageUrl: null,
   slotType: 'energy',
-  goalLine: 'You told us your top goal is “Energy”. Of the 4 products in your stack, this is the one built around it.',
+  goalLine: 'You told us your top goal is “More energy”. Of the 4 products in your stack, this is the one built around it.',
   claim: null,
   servings: 30,
   packMonths: 1.5,
-  listPrice: 29.99,
-  offerPrice: 25.49,
-  discountPct: 15,
-  saving: 4.5,
-  deliveryCharge: 4.95,
-  total: 30.44,
+  deal: deal(29.99, 15, 4.95, 0, 'free'),
+  remoteSurcharge: 2.95,
   status: 'idle',
   message: null,
   phase: 'static',
@@ -34,15 +52,17 @@ const BASE: LastChanceViewProps = {
 }
 
 const STATES: Array<[string, Partial<LastChanceViewProps>]> = [
-  ['discounted', {}],
-  ['no-discount', { offerPrice: 29.99, discountPct: 0, saving: 0, total: 34.94 }],
-  ['with-claim', { title: 'CHRGD Whey Protein', role: 'Protein', slotType: 'protein', goalLine: 'You told us your top goal is “Build muscle”. Of the 5 products in your stack, this is the one built around it. It’s the core of your stack.', claim: 'Protein contributes to a growth in muscle mass', listPrice: 34.99, offerPrice: 31.49, discountPct: 10, saving: 3.5, total: 36.44, packMonths: 1 }],
-  ['free-delivery', { title: 'CHRGD Mass Builder', role: 'Protein', slotType: 'protein', listPrice: 109.99, offerPrice: 93.49, saving: 16.5, deliveryCharge: 0, total: 93.49, packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
+  ['free-delivery-and-percent', {}],
+  ['free-delivery-only', { deal: deal(29.99, 0, 4.95, 0, 'free') }],
+  ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: 'Strength', slotType: 'strength', deal: deal(19.99, 0, 4.95, 1.49, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
+  ['with-claim', { title: 'CHRGD Whey Protein', role: 'Protein', slotType: 'protein', goalLine: 'You told us your top goal is “Build muscle”. Of the 5 products in your stack, this is the one built around it. It’s the core of your stack.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 5, 4.95, 0, 'free'), packMonths: 1 }],
+  ['delivery-already-free', { title: 'CHRGD Mass Builder', role: 'Protein', slotType: 'protein', deal: deal(109.99, 24, 0, 0, 'included'), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
   ['long-name-no-facts', { title: 'Collagen Hydrolysed Type I & III, Unflavoured — 300g', role: 'Recovery', slotType: 'recovery', packMonths: null, servings: null, goalLine: 'Picked for your goal “Recovery”.' }],
   ['loading', { status: 'loading' }],
   ['redirecting', { status: 'redirecting' }],
+  ['blocked', { blocked: true }],
   ['error', { status: 'error', message: 'Unable to reach the store. Check your connection and try again.' }],
-  ['price-changed', { status: 'changed', message: 'The price has changed to £26.99.', offerPrice: 26.99, saving: 3, total: 31.94, discountPct: 10 }],
+  ['deal-changed', { status: 'changed', message: 'This deal has changed: it’s now £26.99 delivered.', deal: deal(29.99, 10, 4.95, 0, 'free') }],
 ]
 
 export function Board() {

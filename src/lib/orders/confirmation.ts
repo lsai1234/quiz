@@ -171,6 +171,14 @@ function toLines(order: Order): ConfirmationLine[] {
   }))
 }
 
+/** What the last-chance deal took off the product (£), by the snapshot taken at checkout. */
+function lastChanceDiscount(order: Order): number {
+  const lc = order.lastChance
+  if (!lc) return 0
+  const units = order.lines.reduce((n, l) => n + l.quantity, 0)
+  return units === 1 ? Math.max(0, Math.round((lc.listPrice - lc.offerPrice) * 100) / 100) : 0
+}
+
 /**
  * Present the order exactly as it stands NOW, from the stored snapshot rather
  * than the live catalogue — a product discontinued or re-priced since purchase
@@ -183,8 +191,11 @@ export function toConfirmationOrder(order: Order): ConfirmationOrder {
     emailMasked: maskEmail(order.email),
     currency: order.currency,
     totals: {
-      subtotal: round(order.subtotal),
-      discount: 0,
+      // A last-chance order shows what came off the shelf price, so the
+      // receipt says "Discount" rather than quietly printing a lower subtotal.
+      // subtotal − discount + shipping is still the total either way.
+      subtotal: round(order.subtotal + lastChanceDiscount(order)),
+      discount: round(lastChanceDiscount(order)),
       shipping: round(order.shipping),
       tax: 0,
       total: round(order.total),

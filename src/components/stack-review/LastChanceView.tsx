@@ -5,32 +5,49 @@ import { Button } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import type { OfferQuote } from '@/lib/last-chance/economics'
 import { ProductTile } from './ProductTile'
 
 /**
- * The last-chance offer, drawn — "The one".
+ * The last-chance offer, drawn — a one-time deal on their top pick.
  *
  * Somebody has scrolled past their whole stack, the price, the giveaway and the
- * small print without buying. This is the smaller yes: the single product that
- * will do the most for them, at a price the business can afford, one tap from
- * paying for it.
+ * small print without buying. This is the smaller yes: the one product from it
+ * that fits them best, on a deal worked out for it on this page — free
+ * delivery first, then a percentage off as far as the margin allows — one tap
+ * from paying for it.
  *
  * ── Why it reveals rather than waits behind a button ────────────────────────
  * A "tap to reveal" asks for a tap at the exact point attention is lowest, and
  * a tap spent revealing is a tap not spent buying. So the card arrives on its
- * own as it scrolls in — the ring charges, the product lifts into its light,
- * the price drops from list to offer — and the one tap left is the one that
- * buys. Reduced motion gets the finished card.
+ * own as it scrolls in: the ring charges, the product lifts into its light,
+ * the deal assembles line by line — postage struck through, the percentage
+ * off — and the delivered price drops to what they will pay. About a second
+ * and a half, once; then it is still. Reduced motion gets the finished card.
  *
- * ── What it may say (docs/ORDER_CONFIRMATION_SPEC.md §5) ─────────────────────
+ * ── "One-time", honestly ────────────────────────────────────────────────────
+ * Everything it claims about the deal is true by construction: it is worked
+ * out here, for this stack; it is not in the shop; no code unlocks it; and it
+ * is one product, once. No countdown and no "ends tonight" — there is no
+ * deadline to state, so none is invented.
+ *
+ * ── What it may say about the product (docs/ORDER_CONFIRMATION_SPEC.md §5) ──
  * Why it is theirs, in terms of the goal they gave us (OC-C-004); one register
  * claim verbatim, or no "what it does" row at all (OC-C-001/002); and facts —
  * servings, price per serving, how long a pack lasts. Never a timeframe for
- * results (OC-C-003), never a percentage of "match", never an outcome.
+ * results (OC-C-003), never an outcome.
  *
  * Purely presentational — `LastChance` owns choosing, pricing and buying — so
  * `/styleguide/last-chance` can show every state without a quiz or a network.
  */
+
+/** The figures the card draws, straight off the quote. */
+export type LastChanceDeal = Pick<
+  OfferQuote,
+  | 'listPrice' | 'offerPrice' | 'discountPct' | 'saving'
+  | 'standardDelivery' | 'deliveryCharge' | 'deliveryDeal' | 'deliverySaving'
+  | 'normalTotal' | 'total' | 'totalSaving'
+>
 
 export interface LastChanceViewProps {
   title: string
@@ -45,12 +62,9 @@ export interface LastChanceViewProps {
   /** Servings in the pack, when known. */
   servings: number | null
   packMonths: number | null
-  listPrice: number
-  offerPrice: number
-  discountPct: number
-  saving: number
-  deliveryCharge: number
-  total: number
+  deal: LastChanceDeal
+  /** What Highlands, Islands and Isle of Man addresses pay on top (£). 0 hides the line. */
+  remoteSurcharge: number
   status: 'idle' | 'loading' | 'redirecting' | 'error' | 'changed'
   message?: string | null
   /** The stack's own checkout is under way — one checkout at a time. */
@@ -72,17 +86,22 @@ export interface LastChanceViewProps {
 const ACCENT = 'var(--color-accent)'
 const INK = 'var(--color-text)'
 const INK_2 = 'var(--color-text-2)'
+const GOOD = 'var(--tone-positive)'
 const MONO = 'var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace'
 const DISPLAY = 'var(--font-display)'
 
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E\")"
 
+// The arrival, in ms from the moment it scrolls in. Short on purpose: the
+// whole deal is on screen and settled in about a second and a half.
+const T = { row1: 640, strike1: 820, row2: 900, strike2: 1080, total: 1150, count: 650 }
+
 function mono(size: number, color: string, tracking = 0.18): CSSProperties {
   return { fontFamily: MONO, fontSize: size, letterSpacing: `${tracking}em`, textTransform: 'uppercase', color, lineHeight: 1.3 }
 }
 
-const capital = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s)
+const d = (ms: number) => ({ ['--d' as string]: `${ms}ms` }) as CSSProperties
 
 /** "about two months" — how a person would say a pack's length. */
 function packLabel(months: number): string {
@@ -94,8 +113,8 @@ function packLabel(months: number): string {
   return `about ${word} months`
 }
 
-/** The price falling from list to offer as the card arrives. */
-function useCountDown(from: number, to: number, animated: boolean, go: boolean, ms = 900): number {
+/** The delivered price falling from what it would have cost to what it costs. */
+function useCountDown(from: number, to: number, animated: boolean, go: boolean, delay: number, ms: number): number {
   const reduced = useReducedMotion()
   const [value, setValue] = useState(animated ? from : to)
   useEffect(() => {
@@ -108,23 +127,26 @@ function useCountDown(from: number, to: number, animated: boolean, go: boolean, 
       return
     }
     let frame = 0
-    const start = performance.now()
+    let start = 0
     const tick = (t: number) => {
+      if (!start) start = t
       const k = Math.min(1, (t - start) / ms)
       // Ease out: quick at first, settling onto the number.
-      const eased = 1 - Math.pow(1 - k, 3)
-      setValue(from + (to - from) * eased)
+      setValue(from + (to - from) * (1 - Math.pow(1 - k, 3)))
       if (k < 1) frame = requestAnimationFrame(tick)
     }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [from, to, animated, go, ms, reduced])
+    const timer = window.setTimeout(() => (frame = requestAnimationFrame(tick)), delay)
+    return () => {
+      window.clearTimeout(timer)
+      cancelAnimationFrame(frame)
+    }
+  }, [from, to, animated, go, delay, ms, reduced])
   return value
 }
 
-function Impact({ icon, label, children, delay }: { icon: IconName; label: string; children: ReactNode; delay: number }) {
+function Fact({ icon, label, children, delay }: { icon: IconName; label: string; children: ReactNode; delay: number }) {
   return (
-    <li className="lc-rise flex items-start gap-3" style={{ ['--d' as string]: `${delay}ms` }}>
+    <li className="lc-rise flex items-start gap-3" style={d(delay)}>
       <span
         aria-hidden
         className="flex shrink-0 items-center justify-center rounded-xl"
@@ -146,17 +168,87 @@ function Impact({ icon, label, children, delay }: { icon: IconName; label: strin
   )
 }
 
+/** A figure that is no longer the price: struck through as the deal lands on it. */
+function Was({ children, delay }: { children: ReactNode; delay: number }) {
+  return (
+    <span aria-hidden className="lc-strike relative inline-block tabular-nums" style={{ ...d(delay), color: INK_2, fontSize: 13 }}>
+      {children}
+    </span>
+  )
+}
+
+/** One line of the deal: what it is on the left, before → after on the right. */
+function DealLine({ icon, label, sub, was, now, srText, delay, strikeAt }: {
+  icon: IconName
+  label: string
+  sub?: string
+  was?: string | null
+  now: string
+  srText: string
+  delay: number
+  strikeAt: number
+}) {
+  return (
+    <li className="lc-rise flex items-center gap-3" style={d(delay)}>
+      <span aria-hidden className="flex shrink-0 items-center justify-center" style={{ width: 22, color: GOOD }}>
+        <Icon name={icon} size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold" style={{ fontSize: 14, color: INK, lineHeight: 1.3 }}>{label}</span>
+        {sub && <span className="block" style={{ fontSize: 12, color: INK_2, lineHeight: 1.35 }}>{sub}</span>}
+      </span>
+      <span className="flex shrink-0 items-baseline gap-2">
+        {was && <Was delay={strikeAt}>{was}</Was>}
+        <span aria-hidden className="lc-pop font-bold tabular-nums" style={{ ...d(strikeAt + 140), fontSize: 15, color: was ? GOOD : INK }}>
+          {now}
+        </span>
+        <span className="sr-only">{srText}</span>
+      </span>
+    </li>
+  )
+}
+
 export function LastChanceView(p: LastChanceViewProps) {
   const phase = p.phase ?? 'static'
-  // Counts from the list price once it arrives; holds the list price while it waits.
-  const price = useCountDown(p.listPrice, p.offerPrice, phase !== 'static', phase === 'go')
-  const discounted = p.discountPct > 0 && p.saving > 0
-  const busy = p.status === 'loading' || p.status === 'redirecting'
+  const { deal } = p
   const titleId = useId()
+  // Counts from the undiscounted delivered price once it arrives; holds it while it waits.
+  const total = useCountDown(deal.normalTotal, deal.total, phase !== 'static', phase === 'go', T.total, T.count)
+  const busy = p.status === 'loading' || p.status === 'redirecting'
+
+  const freeDelivery = deal.deliveryDeal === 'free' || deal.deliveryDeal === 'included'
+  const pct = deal.discountPct > 0 ? deal.discountPct : 0
+  const ribbon = freeDelivery
+    ? 'Free delivery'
+    : deal.deliveryDeal === 'reduced'
+      ? `Delivery just ${formatGBP(deal.deliveryCharge)}`
+      : null
 
   // The ring's circumference, for the stroke that charges round it.
   const R = 92
   const C = 2 * Math.PI * R
+
+  const deliveryLine = (() => {
+    if (deal.deliveryDeal === 'included') {
+      return { label: 'Free delivery', sub: 'UK mainland — always free at this price', was: null, now: 'Free', sr: 'Free delivery to the UK mainland.' }
+    }
+    if (deal.deliveryDeal === 'free') {
+      return {
+        label: 'Free delivery',
+        sub: 'UK mainland, on us',
+        was: formatGBP(deal.standardDelivery),
+        now: 'Free',
+        sr: `Free delivery to the UK mainland, instead of ${formatGBP(deal.standardDelivery)}.`,
+      }
+    }
+    return {
+      label: 'Delivery, cut',
+      sub: 'UK mainland',
+      was: formatGBP(deal.standardDelivery),
+      now: formatGBP(deal.deliveryCharge),
+      sr: `Delivery to the UK mainland ${formatGBP(deal.deliveryCharge)}, instead of ${formatGBP(deal.standardDelivery)}.`,
+    }
+  })()
 
   return (
     <section
@@ -166,16 +258,22 @@ export function LastChanceView(p: LastChanceViewProps) {
       style={{ marginTop: 'var(--space-8, 3rem)' }}
     >
       <style>{`
+        .lc-strike::after { content: ''; position: absolute; left: -2px; right: -2px; top: 52%; height: 1.5px;
+          background: currentColor; transform-origin: left center; }
         @media (prefers-reduced-motion: no-preference) {
           /* Laid out but unseen until it scrolls in, so nothing shifts when it does. */
-          .lc-wait .lc-rise, .lc-wait .lc-card, .lc-wait .lc-stamp { opacity: 0; }
+          .lc-wait .lc-rise, .lc-wait .lc-card, .lc-wait .lc-stamp, .lc-wait .lc-ribbon, .lc-wait .lc-pop { opacity: 0; }
           .lc-wait .lc-ring { stroke-dashoffset: ${C.toFixed(1)}; }
-          .lc-anim .lc-rise { animation: lc-rise 640ms cubic-bezier(.22,1,.36,1) both; animation-delay: var(--d, 0ms); }
-          .lc-anim .lc-card { animation: lc-card 820ms cubic-bezier(.22,1,.36,1) both; }
-          .lc-anim .lc-ring { animation: lc-ring 1300ms cubic-bezier(.65,0,.35,1) 200ms both; }
-          .lc-anim .lc-float { animation: lc-float 1100ms cubic-bezier(.22,1,.36,1) 150ms both; }
-          .lc-anim .lc-beam { animation: lc-beam 1800ms cubic-bezier(.22,1,.36,1) both; }
-          .lc-anim .lc-stamp { animation: lc-stamp 520ms cubic-bezier(.22,1,.36,1) 900ms both; }
+          .lc-wait .lc-strike::after { transform: scaleX(0); }
+          .lc-anim .lc-rise { animation: lc-rise 560ms cubic-bezier(.22,1,.36,1) both; animation-delay: var(--d, 0ms); }
+          .lc-anim .lc-card { animation: lc-card 760ms cubic-bezier(.22,1,.36,1) both; }
+          .lc-anim .lc-ring { animation: lc-ring 1200ms cubic-bezier(.65,0,.35,1) 150ms both; }
+          .lc-anim .lc-float { animation: lc-float 1000ms cubic-bezier(.22,1,.36,1) 120ms both; }
+          .lc-anim .lc-beam { animation: lc-beam 1600ms cubic-bezier(.22,1,.36,1) both; }
+          .lc-anim .lc-stamp { animation: lc-stamp 480ms cubic-bezier(.22,1,.36,1) 760ms both; }
+          .lc-anim .lc-ribbon { animation: lc-ribbon 520ms cubic-bezier(.22,1,.36,1) 560ms both; }
+          .lc-anim .lc-strike::after { animation: lc-strike 300ms ease-out both; animation-delay: var(--d, 0ms); }
+          .lc-anim .lc-pop { animation: lc-pop 380ms cubic-bezier(.22,1,.36,1) both; animation-delay: var(--d, 0ms); }
         }
         @keyframes lc-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         @keyframes lc-card { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
@@ -183,18 +281,24 @@ export function LastChanceView(p: LastChanceViewProps) {
         @keyframes lc-float { from { opacity: 0; transform: translateY(18px) rotate(-4deg) scale(.92); } to { opacity: 1; transform: none; } }
         @keyframes lc-beam { from { opacity: 0; transform: rotate(-120deg); } to { opacity: 1; transform: none; } }
         @keyframes lc-stamp { from { opacity: 0; transform: rotate(12deg) scale(1.6); } to { opacity: 1; transform: rotate(12deg) scale(1); } }
+        @keyframes lc-ribbon { from { opacity: 0; transform: translate(-50%, 8px) scale(.9); } to { opacity: 1; transform: translate(-50%, 0); } }
+        @keyframes lc-strike { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes lc-pop { from { opacity: 0; transform: scale(1.35); } to { opacity: 1; transform: none; } }
       `}</style>
 
       {/* ── The lead-in: a beat of copy that reframes the scroll ─────────── */}
-      <div className="lc-rise px-1 text-center" style={{ ['--d' as string]: '0ms' }}>
+      <div className="lc-rise px-1 text-center" style={d(0)}>
         <p style={mono(11, INK_2, 0.22)}>Not ready for the whole stack?</p>
         <h2
           id={titleId}
           className="mx-auto mt-2"
           style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.02em', color: INK, maxWidth: 360 }}
         >
-          If you only get one thing, make it this.
+          Then here’s a one-time deal on your top pick.
         </h2>
+        <p className="mx-auto mt-2.5" style={{ fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 360 }}>
+          Worked out for your stack, just now. It only exists on this page — it isn’t in the shop, and no code unlocks it.
+        </p>
       </div>
 
       {/* ── The card ─────────────────────────────────────────────────────── */}
@@ -215,25 +319,28 @@ export function LastChanceView(p: LastChanceViewProps) {
         <div className="relative flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5" style={mono(11, ACCENT, 0.22)}>
             <Icon name="bolt" size={13} />
-            Your top pick
+            One-time offer
           </span>
           <span style={mono(10.5, INK_2, 0.16)}>{p.role}</span>
         </div>
 
         {/* Hero: the product in its light, the ring charging round it */}
-        <div className="relative mx-auto mt-3 flex items-center justify-center" style={{ width: 220, height: 220 }}>
+        <div className="relative mx-auto mt-3 flex items-center justify-center" style={{ width: 220, height: 236 }}>
           <span
             aria-hidden
             className="lc-beam pointer-events-none absolute"
             style={{
-              inset: -40,
+              top: -40,
+              left: -40,
+              width: 300,
+              height: 300,
               borderRadius: '50%',
               background:
                 'conic-gradient(from 0deg, transparent 0deg, color-mix(in srgb, var(--color-accent) 18%, transparent) 40deg, transparent 90deg, transparent 180deg, color-mix(in srgb, var(--color-accent) 12%, transparent) 220deg, transparent 270deg)',
               filter: 'blur(14px)',
             }}
           />
-          <svg aria-hidden className="absolute inset-0" viewBox="0 0 220 220" width={220} height={220}>
+          <svg aria-hidden className="absolute left-0 top-0" viewBox="0 0 220 220" width={220} height={220}>
             <circle cx="110" cy="110" r={R} fill="none" stroke="color-mix(in srgb, var(--color-text) 10%, transparent)" strokeWidth="2" />
             <circle
               className="lc-ring"
@@ -254,7 +361,7 @@ export function LastChanceView(p: LastChanceViewProps) {
             aria-hidden
             className="absolute"
             style={{
-              bottom: 26,
+              top: 168,
               width: 120,
               height: 18,
               borderRadius: '50%',
@@ -262,7 +369,7 @@ export function LastChanceView(p: LastChanceViewProps) {
               filter: 'blur(4px)',
             }}
           />
-          <span className="lc-float relative block" style={{ width: 132, height: 132 }}>
+          <span className="lc-float absolute block" style={{ top: 44, width: 132, height: 132 }}>
             <ProductTile
               imageUrl={p.imageUrl}
               slot={p.slotType}
@@ -274,7 +381,7 @@ export function LastChanceView(p: LastChanceViewProps) {
             />
           </span>
 
-          {discounted && (
+          {pct > 0 && (
             <span
               aria-hidden
               className="lc-stamp absolute flex flex-col items-center justify-center"
@@ -290,80 +397,124 @@ export function LastChanceView(p: LastChanceViewProps) {
                 transform: 'rotate(12deg)',
               }}
             >
-              <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 20, lineHeight: 1 }}>−{p.discountPct}%</span>
+              <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 20, lineHeight: 1 }}>−{pct}%</span>
               <span style={{ ...mono(10, 'currentColor', 0.14), marginTop: 2 }}>Off</span>
+            </span>
+          )}
+
+          {/* Free delivery leads the deal, so it is said over the product itself. */}
+          {ribbon && (
+            <span
+              aria-hidden
+              className="lc-ribbon absolute inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5"
+              style={{
+                bottom: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'var(--fill-accent, var(--color-accent))',
+                boxShadow: '0 10px 24px -10px color-mix(in srgb, var(--color-accent) 80%, transparent)',
+                ...mono(11.5, 'var(--ink-on-accent, var(--color-bg))', 0.14),
+                fontWeight: 700,
+              }}
+            >
+              <Icon name="truck" size={14} />
+              {ribbon}
             </span>
           )}
         </div>
 
         {/* Name, and why it is theirs */}
-        <div className="relative text-center">
+        <div className="relative mt-4 text-center">
           <h3
             className="lc-rise"
-            style={{ ['--d' as string]: '260ms', fontFamily: DISPLAY, fontSize: 24, fontWeight: 800, lineHeight: 1.12, letterSpacing: '-0.02em', color: INK }}
+            style={{ ...d(220), fontFamily: DISPLAY, fontSize: 24, fontWeight: 800, lineHeight: 1.12, letterSpacing: '-0.02em', color: INK }}
           >
             {p.title}
           </h3>
-          <p
-            className="lc-rise mx-auto mt-2"
-            style={{ ['--d' as string]: '340ms', fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 380 }}
-          >
+          <p className="lc-rise mx-auto mt-2" style={{ ...d(300), fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 380 }}>
             {p.goalLine}
           </p>
         </div>
 
         {/* What it does — register wording or nothing — and what you get. */}
-        <ul className="relative mt-5 grid gap-3.5">
-          {p.claim && (
-            <Impact icon="bolt" label="What it does" delay={420}>{p.claim}.</Impact>
-          )}
-          {(p.servings || p.packMonths !== null) && (
-            <Impact icon="box" label="What you get" delay={500}>
-              {[
-                p.servings ? `${p.servings} servings — ${formatGBP(Math.round((p.offerPrice / p.servings) * 100) / 100)} each` : null,
-                p.packMonths !== null ? `lasts ${packLabel(p.packMonths)} at your usage` : null,
-              ].filter(Boolean).join(', ')}.
-            </Impact>
-          )}
-        </ul>
+        {(p.claim || p.servings || p.packMonths !== null) && (
+          <ul className="relative mt-5 grid gap-3.5">
+            {p.claim && <Fact icon="bolt" label="What it does" delay={380}>{p.claim}.</Fact>}
+            {(p.servings || p.packMonths !== null) && (
+              <Fact icon="box" label="What you get" delay={460}>
+                {[
+                  p.servings ? `${p.servings} servings — ${formatGBP(Math.round((deal.offerPrice / p.servings) * 100) / 100)} each` : null,
+                  p.packMonths !== null ? `lasts ${packLabel(p.packMonths)} at your usage` : null,
+                ].filter(Boolean).join(', ')}.
+              </Fact>
+            )}
+          </ul>
+        )}
 
-        {/* Price, and the one tap */}
+        {/* The deal, assembling — then the one tap */}
         <div
           className="lc-rise relative mt-6 rounded-2xl p-4"
-          style={{
-            ['--d' as string]: '660ms',
-            background: 'color-mix(in srgb, var(--color-bg) 55%, transparent)',
-            border: '1px solid var(--color-border)',
-          }}
+          style={{ ...d(560), background: 'color-mix(in srgb, var(--color-bg) 55%, transparent)', border: '1px solid var(--color-border)' }}
         >
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex items-center justify-between">
+            <span style={mono(10.5, INK_2, 0.18)}>Your deal</span>
+            <span className="inline-flex items-center gap-1" style={mono(10, INK_2, 0.14)}>
+              <Icon name="lock" size={11} />
+              Only on this page
+            </span>
+          </div>
+
+          <ul className="mt-3 grid gap-3">
+            <DealLine
+              icon="truck"
+              label={deliveryLine.label}
+              sub={deliveryLine.sub}
+              was={deliveryLine.was}
+              now={deliveryLine.now}
+              srText={deliveryLine.sr}
+              delay={T.row1}
+              strikeAt={T.strike1}
+            />
+            <DealLine
+              icon={pct > 0 ? 'sparkle' : 'box'}
+              label={pct > 0 ? `${pct}% off` : 'The product'}
+              sub={pct > 0 ? 'Worked out for this order' : undefined}
+              was={pct > 0 ? formatGBP(deal.listPrice) : null}
+              now={formatGBP(deal.offerPrice)}
+              srText={pct > 0 ? `${pct}% off: ${formatGBP(deal.offerPrice)} instead of ${formatGBP(deal.listPrice)}.` : `${formatGBP(deal.offerPrice)}.`}
+              delay={T.row2}
+              strikeAt={T.strike2}
+            />
+          </ul>
+
+          <div className="lc-rise mt-4 flex items-end justify-between gap-3 border-t pt-3.5" style={{ ...d(T.total - 100), borderColor: 'var(--color-border)' }}>
             <div className="min-w-0">
-              {discounted && (
-                <span className="block text-sm line-through tabular-nums" style={{ color: INK_2 }}>{formatGBP(p.listPrice)}</span>
-              )}
+              <span className="block" style={mono(10.5, INK_2, 0.16)}>Delivered for</span>
               <span
                 aria-hidden
-                className="block tabular-nums"
+                className="mt-1 block tabular-nums"
                 style={{ fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', color: INK }}
               >
-                {formatGBP(Math.round(price * 100) / 100)}
+                {formatGBP(Math.round(total * 100) / 100)}
               </span>
               <span className="sr-only">
-                {discounted ? `${formatGBP(p.offerPrice)}, down from ${formatGBP(p.listPrice)}` : formatGBP(p.offerPrice)}
+                {deal.totalSaving > 0
+                  ? `${formatGBP(deal.total)} delivered, down from ${formatGBP(deal.normalTotal)}`
+                  : `${formatGBP(deal.total)} delivered`}
               </span>
             </div>
-            {discounted && (
-              <span
-                className="mb-1 shrink-0 rounded-full px-2.5 py-1 text-xs font-bold tabular-nums"
-                style={{ color: 'var(--tone-positive)', background: 'color-mix(in srgb, var(--tone-positive) 14%, transparent)' }}
-              >
-                You save {formatGBP(p.saving)}
+            {deal.totalSaving > 0 && (
+              <span className="mb-1 flex shrink-0 flex-col items-end gap-1">
+                <Was delay={T.total}>{formatGBP(deal.normalTotal)}</Was>
+                <span
+                  className="rounded-full px-2.5 py-1 text-xs font-bold tabular-nums"
+                  style={{ color: GOOD, background: 'color-mix(in srgb, var(--tone-positive) 14%, transparent)' }}
+                >
+                  You save {formatGBP(deal.totalSaving)}
+                </span>
               </span>
             )}
           </div>
-          <p className="mt-1.5 text-xs" style={{ color: INK_2 }}>
-            {p.deliveryCharge > 0 ? `+ ${formatGBP(p.deliveryCharge)} delivery · ${formatGBP(p.total)} in total` : 'Free delivery'}
-          </p>
 
           <Button
             ref={p.onCtaRef}
@@ -376,7 +527,7 @@ export function LastChanceView(p: LastChanceViewProps) {
             iconRight={busy ? undefined : 'arrow-right'}
             onClick={p.onBuy}
           >
-            {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : `Get it for ${formatGBP(p.offerPrice)}`}
+            {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : `Get it for ${formatGBP(deal.total)}`}
           </Button>
 
           {(p.status === 'error' || p.status === 'changed') && p.message && (
@@ -386,8 +537,14 @@ export function LastChanceView(p: LastChanceViewProps) {
             </p>
           )}
 
-          <p className="mt-3 text-center text-[11.5px]" style={{ color: INK_2 }}>
+          <p className="mt-3 text-center text-[11.5px] leading-snug" style={{ color: INK_2 }}>
             Just this, once — no subscription. Pay on the next screen.
+            {p.remoteSurcharge > 0 && (
+              <>
+                <br />
+                Highlands, Islands &amp; Isle of Man add {formatGBP(p.remoteSurcharge)}.
+              </>
+            )}
           </p>
         </div>
 

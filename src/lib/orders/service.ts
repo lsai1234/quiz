@@ -110,6 +110,8 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     starterPartnerId: input.starterPartnerId ?? null,
     billedAmount: input.billedAmount ?? null,
     subscription: input.subscription ?? null,
+    ...(input.deliveryDue ? { deliveryDue: input.deliveryDue } : {}),
+    ...(input.lastChance ? { lastChance: input.lastChance } : {}),
     events: [
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),

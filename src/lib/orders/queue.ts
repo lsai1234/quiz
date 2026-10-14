@@ -273,7 +273,9 @@ export function buildInFlightList(orders: Order[], now: Date = new Date()): InFl
  */
 function shortfallOn(order: Order, zone: string | null): number | null {
   if (zone !== 'uk-2') return null
-  const due = customerDeliveryCharge(order.subtotal, 'uk-2')
+  // What checkout actually offered up there, where it was recorded; the bands
+  // only for orders from before it was.
+  const due = order.deliveryDue?.['uk-2'] ?? customerDeliveryCharge(order.subtotal, 'uk-2')
   const paid = order.shipping ?? 0
   const short = round(due - paid)
   return short > 0 ? short : null

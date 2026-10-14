@@ -28,7 +28,7 @@
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { blendedCustomerCharge, blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
-import { costFromSupplierPrice, revenueFromShelfPrice, vatRateFor } from './vat'
+import { costFromSupplierPrice, revenueFromShelfPrice, supplierVatIsCost, vatRateFor } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
 const round4 = (n: number) => Math.round(n * 10000) / 10000
@@ -74,6 +74,9 @@ export interface UnitEconomics {
   assumptions: {
     vatRate: number
     vatRegistered: boolean
+    /** Whether PowerBody's invoices carry VAT (`vat.supplierChargesVat`). It is
+     *  a cost only while we are unregistered — see `supplierVatIsCost`. */
+    supplierChargesVat: boolean
     grams: number
     weightKnown: boolean
     costKnown: boolean
@@ -110,6 +113,15 @@ export interface EconomicsInput {
    */
   freeDeliveryBasis?: number
   /**
+   * The MAINLAND delivery charge this order carries, when it is set by a deal
+   * rather than by the bands — 0 when an offer waives postage, or a reduced
+   * figure. The Highlands surcharge still rides on top for the share of orders
+   * that pay it, blended exactly as `blendedCustomerCharge` blends the bands,
+   * because our cost up there never goes away. Ignored when `chargeDelivery`
+   * is false.
+   */
+  customerDelivery?: number
+  /**
    * How many products share the parcel this line ships in.
    *
    * PowerBody charge per parcel on its total wholesale value, so a product in a
@@ -142,7 +154,12 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   const deliveryCharged =
     input.chargeDelivery === false
       ? 0
-      : blendedCustomerCharge(input.freeDeliveryBasis ?? shelfPrice, config)
+      : input.customerDelivery != null
+        ? round(
+            Math.max(0, input.customerDelivery) +
+              Math.min(1, Math.max(0, config.delivery.zone2SharePct)) * config.delivery.zone2Surcharge,
+          )
+        : blendedCustomerCharge(input.freeDeliveryBasis ?? shelfPrice, config)
   const grossRevenue = round(shelfPrice + deliveryCharged)
   const netRevenue = round(
     revenueFromShelfPrice(shelfPrice, vatRate, config) +
@@ -217,24 +234,37 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
     // over the share of orders that pay one. Saying "they pay postage" on a
     // free-delivery order would be the wrong explanation for a real number.
     const basis = input.freeDeliveryBasis ?? shelfPrice
-    const freeOnMainland = customerDeliveryCharge(basis, 'uk-1', config) === 0
+    const freeOnMainland =
+      input.customerDelivery != null ? input.customerDelivery <= 0 : customerDeliveryCharge(basis, 'uk-1', config) === 0
     push(
       'delivery-charged',
       'Delivery charged',
       deliveryCharged,
-      freeOnMainland
+      input.customerDelivery != null && !freeOnMainland
+        ? `£${input.customerDelivery.toFixed(2)} on the mainland, set by the offer rather than the bands — blended across zones.`
+        : freeOnMainland
         ? `Free over £${config.freeDeliveryThreshold}, so this is the Highlands surcharge averaged over the ${Math.round(config.delivery.zone2SharePct * 100)}% of orders that pay it.`
         : `Under the £${config.freeDeliveryThreshold} free-delivery threshold, so they pay postage — blended across zones.`,
     )
   }
+  // Whether PowerBody's VAT is in the goods line decides what both of these
+  // say: with `supplierChargesVat` off there is no VAT on our costs to mention,
+  // and saying "which we cannot reclaim" would explain a number that isn't there.
+  const supplierVat = supplierVatIsCost(config)
   push('vat', config.vat.registered ? 'Less VAT' : 'No VAT charged', -vat,
     config.vat.registered
       ? `${Math.round(vatRate * 1000) / 10}% of the price is HMRC's, not ours.`
-      : 'Not VAT-registered, so nothing is charged — and nothing can be reclaimed on costs.')
+      : supplierVat
+        ? 'Not VAT-registered, so nothing is charged — and nothing can be reclaimed on costs.'
+        : 'Not VAT-registered, so nothing is charged.')
   push('goods', 'Less what PowerBody charge for the goods', -productCost,
     config.vat.registered
-      ? 'Their wholesale price, ex VAT — we reclaim the VAT they charge us.'
-      : 'Their wholesale price plus VAT, which we cannot reclaim.',
+      ? config.vat.supplierChargesVat
+        ? 'Their wholesale price, ex VAT — we reclaim the VAT they charge us.'
+        : 'Their wholesale price, ex VAT — any VAT they charge us is reclaimed.'
+      : supplierVat
+        ? 'Their wholesale price plus VAT, which we cannot reclaim.'
+        : 'Their wholesale price — their invoices carry no VAT for us.',
     !costKnown)
   push('delivery-cost', 'Less what PowerBody charge to ship it', -deliveryCost, deliveryNote(), !weightKnown)
   push('fees', 'Less card fees', -paymentFee,
@@ -259,6 +289,7 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
     assumptions: {
       vatRate,
       vatRegistered: config.vat.registered,
+      supplierChargesVat: config.vat.supplierChargesVat,
       grams,
       weightKnown,
       costKnown,
@@ -306,7 +337,8 @@ export function priceForMargin(
   const costKnown = input.supplierCost != null
   const netDivisor = config.vat.registered ? 1 + vatRate : 1
   const stdDivisor = config.vat.registered ? 1 + config.vat.standardRate : 1
-  const costMultiplier = config.vat.registered ? 1 : 1 + config.vat.standardRate
+  // In step with `costFromSupplierPrice`, which grosses up by the same factor.
+  const costMultiplier = supplierVatIsCost(config) ? 1 + config.vat.standardRate : 1
 
   const perPound =
     (1 - m) / netDivisor -
