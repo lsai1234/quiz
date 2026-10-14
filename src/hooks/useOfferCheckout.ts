@@ -29,7 +29,13 @@ export function useOfferCheckout() {
   // A ref, not state: a double tap must not slip between two renders.
   const inFlight = useRef(false)
 
-  const buy = useCallback(async (offer: { variantId: string; productTitle: string; quote: OfferQuote }) => {
+  const buy = useCallback(async (offer: {
+    variantId: string
+    productTitle: string
+    quote: OfferQuote
+    /** The register claim shown on the card, kept with the order (OC-C-006). */
+    claimId?: string | null
+  }) => {
     if (inFlight.current) return
     inFlight.current = true
     setState({ status: 'loading' })
@@ -50,6 +56,7 @@ export function useOfferCheckout() {
             attributes: [
               { key: 'source', value: LAST_CHANCE_SOURCE },
               { key: 'product', value: offer.productTitle },
+              ...(offer.claimId ? [{ key: 'claim', value: offer.claimId }] : []),
             ],
           }],
           lastChance: { variantId: offer.variantId, expectedPrice: offer.quote.offerPrice },

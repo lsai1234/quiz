@@ -12,48 +12,70 @@ Review every state at `/styleguide/last-chance`.
 ## What the customer sees
 
 > **NOT READY FOR THE WHOLE STACK?**
-> **Start with the one that matters most.**
+> **If you only get one thing, make it this.**
 
-A spotlight card that arrives as it scrolls into view:
+A spotlight card that arrives once as it scrolls into view, then stays still:
 
-- **Your #1 pick** — their best-fitting product, floating in a beam of light
-  with a ring that charges round it, and a **−15% OFF** stamp pressed on.
-- **Why it's the one** — the engine's own reason it is in *their* stack.
-- **What it does** — the approved claim wording for that kind of product.
-- **When you'll notice it** — "right away", "within a few weeks", or, for
-  things you never consciously feel (protein, vitamins), how it works instead.
-- **How long it lasts** — "one pack lasts about six weeks at your usage".
+- **Your top pick**: the product from their stack that fits them best, lifting
+  into a beam of light while a ring charges round it, with a **−10% OFF** stamp
+  pressed on.
+- **Why it's theirs**: in terms of the goal they gave us, e.g. *You told us
+  your top goal is "Build muscle". Of the 3 products in your stack, this is
+  the one built around it. It's the core of your stack.*
+- **What it does**: one claim from the GB register, verbatim
+  (`lib/consult/claims.ts`), e.g. *Protein contributes to a growth in muscle
+  mass.* Kinds of product with no authorised claim (pre-workouts, probiotics,
+  greens, collagen, …) get no "what it does" row at all.
+- **What you get**: facts only. *30 servings, £1.11 each, lasts about a month
+  at your usage.* Shown only when the servings are actually recorded.
 - **The price falls** from list to offer as it arrives, with delivery and the
-  all-in total stated plainly, and one button: **Get it for £25.49 →**.
-- "Just this, once — no subscription. Pay on the next screen." and a way back
+  all-in total stated plainly, and one button: **Get it for £33.29 →**.
+- "Just this, once. No subscription. Pay on the next screen." and a way back
   to the full stack.
+
+**What it never says** (`docs/ORDER_CONFIRMATION_SPEC.md` §5): no timeframes
+for results, no outcomes, no "% match", nothing generated at runtime. The first
+draft had a "When you'll notice it" row; it was dropped because a timeframe
+next to a sale breaks OC-C-003. The claim id rides on the order line
+(`claim` attribute), per OC-C-006.
 
 **Reveal or straight to buy?** Both, without a gate: it reveals itself on
 scroll, and the one remaining tap buys. A "tap to reveal" button would spend a
-tap at the point attention is lowest. Reduced motion gets the finished card.
+tap at the point attention is lowest. Nothing loops, and reduced motion gets
+the finished card.
 
-**Seamless:** one-off orders are guest checkout — no account, no consent gate.
-The tap goes straight to Stripe's payment page (in mock mode, straight to the
-order confirmation).
+**Seamless:** one-off orders are guest checkout, so there is no account and no
+consent gate. The tap goes straight to Stripe's payment page (in mock mode,
+straight to the order confirmation). While the card's button is on screen, the
+page's sticky "Checkout" bar steps aside, so there are never two buy buttons.
+
+**When it doesn't show:** during a claim, once any code is applied (a
+founder's, a partner's referral or the day's code; that is already this
+visit's deal, and showing a second price would only confuse), for a stack of
+one product, or when nothing in the stack can be sold alone at a profit.
 
 ---
 
 ## Which product
 
-`lib/last-chance/pick.ts`. Every product in the stack is scored on:
+`lib/last-chance/pick.ts`. Each product in the stack is scored on:
 
 | Signal | Weight |
 |---|---|
-| The engine's fit for this person (`confidenceScore`, 0–100) | as is |
+| Fit for this person, re-scored fresh with the engine's own `scoreProduct` (0–100) | as is |
 | The stack can't do without it (`required`) | +15 |
-| You'll *notice* it — immediate / few weeks / couple of months / never felt | +12 / +8 / +3 / 0 |
-| Founders' priority (`recommendationPriority`) and Top 25 rank | up to +10 each |
+| It serves the goal they said matters most | +10 |
+| There is register wording to say what it does | +5 |
 
-…but only products that can be **sold on their own at a profit** are eligible:
-in stock, not a subscription-only refill, and passing the economics below. A
-cheap product whose parcel costs more than it makes is skipped, not discounted
-harder. If nothing passes, the section doesn't render. A stack of one product
-gets no offer.
+Founders' priority and Top 25 rank are already inside `scoreProduct`, so they
+are not added twice.
+
+Only products that can be **sold on their own at a profit** are eligible: in
+stock, not an accessory, not a subscription-only refill, not ruled out for
+this person by a hard gate, and passing the economics below. A product that
+can carry a discount beats one that can't, because the section is an offer. A
+full-price product is shown only when none can. A cheap product whose parcel
+costs more than it makes is skipped, not discounted harder.
 
 ---
 
@@ -98,7 +120,7 @@ Further guards:
   offer replaces it (the deeper wins), never stacks.
 
 The floor (`OFFER_FLOOR`) and the ladder (`OFFER_LADDER`) are two constants in
-`lib/last-chance/economics.ts` — easy to tune. The trade-off to decide: the
+`lib/last-chance/economics.ts`, so they're easy to tune. The trade-off to decide: the
 offer gives away margin to win a sale that otherwise doesn't happen (e.g. a
 £39.99 product keeps £4.12 at 20% off instead of £12.00 at full price).
 
@@ -116,10 +138,10 @@ and bills that.
   refused, not discounted.
 - **No codes on offer orders**, typed or referred: a code could replace the
   checked price with an unchecked one, and a partner referral would add up to
-  15% commission the floor didn't count. *(Decision for the founders: this
-  means a referred customer's single-product offer purchase isn't credited to
-  their partner. The partner keeps the credit for the stack they referred
-  somebody to. Reversible — see `wantsOffer` in `/api/cart`.)*
+  15% commission the floor didn't count. In practice a referred visitor never
+  sees the offer: their partner's code is applied to the stack automatically,
+  and the offer steps aside whenever a code is applied. *(Reversible: see
+  `wantsOffer` in `/api/cart`.)*
 - The order's audit trail records it: `last-chance offer: 15% off CHRGD
   Pre-Workout (list £29.99)`.
 

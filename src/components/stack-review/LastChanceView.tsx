@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { Button } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from './ProductTile'
 
@@ -21,11 +22,11 @@ import { ProductTile } from './ProductTile'
  * the price drops from list to offer — and the one tap left is the one that
  * buys. Reduced motion gets the finished card.
  *
- * ── What it may say ─────────────────────────────────────────────────────────
- * Only what is already true and allowed: the engine's own reason for choosing
- * it, the approved claim wording for its kind of product
- * (`APPROVED_CLAIMS`), when its effect is typically noticeable, and how long a
- * pack lasts at their usage. No percentages of "match", no outcomes promised.
+ * ── What it may say (docs/ORDER_CONFIRMATION_SPEC.md §5) ─────────────────────
+ * Why it is theirs, in terms of the goal they gave us (OC-C-004); one register
+ * claim verbatim, or no "what it does" row at all (OC-C-001/002); and facts —
+ * servings, price per serving, how long a pack lasts. Never a timeframe for
+ * results (OC-C-003), never a percentage of "match", never an outcome.
  *
  * Purely presentational — `LastChance` owns choosing, pricing and buying — so
  * `/styleguide/last-chance` can show every state without a quiz or a network.
@@ -37,18 +38,12 @@ export interface LastChanceViewProps {
   role: string
   imageUrl: string | null
   slotType: string
-  /** The engine's reason this is in their stack. */
-  reason: string
-  /** Approved claim wording, at most two. */
-  claims: string[]
-  /** "within a few weeks" */
-  noticeable: string
-  /**
-   * The kind of effect. `none` — protein, vitamins — is never consciously felt,
-   * so "when you'll notice it: quietly in the background" would be the wrong
-   * question answered honestly. Those say how they work instead.
-   */
-  onset?: 'immediate' | 'short' | 'long' | 'none'
+  /** Why it is theirs, from the goals they gave us. */
+  goalLine: string
+  /** One GB-register claim, verbatim — or null, and the row is not shown. */
+  claim: string | null
+  /** Servings in the pack, when known. */
+  servings: number | null
   packMonths: number | null
   listPrice: number
   offerPrice: number
@@ -58,6 +53,8 @@ export interface LastChanceViewProps {
   total: number
   status: 'idle' | 'loading' | 'redirecting' | 'error' | 'changed'
   message?: string | null
+  /** The stack's own checkout is under way — one checkout at a time. */
+  blocked?: boolean
   /**
    * `wait` — laid out but not yet shown, until it scrolls into view;
    * `go` — arriving; `static` — the finished card with no motion (the lab).
@@ -99,9 +96,9 @@ function packLabel(months: number): string {
 
 /** The price falling from list to offer as the card arrives. */
 function useCountDown(from: number, to: number, animated: boolean, go: boolean, ms = 900): number {
+  const reduced = useReducedMotion()
   const [value, setValue] = useState(animated ? from : to)
   useEffect(() => {
-    const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     if (!animated || reduced || from === to) {
       setValue(to)
       return
@@ -121,7 +118,7 @@ function useCountDown(from: number, to: number, animated: boolean, go: boolean, 
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [from, to, animated, go, ms])
+  }, [from, to, animated, go, ms, reduced])
   return value
 }
 
@@ -155,6 +152,7 @@ export function LastChanceView(p: LastChanceViewProps) {
   const price = useCountDown(p.listPrice, p.offerPrice, phase !== 'static', phase === 'go')
   const discounted = p.discountPct > 0 && p.saving > 0
   const busy = p.status === 'loading' || p.status === 'redirecting'
+  const titleId = useId()
 
   // The ring's circumference, for the stroke that charges round it.
   const R = 92
@@ -163,7 +161,7 @@ export function LastChanceView(p: LastChanceViewProps) {
   return (
     <section
       ref={p.sectionRef}
-      aria-labelledby="last-chance-title"
+      aria-labelledby={titleId}
       className={`lc relative mx-auto max-w-lg ${phase === 'go' ? 'lc-anim' : phase === 'wait' ? 'lc-wait' : ''}`}
       style={{ marginTop: 'var(--space-8, 3rem)' }}
     >
@@ -175,32 +173,27 @@ export function LastChanceView(p: LastChanceViewProps) {
           .lc-anim .lc-rise { animation: lc-rise 640ms cubic-bezier(.22,1,.36,1) both; animation-delay: var(--d, 0ms); }
           .lc-anim .lc-card { animation: lc-card 820ms cubic-bezier(.22,1,.36,1) both; }
           .lc-anim .lc-ring { animation: lc-ring 1300ms cubic-bezier(.65,0,.35,1) 200ms both; }
-          .lc-anim .lc-float { animation: lc-float 5.5s ease-in-out 1.2s infinite; }
-          .lc-anim .lc-beam { animation: lc-beam 14s linear infinite; }
+          .lc-anim .lc-float { animation: lc-float 1100ms cubic-bezier(.22,1,.36,1) 150ms both; }
+          .lc-anim .lc-beam { animation: lc-beam 1800ms cubic-bezier(.22,1,.36,1) both; }
           .lc-anim .lc-stamp { animation: lc-stamp 520ms cubic-bezier(.22,1,.36,1) 900ms both; }
-          .lc-anim .lc-sheen::after { animation: lc-sheen 2.8s ease-in-out 1.6s infinite; }
         }
         @keyframes lc-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         @keyframes lc-card { from { opacity: 0; transform: translateY(26px) scale(.97); } to { opacity: 1; transform: none; } }
         @keyframes lc-ring { from { stroke-dashoffset: ${C.toFixed(1)}; } to { stroke-dashoffset: ${(C * 0.08).toFixed(1)}; } }
-        @keyframes lc-float { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-7px) rotate(1.5deg); } }
-        @keyframes lc-beam { to { transform: rotate(360deg); } }
+        @keyframes lc-float { from { opacity: 0; transform: translateY(18px) rotate(-4deg) scale(.92); } to { opacity: 1; transform: none; } }
+        @keyframes lc-beam { from { opacity: 0; transform: rotate(-120deg); } to { opacity: 1; transform: none; } }
         @keyframes lc-stamp { from { opacity: 0; transform: rotate(12deg) scale(1.6); } to { opacity: 1; transform: rotate(12deg) scale(1); } }
-        @keyframes lc-sheen { 0% { transform: translateX(-120%) skewX(-20deg); } 45%, 100% { transform: translateX(260%) skewX(-20deg); } }
-        .lc-sheen { position: relative; overflow: hidden; border-radius: var(--radius-row); }
-        .lc-sheen::after { content: ''; position: absolute; inset: 0; width: 40%; pointer-events: none;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: translateX(-120%) skewX(-20deg); }
       `}</style>
 
       {/* ── The lead-in: a beat of copy that reframes the scroll ─────────── */}
       <div className="lc-rise px-1 text-center" style={{ ['--d' as string]: '0ms' }}>
         <p style={mono(11, INK_2, 0.22)}>Not ready for the whole stack?</p>
         <h2
-          id="last-chance-title"
+          id={titleId}
           className="mx-auto mt-2"
           style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.02em', color: INK, maxWidth: 360 }}
         >
-          Start with the one that matters most.
+          If you only get one thing, make it this.
         </h2>
       </div>
 
@@ -208,10 +201,10 @@ export function LastChanceView(p: LastChanceViewProps) {
       <div
         className="lc-card relative mt-6 overflow-hidden"
         style={{
-          borderRadius: 28,
-          padding: '22px 20px 20px',
+          borderRadius: 'var(--radius-sheet)',
+          padding: 'var(--space-5)',
           background:
-            'radial-gradient(90% 55% at 50% 0%, color-mix(in srgb, var(--color-accent) 22%, transparent) 0%, transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 6%, var(--color-surface-2)) 0%, var(--color-surface-2) 55%)',
+            'radial-gradient(90% 55% at 50% 0%, color-mix(in srgb, var(--color-accent) 12%, transparent) 0%, transparent 70%), linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 6%, var(--color-surface-2)) 0%, var(--color-surface-2) 55%)',
           border: '1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border))',
           boxShadow: '0 30px 60px -30px color-mix(in srgb, var(--color-accent) 55%, transparent), inset 0 1px 0 color-mix(in srgb, white 10%, transparent)',
         }}
@@ -222,7 +215,7 @@ export function LastChanceView(p: LastChanceViewProps) {
         <div className="relative flex items-center justify-between">
           <span className="inline-flex items-center gap-1.5" style={mono(11, ACCENT, 0.22)}>
             <Icon name="bolt" size={13} />
-            Your #1 pick
+            Your top pick
           </span>
           <span style={mono(10.5, INK_2, 0.16)}>{p.role}</span>
         </div>
@@ -298,12 +291,12 @@ export function LastChanceView(p: LastChanceViewProps) {
               }}
             >
               <span style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: 20, lineHeight: 1 }}>−{p.discountPct}%</span>
-              <span style={{ ...mono(8.5, 'currentColor', 0.14), marginTop: 2 }}>Off</span>
+              <span style={{ ...mono(10, 'currentColor', 0.14), marginTop: 2 }}>Off</span>
             </span>
           )}
         </div>
 
-        {/* Name and why */}
+        {/* Name, and why it is theirs */}
         <div className="relative text-center">
           <h3
             className="lc-rise"
@@ -312,27 +305,25 @@ export function LastChanceView(p: LastChanceViewProps) {
             {p.title}
           </h3>
           <p
-            className="lc-rise mx-auto mt-2 line-clamp-3"
+            className="lc-rise mx-auto mt-2"
             style={{ ['--d' as string]: '340ms', fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 380 }}
           >
-            {p.reason}
+            {p.goalLine}
           </p>
         </div>
 
-        {/* What it will do for them, in words we are allowed to use */}
+        {/* What it does — register wording or nothing — and what you get. */}
         <ul className="relative mt-5 grid gap-3.5">
-          {p.claims[0] && (
-            <Impact icon="bolt" label="What it does" delay={420}>{capital(p.claims[0])}.</Impact>
+          {p.claim && (
+            <Impact icon="bolt" label="What it does" delay={420}>{p.claim}.</Impact>
           )}
-          {p.onset === 'none' ? (
-            <Impact icon="clock" label="How it works" delay={500}>
-              Steadily, every day — not something you feel, but the base your goal is built on.
+          {(p.servings || p.packMonths !== null) && (
+            <Impact icon="box" label="What you get" delay={500}>
+              {[
+                p.servings ? `${p.servings} servings — ${formatGBP(Math.round((p.offerPrice / p.servings) * 100) / 100)} each` : null,
+                p.packMonths !== null ? `lasts ${packLabel(p.packMonths)} at your usage` : null,
+              ].filter(Boolean).join(', ')}.
             </Impact>
-          ) : (
-            <Impact icon="clock" label="When you’ll notice it" delay={500}>{capital(p.noticeable)}.</Impact>
-          )}
-          {p.packMonths !== null && (
-            <Impact icon="box" label="How long it lasts" delay={580}>One pack lasts {packLabel(p.packMonths)} at your usage.</Impact>
           )}
         </ul>
 
@@ -374,19 +365,19 @@ export function LastChanceView(p: LastChanceViewProps) {
             {p.deliveryCharge > 0 ? `+ ${formatGBP(p.deliveryCharge)} delivery · ${formatGBP(p.total)} in total` : 'Free delivery'}
           </p>
 
-          <div className="lc-sheen mt-4">
-            <Button
-              ref={p.onCtaRef}
-              variant="primary"
-              size="lg"
-              fullWidth
-              loading={busy}
-              iconRight={busy ? undefined : 'arrow-right'}
-              onClick={p.onBuy}
-            >
-              {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : `Get it for ${formatGBP(p.offerPrice)}`}
-            </Button>
-          </div>
+          <Button
+            ref={p.onCtaRef}
+            className="mt-4"
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={busy}
+            disabled={p.blocked}
+            iconRight={busy ? undefined : 'arrow-right'}
+            onClick={p.onBuy}
+          >
+            {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : `Get it for ${formatGBP(p.offerPrice)}`}
+          </Button>
 
           {(p.status === 'error' || p.status === 'changed') && p.message && (
             <p role="alert" className="mt-2.5 flex items-start gap-1.5 text-xs" style={{ color: p.status === 'error' ? 'var(--color-red)' : INK }}>
@@ -403,11 +394,11 @@ export function LastChanceView(p: LastChanceViewProps) {
         <button
           type="button"
           onClick={p.onBackToStack}
-          className="relative mx-auto mt-4 flex items-center gap-1 text-xs font-semibold underline underline-offset-4"
+          className="system-focus relative mx-auto mt-4 flex items-center gap-1 rounded-lg px-2 text-xs font-semibold underline underline-offset-4"
           style={{ color: INK_2, minHeight: 44 }}
         >
           <Icon name="chevron-up" size={14} />
-          Or go back to your full stack
+          Or get your full stack
         </button>
       </div>
     </section>

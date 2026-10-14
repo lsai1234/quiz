@@ -15,7 +15,7 @@ jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
 
 function product(id: string, price: number, cost: number, over: Partial<CatalogueProduct> = {}): CatalogueProduct {
   return {
-    id, title: `CHRGD ${id}`, cost, basePrice: price, swapGroup: 'pre-workout-stim', stackSlots: ['energy'],
+    id, title: `CHRGD ${id}`, cost, basePrice: price, swapGroup: 'pre-workout-stim', stackSlots: ['energy'], goals: ['energy'],
     recommendationPriority: 5, shortReason: '', imageUrl: null, category: 'Energy',
     variants: [{ id: `v-${id}`, price, available: true, cost }],
     ...over,
@@ -35,12 +35,15 @@ const quote = quoteOffer(offerProductFor(PRE, PRE.variants[0]))
 
 afterEach(() => jest.restoreAllMocks())
 
-it('shows the quote for the stack’s best product, in approved words', () => {
-  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} subscriptionPlan={[]} onBackToStack={() => {}} />)
-  expect(screen.getByRole('heading', { name: /start with the one that matters most/i })).toBeInTheDocument()
+it('shows the quote for the stack’s best product, and says only what is allowed', () => {
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} primaryGoal="energy" onBackToStack={() => {}} />)
+  expect(screen.getByRole('heading', { name: /if you only get one thing, make it this/i })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'CHRGD pre' })).toBeInTheDocument()
-  expect(screen.getByText(/picked for your evening sessions \(pre\)/i)).toBeInTheDocument()
-  expect(screen.getByText(/caffeine contributes to increased alertness and concentration/i)).toBeInTheDocument()
+  expect(screen.getByText(/you told us your top goal is “more energy”/i)).toBeInTheDocument()
+  // A pre-workout has no authorised claim: no "what it does", and none of the engine's free text.
+  expect(screen.queryByText(/what it does/i)).not.toBeInTheDocument()
+  expect(screen.queryByText(/picked for your evening sessions/i)).not.toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/notice it|right away|within a few weeks/i)
   expect(screen.getByRole('button', { name: new RegExp(`get it for £${quote.offerPrice.toFixed(2)}`, 'i') })).toBeInTheDocument()
   expect(quote.discountPct).toBeGreaterThan(0)
   // Said plainly for screen readers while the big figure counts down to it.
@@ -50,7 +53,7 @@ it('shows the quote for the stack’s best product, in approved words', () => {
 it('sends the variant and the price it showed, nothing to charge', async () => {
   const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ checkoutUrl: 'https://checkout.stripe.test/x', orderId: 'o1' }) })
   global.fetch = fetchMock as unknown as typeof fetch
-  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} subscriptionPlan={[]} onBackToStack={() => {}} />)
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
   await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
   await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   const [url, init] = fetchMock.mock.calls[0]
@@ -67,7 +70,7 @@ it('shows the server’s new price when it moved, and says so', async () => {
   global.fetch = jest.fn().mockResolvedValue({
     ok: false, status: 409, json: async () => ({ error: `The price has changed to £${moved.offerPrice.toFixed(2)}.`, offerChanged: true, quote: moved }),
   }) as unknown as typeof fetch
-  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} subscriptionPlan={[]} onBackToStack={() => {}} />)
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
   await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
   expect(await screen.findByRole('alert')).toHaveTextContent(/price has changed/i)
   expect(screen.getByRole('button', { name: new RegExp(`get it for £${moved.offerPrice.toFixed(2)}`, 'i') })).toBeInTheDocument()
@@ -76,7 +79,7 @@ it('shows the server’s new price when it moved, and says so', async () => {
 it('renders nothing when no product in the stack pays on its own', () => {
   const cheap = (id: string) => product(id, 11.99, 6)
   const { container } = render(
-    <LastChance slots={[slot('a', 90), slot('b', 80)]} products={[cheap('a'), cheap('b')]} subscriptionPlan={[]} onBackToStack={() => {}} />,
+    <LastChance slots={[slot('a', 90), slot('b', 80)]} products={[cheap('a'), cheap('b')]} onBackToStack={() => {}} />,
   )
   expect(container).toBeEmptyDOMElement()
 })

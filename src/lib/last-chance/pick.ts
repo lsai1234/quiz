@@ -1,29 +1,54 @@
 /**
  * Which ONE product to put in front of somebody who scrolled past their whole
- * stack without buying it.
+ * stack without buying it — and what we may honestly say about it.
  *
  * ── The ranking ─────────────────────────────────────────────────────────────
- * The engine already said how well each slot fits this person
- * (`confidenceScore`, 0–100) and which ones the stack cannot do without
- * (`required`). Those lead. On top, a lean towards things you will actually
- * notice — "the one you'll see a difference with" is the pitch, and a
- * pre-workout felt in twenty minutes keeps that promise in a way a vitamin
- * working quietly for months does not — and the founders' own priority.
+ * Fit is re-scored fresh with the engine's own `scoreProduct`, halved onto the
+ * 0–100 scale `confidenceScore` uses. Not `confidenceScore` itself: a swap
+ * leaves it describing the old product, and a booster the member added carries
+ * `priority × 10`, which is not a fit at all. On top: the stack's anchors
+ * (`required`), whether it serves the goal they said matters most, and whether
+ * there is register wording to say what it does. `recommendationPriority` and
+ * Top 25 are already inside `scoreProduct`, so they are not added twice.
+ *
+ * Nothing rewards "you'll feel it soon". That was the first draft, and it both
+ * broke OC-C-003 (no timeframes for results next to a sale) and pushed the
+ * pick towards exactly the kinds of product we can make no claim about.
  *
  * ── The filter, before any of that ──────────────────────────────────────────
- * The product has to be buyable on its own at a profit: in stock, not a
- * subscription-only refill, and `quoteOffer` viable — which is also what keeps
- * a £12.99 vitamin, whose parcel costs more than it makes, off the card
- * however well it fits. A product that does not pass is skipped, not
- * discounted harder.
+ * Buyable on its own at a profit: in stock, not an accessory, not a
+ * subscription-only refill, not ruled out for this person by a hard gate, and
+ * `quoteOffer` viable. A product that can carry a discount beats one that
+ * cannot — the section is an offer — and only when none can is the best
+ * full-price product shown instead.
+ *
+ * ── What the card may say (docs/ORDER_CONFIRMATION_SPEC.md §5) ──────────────
+ * - Why you: built here from the goals they gave us (OC-C-004) — never the
+ *   engine's free-text `reason`, which no claim check has seen.
+ * - What it does: one GB-register claim, verbatim (`consult/claims.ts`), or
+ *   nothing. Pre-workouts, probiotics, greens, collagen and the rest
+ *   deliberately carry none.
+ * - Facts: servings, price per serving, how long a pack lasts at their usage.
  *
  * Pure and client-safe.
  */
-import type { CatalogueProduct, CatalogueVariant, EffectOnset } from '@/lib/catalogue/types'
+import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import type { Goal, QuizAnswers } from '@/lib/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
-import { getApprovedClaims } from '@/lib/stack-blueprint/approved-claims'
-import { effectOnsetForProduct, onsetWindowLabel } from '@/lib/feedback'
-import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { CLAIMS, claimsFor } from '@/lib/consult/claims'
+import { GOAL_LABELS } from '@/lib/quiz-goals'
+import { getArchetype, scoreProduct, type SlotType } from '@/lib/stack-blueprint/factory'
+import { withDeepDiveSignals } from '@/lib/ai-questions'
+import { isAccessory } from '@/lib/catalogue/accessory'
+import { servingsForVariant } from '@/lib/shop/per-serving'
+import {
+  getPricingConfig,
+  occasionsPerMonthFor,
+  proteinWeightFactor,
+  USAGE_SERVINGS_PER_OCCASION,
+  type PricingConfig,
+  type UsageLevel,
+} from '@/lib/stack-blueprint/pricing'
 import { offerProductFor, quoteOffer, type OfferQuote } from './economics'
 
 export interface HeroOffer {
@@ -32,91 +57,173 @@ export interface HeroOffer {
   product: CatalogueProduct
   variant: CatalogueVariant
   quote: OfferQuote
-  /** The engine's own sentence for why this is in their stack. */
-  reason: string
-  /** What it does, in the approved wording for its kind — at most two. */
-  claims: string[]
-  /** "within a few weeks" — when the benefit is typically noticeable. */
-  noticeable: string
-  /** The kind of effect — `none` is one you never consciously feel (protein, vitamins). */
-  onset: EffectOnset
-  /** How long one pack lasts at their usage (months), when known. */
+  /** Why this one, in terms of what they told us — personalisation, not a claim. */
+  goalLine: string
+  /** One register claim, verbatim, or null when the kind has none. */
+  claim: { id: string; wording: string } | null
+  /** Servings in the pack on offer, when known. */
+  servings: number | null
+  /** How long one pack lasts at their usage (months), when it can be said. */
   packMonths: number | null
   /** Why it ranked first, for tests and the hub. */
   score: number
 }
 
-const ONSET_BONUS: Record<string, number> = { immediate: 12, short: 8, long: 3, none: 0 }
+export interface PickContext {
+  /** Their answers, for a fresh fit score and their usage. Absent on direct navigation. */
+  answers?: QuizAnswers | null
+  /** The goal that matters most — `answers.primaryGoal`, else the blueprint's. */
+  primaryGoal?: Goal | null
+  /** The member's usage choices from the plan journey. */
+  usage?: Record<string, UsageLevel>
+}
+
+/** The register claim that speaks to their goal, where one does; else the kind's first. */
+const CLAIM_FOR_GOAL: Partial<Record<Goal, string[]>> = {
+  muscle: ['protein-muscle-growth', 'creatine-performance', 'vitd-muscle', 'magnesium-muscle'],
+  bulking: ['protein-muscle-growth', 'creatine-performance'],
+  cutting: ['protein-muscle-maintenance'],
+  performance: ['creatine-performance', 'cho-electrolyte-endurance'],
+  hydration: ['cho-electrolyte-water', 'cho-electrolyte-endurance'],
+  recovery: ['protein-muscle-maintenance', 'magnesium-muscle'],
+  energy: ['b12-tiredness', 'magnesium-tiredness', 'vitc-tiredness', 'b6-tiredness'],
+  immune: ['vitd-immune', 'zinc-immune', 'vitc-immune'],
+  focus: ['dha-brain', 'zinc-cognitive'],
+  health: ['epa-dha-heart', 'vitd-immune'],
+}
+
+function claimFor(product: CatalogueProduct, goals: Goal[]): HeroOffer['claim'] {
+  const ids = claimsFor(product.swapGroup)
+  if (ids.length === 0) return null
+  for (const goal of goals) {
+    const preferred = (CLAIM_FOR_GOAL[goal] ?? []).find((id) => ids.includes(id))
+    if (preferred && CLAIMS[preferred]) return { id: preferred, wording: CLAIMS[preferred].wording }
+  }
+  const first = CLAIMS[ids[0]]
+  return first ? { id: first.id, wording: first.wording } : null
+}
+
+const label = (goal: Goal) => GOAL_LABELS[goal] ?? goal
+
+/** Their goal, in their own option words, and how this product relates to it. */
+function goalLineFor(product: CatalogueProduct, slot: StackSlotEntry, goals: Goal[], primary: Goal | null, stackSize: number): string {
+  const productGoals = product.goals ?? []
+  const core = slot.required ? ' It’s the core of your stack.' : ''
+  if (primary && productGoals.includes(primary)) {
+    return `You told us your top goal is “${label(primary)}”. Of the ${stackSize} products in your stack, this is the one built around it.${core}`
+  }
+  const served = goals.find((g) => productGoals.includes(g))
+  if (served) return `Picked for your goal “${label(served)}”.${core}`
+  return `One of the ${stackSize} products we picked for you.${core}`
+}
 
 function variantFor(product: CatalogueProduct, slot: StackSlotEntry): CatalogueVariant | null {
   return (
     product.variants.find((v) => v.id === slot.selectedVariantId && v.available) ??
+    product.variants.find((v) => v.id === product.defaultVariantId && v.available) ??
     product.variants.find((v) => v.available) ??
     null
   )
 }
 
-/** How well a slot's product answers "the one you'll see a difference with". */
-export function impactScore(slot: StackSlotEntry, product: CatalogueProduct): number {
-  const onset = effectOnsetForProduct(product)
-  return (
-    Math.max(0, Math.min(100, slot.confidenceScore)) +
-    (slot.required ? 15 : 0) +
-    (ONSET_BONUS[onset] ?? 0) +
-    Math.max(0, Math.min(10, product.recommendationPriority)) +
-    (product.topRank ? Math.max(0, 11 - Math.min(10, product.topRank)) : 0)
-  )
+/**
+ * Servings in the pack, only when somebody actually recorded a count.
+ *
+ * `servingsForVariant` falls back to `resolveConsumption`, which assumes 30
+ * when nothing is known — fine for sizing a subscription, but on a sales card
+ * it would turn "we don't know" into "lasts about a month".
+ */
+export function knownServings(product: CatalogueProduct, variant: CatalogueVariant): number | null {
+  const recorded =
+    (variant.servings ?? 0) > 0 || (product.consumption?.servingsPerUnit ?? 0) > 0 || (product.servings ?? 0) > 0
+  return recorded ? servingsForVariant(product, variant) : null
+}
+
+/** How long one pack lasts at their usage, or null when the servings are not known. */
+export function packMonthsFor(
+  product: CatalogueProduct,
+  variant: CatalogueVariant,
+  answers: QuizAnswers | null,
+  usage: UsageLevel = 'standard',
+): number | null {
+  const servings = knownServings(product, variant)
+  if (!servings || servings <= 0) return null
+  const perMonth =
+    occasionsPerMonthFor(product, answers) * USAGE_SERVINGS_PER_OCCASION[usage] * proteinWeightFactor(product, answers)
+  if (!(perMonth > 0)) return null
+  return Math.round((servings / perMonth) * 10) / 10
+}
+
+/** Fit on the engine's 0–100 scale, fresh; -Infinity when a hard gate rules it out. */
+function fitFor(product: CatalogueProduct, slot: StackSlotEntry, answers: QuizAnswers | null): number {
+  if (!answers) return Math.max(0, Math.min(100, slot.confidenceScore))
+  const raw = scoreProduct(product, slot.slotType as SlotType, answers, getArchetype(answers.goals ?? []))
+  if (raw === -Infinity) return -Infinity
+  return Math.max(0, Math.min(100, Math.round(raw / 2)))
 }
 
 /**
  * The hero, or null when no product in the stack can be sold on its own at a
  * profit — in which case the section does not render at all.
- *
- * `packMonthsByProductId` comes from the page's subscription plan (one unit
- * covers 1 ÷ monthlyUnits months at their usage); absent, the card simply does
- * not say how long a pack lasts.
  */
 export function pickHeroOffer(
   slots: readonly StackSlotEntry[],
   products: readonly CatalogueProduct[],
-  opts: { packMonthsByProductId?: Record<string, number> } = {},
+  ctx: PickContext = {},
   config: PricingConfig = getPricingConfig(),
 ): HeroOffer | null {
   // One product is not a "smaller sale" of a stack of one.
   if (slots.length < 2) return null
 
-  const candidates: HeroOffer[] = []
+  const answers = ctx.answers ? withDeepDiveSignals(ctx.answers) : null
+  const goals: Goal[] = answers?.goals ?? (ctx.primaryGoal ? [ctx.primaryGoal] : [])
+  const primary = answers?.primaryGoal ?? ctx.primaryGoal ?? goals[0] ?? null
+  const ordered = primary ? [primary, ...goals.filter((g) => g !== primary)] : goals
+
+  const candidates: Array<HeroOffer & { order: number }> = []
   for (const slot of slots) {
     const product = products.find((p) => p.id === slot.selectedProductId)
-    if (!product || product.isSubscriptionOnly) continue
+    if (!product || product.isSubscriptionOnly || isAccessory(product)) continue
     const variant = variantFor(product, slot)
     if (!variant) continue
+    const fit = fitFor(product, slot, answers)
+    if (fit === -Infinity) continue
     const quote = quoteOffer(offerProductFor(product, variant, config), {}, config)
     if (!quote.viable) continue
-    const months = opts.packMonthsByProductId?.[product.id]
+    const claim = claimFor(product, ordered)
+    const score =
+      fit +
+      (slot.required ? 15 : 0) +
+      (primary && (product.goals ?? []).includes(primary) ? 10 : 0) +
+      (claim ? 5 : 0)
     candidates.push({
       slotId: slot.slotId,
       slotType: slot.slotType,
       product,
       variant,
       quote,
-      reason: slot.reason || product.shortReason,
-      claims: getApprovedClaims(product.swapGroup).slice(0, 2),
-      noticeable: onsetWindowLabel(effectOnsetForProduct(product)),
-      onset: effectOnsetForProduct(product),
-      packMonths: months && Number.isFinite(months) && months > 0 ? Math.round(months * 10) / 10 : null,
-      score: impactScore(slot, product),
+      goalLine: goalLineFor(product, slot, goals, primary, slots.length),
+      claim,
+      servings: knownServings(product, variant),
+      packMonths: packMonthsFor(product, variant, answers, ctx.usage?.[product.id]),
+      score,
+      order: slot.displayOrder,
     })
   }
   if (candidates.length === 0) return null
 
-  // Highest impact first; then the one that leaves more margin; then the cheaper,
-  // because the point of the section is a smaller yes.
-  candidates.sort(
+  // An offer that offers something, wherever one exists.
+  const discounted = candidates.filter((c) => c.quote.discountPct > 0)
+  const pool = discounted.length > 0 ? discounted : candidates
+
+  pool.sort(
     (a, b) =>
       b.score - a.score ||
+      Number(b.quote.costKnown) - Number(a.quote.costKnown) ||
+      a.order - b.order ||
       b.quote.contribution - a.quote.contribution ||
       a.quote.total - b.quote.total,
   )
-  return candidates[0]
+  const { order: _order, ...hero } = pool[0]
+  return hero
 }

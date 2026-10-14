@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SLOT_LABELS, type CatalogueProduct, type StackSlot } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
-import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
+import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
+import type { Goal, QuizAnswers } from '@/lib/types'
 import { pickHeroOffer } from '@/lib/last-chance/pick'
 import type { OfferQuote } from '@/lib/last-chance/economics'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
@@ -18,31 +19,23 @@ import { LastChanceView } from './LastChanceView'
  * profit (`pickHeroOffer` returns null) — an offer the business cannot afford
  * is not made, rather than made smaller.
  */
-export function LastChance({ slots, products, subscriptionPlan, onBackToStack, onCtaRef }: {
+export function LastChance({ slots, products, answers, primaryGoal, usage, blocked, onBackToStack, onCtaRef }: {
   slots: StackSlotEntry[]
   /** The whole catalogue — the lookup the slots resolve against. */
   products: CatalogueProduct[]
-  /** For how long one pack lasts at their usage. */
-  subscriptionPlan: SubscriptionLine[]
+  /** Their answers: a fresh fit score, their goals in their own words, their usage. */
+  answers?: QuizAnswers | null
+  /** The goal that matters most, when the answers do not say. */
+  primaryGoal?: Goal | null
+  usage?: Record<string, UsageLevel>
+  /** The stack's own checkout is under way. */
+  blocked?: boolean
   onBackToStack: () => void
   onCtaRef?: (el: HTMLButtonElement | null) => void
 }) {
-  /*
-    How long a pack lasts, from the plan's own usage maths: one unit covers
-    1 ÷ monthlyUnits months. Only where the plan ships the very product the
-    stack holds — a monthly refill's usage says nothing about the tub on offer.
-  */
-  const packMonthsByProductId = useMemo(() => {
-    const out: Record<string, number> = {}
-    for (const line of subscriptionPlan) {
-      if (line.monthlyUnits > 0) out[line.product.id] = 1 / line.monthlyUnits
-    }
-    return out
-  }, [subscriptionPlan])
-
   const hero = useMemo(
-    () => pickHeroOffer(slots, products, { packMonthsByProductId }),
-    [slots, products, packMonthsByProductId],
+    () => pickHeroOffer(slots, products, { answers, primaryGoal, usage }),
+    [slots, products, answers, primaryGoal, usage],
   )
 
   const { state, buy } = useOfferCheckout()
@@ -81,9 +74,9 @@ export function LastChance({ slots, products, subscriptionPlan, onBackToStack, o
 
   const quote = override ?? hero?.quote ?? null
   const onBuy = useCallback(() => {
-    if (!hero || !quote) return
-    void buy({ variantId: hero.variant.id, productTitle: hero.product.title, quote })
-  }, [buy, hero, quote])
+    if (!hero || !quote || blocked) return
+    void buy({ variantId: hero.variant.id, productTitle: hero.product.title, quote, claimId: hero.claim?.id ?? null })
+  }, [buy, hero, quote, blocked])
 
   if (!hero || !quote || !quote.viable) return null
 
@@ -93,10 +86,9 @@ export function LastChance({ slots, products, subscriptionPlan, onBackToStack, o
       role={SLOT_LABELS[hero.slotType as StackSlot] ?? hero.product.category ?? ''}
       imageUrl={hero.product.imageUrl ?? null}
       slotType={hero.slotType}
-      reason={hero.reason}
-      claims={hero.claims}
-      noticeable={hero.noticeable}
-      onset={hero.onset}
+      goalLine={hero.goalLine}
+      claim={hero.claim?.wording ?? null}
+      servings={hero.servings}
       packMonths={hero.packMonths}
       listPrice={quote.listPrice}
       offerPrice={quote.offerPrice}
@@ -106,6 +98,7 @@ export function LastChance({ slots, products, subscriptionPlan, onBackToStack, o
       total={quote.total}
       status={state.status}
       message={state.status === 'error' || state.status === 'changed' ? state.message : null}
+      blocked={blocked}
       phase={phase}
       sectionRef={setSection}
       onBuy={onBuy}

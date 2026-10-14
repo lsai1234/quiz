@@ -1125,16 +1125,24 @@ export function StackReviewPage() {
           {/*
             The last word: for somebody who scrolled past the whole stack without
             buying it, the one product that will do the most for them, at a
-            price the order can afford (`lib/last-chance`). Not during a claim or
-            with a founder code — those are already the deal this visit is about.
+            price the order can afford (`lib/last-chance`). Not during a claim,
+            and not once a code is applied — a founder's, a partner's referral or
+            the day's: that is already the deal this visit is about, and the offer
+            takes no codes, so showing it would only set two prices side by side.
           */}
-          {!claiming && !founderKind && (
+          {!claiming && !partnerCode && (
             <div className="pb-10">
               <LastChance
                 slots={activeSlots}
                 products={products}
-                subscriptionPlan={subscriptionPlan}
-                onBackToStack={() => document.getElementById('scene-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                answers={answers}
+                primaryGoal={activeBlueprint.primaryGoal}
+                usage={subscriptionUsage}
+                blocked={checkoutState.status === 'loading' || leavingForStripe}
+                onBackToStack={() => {
+                  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                  document.getElementById('scene-plan')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+                }}
                 onCtaRef={setOfferCtaEl}
               />
             </div>
