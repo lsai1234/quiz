@@ -114,11 +114,12 @@ export function priceAtFounderTerms(
 
   const priced = lines.map((l) => {
     const quantity = qtyOf(l)
-    // `cost` is PowerBody's ex-VAT quote. While we are not VAT-registered their
-    // VAT is money that genuinely leaves the account and is never coming back,
-    // so cost price means the gross figure — otherwise a "cost price" order
-    // still loses us 20% of the goods. `costFromSupplierPrice` reads
-    // `vat.registered` and is the only place that decision is made.
+    // `cost` is PowerBody's ex-VAT quote. When they charge us VAT and we are
+    // not registered to reclaim it, that VAT genuinely leaves the account, so
+    // cost price means the gross figure — otherwise a "cost price" order still
+    // loses us 20% of the goods. `costFromSupplierPrice` makes that call (via
+    // `supplierVatIsCost`: `vat.supplierChargesVat` and `vat.registered`) and
+    // is the only place it is made.
     const unit = kind === 'free' ? 0 : round(costFromSupplierPrice(l.cost, config))
     return { unitPrice: round(l.price), discountedUnitPrice: unit, quantity, lineTotal: round(unit * quantity) }
   })

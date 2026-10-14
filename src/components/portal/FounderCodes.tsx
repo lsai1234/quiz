@@ -5,6 +5,7 @@ import { Badge, Button, Card, Input, Note } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
 import { supplierVatIsCost } from '@/lib/pricing/vat'
 import { PRICING_CONFIG, getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
 import {
   FOUNDER_CODE_LABELS,
   type FounderCode,
@@ -180,6 +181,12 @@ export function FounderCodes() {
    */
   const [vatIsCost, setVatIsCost] = useState(() => supplierVatIsCost(PRICING_CONFIG))
   useEffect(() => { setVatIsCost(supplierVatIsCost(getPricingConfig())) }, [codes, now])
+  // And the moment the saved settings reach the browser, rather than at the next tick.
+  useEffect(() => {
+    const reread = () => setVatIsCost(supplierVatIsCost(getPricingConfig()))
+    window.addEventListener(PRICING_SYNCED_EVENT, reread)
+    return () => window.removeEventListener(PRICING_SYNCED_EVENT, reread)
+  }, [])
 
   const live = (codes ?? []).filter((c) => c.state === 'live')
   const past = (codes ?? []).filter((c) => c.state !== 'live')

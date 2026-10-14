@@ -389,7 +389,7 @@ export default function PricingPage() {
               <Toggle label="PowerBody charge us VAT" value={draft.vat.supplierChargesVat} onChange={(v) => setNested('vat', { supplierChargesVat: v })}
                 help={
                   draft.vat.supplierChargesVat
-                    ? "Their 20% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered."
+                    ? `Their ${Math.round(draft.vat.standardRate * 1000) / 10}% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered.`
                     : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Right while their invoices to us carry no VAT. If they do, turn this on — otherwise every margin here, the last-chance offer and cost-price codes are about a fifth of cost too generous."
                 } />
             )}
