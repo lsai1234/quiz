@@ -5,7 +5,7 @@ import { closesLabel } from '@/lib/competition/prize'
 import { cardImageUrl } from '@/lib/share-card/share-link'
 import type { ShareCardPayload } from '@/lib/share-card/types'
 import {
-  COMPETITION_EVENT, enterByEmail, hasPendingShare, rememberedEntry, type RememberedEntry,
+  COMPETITION_EVENT, enterByEmail, hasPendingShare, noteFollowed, rememberedEntry, type RememberedEntry,
 } from '@/lib/competition/client'
 import { GiveawayEntryView } from './GiveawayEntryView'
 
@@ -13,10 +13,13 @@ import { GiveawayEntryView } from './GiveawayEntryView'
  * Entering the giveaway, at the foot of the results page.
  *
  * ── The mechanic ────────────────────────────────────────────────────────────
- * Finish the quiz, leave an email: one entry. Share the card to your story on
- * top: ten more. The quiz is the qualifier, so this lives only where the quiz
- * ends — and the email is the entry, so nobody has to tag anything or come back
- * to type a handle.
+ * Finish the quiz, leave an email: one entry. Follow us on Instagram: three
+ * more. Share the card to your story: ten more. The quiz is the qualifier, so
+ * this lives only where the quiz ends — and the email is the entry, so nobody
+ * has to tag anything or come back to type a handle.
+ *
+ * The two bonuses are offered only once somebody is in, so the first thing the
+ * ticket asks for is still one email and nothing else.
  *
  * ── Why it starts as one button ─────────────────────────────────────────────
  * This page's job is checkout. A form sitting open under the plan is a second
@@ -39,6 +42,8 @@ interface Live {
   test: boolean
   closesAt: string | null
   shareBonus?: number
+  followBonus?: number
+  instagramHandle?: string
 }
 
 export function GiveawayEntry({ onShare, payload }: {
@@ -94,18 +99,29 @@ export function GiveawayEntry({ onShare, payload }: {
     setStatus(result.reason === 'invalid-email' ? 'invalid' : result.reason)
   }
 
+  // Credited as the tap happens, while the link opens Instagram — nothing on our
+  // side can see whether they followed, so waiting for them to come back would
+  // only lose the bonus for anyone who stays in the app. The count updates
+  // through the storage event when the server answers.
+  function follow() {
+    if (!comp) return
+    void noteFollowed(comp.name)
+  }
+
   return (
     <GiveawayEntryView
       prize={comp.prize}
       test={comp.test}
       closes={closesLabel(comp.closesAt)}
       bonus={comp.shareBonus ?? 10}
+      followBonus={comp.followBonus ?? 3}
+      handle={comp.instagramHandle || '@getchrgd_'}
       cardImageUrl={thumb}
       phase={entry ? 'entered' : open ? 'form' : 'invite'}
       email={email}
       status={status}
       pendingShare={pendingShare}
-      entry={entry ? { email: entry.email, tickets: entry.tickets, shared: entry.shared } : null}
+      entry={entry ? { email: entry.email, tickets: entry.tickets, shared: entry.shared, followed: entry.followed === true } : null}
       onOpen={() => setOpen(true)}
       onEmailChange={(value) => {
         setEmail(value)
@@ -113,6 +129,7 @@ export function GiveawayEntry({ onShare, payload }: {
       }}
       onSubmit={submit}
       onShare={onShare}
+      onFollow={follow}
     />
   )
 }

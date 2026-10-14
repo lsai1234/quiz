@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, Note, Select } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
+import { addDays, describeDeadline, londonDate, shortDay } from '@/lib/store-codes/deadline'
 
 /**
  * Store discount codes, in the Founders Hub.
@@ -14,6 +15,11 @@ import { Icon } from '@/components/ui/Icon'
  * Only ever one code per order. The code's rate replaces the bundle, subscribe
  * & save or intro discount the order would otherwise get — whichever is deeper
  * wins, they never add together.
+ *
+ * A code can be given a day it ends, and one code at a time can be advertised on
+ * the results page with a countdown. The countdown runs to the end set here and
+ * the checkout refuses the code after it, so the deadline the customer is shown
+ * is the one that actually applies.
  */
 
 interface Row {
@@ -21,6 +27,38 @@ interface Row {
   percent: number
   uses: number
   createdAt: string
+  endsAt: string | null
+  ended: boolean
+  atCheckout: boolean
+}
+
+/** How far ahead the end-day picker reaches. A longer campaign can run with no end. */
+const END_DAYS = 14
+
+/**
+ * The days a code can be set to end on, London's, from today. Each ends at the
+ * midnight closing it — the value is the day, the server turns it into a time.
+ */
+function endChoices(current: string | null, now = new Date()): Array<{ value: string; label: string }> {
+  const today = londonDate(now)
+  const days = Array.from({ length: END_DAYS }, (_, i) => addDays(today, i))
+  const choices = [
+    { value: 'none', label: 'No end date' },
+    ...days.map((d, i) => ({
+      value: d,
+      label: i === 0 ? 'Ends tonight at midnight' : i === 1 ? 'Ends tomorrow at midnight' : `Ends ${shortDay(d)} at midnight`,
+    })),
+  ]
+  // An end already set further out (or in the past) still shows as itself.
+  if (current && !days.includes(current)) {
+    choices.push({ value: current, label: `Ends ${shortDay(current)} at midnight` })
+  }
+  return choices
+}
+
+/** The London day a stored end closes — a midnight belongs to the day before it. */
+function endDay(endsAt: string | null): string | null {
+  return endsAt ? londonDate(new Date(endsAt).getTime() - 1) : null
 }
 
 const PERCENTS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
@@ -149,7 +187,7 @@ export function StoreCodes() {
 
       {/* ── Live codes ── */}
       <section>
-        <h2 style={eyebrow}>Live codes</h2>
+        <h2 style={eyebrow}>Your codes</h2>
         {!codes || codes.length === 0 ? (
           <p style={meta}>{codes === null ? 'Loading…' : 'No store codes yet. Add one above.'}</p>
         ) : (
@@ -173,9 +211,13 @@ export function StoreCodes() {
                       </span>
                       <span className="block" style={{ ...meta, marginTop: 'var(--space-1)' }}>
                         {c.percent}% off · used {c.uses} time{c.uses === 1 ? '' : 's'}
+                        {c.endsAt && (c.ended
+                          ? ` · ended ${shortDay(endDay(c.endsAt)!)}`
+                          : ` · ends ${describeDeadline(c.endsAt)}`)}
                       </span>
                     </span>
-                    <Badge tone="positive" dot>Live</Badge>
+                    {c.atCheckout && !c.ended && <Badge tone="accent">At checkout</Badge>}
+                    {c.ended ? <Badge tone="neutral">Ended</Badge> : <Badge tone="positive" dot>Live</Badge>}
                     <Button size="sm" variant="ghost" icon="link" onClick={() => void copy(c.code)}>
                       {copied === c.code ? 'Copied' : 'Copy'}
                     </Button>
@@ -207,6 +249,44 @@ export function StoreCodes() {
                       </Button>
                     )}
                   </div>
+                  <div
+                    className="flex items-end"
+                    style={{ gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 'var(--space-3)' }}
+                  >
+                    <Select
+                      label={`When ${c.code} ends`}
+                      hideLabel
+                      compact
+                      className="min-w-0 flex-1"
+                      value={endDay(c.endsAt) ?? 'none'}
+                      disabled={busy !== null}
+                      onChange={(e) => void post({ action: 'set-end', code: c.code, ends: e.target.value }, `end:${c.code}`)}
+                    >
+                      {endChoices(endDay(c.endsAt)).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </Select>
+                    {c.atCheckout ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy !== null}
+                        onClick={() => void post({ action: 'promote', code: null }, `promo:${c.code}`)}
+                      >
+                        Stop showing at checkout
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon="bolt"
+                        disabled={busy !== null || c.ended}
+                        onClick={() => void post({ action: 'promote', code: c.code }, `promo:${c.code}`)}
+                      >
+                        Show at checkout
+                      </Button>
+                    )}
+                  </div>
                 </Card>
               </li>
             ))}
@@ -225,6 +305,14 @@ export function StoreCodes() {
           Codes work on everything — quiz stacks, bundles, subscriptions and single products from the
           shop. A link ending <strong>?ref=YOURCODE</strong> applies the code
           automatically, which is handy for ads.
+        </p>
+        <p style={meta}>
+          <strong>Show at checkout</strong> puts one code on the results page, revealed as people
+          scroll to the price, with an Apply button. If the code has an end, it gets a live
+          countdown to it — and the code stops working at that moment, so the countdown is true.
+          Set it to end tonight for a “today only” push. A countdown that restarts every night on a
+          code that carries on is a fake deadline, which UK consumer law bans outright, so there
+          isn’t one: no end date, no countdown.
         </p>
       </div>
     </div>

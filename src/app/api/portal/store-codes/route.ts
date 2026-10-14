@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { createStoreCode, deleteStoreCode, listStoreCodes } from '@/lib/store-codes'
+import {
+  createStoreCode, deleteStoreCode, listStoreCodes, setCheckoutPromo, setStoreCodeEnd,
+} from '@/lib/store-codes'
 
 /**
  * Store discount codes, from the Founders Hub.
  *
- * GET lists them; POST `{ action: 'create', name, percent }` or
- * `{ action: 'delete', code }`. Every response carries the full list, so the
- * screen never has to patch its own copy.
+ * GET lists them; POST `{ action: 'create', name, percent }`,
+ * `{ action: 'delete', code }`, `{ action: 'set-end', code, ends }` (`ends` is
+ * `YYYY-MM-DD`, the London day it ends at midnight, or `null`) or
+ * `{ action: 'promote', code }` (`null` stops advertising one). Every response
+ * carries the full list, so the screen never has to patch its own copy.
  */
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +51,22 @@ export async function POST(req: Request) {
     if (!(await deleteStoreCode(code))) {
       return NextResponse.json({ error: 'That is not one of the store codes.' }, { status: 404 })
     }
+    return NextResponse.json(await payload())
+  }
+
+  if (action === 'set-end') {
+    const code = typeof body.code === 'string' ? body.code : ''
+    if (!code) return NextResponse.json({ error: 'code required' }, { status: 400 })
+    const ends = body.ends === null || body.ends === 'none' ? null : String(body.ends ?? '')
+    const result = await setStoreCodeEnd(code, ends)
+    if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 })
+    return NextResponse.json(await payload())
+  }
+
+  if (action === 'promote') {
+    const code = typeof body.code === 'string' && body.code ? body.code : null
+    const result = await setCheckoutPromo(code)
+    if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 400 })
     return NextResponse.json(await payload())
   }
 

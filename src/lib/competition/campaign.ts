@@ -95,7 +95,7 @@ export const EMPTY_CAMPAIGN: Campaign = {
   entrySteps: [
     'Take the quiz',
     'Enter your email at the end',
-    'Share your card to your story for 10 bonus entries',
+    'Follow us for 3 bonus entries, share your card for 10 more',
   ],
   platformDisclaimer:
     'This promotion is in no way sponsored, endorsed or administered by, or associated with, Instagram or TikTok.',

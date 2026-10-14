@@ -60,7 +60,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         slug: 'discount-codes',
         title: 'Discount codes',
         blurb:
-          'Simple percentage-off codes for customers — give it a name, pick a percentage, delete it when the campaign ends.',
+          'Simple percentage-off codes for customers — a name, a percentage and, if you like, a day it ends. One can be advertised at checkout.',
         icon: 'diamond',
       },
       {

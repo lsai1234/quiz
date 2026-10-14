@@ -27,6 +27,8 @@ export type EntryState = 'pending' | 'verified' | 'rejected' | 'won'
 
 /** Extra tickets for sharing the card, on top of the one for entering. */
 export const SHARE_BONUS = 10
+/** Extra tickets for following us on Instagram. Between the two on purpose: one tap, not a post. */
+export const FOLLOW_BONUS = 3
 
 export interface CompetitionEntry {
   id: string
@@ -42,6 +44,9 @@ export interface CompetitionEntry {
   /** Tickets on top of the entry itself — `SHARE_BONUS` once they have shared. */
   bonusEntries: number
   sharedAt: string | null
+  /** `FOLLOW_BONUS` once they have followed us. Kept apart so either can be taken away alone. */
+  followEntries: number
+  followedAt: string | null
   /** Said yes to marketing emails. Never implied by entering. */
   marketingOptIn: boolean
 }
@@ -59,6 +64,8 @@ interface Row {
   created_at: string
   bonus_entries: number | null
   shared_at: string | null
+  follow_entries: number | null
+  followed_at: string | null
   marketing_opt_in: number | null
 }
 
@@ -75,12 +82,16 @@ const toEntry = (r: Row): CompetitionEntry => ({
   createdAt: r.created_at,
   bonusEntries: Number(r.bonus_entries ?? 0),
   sharedAt: r.shared_at ?? null,
+  followEntries: Number(r.follow_entries ?? 0),
+  followedAt: r.followed_at ?? null,
   marketingOptIn: Number(r.marketing_opt_in ?? 0) === 1,
 })
 
-/** How many chances in the draw an entry has. */
-export function ticketsFor(entry: Pick<CompetitionEntry, 'bonusEntries'>): number {
-  return 1 + Math.max(0, entry.bonusEntries)
+/** How many chances in the draw an entry has: one, plus whatever bonuses it holds. */
+export function ticketsFor(
+  entry: Pick<CompetitionEntry, 'bonusEntries'> & Partial<Pick<CompetitionEntry, 'followEntries'>>,
+): number {
+  return 1 + Math.max(0, entry.bonusEntries) + Math.max(0, entry.followEntries ?? 0)
 }
 
 /**
@@ -136,6 +147,8 @@ export async function enterCompetition(input: {
     createdAt: now(),
     bonusEntries: 0,
     sharedAt: null,
+    followEntries: 0,
+    followedAt: null,
     marketingOptIn: false,
   }
 
@@ -218,6 +231,8 @@ export async function enterWithEmail(input: {
     createdAt: now(),
     bonusEntries: 0,
     sharedAt: null,
+    followEntries: 0,
+    followedAt: null,
     marketingOptIn: input.marketingOptIn === true,
   }
 
@@ -263,6 +278,44 @@ export async function claimShareBonus(
     [SHARE_BONUS, sharedAt, id],
   )
   return toEntry({ ...row, bonus_entries: SHARE_BONUS, shared_at: sharedAt })
+}
+
+/**
+ * Add the follow bonus to an entry.
+ *
+ * The same shape as the share bonus and the same caveat, more so: nothing here
+ * can see Instagram, so this records that somebody pressed "Follow", not that
+ * they follow us. Set once, never added to, and the Founders Hub can take it
+ * away from anyone who plainly didn't.
+ */
+export async function claimFollowBonus(
+  id: string,
+  campaign: string,
+): Promise<CompetitionEntry | null> {
+  const db = await getEngine()
+  const row = await db.get<Row>(
+    'SELECT * FROM competition_entries WHERE id = ? AND campaign = ?',
+    [id, campaign],
+  )
+  if (!row) return null
+  if (Number(row.follow_entries ?? 0) >= FOLLOW_BONUS) return toEntry(row)
+
+  const followedAt = now()
+  await db.run(
+    'UPDATE competition_entries SET follow_entries = ?, followed_at = ? WHERE id = ?',
+    [FOLLOW_BONUS, followedAt, id],
+  )
+  return toEntry({ ...row, follow_entries: FOLLOW_BONUS, followed_at: followedAt })
+}
+
+/** Set an entry's follow bonus outright — the Founders Hub's "remove follow bonus". */
+export async function setFollowEntries(id: string, bonus: number): Promise<void> {
+  const db = await getEngine()
+  const value = Math.max(0, Math.floor(bonus))
+  await db.run(
+    'UPDATE competition_entries SET follow_entries = ?, followed_at = CASE WHEN ? = 0 THEN NULL ELSE followed_at END WHERE id = ?',
+    [value, value, id],
+  )
 }
 
 /** Set an entry's bonus outright — the Founders Hub's "remove bonus". */
@@ -371,8 +424,9 @@ export async function setEntryState(id: string, state: EntryState, note?: string
  * £200, and "we used a properly random draw" is a claim that has to survive
  * somebody asking how.
  *
- * Weighted by tickets: an entry with the share bonus is eleven tickets in the
- * hat, one without it is one. `pick` chooses a ticket, not a row.
+ * Weighted by tickets: an entry with both bonuses is fourteen tickets in the
+ * hat (1 + 3 for following + 10 for sharing), one without either is one.
+ * `pick` chooses a ticket, not a row.
  */
 export async function drawWinner(
   campaign: string,
@@ -400,12 +454,13 @@ export async function drawWinner(
 /** Counts for the Founders Hub, so it never has to tally in the browser. */
 export async function entryCounts(
   campaign: string,
-): Promise<Record<EntryState | 'test' | 'emails' | 'shared' | 'tickets', number>> {
+): Promise<Record<EntryState | 'test' | 'emails' | 'shared' | 'followed' | 'tickets', number>> {
   const entries = await listEntries(campaign)
   const real = entries.filter((e) => !e.isTest)
   return {
     emails: real.filter((e) => e.channel === 'email').length,
     shared: real.filter((e) => e.bonusEntries > 0).length,
+    followed: real.filter((e) => e.followEntries > 0).length,
     tickets: real
       .filter((e) => e.state === 'verified')
       .reduce((sum, e) => sum + ticketsFor(e), 0),

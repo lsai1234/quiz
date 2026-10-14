@@ -351,7 +351,7 @@ describe('after a successful share', () => {
     expect(await screen.findByText('Entered as sam@example.com')).toBeInTheDocument()
     expect(await screen.findByText('11 entries in the draw')).toBeInTheDocument()
     const bonus = (global.fetch as jest.Mock).mock.calls.find(([u]) => String(u).includes('/api/competition/bonus'))
-    expect(JSON.parse(bonus![1].body)).toEqual({ id: 'entry-1' })
+    expect(JSON.parse(bonus![1].body)).toEqual({ id: 'entry-1', kind: 'share' })
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 

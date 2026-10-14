@@ -905,6 +905,17 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE competition_entries ADD COLUMN shared_at TEXT;
   ALTER TABLE competition_entries ADD COLUMN marketing_opt_in INTEGER NOT NULL DEFAULT 0;
   `,
+
+  // v27 — a bonus for following us on Instagram, beside the one for sharing.
+  //
+  // Its own pair of columns rather than more of `bonus_entries`, because the two
+  // are earned, claimed and taken away separately: a founder who finds somebody
+  // never followed has to be able to remove those three tickets and leave the
+  // ten for sharing alone. The draw weights by 1 + bonus_entries + follow_entries.
+  `
+  ALTER TABLE competition_entries ADD COLUMN follow_entries INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE competition_entries ADD COLUMN followed_at TEXT;
+  `,
 ]
 
 /**

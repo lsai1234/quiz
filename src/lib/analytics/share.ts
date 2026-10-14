@@ -58,9 +58,9 @@ export const share = {
     track('competition_enter', { already: p.already })
   },
 
-  /** The share bonus was credited to an entry. */
-  competitionBonus() {
-    track('competition_bonus')
+  /** A bonus was credited to an entry — for sharing the card, or following us. */
+  competitionBonus(p: { kind: 'share' | 'follow' } = { kind: 'share' }) {
+    track('competition_bonus', { kind: p.kind })
   },
 
   /** Closed without sharing. `share_open` minus this minus `share_method` is

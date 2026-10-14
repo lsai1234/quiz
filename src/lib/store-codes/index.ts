@@ -1,9 +1,13 @@
 /**
  * Store codes — simple percentage-off codes the founders make for campaigns.
  *
- * A name and a percentage, nothing else. `SUMMER15` takes 15% off, for anyone,
- * on anything — single shop products included, which partner codes are not —
- * until it is deleted. The shop exception lives in `redeemPartnerCode`.
+ * A name and a percentage, and optionally a day it ends. `SUMMER15` takes 15%
+ * off, for anyone, on anything — single shop products included, which partner
+ * codes are not — until it is deleted or its end date passes. The shop
+ * exception lives in `redeemPartnerCode`.
+ *
+ * One code at a time can be advertised on the results page, with a countdown to
+ * its end (`liveCheckoutPromo`).
  *
  * ── Why these are partner codes underneath ─────────────────────────────────
  * A partner code already does everything a store code needs to, on every
@@ -21,10 +25,12 @@
  *
  * Server-only.
  */
-import { normaliseCode } from '@/lib/partners/codes'
+import { kvGet, kvSet } from '@/lib/db/kv'
+import { isExpired, normaliseCode } from '@/lib/partners/codes'
 import { HOUSE_PARTNER_EMAIL, HOUSE_PARTNER_ID } from '@/lib/partners/house'
 import * as repo from '@/lib/partners/repo'
 import type { CodeTerms, PartnerCode } from '@/lib/partners/types'
+import { isIsoDate, londonDate, londonEndOfDay } from './deadline'
 
 /** The deepest a store code may go — the same ceiling a partner code has. */
 export const MAX_STORE_CODE_PCT = 50
@@ -36,14 +42,23 @@ export interface StoreCode {
   /** How many orders have used it. */
   uses: number
   createdAt: string
+  /** When it stops working at checkout, or null for "until deleted". A London midnight. */
+  endsAt: string | null
+  /** Past its end: still listed, so the founders can see it ran, but refused at checkout. */
+  ended: boolean
+  /** The code advertised on the results page, with its countdown. At most one. */
+  atCheckout: boolean
 }
 
-function toStoreCode(code: PartnerCode): StoreCode {
+function toStoreCode(code: PartnerCode, promoted: string | null, now = new Date()): StoreCode {
   return {
     code: code.code,
     percent: Math.round(code.discountPct * 100),
     uses: code.terms.uses,
     createdAt: code.createdAt,
+    endsAt: code.terms.endsAt,
+    ended: isExpired(code, now),
+    atCheckout: promoted === code.code,
   }
 }
 
@@ -90,10 +105,11 @@ export async function ensureHousePartner(): Promise<void> {
   }
 }
 
-/** Every live store code, newest first. */
+/** Every store code, newest first — ended ones included, marked as such. */
 export async function listStoreCodes(): Promise<StoreCode[]> {
   const codes = await repo.listCodes(HOUSE_PARTNER_ID)
-  return codes.map(toStoreCode)
+  const promoted = await promotedCode()
+  return codes.map((c) => toStoreCode(c, promoted))
 }
 
 export type StoreCodeResult = { ok: true; code: StoreCode } | { ok: false; reason: string }
@@ -128,7 +144,7 @@ export async function createStoreCode(input: { name: string; percent: number }):
     discountPct: input.percent / 100,
     terms: storeCodeTerms(),
   })
-  return { ok: true, code: toStoreCode(created) }
+  return { ok: true, code: toStoreCode(created, await promotedCode()) }
 }
 
 /**
@@ -141,5 +157,91 @@ export async function deleteStoreCode(input: string): Promise<boolean> {
   const code = await repo.getCode(normaliseCode(input))
   if (!code || code.partnerId !== HOUSE_PARTNER_ID) return false
   await repo.deleteCode(code.code)
+  // Otherwise a new code made later under the same name would start being
+  // advertised at checkout without anybody having asked for that.
+  if ((await promotedCode()) === code.code) await setCheckoutPromo(null)
   return true
+}
+
+/** A store code by name, or null if the name is not one of ours. */
+async function storeCode(input: string): Promise<PartnerCode | null> {
+  const code = await repo.getCode(normaliseCode(input))
+  return code && code.partnerId === HOUSE_PARTNER_ID ? code : null
+}
+
+/**
+ * Set when a store code stops working: at the midnight closing London's day
+ * `date` (`YYYY-MM-DD`), or never (`null`).
+ *
+ * ── Why a day and not a time ───────────────────────────────────────────────
+ * Because "ends tonight" is the promise the countdown at checkout makes, and a
+ * promise has to be kept by the thing that actually refuses the code — which is
+ * `checkCode`, reading this same `endsAt`. Ending a code earlier than the
+ * founders meant is the safe direction to be wrong in; this cannot do that,
+ * since a day ends when it ends.
+ */
+export async function setStoreCodeEnd(input: string, date: string | null, now = new Date()): Promise<StoreCodeResult> {
+  const code = await storeCode(input)
+  if (!code) return { ok: false, reason: 'That is not one of the store codes.' }
+  if (date !== null) {
+    if (!isIsoDate(date)) return { ok: false, reason: 'Pick a day for the code to end.' }
+    if (date < londonDate(now)) return { ok: false, reason: 'Pick today or a later day.' }
+  }
+  const terms: CodeTerms = { ...code.terms, endsAt: date === null ? null : londonEndOfDay(date).toISOString() }
+  await repo.updateCode(code.code, { terms })
+  return { ok: true, code: toStoreCode({ ...code, terms }, await promotedCode(), now) }
+}
+
+// ─── Advertised at checkout ────────────────────────────────────────────────
+
+const PROMO_KEY = 'store-codes:checkout-promo'
+
+async function promotedCode(): Promise<string | null> {
+  const stored = await kvGet<{ code: string | null }>(PROMO_KEY)
+  return stored?.code ?? null
+}
+
+/**
+ * Choose the code the results page advertises, or `null` to advertise none.
+ *
+ * One at a time: the card is a single offer with a single deadline, and two
+ * would be two countdowns arguing with each other above one basket.
+ */
+export async function setCheckoutPromo(input: string | null, now = new Date()): Promise<StoreCodeResult | { ok: true; code: null }> {
+  if (input === null) {
+    await kvSet(PROMO_KEY, { code: null })
+    return { ok: true, code: null }
+  }
+  const code = await storeCode(input)
+  if (!code) return { ok: false, reason: 'That is not one of the store codes.' }
+  if (isExpired(code, now)) return { ok: false, reason: `${code.code} has ended. Give it a new end date first.` }
+  await kvSet(PROMO_KEY, { code: code.code })
+  return { ok: true, code: toStoreCode(code, code.code, now) }
+}
+
+export interface CheckoutPromo {
+  code: string
+  /** Whole percent, e.g. 25. */
+  percent: number
+  /** The real end the countdown runs to, or null — in which case there is no countdown. */
+  endsAt: string | null
+}
+
+/**
+ * The offer to advertise at checkout right now, or null.
+ *
+ * Null unless the chosen code would actually be accepted this minute — not yet
+ * started, ended, used up or deleted all hide the card. That is what keeps the
+ * countdown honest: it runs to the same `endsAt` that `checkCode` refuses the
+ * code after, so when the clock reaches zero the code really has stopped
+ * working. A timer that restarts every evening on a code that does not end is
+ * a false "limited time" claim, which UK consumer law bans outright.
+ */
+export async function liveCheckoutPromo(now = new Date()): Promise<CheckoutPromo | null> {
+  const name = await promotedCode()
+  if (!name) return null
+  const code = await storeCode(name)
+  if (!code || code.status !== 'active' || isExpired(code, now)) return null
+  if (code.terms.startsAt && now < new Date(code.terms.startsAt)) return null
+  return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt }
 }

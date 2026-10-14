@@ -15,6 +15,8 @@ const BASE: GiveawayViewProps = {
   test: false,
   closes: 'Closes 30 Nov',
   bonus: 10,
+  followBonus: 3,
+  handle: '@getchrgd_',
   cardImageUrl: null,
   phase: 'invite',
   email: '',
@@ -25,6 +27,7 @@ const BASE: GiveawayViewProps = {
   onEmailChange: noop,
   onSubmit: (e) => e.preventDefault(),
   onShare: noop,
+  onFollow: noop,
 }
 
 const STATES: Array<[string, Partial<GiveawayViewProps>]> = [
@@ -36,8 +39,10 @@ const STATES: Array<[string, Partial<GiveawayViewProps>]> = [
   ['form-invalid', { phase: 'form', email: 'sam@', status: 'invalid' }],
   ['form-sending', { phase: 'form', email: 'sam@example.com', status: 'sending' }],
   ['form-error', { phase: 'form', email: 'sam@example.com', status: 'error' }],
-  ['entered', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 1, shared: false } }],
-  ['entered-shared', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 11, shared: true } }],
+  ['entered', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 1, shared: false, followed: false } }],
+  ['entered-followed', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 4, shared: false, followed: true } }],
+  ['entered-shared', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 11, shared: true, followed: false } }],
+  ['entered-full', { phase: 'entered', entry: { email: 'sam@example.com', tickets: 14, shared: true, followed: true } }],
 ]
 
 export function Board({ thumb }: { thumb: string }) {

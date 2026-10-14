@@ -1,8 +1,8 @@
 'use client'
 
 import type { CSSProperties, FormEvent, ReactNode } from 'react'
-import { Button, Input } from '@/components/system'
-import { Icon } from '@/components/ui/Icon'
+import { Button, Input, buttonSurface } from '@/components/system'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 /**
  * The giveaway, drawn — "Poster ticket".
@@ -11,9 +11,14 @@ import { Icon } from '@/components/ui/Icon'
  *
  * The giveaway as a printed ticket in the card's own language: a poster face
  * (rail, two-weight prize, the card itself in cyan brackets) and a tear-off
- * stub that carries the entry count as a ticket number and a charge rail of
- * eleven cells — one for the email, ten for sharing — so the two-step mechanic
- * is something you can see fill rather than a sentence you have to parse.
+ * stub that carries the entry count as a ticket number and a charge rail in
+ * three groups — one cell for the email, three for following us, ten for
+ * sharing — so the mechanic is something you can see fill rather than a
+ * sentence you have to parse.
+ *
+ * The groups fill independently, not left to right: somebody can share without
+ * following, and a rail that lit the next eleven cells in a row would show them
+ * a follow they never made.
  *
  * It is the only giveaway block on the page: the card thumbnail and the share
  * step live on the ticket, so the "Share your stack" tile above is dropped.
@@ -37,6 +42,10 @@ export interface GiveawayViewProps {
   closes: string
   /** Extra entries for sharing the card. 10. */
   bonus: number
+  /** Extra entries for following us on Instagram. 3. */
+  followBonus: number
+  /** Our Instagram handle, "@getchrgd_" — what the follow step opens. */
+  handle: string
   /**
    * The person's own giveaway card (a 9:16 poster of their stack, 1080×1920),
    * or null while unavailable. It is the thing they share for the bonus.
@@ -48,12 +57,17 @@ export interface GiveawayViewProps {
   status: 'idle' | 'sending' | 'invalid' | 'closed' | 'error'
   /** They shared the card before entering; the bonus lands when they enter. */
   pendingShare: boolean
-  /** Non-null exactly when phase === 'entered'. tickets is 1, or 1 + bonus once shared. */
-  entry: { email: string; tickets: number; shared: boolean } | null
+  /** Non-null exactly when phase === 'entered'. tickets is 1, plus each bonus claimed. */
+  entry: { email: string; tickets: number; shared: boolean; followed: boolean } | null
   onOpen: () => void
   onEmailChange: (value: string) => void
   onSubmit: (e: FormEvent) => void
   onShare: () => void
+  /**
+   * They pressed "Follow". The view opens Instagram itself (it is a link, so a
+   * phone hands it to the app); this credits the bonus.
+   */
+  onFollow: () => void
 }
 
 const MONO = 'var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace'
@@ -256,46 +270,80 @@ function CardThumb({ src, shareable, duplicate, shared, test, bonus, onShare }: 
   )
 }
 
-/** One cell for the email, a gap, then one per bonus entry for the share. */
-function Rail({ tickets, held, test, bonus }: { tickets: number; held: boolean; test: boolean; bonus: number }) {
-  // Entered but not shared: the ten empty cells are the next thing to fill.
-  const next = tickets === 1
-  const lit = (i: number) => i < tickets
-  const tone = test ? AMBER : ACCENT
+/** Where a group of cells stands: filled, held for later, the next to fill, or neither. */
+type Fill = 'lit' | 'held' | 'next' | 'idle'
+
+interface Group {
+  key: 'email' | 'follow' | 'share'
+  label: string
+  cells: number
+  fill: Fill
+}
+
+/**
+ * The charge rail: one group per way of earning entries, each as many cells as
+ * it is worth, with its label set underneath it.
+ *
+ * A grid rather than one flex row so each label sits under its own cells: the
+ * first two columns are as wide as their labels, the share group takes the rest.
+ */
+function Rail({ groups, tone }: { groups: Group[]; tone: string }) {
+  let n = 0
   return (
-    <div className="flex items-center" style={{ gap: 3 }} aria-hidden>
-      {Array.from({ length: 1 + Math.max(1, Math.min(bonus, 20)) }, (_, i) => {
-        const on = lit(i)
-        const isHeld = !on && held && i > 0
-        const isNext = !on && next && i > 0
-        return (
-          <span
-            key={i}
-            className={on ? 'gwA-cell' : undefined}
-            style={{
-              ['--i' as string]: i,
-              flex: i === 0 ? '0 0 22px' : '1 1 0',
-              marginRight: i === 0 ? 7 : 0,
-              height: 14,
-              borderRadius: 2,
-              background: on
-                ? `linear-gradient(180deg, color-mix(in srgb, ${tone} 70%, white), ${tone})`
-                : isHeld
-                  ? `repeating-linear-gradient(135deg, color-mix(in srgb, ${tone} 45%, transparent) 0 2px, transparent 2px 5px)`
-                  : 'color-mix(in srgb, var(--color-text) 5%, transparent)',
-              boxShadow: on
-                ? `0 0 10px -2px color-mix(in srgb, ${tone} 70%, transparent)`
-                : `inset 0 0 0 1px ${isHeld ? `color-mix(in srgb, ${tone} 50%, transparent)` : isNext ? `color-mix(in srgb, ${tone} 38%, transparent)` : 'color-mix(in srgb, var(--color-text) 13%, transparent)'}`,
-            }}
-          />
-        )
-      })}
+    <div
+      aria-hidden
+      style={{ display: 'grid', gridTemplateColumns: 'auto auto 1fr', columnGap: 8, rowGap: 8 }}
+    >
+      {groups.map((g) => (
+        <div key={g.key} className="flex items-center" style={{ gap: 3 }}>
+          {Array.from({ length: Math.max(1, Math.min(g.cells, 20)) }, (_, i) => {
+            const on = g.fill === 'lit'
+            const order = n++
+            return (
+              <span
+                key={i}
+                className={on ? 'gwA-cell' : undefined}
+                style={{
+                  ['--i' as string]: on ? i : order,
+                  flex: '1 1 0',
+                  minWidth: 6,
+                  height: 14,
+                  borderRadius: 2,
+                  background: on
+                    ? `linear-gradient(180deg, color-mix(in srgb, ${tone} 70%, white), ${tone})`
+                    : g.fill === 'held'
+                      ? `repeating-linear-gradient(135deg, color-mix(in srgb, ${tone} 45%, transparent) 0 2px, transparent 2px 5px)`
+                      : 'color-mix(in srgb, var(--color-text) 5%, transparent)',
+                  boxShadow: on
+                    ? `0 0 10px -2px color-mix(in srgb, ${tone} 70%, transparent)`
+                    : `inset 0 0 0 1px ${
+                        g.fill === 'held'
+                          ? `color-mix(in srgb, ${tone} 50%, transparent)`
+                          : g.fill === 'next'
+                            ? `color-mix(in srgb, ${tone} 38%, transparent)`
+                            : 'color-mix(in srgb, var(--color-text) 13%, transparent)'
+                      }`,
+                }}
+              />
+            )
+          })}
+        </div>
+      ))}
+      {groups.map((g) => (
+        <span
+          key={g.key}
+          className="whitespace-nowrap"
+          style={mono(11, g.fill === 'lit' || g.fill === 'held' ? INK : g.fill === 'next' ? tone : INK_2, 0.1)}
+        >
+          {g.fill === 'held' ? `+${g.cells} held` : `${g.label} +${g.cells}`}
+        </span>
+      ))}
     </div>
   )
 }
 
-function Counter({ tickets, held, test, bonus }: { tickets: number; held: boolean; test: boolean; bonus: number }) {
-  const full = tickets >= 1 + bonus
+function Counter({ tickets, groups, test, max }: { tickets: number; groups: Group[]; test: boolean; max: number }) {
+  const full = groups.every((g) => g.fill === 'lit')
   const tone = test ? AMBER : ACCENT
   return (
     <div aria-hidden>
@@ -306,39 +354,63 @@ function Counter({ tickets, held, test, bonus }: { tickets: number; held: boolea
             <Bolt size={11} color={tone} /> Fully charged
           </span>
         ) : (
-          <span style={mono(11, INK_2, 0.2)}>Up to {pad(1 + bonus)}</span>
+          <span style={mono(11, INK_2, 0.2)}>Up to {pad(max)}</span>
         )}
       </div>
-      <div className="mt-1.5 flex items-center gap-3.5">
-        <span
-          key={tickets}
-          className={tickets > 0 ? 'gwA-pop' : undefined}
-          style={{
-            fontFamily: DISPLAY,
-            fontSize: 50,
-            fontWeight: 700,
-            lineHeight: 0.84,
-            letterSpacing: '0.01em',
-            fontVariantNumeric: 'tabular-nums',
-            color: tickets > 0 ? (full ? tone : INK) : 'transparent',
-            WebkitTextStroke: tickets > 0 ? undefined : `1px ${INK_2}`,
-            textShadow: full ? `0 0 22px color-mix(in srgb, ${tone} 55%, transparent)` : undefined,
-          }}
-        >
-          {pad(tickets)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <Rail tickets={tickets} held={held} test={test} bonus={bonus} />
-          <div className="mt-2 flex justify-between gap-2">
-            <span style={mono(11, tickets > 0 ? INK : INK_2, 0.1)}>Email +1</span>
-            <span style={mono(11, held || tickets > 1 ? INK : tickets === 1 ? tone : INK_2, 0.1)}>
-              {held && tickets === 0 ? `+${bonus} held` : `Share card +${bonus}`}
-            </span>
-          </div>
-        </div>
+      <span
+        key={tickets}
+        className={`mt-1.5 block ${tickets > 0 ? 'gwA-pop' : ''}`}
+        style={{
+          fontFamily: DISPLAY,
+          fontSize: 50,
+          fontWeight: 700,
+          lineHeight: 0.84,
+          letterSpacing: '0.01em',
+          fontVariantNumeric: 'tabular-nums',
+          color: tickets > 0 ? (full ? tone : INK) : 'transparent',
+          WebkitTextStroke: tickets > 0 ? undefined : `1px ${INK_2}`,
+          textShadow: full ? `0 0 22px color-mix(in srgb, ${tone} 55%, transparent)` : undefined,
+          transformOrigin: 'left center',
+        }}
+      >
+        {pad(tickets)}
+      </span>
+      <div style={{ marginTop: 'var(--space-3)' }}>
+        <Rail groups={groups} tone={tone} />
       </div>
     </div>
   )
+}
+
+/**
+ * One way to add entries, once you are in: a button while it is still to do, a
+ * quiet ticked line once it is done. The line stays so the stub still adds up —
+ * "where did my other three come from" has its answer on screen.
+ */
+function Boost({ done, doneText, tone, children }: { done: boolean; doneText: string; tone: string; children: ReactNode }) {
+  if (!done) return <>{children}</>
+  return (
+    <p className="flex items-center gap-2" style={{ fontSize: 13, lineHeight: 1.4, color: INK_2, minHeight: 28 }}>
+      <span className="shrink-0" style={{ color: tone }}><Icon name="check" size={14} /></span>
+      {doneText}
+    </p>
+  )
+}
+
+/** A step's label with its worth set flush right, like a line on a receipt. */
+function StepLabel({ icon, text, worth }: { icon: IconName; text: string; worth: string }) {
+  return (
+    <span className="flex w-full min-w-0 items-center" style={{ gap: 'var(--space-2)' }}>
+      <Icon name={icon} size={18} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-left">{text}</span>
+      <span className="shrink-0" style={{ fontVariantNumeric: 'tabular-nums' }}>{worth}</span>
+    </span>
+  )
+}
+
+/** "@getchrgd_" → its profile. On a phone this opens the Instagram app. */
+export function instagramProfileUrl(handle: string): string {
+  return `https://www.instagram.com/${handle.trim().replace(/^@/, '')}/`
 }
 
 /**
@@ -395,18 +467,35 @@ function Stamp({ tone, children }: { tone: string; children: ReactNode }) {
 }
 
 export function GiveawayEntryView(p: GiveawayViewProps) {
-  const { entry, bonus, test } = p
+  const { entry, bonus, followBonus, test } = p
   const prize = splitPrize(p.prize)
   const tone = test ? AMBER : ACCENT
   const shared = Boolean(entry?.shared || p.pendingShare)
-  const tickets = entry?.tickets ?? 0
   const held = !entry && p.pendingShare
+  const max = 1 + followBonus + bonus
+  const handle = p.handle || '@getchrgd_'
+
+  const groups: Group[] = [
+    { key: 'email', label: 'Email', cells: 1, fill: entry ? 'lit' : 'idle' },
+    { key: 'follow', label: 'Follow', cells: followBonus, fill: entry?.followed ? 'lit' : entry ? 'next' : 'idle' },
+    {
+      key: 'share',
+      label: 'Share',
+      cells: bonus,
+      fill: entry?.shared ? 'lit' : held ? 'held' : entry ? 'next' : 'idle',
+    },
+  ]
 
   const heavy = test ? 'Enter the' : [prize.lead, prize.amount].filter(Boolean).join(' ')
   const light = test ? 'test draw' : prize.rest
 
   let stub: ReactNode
   if (entry) {
+    const bonuses = [
+      entry.followed ? `${followBonus} for following us` : null,
+      entry.shared ? `${bonus} for sharing your card` : null,
+    ].filter(Boolean)
+    const allDone = entry.followed && entry.shared
     stub = (
       <div role="status" aria-live="polite">
         <p
@@ -419,21 +508,53 @@ export function GiveawayEntryView(p: GiveawayViewProps) {
           Entered as <strong style={{ color: INK, fontWeight: 600, overflowWrap: 'anywhere' }}>{entry.email}</strong>.{' '}
           {p.test
             ? 'Test run — this is a rehearsal, so there is no real draw.'
-            : entry.shared
-              ? `That includes ${bonus} bonus entries for sharing your card. Good luck!`
+            : bonuses.length > 0
+              ? `That includes ${bonuses.join(' and ')}.${allDone ? ' Good luck!' : ''}`
               : 'We’ll email you if you win.'}
         </p>
         <div style={{ marginTop: 'var(--space-5)' }}>
-          <Counter tickets={entry.tickets} held={false} test={test} bonus={bonus} />
+          <Counter tickets={entry.tickets} groups={groups} test={test} max={max} />
         </div>
-        {!entry.shared && (
+        {!allDone && (
           <div style={{ marginTop: 'var(--space-5)' }}>
-            {/* Filled once they have opted in: by now it is the one next action. */}
-            <Button variant="primary" size="lg" icon="share" fullWidth onClick={p.onShare}>
-              Share your card for +{bonus} entries
-            </Button>
+            <p style={{ ...mono(11, INK_2, 0.16), marginBottom: 'var(--space-2)' }}>Add more entries</p>
+            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+              <Boost tone={tone} done={entry.followed} doneText={`Following ${handle} · +${followBonus} added`}>
+                {/* A link, because it is one: on a phone it opens the Instagram
+                    app, and long-press / open-in-new-tab keep working. */}
+                <a
+                  href={instagramProfileUrl(handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={p.onFollow}
+                  {...buttonSurface('secondary', 'lg')}
+                  className={`${buttonSurface('secondary', 'lg').className} w-full`}
+                  aria-label={`Follow ${handle} on Instagram for ${followBonus} bonus entries`}
+                >
+                  <StepLabel icon="instagram" text={`Follow ${handle}`} worth={`+${followBonus}`} />
+                </a>
+              </Boost>
+              <Boost tone={tone} done={entry.shared} doneText={`Card shared · +${bonus} added`}>
+                {/* Filled once they have opted in: the biggest of the two, and the
+                    one that brings the next person to the quiz. */}
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  layout="stack"
+                  onClick={p.onShare}
+                  aria-label={`Share your card for ${bonus} bonus entries`}
+                >
+                  <StepLabel icon="share" text="Share your card" worth={`+${bonus}`} />
+                </Button>
+              </Boost>
+            </div>
             <p className="mt-2.5" style={{ fontSize: 12, lineHeight: 1.45, color: INK_2 }}>
-              Post it to your Instagram story and your {bonus} bonus entries are added.
+              {entry.followed
+                ? `Post your card to your Instagram story and your ${bonus} bonus entries are added.`
+                : entry.shared
+                  ? `Follow ${handle} on Instagram and ${followBonus} more entries are added.`
+                  : `Follow us, then post your card to your story — up to ${pad(max)} entries in all.`}
             </p>
           </div>
         )}
@@ -442,7 +563,7 @@ export function GiveawayEntryView(p: GiveawayViewProps) {
   } else if (p.phase === 'invite') {
     stub = (
       <>
-        <Counter tickets={0} held={held} test={test} bonus={bonus} />
+        <Counter tickets={0} groups={groups} test={test} max={max} />
         {p.pendingShare && (
           <p className="mt-4 flex items-start gap-2" style={{ fontSize: 13, lineHeight: 1.45, color: INK_2 }}>
             <span className="mt-0.5 shrink-0" style={{ color: tone }}><Icon name="check" size={14} /></span>
@@ -460,7 +581,7 @@ export function GiveawayEntryView(p: GiveawayViewProps) {
     const sending = p.status === 'sending'
     stub = (
       <>
-        <Counter tickets={0} held={held} test={test} bonus={bonus} />
+        <Counter tickets={0} groups={groups} test={test} max={max} />
         <form onSubmit={p.onSubmit} noValidate className="gwA-rise" style={{ marginTop: 'var(--space-5)' }}>
           <p aria-hidden className="flex items-baseline" style={{ ...mono(11, INK_2, 0.16), marginBottom: 'var(--space-2)', gap: 'var(--space-2)' }}>
             <span>Your email</span>

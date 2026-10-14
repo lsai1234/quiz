@@ -4,7 +4,7 @@ import {
 import {
   enterCompetition, listEntries, setEntryState, drawWinner, entryCounts, normaliseHandle,
   importTaggedHandles, enterWithEmail, claimShareBonus, setBonusEntries, normaliseEmail, ticketsFor,
-  SHARE_BONUS,
+  claimFollowBonus, setFollowEntries, SHARE_BONUS, FOLLOW_BONUS,
 } from '../entries'
 
 /**
@@ -306,6 +306,40 @@ describe('entering by email', () => {
     expect(entry).toMatchObject({ bonusEntries: 0, sharedAt: null })
   })
 
+  it('adds three tickets for a follow, once, and alongside the share bonus rather than instead of it', async () => {
+    const res = await enterWithEmail({ campaign: 'follow1', email: 'fi@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    const once = await claimFollowBonus(res.entry.id, 'follow1')
+    const twice = await claimFollowBonus(res.entry.id, 'follow1')
+    expect(FOLLOW_BONUS).toBe(3)
+    expect(once?.followEntries).toBe(FOLLOW_BONUS)
+    expect(twice?.followedAt).toBe(once?.followedAt)
+    expect(twice && ticketsFor(twice)).toBe(1 + FOLLOW_BONUS)
+
+    const both = await claimShareBonus(res.entry.id, 'follow1')
+    expect(both && ticketsFor(both)).toBe(1 + FOLLOW_BONUS + SHARE_BONUS)
+    // Entering again on another device hands back the whole count.
+    const again = await enterWithEmail({ campaign: 'follow1', email: 'fi@example.com', route: 'quiz' })
+    expect(again.ok && ticketsFor(again.entry)).toBe(14)
+  })
+
+  it('will not credit a follow to an entry from another campaign', async () => {
+    const res = await enterWithEmail({ campaign: 'follow2', email: 'ro@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    expect(await claimFollowBonus(res.entry.id, 'some-other-campaign')).toBeNull()
+  })
+
+  it('lets a founder take one bonus away and leave the other', async () => {
+    const res = await enterWithEmail({ campaign: 'follow3', email: 'lee@example.com', route: 'quiz' })
+    if (!res.ok) throw new Error('entry failed')
+    await claimFollowBonus(res.entry.id, 'follow3')
+    await claimShareBonus(res.entry.id, 'follow3')
+    await setFollowEntries(res.entry.id, 0)
+    const [entry] = await listEntries('follow3')
+    expect(entry).toMatchObject({ followEntries: 0, followedAt: null, bonusEntries: SHARE_BONUS })
+    expect(ticketsFor(entry)).toBe(1 + SHARE_BONUS)
+  })
+
   it('weights the draw by tickets', async () => {
     const a = await enterWithEmail({ campaign: 'weighted', email: 'a@example.com', route: 'quiz' })
     const b = await enterWithEmail({ campaign: 'weighted', email: 'b@example.com', route: 'quiz' })
@@ -333,6 +367,7 @@ describe('entering by email', () => {
     await enterWithEmail({ campaign: 'counted', email: 't@example.com', route: 'quiz', isTest: true })
     if (!a.ok) throw new Error('entry failed')
     await claimShareBonus(a.entry.id, 'counted')
-    expect(await entryCounts('counted')).toMatchObject({ emails: 2, shared: 1, tickets: 12, test: 1 })
+    await claimFollowBonus(a.entry.id, 'counted')
+    expect(await entryCounts('counted')).toMatchObject({ emails: 2, shared: 1, followed: 1, tickets: 15, test: 1 })
   })
 })

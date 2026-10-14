@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getCampaign, competitionState, isTestRun } from '@/lib/competition/campaign'
 import {
-  enterCompetition, enterWithEmail, ticketsFor, SHARE_BONUS,
+  enterCompetition, enterWithEmail, ticketsFor, SHARE_BONUS, FOLLOW_BONUS,
   type EntryChannel, type EntryRoute,
 } from '@/lib/competition/entries'
 
@@ -11,7 +11,7 @@ import {
  * ── By email, now ───────────────────────────────────────────────────────────
  * `{ email, route: 'quiz' | 'free', agreedToTerms }` is the entry: one ticket
  * for finishing the quiz and leaving an address, and `/api/competition/bonus`
- * adds ten more for sharing the card. The response carries the entry id, which
+ * adds three more for following us and ten for sharing the card. The response carries the entry id, which
  * is what the browser hands back to claim that bonus. The handle body below is
  * the older share-and-tag route, kept so nothing already in flight breaks.
  *
@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       already: result.already,
       tickets: ticketsFor(result.entry),
       shared: result.entry.bonusEntries > 0,
+      followed: result.entry.followEntries > 0,
       test: result.entry.isTest,
     })
   }
@@ -129,5 +130,6 @@ export async function GET() {
     platformDisclaimer: campaign.platformDisclaimer,
     promoterName: campaign.promoterName,
     shareBonus: SHARE_BONUS,
+    followBonus: FOLLOW_BONUS,
   })
 }

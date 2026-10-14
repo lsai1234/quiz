@@ -26,7 +26,8 @@ import { StackDeck } from './StackDeck'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
-import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
+import { PartnerCodeBox, checkDiscountCode, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
+import { CheckoutPromo, type Promo } from './CheckoutPromo'
 import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
 import { StarterDeliveryForm } from './StarterDeliveryForm'
 import type { SupplierAddress } from '@/lib/supplier/types'
@@ -597,6 +598,70 @@ export function StackReviewPage() {
     if (checkoutState.status === 'mock-complete') clearClaim()
   }, [checkoutState.status])
   /*
+   * ── The advertised code ─────────────────────────────────────────────────
+   *
+   * One store code the Founders Hub has chosen to show here, while it would
+   * actually be accepted (`/api/checkout-promo`). Priced twice — without any
+   * code and with this one — through the same `calculatePricing` the receipt
+   * uses, so the "£97.56 → £77.97" on the card is the receipt the button
+   * produces, margin floor and replace-not-stack included.
+   *
+   * Never beside another code: a partner's or a founder's code, or a claimed
+   * starter, is the discount this order is about, and an offer arguing with it
+   * would cost the partner their attribution for no gain to anyone. And only
+   * when it would save money — a code that comes to the same as the bundle deal
+   * is not an offer.
+   */
+  const [promo, setPromo] = useState<Promo | null>(null)
+  useEffect(() => {
+    let live = true
+    fetch('/api/checkout-promo', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { promo?: Promo | null } | null) => {
+        if (live && d?.promo) setPromo(d.promo)
+      })
+      .catch(() => {
+        /* No offer is the safe answer to a question we could not ask. */
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+  const promoApplied = promo !== null && partnerCode?.code === promo.code
+  const promoPrices = useMemo(() => {
+    if (!promo || claiming || founderKind || (partnerCode && partnerCode.code !== promo.code)) return null
+    const without = calculatePricing(activeBlueprint, products, answers, undefined, {
+      ...subOpts, partnerDiscountPct: null,
+    })
+    const withCode = calculatePricing(activeBlueprint, products, answers, undefined, {
+      ...subOpts, partnerDiscountPct: promo.percent / 100,
+    })
+    const sub = planType === 'subscription' && without.subscriptionItemCount > 0 && without.subscriptionMinOrderMet
+    return sub
+      ? { scope: 'first month' as const, before: without.subscriptionFirstMonth, after: withCode.subscriptionFirstMonth }
+      : { scope: 'order' as const, before: without.oneOffTotal, after: withCode.oneOffTotal }
+  }, [promo, claiming, founderKind, partnerCode, activeBlueprint, products, answers, subOpts, planType])
+  const showPromo = promo !== null && promoPrices !== null
+    && (promoApplied || promoPrices.after < promoPrices.before - 0.005)
+
+  const applyPromo = useCallback(async (): Promise<string | null> => {
+    if (!promo) return 'This offer isn’t available any more.'
+    const result = await checkDiscountCode({
+      code: promo.code,
+      subtotal: planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal,
+    })
+    if (!result.ok) return result.reason
+    setPartnerCode(result.applied)
+    return null
+  }, [promo, planType, pricing.subscriptionTotal, pricing.oneOffSubtotal])
+
+  // The deadline passed with the page open. Take the code off now, rather than
+  // let the checkout refuse it after somebody has pressed pay.
+  const promoEnded = useCallback(() => {
+    setPartnerCode((current) => (current && promo && current.code === promo.code ? null : current))
+  }, [promo])
+
+  /*
    * ── The bar gets out of the receipt's way ────────────────────────────────
    *
    * The sticky bar exists so checkout stays reachable while you are still
@@ -872,13 +937,30 @@ export function StackReviewPage() {
           )}
 
           {/* Above the receipt, so the totals below already include it. */}
-          <div className="mb-3 flex flex-col">
-            <PartnerCodeBox
-              subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
-              applied={partnerCode}
-              onChange={setPartnerCode}
+          {showPromo && promo && promoPrices && (
+            <CheckoutPromo
+              promo={promo}
+              before={promoPrices.before}
+              after={promoPrices.after}
+              scope={promoPrices.scope}
+              applied={promoApplied}
+              onApply={applyPromo}
+              onRemove={() => setPartnerCode(null)}
+              onEnded={promoEnded}
             />
-          </div>
+          )}
+          {/* The advertised code carries its own applied state and Remove, so the
+              box steps aside while it is on rather than saying it twice. */}
+          {!promoApplied && (
+            <div className="mb-3 flex flex-col">
+              <PartnerCodeBox
+                subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
+                applied={partnerCode}
+                onChange={setPartnerCode}
+                prompt={showPromo ? 'Got a different code?' : undefined}
+              />
+            </div>
+          )}
 
           {/* The high-level receipt — what you're buying, discounts, total */}
           <PlanReceipt

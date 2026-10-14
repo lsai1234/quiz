@@ -31,6 +31,42 @@ export interface AppliedCode {
   founderNote?: string | null
 }
 
+/**
+ * Ask the server whether a code works on this basket, and what it does.
+ *
+ * The one place a code is checked from the browser — the box below and the
+ * advertised offer at checkout both come through here, so a code applied by a
+ * button is exactly the object a typed one would have been.
+ */
+export async function checkDiscountCode(input: {
+  code: string
+  subtotal: number
+  channel?: RedeemChannel
+}): Promise<{ ok: true; applied: AppliedCode } | { ok: false; reason: string; network?: boolean }> {
+  try {
+    const res = await fetch('/api/partner-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: input.code, subtotal: input.subtotal, channel: input.channel ?? 'quiz' }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (!d.ok) return { ok: false, reason: d.reason ?? 'That code didn’t work.' }
+    return {
+      ok: true,
+      applied: {
+        code: d.code,
+        discountPct: d.discountPct,
+        partnerName: d.partnerName,
+        founderKind: d.founderKind ?? null,
+        founderLabel: d.label ?? null,
+        founderNote: d.note ?? null,
+      },
+    }
+  } catch {
+    return { ok: false, reason: 'Couldn’t check that code — try again.', network: true }
+  }
+}
+
 interface Props {
   /** Undiscounted order value, so a minimum-spend rule is judged on the real basket. */
   subtotal: number
@@ -43,6 +79,8 @@ interface Props {
   channel?: RedeemChannel
   applied: AppliedCode | null
   onChange: (applied: AppliedCode | null) => void
+  /** The closed box's wording. "Got a different code?" beside an advertised one. */
+  prompt?: string
 }
 
 function cookieValue(name: string): string | null {
@@ -80,7 +118,7 @@ function forgetReferral(): void {
  * checkout is where attribution goes missing, and a partner who brought the
  * customer in but earned nothing has a real complaint.
  */
-export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }: Props) {
+export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange, prompt = 'Got a discount code?' }: Props) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [checking, setChecking] = useState(false)
@@ -100,37 +138,21 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
       if (!code.trim()) return
       setChecking(true)
       if (!silent) setError(null)
-      try {
-        const res = await fetch('/api/partner-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, subtotal, channel }),
-        })
-        const d = await res.json().catch(() => ({}))
-        if (d.ok) {
-          onChange({
-            code: d.code,
-            discountPct: d.discountPct,
-            partnerName: d.partnerName,
-            founderKind: d.founderKind ?? null,
-            founderLabel: d.label ?? null,
-            founderNote: d.note ?? null,
-          })
-          setFromLink(silent)
-          setInput('')
-          setError(null)
-        } else {
-          onChange(null)
-          // A referral cookie that no longer works fails quietly — the visitor
-          // never typed it, so telling them it is invalid is noise about
-          // something they did not do.
-          if (!silent) setError(d.reason ?? 'That code didn’t work.')
-        }
-      } catch {
-        if (!silent) setError('Couldn’t check that code — try again.')
-      } finally {
-        setChecking(false)
+      const result = await checkDiscountCode({ code, subtotal, channel })
+      if (result.ok) {
+        onChange(result.applied)
+        setFromLink(silent)
+        setInput('')
+        setError(null)
+      } else {
+        // A network failure leaves whatever was applied alone; a refusal
+        // clears it. A referral cookie that no longer works fails quietly —
+        // the visitor never typed it, so telling them it is invalid is noise
+        // about something they did not do.
+        if (!result.network) onChange(null)
+        if (!silent) setError(result.reason)
       }
+      setChecking(false)
     },
     [subtotal, channel, onChange],
   )
@@ -221,7 +243,7 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
         className="text-[11px] font-semibold underline self-start"
         style={{ color: 'var(--color-muted)' }}
       >
-        Got a discount code?
+        {prompt}
       </button>
     )
   }

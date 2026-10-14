@@ -25,6 +25,8 @@ export interface RememberedEntry {
   email: string
   tickets: number
   shared: boolean
+  /** Pressed "Follow". Optional because entries remembered before the follow bonus lack it. */
+  followed?: boolean
 }
 
 /** `undefined` when storage itself is unavailable — distinct from "nothing stored". */
@@ -71,7 +73,7 @@ async function postBonus(entry: RememberedEntry): Promise<void> {
     const res = await fetch('/api/competition/bonus', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: entry.id }),
+      body: JSON.stringify({ id: entry.id, kind: 'share' }),
     })
     if (!res.ok) return
     const json = (await res.json()) as { tickets?: number }
@@ -80,6 +82,35 @@ async function postBonus(entry: RememberedEntry): Promise<void> {
     rememberEntry({ ...entry, shared: true, tickets: json.tickets ?? entry.tickets })
   } catch {
     /* network — the flag stays, and the next share or entry tries again */
+  }
+}
+
+/**
+ * They pressed "Follow". Credits the follow bonus to the entry they hold.
+ *
+ * Only ever offered once somebody has entered, so unlike a share there is no
+ * holding it for later — no entry, nothing to credit. Returns whether it landed,
+ * so the button can say so or offer to try again.
+ */
+export async function noteFollowed(campaign: string): Promise<boolean> {
+  const entry = rememberedEntry(campaign)
+  if (!entry) return false
+  if (entry.followed) return true
+  try {
+    const res = await fetch('/api/competition/bonus', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, kind: 'follow' }),
+    })
+    if (!res.ok) return false
+    const json = (await res.json()) as { tickets?: number }
+    // Read again: a share may have been credited while this was in flight.
+    const latest = rememberedEntry(campaign) ?? entry
+    shareEvents.competitionBonus({ kind: 'follow' })
+    rememberEntry({ ...latest, followed: true, tickets: json.tickets ?? latest.tickets })
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -134,6 +165,7 @@ export async function enterByEmail(input: {
       email: input.email.trim().toLowerCase(),
       tickets: json.tickets ?? 1,
       shared: json.shared === true,
+      followed: json.followed === true,
     }
     rememberEntry(entry)
     shareEvents.competitionEnter({ already: json.already === true })

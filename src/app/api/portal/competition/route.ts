@@ -5,7 +5,8 @@ import {
   type Campaign, type CampaignStatus,
 } from '@/lib/competition/campaign'
 import {
-  entryCounts, listEntries, setEntryState, drawWinner, importTaggedHandles, setBonusEntries, ticketsFor,
+  entryCounts, listEntries, setEntryState, drawWinner, importTaggedHandles, setBonusEntries, setFollowEntries,
+  ticketsFor,
   type CompetitionEntry, type EntryState,
 } from '@/lib/competition/entries'
 
@@ -51,12 +52,13 @@ function cell(value: string | number): string {
  * the only thing that says who may be emailed about anything but the draw.
  */
 function entriesCsv(entries: CompetitionEntry[]): string {
-  const header = ['email', 'entered_at', 'route', 'tickets', 'shared', 'marketing_opt_in', 'state']
+  const header = ['email', 'entered_at', 'route', 'tickets', 'shared', 'followed', 'marketing_opt_in', 'state']
   const rows = entries
     .filter((e) => e.channel === 'email' && !e.isTest)
     .map((e) => [
       e.handle, e.createdAt, e.route, ticketsFor(e),
-      e.bonusEntries > 0 ? 'yes' : 'no', e.marketingOptIn ? 'yes' : 'no', e.state,
+      e.bonusEntries > 0 ? 'yes' : 'no', e.followEntries > 0 ? 'yes' : 'no',
+      e.marketingOptIn ? 'yes' : 'no', e.state,
     ].map(cell).join(','))
   return [header.join(','), ...rows].join('\r\n') + '\r\n'
 }
@@ -120,14 +122,17 @@ export async function POST(req: Request) {
   }
 
   if (action === 'set-bonus') {
-    // Taking a share bonus away — somebody who plainly never posted. The entry
-    // itself stays; only the ten extra tickets go.
+    // Taking a bonus away — somebody who plainly never posted, or never
+    // followed. The entry itself stays, and so does the other bonus; only the
+    // one named goes. `kind` defaults to the share bonus, the only one there was.
     const id = String(body.id ?? '')
     const bonus = Number(body.bonus)
-    if (!id || !Number.isFinite(bonus) || bonus < 0) {
-      return NextResponse.json({ error: 'id and a bonus of 0 or more are required' }, { status: 400 })
+    const kind = body.kind ?? 'share'
+    if (!id || !Number.isFinite(bonus) || bonus < 0 || (kind !== 'share' && kind !== 'follow')) {
+      return NextResponse.json({ error: 'id, kind (share | follow) and a bonus of 0 or more are required' }, { status: 400 })
     }
-    await setBonusEntries(id, bonus)
+    if (kind === 'follow') await setFollowEntries(id, bonus)
+    else await setBonusEntries(id, bonus)
     return NextResponse.json(await payload())
   }
 

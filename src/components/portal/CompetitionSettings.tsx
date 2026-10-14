@@ -43,13 +43,13 @@ const STATUS_COPY: Record<CampaignStatus, { label: string; desc: string }> = {
 const FIELDS: Array<{ key: keyof Campaign; label: string; hint: string; long?: boolean }> = [
   { key: 'name', label: 'Name', hint: 'Internal and on the entry screen — e.g. “£200 Stack Giveaway”.' },
   { key: 'prize', label: 'Prize', hint: 'As advertised. “Up to £200” needs a defined structure before this can go live.' },
-  { key: 'mechanic', label: 'How to enter', hint: 'Take the quiz and enter your email at the end for one entry; share your card to your story for 10 bonus entries — in the words it appears in.' },
+  { key: 'mechanic', label: 'How to enter', hint: 'Take the quiz and enter your email at the end for one entry; follow @getchrgd_ on Instagram for 3 bonus entries; share your card to your story for 10 more — in the words it appears in. The terms page prints this, so it has to name every bonus.' },
   { key: 'promoterName', label: 'Promoter name', hint: 'Required: the promoter has to be identifiable on the promotion.' },
   { key: 'promoterAddress', label: 'Promoter address', hint: 'Required, and it has to be a real one.', long: true },
   { key: 'winnerSelection', label: 'How winners are picked', hint: 'When, how, how they are told, and what happens if they cannot be reached.', long: true },
   { key: 'freeEntryRoute', label: 'Free entry route', hint: 'No purchase necessary, and of equal standing to entering by sharing.', long: true },
   { key: 'termsUrl', label: 'Full terms URL', hint: 'Where the complete terms live.' },
-  { key: 'instagramHandle', label: 'Instagram handle', hint: 'Printed on the entry card. A reshared story has no link on it — this is the only way someone who sees it can find us.' },
+  { key: 'instagramHandle', label: 'Instagram handle', hint: 'Printed on the entry card, and the account the follow bonus opens. A reshared story has no link on it — this is the only way someone who sees it can find us.' },
   { key: 'quizRoute', label: 'How to reach the quiz', hint: 'What it says under the handle — “Quiz link in our bio”.' },
   { key: 'platformDisclaimer', label: 'Platform disclaimer', hint: 'Instagram requires the promotion to disclaim their involvement.', long: true },
   { key: 'emailUse', label: 'Your email (offers and news)', hint: 'Shown on the terms page. The entry form says “by entering you agree to the T&Cs, including that we can email you offers and news” — this is the term it points at.', long: true },
@@ -201,6 +201,7 @@ export function CompetitionSettings() {
           <p className="text-[10px] text-[var(--ink-3)] leading-snug">
             Short lines, not sentences. The giveaway card prints its own three — take the quiz,
             enter your email at the end, share for 10 bonus entries — so keep these saying the same thing.
+            The follow bonus (3 entries) is offered on the results page once someone has entered.
           </p>
         </div>
 
@@ -213,13 +214,15 @@ export function CompetitionSettings() {
       <div className="rounded-2xl p-4" style={surface}>
         <p className="text-xs font-bold text-[var(--ink-1)] mb-1">Entries</p>
         <p className="text-[11px] text-[var(--ink-3)] mb-2 leading-snug">
-          Everyone who finished the quiz and left their email. One ticket each, plus 10 for
-          sharing their card. The share is what the browser reported, not a checked story —
-          take the bonus off anyone who plainly didn’t post.
+          Everyone who finished the quiz and left their email. One ticket each, plus 3 for
+          following us and 10 for sharing their card. Both are what the browser reported — a
+          tap on Follow, a completed share sheet — not a checked follow or story. Take a bonus
+          off anyone who plainly didn’t.
         </p>
-        <div className="grid grid-cols-5 gap-2 mb-3">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
           {([
             ['emails', 'Emails'],
+            ['followed', 'Followed'],
             ['shared', 'Shared'],
             ['tickets', 'Tickets'],
             ['won', 'Won'],
@@ -281,14 +284,24 @@ export function CompetitionSettings() {
                     {describe(e)} · {new Date(e.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
+                {e.followEntries > 0 && e.state !== 'won' && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove follow bonus from ${e.handle}`}
+                    onClick={() => post({ action: 'set-bonus', kind: 'follow', id: e.id, bonus: 0 })}
+                  >
+                    − Follow
+                  </Button>
+                )}
                 {e.bonusEntries > 0 && e.state !== 'won' && (
                   <Button
                     size="sm"
                     variant="ghost"
                     aria-label={`Remove share bonus from ${e.handle}`}
-                    onClick={() => post({ action: 'set-bonus', id: e.id, bonus: 0 })}
+                    onClick={() => post({ action: 'set-bonus', kind: 'share', id: e.id, bonus: 0 })}
                   >
-                    Remove bonus
+                    − Share
                   </Button>
                 )}
                 {e.state === 'pending' && (
@@ -332,7 +345,8 @@ export function CompetitionSettings() {
           somebody asking how. Test entries can never win.
         </p>
         <p className="text-[10px] text-[var(--ink-3)] mt-1.5 leading-snug">
-          Somebody with the share bonus has 11 chances; without it, 1.
+          Somebody with both bonuses has 14 chances: 1 for the email, 3 for following, 10 for
+          sharing. Without either, 1.
         </p>
         {winner && (
           <p className="text-xs font-bold mt-2" style={{ color: 'var(--tone-positive)' }}>
@@ -392,13 +406,14 @@ function emailsOf(entries: CompetitionEntry[]): string[] {
 
 /** One line under an entrant: how they got in and what they hold. */
 function describe(e: CompetitionEntry): string {
-  const tickets = 1 + e.bonusEntries
+  const tickets = 1 + e.bonusEntries + e.followEntries
   const how = e.channel === 'email'
     ? (e.route === 'free' ? 'free entry' : 'quiz')
     : `${e.channel} · ${e.route === 'tag' ? 'tagged us' : e.route === 'free' ? 'free entry' : 'shared'}`
   return [
     how,
     `${tickets} ${tickets === 1 ? 'ticket' : 'tickets'}`,
+    e.followEntries > 0 ? 'followed' : null,
     e.bonusEntries > 0 ? 'shared' : null,
     e.marketingOptIn ? 'offers ✓' : (e.channel === 'email' ? 'no offers' : null),
     e.state,

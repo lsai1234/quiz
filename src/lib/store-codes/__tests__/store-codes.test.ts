@@ -1,7 +1,9 @@
 /**
  * Store codes — a name and a percentage, riding the partner-code checkout path.
  */
-import { createStoreCode, deleteStoreCode, listStoreCodes, validateStoreCode } from '@/lib/store-codes'
+import {
+  createStoreCode, deleteStoreCode, listStoreCodes, validateStoreCode, setStoreCodeEnd, setCheckoutPromo, liveCheckoutPromo,
+} from '@/lib/store-codes'
 import { createPartner, listPartnerRecords } from '@/lib/partners'
 import { recordCodeUse, redeemPartnerCode } from '@/lib/partners/redeem'
 import { accrueForOrder } from '@/lib/partners/ledger'
@@ -105,5 +107,61 @@ describe('store codes', () => {
     await createPartner({ email: 'keep@example.com', name: 'Keeper', code: 'KEEPER20' })
     expect(await deleteStoreCode('KEEPER20')).toBe(false)
     expect((await redeemPartnerCode('KEEPER20', { subtotal: 40, channel: 'quiz' }, never)).ok).toBe(true)
+  })
+})
+
+describe('ending a code, and advertising one at checkout', () => {
+  const now = new Date('2026-10-13T15:00:00Z') // 16:00 in London
+
+  it('ends a code at London midnight on the day chosen, and checkout refuses it after', async () => {
+    await createStoreCode({ name: 'TONIGHT20', percent: 20 })
+    const set = await setStoreCodeEnd('tonight20', '2026-10-13', now)
+    expect(set).toMatchObject({ ok: true, code: { endsAt: '2026-10-13T23:00:00.000Z', ended: false } })
+
+    const before = await redeemPartnerCode('TONIGHT20', { subtotal: 40, channel: 'quiz', now: new Date('2026-10-13T22:59:00Z') }, never)
+    const after = await redeemPartnerCode('TONIGHT20', { subtotal: 40, channel: 'quiz', now: new Date('2026-10-13T23:00:01Z') }, never)
+    expect(before.ok).toBe(true)
+    expect(after).toEqual({ ok: false, reason: 'That code has expired.' })
+  })
+
+  it('will not end a code in the past, and can take an end away', async () => {
+    await createStoreCode({ name: 'PASTEND', percent: 10 })
+    expect(await setStoreCodeEnd('PASTEND', '2026-10-12', now)).toEqual({ ok: false, reason: 'Pick today or a later day.' })
+    expect(await setStoreCodeEnd('PASTEND', 'soon', now)).toMatchObject({ ok: false })
+    await setStoreCodeEnd('PASTEND', '2026-10-20', now)
+    expect(await setStoreCodeEnd('PASTEND', null, now)).toMatchObject({ ok: true, code: { endsAt: null } })
+  })
+
+  it('advertises the chosen code with its real end, and nothing once it has ended', async () => {
+    await createStoreCode({ name: 'LAUNCH25', percent: 25 })
+    await setStoreCodeEnd('LAUNCH25', '2026-10-13', now)
+    expect(await setCheckoutPromo('launch25', now)).toMatchObject({ ok: true })
+
+    expect(await liveCheckoutPromo(now)).toEqual({ code: 'LAUNCH25', percent: 25, endsAt: '2026-10-13T23:00:00.000Z' })
+    expect((await listStoreCodes()).find((c) => c.code === 'LAUNCH25')).toMatchObject({ atCheckout: true })
+    // The countdown and the code end together: after midnight there is no card.
+    expect(await liveCheckoutPromo(new Date('2026-10-13T23:00:01Z'))).toBeNull()
+    // And an ended code cannot be chosen until it has a new end.
+    expect(await setCheckoutPromo('LAUNCH25', new Date('2026-10-14T09:00:00Z'))).toMatchObject({ ok: false })
+  })
+
+  it('advertises a code with no end without a deadline, and stops when told or when it is deleted', async () => {
+    await createStoreCode({ name: 'OPEN15', percent: 15 })
+    await setCheckoutPromo('OPEN15', now)
+    expect(await liveCheckoutPromo(now)).toEqual({ code: 'OPEN15', percent: 15, endsAt: null })
+
+    await setCheckoutPromo(null, now)
+    expect(await liveCheckoutPromo(now)).toBeNull()
+
+    await setCheckoutPromo('OPEN15', now)
+    await deleteStoreCode('OPEN15')
+    await createStoreCode({ name: 'OPEN15', percent: 15 })
+    // A new code under an old name is not advertised just because the old one was.
+    expect(await liveCheckoutPromo(now)).toBeNull()
+  })
+
+  it('only ever advertises one of ours', async () => {
+    await createPartner({ email: 'promo-partner@example.com', name: 'Promo Partner', code: 'PARTNER30' })
+    expect(await setCheckoutPromo('PARTNER30', now)).toEqual({ ok: false, reason: 'That is not one of the store codes.' })
   })
 })

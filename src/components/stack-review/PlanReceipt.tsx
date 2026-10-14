@@ -8,6 +8,7 @@ import { cadenceLine, formatGBP, getPricingConfig, planComparison, qualifiesForF
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import type { StackLevel } from '@/lib/types'
+import { Icon } from '@/components/ui/Icon'
 import { ProductTile } from './ProductTile'
 import { ShopAlaCarte } from './ShopAlaCarte'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
@@ -23,6 +24,8 @@ interface LineItem {
   suffix?: string
   /** How it is taken and how often it lands. Subscription lines only. */
   note?: string
+  /** What it is for — the slot it fills ("Electrolytes"). One-off lines, where there is no cadence to say. */
+  role?: string
 }
 
 interface Props {
@@ -169,11 +172,11 @@ function PlanTab({ label, sub, active, disabled, onClick }: { label: string; sub
 
 function Row({ label, value, accent, strike }: { label: string; value: string; accent?: boolean; strike?: boolean }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs" style={{ color: accent ? 'var(--color-accent)' : 'var(--color-muted)' }}>{label}</span>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs min-w-0" style={{ color: accent ? 'var(--color-accent)' : 'var(--color-text-2)' }}>{label}</span>
       <span
-        className="text-xs font-semibold"
-        style={{ color: accent ? 'var(--color-accent)' : 'var(--color-muted)', textDecoration: strike ? 'line-through' : 'none' }}
+        className="text-xs font-semibold tabular-nums flex-shrink-0"
+        style={{ color: accent ? 'var(--color-accent)' : 'var(--color-text-2)', textDecoration: strike ? 'line-through' : 'none' }}
       >
         {value}
       </span>
@@ -280,12 +283,17 @@ export function PlanReceipt({
       }))
     : slots.map((slot) => {
         const line = stackLines.find((l) => l.slot.slotId === slot.slotId)
+        const title = line?.product.title ?? slot.title
+        const role = slotTitleById[slot.slotId] ?? slot.title
         return {
           key: slot.slotId,
           slotType: slot.slotType,
           imageUrl: line?.product.imageUrl ?? null,
-          title: line?.product.title ?? slot.title,
+          title,
           price: line?.variant.price ?? line?.product.basePrice ?? 0,
+          // Only when it adds something: a "Creatine" label under "Creatine
+          // Monohydrate" is the same word twice.
+          role: role && !title.toLowerCase().includes(role.toLowerCase()) ? role : undefined,
         }
       })
 
@@ -328,21 +336,34 @@ export function PlanReceipt({
         <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
           Your order · {items.length} {items.length === 1 ? 'item' : 'items'}
         </p>
-        <div className="space-y-2">
+        {/*
+          Two lines for a name, not one cut short. "Endurance Breathe Isotonic
+          Energy …" and "Collagen Hydrolysed Type I & III, Unfl…" were the two
+          products somebody most needed to recognise, and the ellipsis took the
+          part that said what they were. The slot underneath says what each one
+          is for, which is the question a list of brand names leaves open.
+        */}
+        <div className="space-y-3">
           {items.map((it) => (
-            <div key={it.key} className="flex items-start gap-2.5">
-              <ProductTile imageUrl={it.imageUrl} slot={it.slotType} title={it.title} size={30} />
+            <div key={it.key} className="flex items-start gap-3">
+              <ProductTile
+                imageUrl={it.imageUrl}
+                slot={it.slotType}
+                title={it.title}
+                size={40}
+                style={{ borderRadius: 10, flexShrink: 0 }}
+              />
               <span className="flex-1 min-w-0">
-                <span className="block text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                <span className="block text-[13px] font-medium leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>
                   {it.title}
                 </span>
-                {it.note && (
-                  <span className="block text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    {it.note}
+                {(it.note ?? it.role) && (
+                  <span className="block text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {it.note ?? it.role}
                   </span>
                 )}
               </span>
-              <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <span className="text-[13px] font-bold tabular-nums flex-shrink-0 leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(it.price)}{it.suffix ?? ''}
               </span>
             </div>
@@ -402,7 +423,13 @@ export function PlanReceipt({
             </>
           ) : (
             <>
-              {hasOneOffSaving && <Row label="Regular price" value={formatGBP(oneOffSubtotal)} strike />}
+              {/* The sum of the items, then what comes off it. A subtotal rather
+                  than a struck-through "regular price": it is the receipt's own
+                  arithmetic, and the line under it says where the saving came
+                  from. Only when there is a saving to subtract from it. */}
+              {hasOneOffSaving && (
+                <Row label={`Subtotal · ${items.length} ${items.length === 1 ? 'item' : 'items'}`} value={formatGBP(oneOffSubtotal)} />
+              )}
               {/* The discount is named and carries the whole saving. A total
                   that saves £21 while the receipt only accounts for £6 of it
                   reads as a mistake in the customer's favour — the last thing
@@ -429,11 +456,45 @@ export function PlanReceipt({
               {starterStack && (
                 <Row label={starterStack.label} value={`−${formatGBP(oneOffTotal)}`} accent />
               )}
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                  {starterStack ? 'To pay' : 'One-off total'}
+              {/* Delivery as a line of the receipt when it is free — it adds
+                  nothing to the total, so the arithmetic above still holds, and
+                  it is good news worth reading where the money is. When it is
+                  not free it is charged at the payment screen, so it stays the
+                  note under the card rather than a row that would leave the
+                  total short of what is taken. */}
+              {freeDelivery && config.freeDeliveryThreshold > 0 && !starterStack && (
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-2)' }}>
+                    Delivery
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
+                    <Icon name="truck" size={14} />
+                    Free
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 pt-2.5 mt-1" style={{ borderTop: '1px solid var(--color-border)' }}>
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
+                    {starterStack ? 'To pay' : 'Total'}
+                  </span>
+                  {/* The saving, once — beside the number it was taken off,
+                      rather than a second row repeating the discount line.
+                      Not on a free order: "save £6.56" under £0.00 undersells
+                      it by everything else the code took off. */}
+                  {hasOneOffSaving && !starterStack && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums whitespace-nowrap"
+                      style={{
+                        color: 'var(--tone-positive)',
+                        background: 'color-mix(in srgb, var(--tone-positive) 12%, transparent)',
+                      }}
+                    >
+                      You save {formatGBP(oneOffSaving)}
+                    </span>
+                  )}
                 </span>
-                <span className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                <span className="text-xl font-black tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                   {formatGBP(starterStack ? 0 : oneOffTotal)}
                 </span>
               </div>
@@ -442,21 +503,32 @@ export function PlanReceipt({
                   Delivery is on us too. Nothing is taken from a card — there is nothing to take.
                 </p>
               )}
-              {/* Not on a free order: "you save £6.56" under a £0.00 total
-                  undersells it by everything else the code took off. */}
-              {hasOneOffSaving && !starterStack && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-emerald-400">You save</span>
-                  <span className="text-xs font-semibold text-emerald-400">−{formatGBP(oneOffSaving)}</span>
-                </div>
-              )}
+              {/* A nudge, not a second call to action: one row, the two numbers
+                  that matter, and a chevron. It was a tinted block whose
+                  sentence wrapped onto two centred lines between the total and
+                  the buy button — the same weight as both. */}
               {canSubscribe && subscriptionDiscountPct > 0 && (
                 <button
                   onClick={() => onPlanChange('subscription')}
-                  className="w-full mt-1 px-3 py-2.5 rounded-xl text-xs font-semibold text-center leading-snug active:scale-[0.98] transition-transform"
-                  style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}
+                  className="w-full mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-left active:scale-[0.99] transition-transform"
+                  style={{ border: '1px solid var(--color-border-2)', background: 'var(--color-surface)' }}
                 >
-                  Subscribe &amp; save up to {subscriptionDiscountPct}% — {LEVEL_LABEL[bundleLevel]} bundle →
+                  <span
+                    className="flex items-center justify-center rounded-lg flex-shrink-0"
+                    style={{ width: 30, height: 30, color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }}
+                  >
+                    <Icon name="refresh" size={16} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                      Subscribe &amp; save up to {subscriptionDiscountPct}%
+                    </span>
+                    <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {formatGBP(subscriptionTotal)}/mo ·{' '}
+                      {subscriptionMinMonths > 1 ? `${subscriptionMinMonths}-month minimum` : 'pause or cancel anytime'}
+                    </span>
+                  </span>
+                  <Icon name="chevron-right" size={16} className="flex-shrink-0 text-[var(--color-muted)]" />
                 </button>
               )}
             </>
@@ -478,9 +550,11 @@ export function PlanReceipt({
         */}
         {/* Not on a free order either, where delivery is already on us and a
             "+£2.95 delivery" line would contradict the line above it. */}
-        {config.freeDeliveryThreshold > 0 && !starterStack && (
+        {/* One-off and free, it is a row of the receipt above. Subscribed and
+            free, it is still said here, under the monthly total. */}
+        {config.freeDeliveryThreshold > 0 && !starterStack && (isSub || !freeDelivery) && (
           <div
-            className="mt-2.5 mb-3.5 flex items-center justify-center gap-2 text-xs font-semibold"
+            className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold"
             style={
               freeDelivery
                 ? { color: 'var(--color-accent)' }
@@ -489,12 +563,7 @@ export function PlanReceipt({
           >
             {freeDelivery ? (
               <>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                  <path d="M1.5 5.5h9v7h-9v-7Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                  <path d="M10.5 8h4l3 3v1.5h-7V8Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                  <circle cx="5" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
-                  <circle cx="14.5" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
-                </svg>
+                <Icon name="truck" size={14} />
                 Free delivery included
               </>
             ) : (
@@ -507,7 +576,7 @@ export function PlanReceipt({
         )}
 
         {/* CTAs */}
-        <div className="space-y-2 mt-3">
+        <div className="space-y-2 mt-4">
           {/* `data-checkout-cta` is how the page knows this button is on screen,
               so the sticky bar can get out of its way — the bar used to sit
               directly on top of it. See `ctaOnScreen` in StackReviewPage. */}
@@ -531,11 +600,19 @@ export function PlanReceipt({
                   ? 'Start subscription →'
                   : 'Continue to checkout →'}
           </button>
+          {/* Secondary, and drawn as one: it was muted text in a hairline, which
+              read as a disabled button rather than a second way forward. */}
           <button
             onClick={onCustomise}
-            className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
-            style={{ fontFamily: 'var(--font-display)' }}
+            className="w-full py-3 rounded-2xl text-sm font-semibold inline-flex items-center justify-center gap-2 active:scale-95 transition-all"
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: 'var(--color-text-2)',
+              border: '1px solid var(--color-border-2)',
+              background: 'var(--color-surface)',
+            }}
           >
+            <Icon name="swap" size={16} />
             Swap products
           </button>
 
