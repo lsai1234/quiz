@@ -44,7 +44,7 @@ import { ProductTile } from './ProductTile'
 /** The figures the card draws, straight off the quote. */
 export type LastChanceDeal = Pick<
   OfferQuote,
-  | 'listPrice' | 'offerPrice' | 'discountPct' | 'saving'
+  | 'listPrice' | 'basePrice' | 'offerPrice' | 'discountPct' | 'saving'
   | 'standardDelivery' | 'deliveryCharge' | 'deliveryDeal' | 'deliverySaving'
   | 'normalTotal' | 'total' | 'totalSaving'
 >
@@ -478,10 +478,13 @@ export function LastChanceView(p: LastChanceViewProps) {
             <DealLine
               icon={pct > 0 ? 'sparkle' : 'box'}
               label={pct > 0 ? `${pct}% off` : 'The product'}
-              sub={pct > 0 ? 'Worked out for this order' : undefined}
-              was={pct > 0 ? formatGBP(deal.listPrice) : null}
+              // Off what it would cost on its own — which, for a £50+ product,
+              // already has the bundle deal in it. Said, so the struck-through
+              // figure is never mistaken for a price the shop invented.
+              sub={pct > 0 ? (deal.basePrice < deal.listPrice ? `Off the ${formatGBP(deal.basePrice)} it’d cost on its own` : 'Worked out for this order') : undefined}
+              was={pct > 0 ? formatGBP(deal.basePrice) : null}
               now={formatGBP(deal.offerPrice)}
-              srText={pct > 0 ? `${pct}% off: ${formatGBP(deal.offerPrice)} instead of ${formatGBP(deal.listPrice)}.` : `${formatGBP(deal.offerPrice)}.`}
+              srText={pct > 0 ? `${pct}% off: ${formatGBP(deal.offerPrice)} instead of ${formatGBP(deal.basePrice)}.` : `${formatGBP(deal.offerPrice)}.`}
               delay={T.row2}
               strikeAt={T.strike2}
             />

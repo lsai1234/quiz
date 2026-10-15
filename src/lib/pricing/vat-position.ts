@@ -24,10 +24,10 @@
  * currently eating (the number that tempts you) next to the output VAT we'd owe
  * (the number that settles it). One without the other misleads.
  *
- * With `supplierChargesVat` off — the shipped default, because the founder says
- * we are not paying VAT at the moment — C carries no VAT either way, input VAT
- * is zero, and registering costs the whole of the output VAT. The verdict says
- * so rather than talking about VAT PowerBody don't charge.
+ * With `supplierChargesVat` off (it ships on: PowerBody do charge us VAT), C
+ * carries no VAT either way, input VAT is zero, and registering costs the whole
+ * of the output VAT. The verdict says so rather than talking about VAT
+ * PowerBody don't charge.
  *
  * WHAT THIS IS NOT
  * ────────────────

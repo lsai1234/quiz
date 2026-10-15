@@ -22,8 +22,9 @@
  * VAT PowerBody charged us — costs are net.
  * Not registered: we keep the whole shelf price (no VAT to hand over) but
  * cannot reclaim, so whatever VAT PowerBody charge us is a real, permanent
- * cost. Whether they charge any is `config.vat.supplierChargesVat` — off by
- * default, because the founder says we are not paying VAT at the moment.
+ * cost. Whether they charge any is `config.vat.supplierChargesVat` — on by
+ * default, because they do: the prices we store are ex VAT and their invoices
+ * add it.
  *
  * Below the registration threshold the second is usually better; above it there
  * is no choice. `config.vat.registered` picks, and it changes both sides of the

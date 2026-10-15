@@ -29,12 +29,30 @@ const BIG = {
   weightGrams: 3000,
   variants: [{ id: 'v-big', title: '3kg', flavour: null, size: '3kg', price: 59.99, compareAtPrice: null, available: true, sku: 'B1', cost: 30 }],
 }
+const REFILL = {
+  id: 'refill',
+  title: 'CHRGD Whey Refill',
+  cost: 12,
+  basePrice: 34.99,
+  isSubscriptionOnly: true,
+  variants: [{ id: 'v-refill', title: '1kg', flavour: null, size: '1kg', price: 34.99, compareAtPrice: null, available: true, sku: 'R1', cost: 12 }],
+}
+const SHAKER = {
+  id: 'shaker',
+  title: 'CHRGD Shaker',
+  cost: 4,
+  basePrice: 24.99,
+  swapGroup: 'accessory',
+  category: 'Accessories',
+  variants: [{ id: 'v-shaker', title: '700ml', flavour: null, size: '700ml', price: 24.99, compareAtPrice: null, available: true, sku: 'S1', cost: 4 }],
+}
 const WHEY = {
   id: 'whey',
   title: 'CHRGD Whey Protein',
   cost: 12,
   basePrice: 34.99,
   weightGrams: 1000,
+  swapGroup: 'protein-whey',
   variants: [{ id: 'v-whey', title: '1kg', flavour: 'Chocolate', size: '1kg', price: 34.99, compareAtPrice: null, available: true, sku: 'W1', cost: 12 }],
 }
 const ZINC = {
@@ -44,7 +62,7 @@ const ZINC = {
   basePrice: 11.99,
   variants: [{ id: 'v-zinc', title: '60 tabs', flavour: null, size: '60 tabs', price: 11.99, compareAtPrice: null, available: true, sku: 'Z1', cost: 6 }],
 }
-jest.mock('@/lib/catalogue/resolve', () => ({ getResolvedCatalogue: async () => ({ products: [WHEY, ZINC, BIG] }) }))
+jest.mock('@/lib/catalogue/resolve', () => ({ getResolvedCatalogue: async () => ({ products: [WHEY, ZINC, BIG, REFILL, SHAKER] }) }))
 
 import { POST } from '../route'
 import { describeDeal, offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
@@ -139,9 +157,10 @@ describe('when free delivery would lose money', () => {
   })
 })
 
-it('is priced on its own: a £50+ product gets the deal, not the bundle tier on top', async () => {
+it('is priced on its own: a £50+ product is billed the deal, off what it costs alone', async () => {
   const big = quoteOffer(offerProductFor(BIG as never, BIG.variants[0]))
   expect(big.viable).toBe(true)
+  expect(big.basePrice).toBeLessThan(59.99)
   const res = await buy({ lines: [line('v-big')], lastChance: offerFor(big, 'v-big') })
   const order = await getOrder((await res.json()).orderId)
   expect(order?.lines[0].unitPrice).toBe(big.offerPrice)
@@ -155,9 +174,36 @@ it('is an offer for one product on its own — nothing else gets the discount', 
   }
 })
 
-it('refuses the offer on a product with no deal it can afford', async () => {
+it('refuses the offer on a product with no deal it can afford — and says the deal is gone', async () => {
   const res = await buy({ lines: [line('v-zinc')], lastChance: { variantId: 'v-zinc', expectedPrice: 11.99, expectedDelivery: 4.95 } })
   expect(res.status).toBe(409)
+  const body = await res.json()
+  // The card reads `viable: false` as "stand down", not as a new price to show.
+  expect(body.quote.viable).toBe(false)
+  expect(body.quote).not.toHaveProperty('contribution')
+})
+
+it('will not sell the deal on something the card would never offer: a refill, an accessory', async () => {
+  for (const [id, product] of [['v-refill', REFILL], ['v-shaker', SHAKER]] as const) {
+    const q = quoteOffer(offerProductFor(product as never, product.variants[0]))
+    const res = await buy({ lines: [line(id)], lastChance: { variantId: id, expectedPrice: q.offerPrice, expectedDelivery: q.deliveryCharge } })
+    expect(res.status).toBe(400)
+  }
+})
+
+it('keeps the register claim the card showed with the order — only a real one for that product', async () => {
+  const withClaim = (value: string) => ({ ...line('v-whey'), attributes: [{ key: 'source', value: 'quiz-last-chance' }, { key: 'claim', value }] })
+  const res = await buy({ lines: [withClaim('protein-muscle-growth')], lastChance: offerFor(quote, 'v-whey') })
+  const order = await getOrder((await res.json()).orderId)
+  expect(order?.lastChance?.claimId).toBe('protein-muscle-growth')
+  expect(order?.events.find((e) => e.type === 'offer')?.detail).toContain('claim shown: protein-muscle-growth')
+
+  // Free text, or a claim this kind of product does not carry, is not kept.
+  for (const bogus of ['cures everything', 'vitd-immune']) {
+    const r = await buy({ lines: [withClaim(bogus)], lastChance: offerFor(quote, 'v-whey') })
+    const o = await getOrder((await r.json()).orderId)
+    expect(o?.lastChance?.claimId).toBeNull()
+  }
 })
 
 it('prices the same line at full price when no offer is asked for', async () => {

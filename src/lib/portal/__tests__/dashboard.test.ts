@@ -127,7 +127,7 @@ describe('money windows', () => {
 
   it('costs the supplier’s VAT in when we cannot reclaim it', () => {
     // Unregistered, as shipped — with PowerBody charging us VAT pinned on,
-    // because that VAT is the subject (`supplierChargesVat` ships off).
+    // because that VAT is the subject (`supplierChargesVat` ships on too).
     const charged = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: true } }
     const w = moneyWindow(ago(24), [order()], charged)
     // Not registered: we keep the whole £40, but the £12 of goods costs £14.40.
@@ -137,8 +137,8 @@ describe('money windows', () => {
   })
 
   it('costs the goods at their quoted price when PowerBody charge us no VAT', () => {
-    const w = moneyWindow(ago(24), [order()], PRICING_CONFIG) // the shipped default
-    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    const none = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: false } }
+    const w = moneyWindow(ago(24), [order()], none)
     expect(w.netRevenue).toBe(40)
     expect(w.cogs).toBe(12)
   })
@@ -231,15 +231,15 @@ describe('dashboard summary', () => {
         vat: buildVatPosition({ orders, config, averageCostRatio: 0.4, now: NOW }).verdict,
       }).notices[0]
 
-    // As shipped, their invoices carry no VAT — so the notice never says they do.
-    const off = notice(PRICING_CONFIG)
+    // Switched off, their invoices carry no VAT — so the notice never says they do.
+    const off = notice({ ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, supplierChargesVat: false } })
     expect(off.id).toBe('vat')
     expect(off.tone).toBe('watch')
     expect(off.detail).toMatch(/PowerBody don't charge us VAT/)
     expect(off.detail).not.toMatch(/VAT PowerBody charge us|can't be reclaimed|cannot reclaim/i)
 
-    // Switched on, the two-sided reading is back.
-    const on = notice({ ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, supplierChargesVat: true } })
+    // On, as shipped, the two-sided reading is back.
+    const on = notice(PRICING_CONFIG)
     expect(on.detail).not.toMatch(/don't charge us VAT/)
   })
 

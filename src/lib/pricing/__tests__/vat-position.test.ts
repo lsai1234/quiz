@@ -167,9 +167,9 @@ describe('when PowerBody charge us no VAT', () => {
   /** Anything that would tell a founder PowerBody's VAT is a cost to us. */
   const CLAIMS_SUPPLIER_VAT = /VAT PowerBody charge us|can't be reclaimed|cannot reclaim|claim it back/i
 
-  it('is how the business ships', () => {
-    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
-    expect(build(spread(10, 50, 300), PRICING_CONFIG).supplierChargesVat).toBe(false)
+  it('is not how the business ships — PowerBody do charge us VAT', () => {
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(true)
+    expect(build(spread(10, 50, 300), noSupplierVat).supplierChargesVat).toBe(false)
   })
 
   it('has nothing to reclaim, so registering costs the whole of the VAT on sales', () => {

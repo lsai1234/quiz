@@ -14,15 +14,23 @@ const noop = () => {}
 const r2 = (n: number) => Math.round(n * 100) / 100
 
 /** A deal's figures from its levers, the way `quoteOffer` derives them. */
-function deal(listPrice: number, pct: number, standardDelivery: number, deliveryCharge: number, deliveryDeal: LastChanceDeal['deliveryDeal']): LastChanceDeal {
-  const offerPrice = r2(listPrice * (1 - pct / 100))
-  const normalTotal = r2(listPrice + standardDelivery)
+function deal(
+  listPrice: number,
+  pct: number,
+  standardDelivery: number,
+  deliveryCharge: number,
+  deliveryDeal: LastChanceDeal['deliveryDeal'],
+  basePrice = listPrice,
+): LastChanceDeal {
+  const offerPrice = r2(basePrice * (1 - pct / 100))
+  const normalTotal = r2(basePrice + standardDelivery)
   const total = r2(offerPrice + deliveryCharge)
   return {
     listPrice,
+    basePrice,
     offerPrice,
     discountPct: pct,
-    saving: r2(listPrice - offerPrice),
+    saving: r2(basePrice - offerPrice),
     standardDelivery,
     deliveryCharge,
     deliveryDeal,
@@ -56,7 +64,7 @@ const STATES: Array<[string, Partial<LastChanceViewProps>]> = [
   ['free-delivery-only', { deal: deal(29.99, 0, 4.95, 0, 'free') }],
   ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: 'Strength', slotType: 'strength', deal: deal(19.99, 0, 4.95, 1.49, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
   ['with-claim', { title: 'CHRGD Whey Protein', role: 'Protein', slotType: 'protein', goalLine: 'You told us your top goal is “Build muscle”. Of the 5 products in your stack, this is the one built around it. It’s the core of your stack.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 5, 4.95, 0, 'free'), packMonths: 1 }],
-  ['delivery-already-free', { title: 'CHRGD Mass Builder', role: 'Protein', slotType: 'protein', deal: deal(109.99, 24, 0, 0, 'included'), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
+  ['delivery-already-free', { title: 'CHRGD Mass Builder', role: 'Protein', slotType: 'protein', deal: deal(109.99, 24, 0, 0, 'included', 101.19), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
   ['long-name-no-facts', { title: 'Collagen Hydrolysed Type I & III, Unflavoured — 300g', role: 'Recovery', slotType: 'recovery', packMonths: null, servings: null, goalLine: 'Picked for your goal “Recovery”.' }],
   ['loading', { status: 'loading' }],
   ['redirecting', { status: 'redirecting' }],

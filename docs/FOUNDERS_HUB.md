@@ -118,14 +118,15 @@ the whole hub reprices. Per-product `vatRate` covers the zero-rated items.
 
 `vat.supplierChargesVat` — **"PowerBody charge us VAT"** under Pricing → Rules →
 VAT, shown only while unregistered — says whether PowerBody's invoices to us
-carry VAT. **It ships as `false`**, because the founder says we are not paying
-VAT at the moment: supplier costs are their prices as quoted, ex VAT, on goods
-and delivery. On, their 20% is a cost we cannot reclaim and every supplier price
-is grossed up by it. `supplierVatIsCost` (charged *and* unregistered) is the one
+carry VAT. **It ships as `true`**, because they do: the supplier prices stored
+in the hub are ex VAT, PowerBody add VAT to every invoice, and until we are
+registered none of it comes back — so their 20% is a cost and every supplier
+price is grossed up by it. Off, costs are their prices as quoted. Registering
+is `vat.registered`, not this. `supplierVatIsCost` (charged *and* unregistered) is the one
 place that is decided; `costFromSupplierPrice` and `priceForMargin` both read it,
 so margins, cut-offs, the last-chance offer and cost-price codes move together.
-If their invoices do carry VAT and this is left off, all of those are about a
-fifth of cost too generous.
+Turned off while their invoices still carry VAT, all of those are about a fifth
+of cost too generous.
 
 The **VAT tab** answers the three questions in the order they get asked.
 

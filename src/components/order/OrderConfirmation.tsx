@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { track } from '@/lib/analytics/events'
+import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import type { ConfirmationResponse } from '@/lib/orders/confirmation'
 import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
 import { receiptFromConfirmation } from '@/lib/receipt/build'
@@ -66,6 +67,11 @@ export function OrderConfirmation({ sessionId, mockOrderId }: { sessionId: strin
       }
 
       setResolved({ status: 'ready', data })
+
+      // Had the one-time deal: it is not offered to this browser again.
+      if (data.state === 'confirmed' && data.order?.lastChanceDeal) {
+        try { window.localStorage.setItem(LAST_CHANCE_USED_KEY, '1') } catch { /* private mode: no memory, no harm */ }
+      }
 
       // Fire the purchase event exactly once, and only for a genuinely confirmed
       // order the server has not already reported (OC-F-090). Async payments

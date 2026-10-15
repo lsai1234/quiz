@@ -105,12 +105,30 @@ describe('minimal disclosure (OC-F-020, OC-F-021, OC-D-006)', () => {
       shipping: 0,
       lastChance: { listPrice: 29.99, offerPrice: 25.49, discountPct: 15, standardDelivery: 4.95, deliveryCharge: 0, deliveryDeal: 'free' },
     })
-    const { totals } = toConfirmationOrder(order)
+    const { totals, lineItems } = toConfirmationOrder(order)
     expect(totals.subtotal).toBe(2999)
     expect(totals.discount).toBe(450)
     expect(totals.shipping).toBe(0)
     expect(totals.total).toBe(2549)
     expect(totals.subtotal - totals.discount + totals.shipping).toBe(totals.total)
+    // The line reads at its shelf price, so the items add up to the subtotal
+    // and the £4.50 is taken off once, in the Discount row.
+    expect(lineItems.reduce((n, l) => n + l.unitAmount * l.qty, 0)).toBe(totals.subtotal)
+  })
+
+  it('shows no last-chance discount on a line that is no longer the one the deal was on', async () => {
+    const order = await createOrderFromCheckout({
+      channel: 'quiz',
+      status: 'paid',
+      // Swapped since for a £19.99 product, but the snapshot survived.
+      lines: [{ ...line, quantity: 1, unitPrice: 19.99 }],
+      shipping: 0,
+      lastChance: { listPrice: 29.99, offerPrice: 25.49, discountPct: 15, standardDelivery: 4.95, deliveryCharge: 0, deliveryDeal: 'free' },
+    })
+    const { totals, lineItems } = toConfirmationOrder(order)
+    expect(totals.discount).toBe(0)
+    expect(totals.subtotal).toBe(1999)
+    expect(lineItems[0].unitAmount).toBe(1999)
   })
 
   it('generates references that do not leak order volume', () => {

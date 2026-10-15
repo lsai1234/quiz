@@ -22,7 +22,7 @@ A spotlight card that arrives once as it scrolls into view, then stays still:
 
 - **One-time offer**: their best-fitting product lifts into a beam of light
   while a ring charges round it. A **FREE DELIVERY** ribbon sits across it, and
-  a **−15% OFF** stamp is pressed on when there is a percentage too.
+  a **−8% OFF** stamp is pressed on when there is a percentage too.
 - **Why it's theirs**: in terms of the goal they gave us, e.g. *You told us
   your top goal is "Build muscle". Of the 3 products in your stack, this is
   the one built around it.*
@@ -33,10 +33,10 @@ A spotlight card that arrives once as it scrolls into view, then stays still:
 - **Your deal · only on this page**: the deal assembles line by line as it
   arrives:
   - Free delivery, with ~~£4.95~~ struck through.
-  - 15% off, with ~~£29.99~~ struck through, now £25.49.
-  - The delivered price counts down from £34.94 to **£25.49**, with **You save
-    £9.45**.
-- One button: **Get it for £25.49 →**, the delivered price. Below it: "Just
+  - 8% off, with ~~£39.99~~ struck through, now £36.79.
+  - The delivered price counts down from £44.94 to **£36.79**, with **You save
+    £8.15**.
+- One button: **Get it for £36.79 →**, the delivered price. Below it: "Just
   this, once. No subscription. Pay on the next screen." and the Highlands
   surcharge, stated.
 
@@ -46,18 +46,21 @@ construction:
 - It is worked out here, for this stack.
 - It is not in the shop.
 - No code unlocks it.
-- It is one product, once.
+- It is one product, once. Once an order on the deal is confirmed, that
+  browser is not offered it again.
 
 There is no countdown and no "ends tonight", because there is no deadline to
 state, so none is invented (a false "only available for a very limited time"
-is a banned practice under UK consumer law). Every saving is against the
-product's real shelf price and the delivery it would really be charged. The
-deal must also beat buying the product the ordinary way, its own bundle tier
-included, by at least £1.
+is a banned practice under UK consumer law). Every saving is measured against
+what the product would really cost delivered through the ordinary checkout:
+its shelf price, less the 8% bundle deal a single £50+ product earns anyway,
+plus the delivery it would really be charged. The deal must beat that by at
+least £1.
 
 **What it never says** (`docs/ORDER_CONFIRMATION_SPEC.md` §5): no timeframes
-for results, no outcomes, nothing generated at runtime. The claim id rides on
-the order line (`claim` attribute), per OC-C-006.
+for results, no outcomes, nothing generated at runtime. The claim id it showed
+is checked against the product's own register claims and kept on the order
+(`lastChance.claimId`), per OC-C-006.
 
 **Reveal or straight to buy?** Both, without a gate. It reveals itself on
 scroll, and the one remaining tap buys. A "tap to reveal" button would spend a
@@ -143,26 +146,27 @@ would give most of the margin away.
   delivery everywhere else, because our cost there never goes away.
 
 Worked across the catalogue's pricing rule (list = 2 × cost), as the engine
-quotes it. With VAT ignored (the switch's current setting):
+quotes it, with PowerBody's VAT counted as a cost (as it is until we register):
 
-| List price | Our cost | The deal | Customer pays, delivered | Instead of | We keep at full price | We keep with the deal |
+| Shelf price | Our cost (ex VAT) | The deal | Customer pays, delivered | Instead of | We keep at full price | We keep with the deal |
 |---|---|---|---|---|---|---|
-| £11.99 | £6.00 | no deal (under the £15 minimum) | — | £16.94 | £3.78 | — |
-| £15.99 | £8.00 | delivery £2.49 (was £4.95) | £18.48 | £20.94 | £5.72 | £3.30 |
-| £17.99 | £9.00 | delivery £1.49 (was £4.95) | £19.48 | £22.94 | £6.69 | £3.29 |
-| £19.99 | £10.00 | delivery £0.99 (was £4.95) | £20.98 | £24.94 | £7.66 | £3.76 |
-| £23.99 | £12.00 | free delivery + 7% off | £22.31 | £28.94 | £9.60 | £3.07 |
-| £29.99 | £15.00 | free delivery + 15% off | £25.49 | £34.94 | £12.51 | £3.21 |
-| £34.99 | £17.50 | free delivery + 20% off | £27.99 | £39.94 | £14.94 | £3.17 |
-| £39.99 | £20.00 | free delivery + 23% off | £30.79 | £44.94 | £17.36 | £3.43 |
-| £49.99 | £25.00 | free delivery + 25% off | £37.49 | £52.94 | £20.24 | £5.03 |
-| £59.99 | £30.00 | free delivery + 25% off | £44.99 | £62.94 | £25.09 | £7.41 |
-| £79.99 | £40.00 | free delivery + 25% off | £59.99 | £82.94 | £34.79 | £12.19 |
-| £109.99 | £55.00 | 25% off (delivery already free) | £82.49 | £109.99 | £47.44 | £20.35 |
+| £11.99 | £6.00 | no deal (under the £15 minimum) | — | £16.94 | £1.22 | — |
+| £15.99 | £8.00 | no deal | — | £20.94 | £2.76 | — |
+| £19.99 | £10.00 | no deal (the most it could do saves under £1) | — | £24.94 | £4.30 | — |
+| £23.99 | £12.00 | delivery £2.49 (was £4.95) | £26.48 | £28.94 | £5.84 | £3.42 |
+| £25.99 | £13.00 | delivery £1.49 (was £4.95) | £27.48 | £30.94 | £6.61 | £3.21 |
+| £29.99 | £15.00 | free delivery | £29.99 | £34.94 | £8.15 | £3.28 |
+| £34.99 | £17.50 | free delivery + 5% off | £33.24 | £39.94 | £10.08 | £3.48 |
+| £39.99 | £20.00 | free delivery + 8% off | £36.79 | £44.94 | £12.00 | £3.98 |
+| £49.99 | £25.00 | free delivery + 13% off | £43.49 | £52.94 | £13.88 | £4.58 |
+| £59.99 | £30.00 | free delivery + 9% off the £55.19 it costs alone | £50.22 | £58.14 | £13.01 | £5.20 |
+| £79.99 | £40.00 | free delivery + 13% off the £73.59 it costs alone | £64.02 | £76.54 | £19.13 | £6.80 |
+| £109.99 | £55.00 | 18% off the £101.19 it costs alone (delivery already free) | £82.98 | £101.19 | £26.60 | £8.66 |
 
-If PowerBody's invoices do carry VAT, turn the switch on and every figure
-tightens by itself. For example, £29.99 becomes free delivery alone, and
-£19.99 and under get no deal.
+From £50 a single product already earns the 8% bundle deal at the ordinary
+checkout, so "Instead of" and "We keep at full price" use that price. The
+percentage comes off it, so the saving on the card is one the customer would
+not otherwise have had.
 
 Further guards:
 
@@ -171,31 +175,34 @@ Further guards:
 - **Under the £15 minimum order** there is no deal (checkout would refuse it).
 - **The deal must beat the ordinary checkout** (the product's own bundle tier
   included) by at least £1. So it is never worse than just buying the product.
+- **A product with no cost on file** has its cost estimated once, from the
+  shelf price. Estimated at each discounted price instead, the guess would
+  fall with every percent off, which PowerBody's price never does.
 
 Every number above is a setting: Founders Hub → Pricing → Rules → Last-chance
 offer. The settings are the floor (£ and %), the deepest percentage, the
 smallest percentage worth adding, and the cap for uncosted products. The
 trade-off they set: the deal gives away margin to win a sale that otherwise
-doesn't happen. For example, a £29.99 product keeps £3.21 on the deal instead
-of £12.51 at full price.
+doesn't happen. For example, a £29.99 product keeps £3.28 on the deal instead
+of £8.15 at full price.
 
 ---
 
-## VAT on our costs: a switch
+## VAT on our costs
 
-Founders Hub → Pricing → Rules → VAT → **PowerBody charge us VAT**. It is shown
-while we are not VAT-registered.
+The supplier prices stored in the hub are PowerBody's **ex VAT** prices.
+PowerBody add VAT to every invoice, and until we are VAT-registered none of it
+comes back. So their 20% on goods and delivery is a real cost, and every deal
+above is worked out with it in.
 
-- **Off (the default, as the founder asked):** costs are PowerBody's prices as
-  quoted, ex VAT, on goods and delivery.
-- **On:** their 20% counts as a cost we can't reclaim.
+Two switches in Founders Hub → Pricing → Rules → VAT:
 
-It moves every margin in the hub, not just this offer: the pricing pages, the
-dashboard's cost of goods and the cost-price founder codes.
-
-**Check before relying on it:** the codebase's own notes record PowerBody as
-VAT-registered, with prices quoted "+ VAT". If their invoices to us carry VAT,
-turn it on.
+- **VAT-registered** (off): flip it the day registration takes effect. Their
+  VAT is then reclaimed, we hand over VAT on sales, and the whole hub
+  reprices, this offer included.
+- **PowerBody charge us VAT** (on): only ever turned off if PowerBody stopped
+  charging VAT. Turned off while they still do, every margin is about a fifth
+  of cost too generous.
 
 ---
 
@@ -212,7 +219,11 @@ re-runs `quoteOffer` on the catalogue's own price and cost and bills that.
 - **A request that doesn't say what delivery it was shown** is held to the
   ordinary charge, so leaving the field out can never loosen the check.
 - **The deal is for one product on its own.** Any other basket shape is
-  refused, not discounted.
+  refused, not discounted. So is a product the card would never offer: a
+  subscription-only refill or an accessory.
+- **If the deal no longer exists** (a setting or a cost changed since the page
+  was drawn), the card keeps its place and says so: "This deal isn't
+  available any more", with its button stood down.
 - **No codes on offer orders**, typed or referred:
   - A code could replace the checked price with an unchecked one.
   - A partner referral would add up to 15% commission the floor didn't count.
@@ -223,8 +234,9 @@ re-runs `quoteOffer` on the catalogue's own price and cost and bills that.
 - **A 409 shows only the deal.** Contribution, margin and floor stay on the
   server.
 - **The order records the deal three ways:**
-  - **Audit trail:** `last-chance offer: free delivery (was £4.95) + 15% off on
-    CHRGD Pre-Workout (list £29.99, £25.49 delivered)`.
+  - **Audit trail:** `last-chance offer: free delivery (was £4.95) + 8% off on
+    CHRGD Whey Protein (list £39.99, £36.79 delivered); claim shown:
+    protein-muscle-growth`.
   - **`lastChance` snapshot:** lets the receipt show "Discount" and "Delivery:
     FREE".
   - **`deliveryDue`:** what each zone was offered at, so the fulfilment queue

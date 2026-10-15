@@ -141,9 +141,9 @@ describe('what a code does to the money', () => {
   })
 
   it('charges the quoted price when PowerBody charge us no VAT', () => {
-    // The shipped default: their invoices carry no VAT, so cost is the ex-VAT
-    // figure — anything more would be charging ourselves a tax we don't pay.
-    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
+    // Switched off: their invoices carry no VAT, so cost is the ex-VAT figure —
+    // anything more would be charging ourselves a tax we don't pay.
+    setPricingOverrides({ vat: { ...PRICING_CONFIG.vat, registered: false, supplierChargesVat: false } })
     const priced = priceAtFounderTerms('cost', lines)
     expect(priced.lines[0].discountedUnitPrice).toBe(10)
     expect(priced.lines[1].discountedUnitPrice).toBe(4)

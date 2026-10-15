@@ -38,6 +38,8 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import type { LastChanceSnapshot, OrderChannel, OrderLine } from '@/lib/orders/types'
 import { supplierIdFor } from '@/lib/catalogue/master'
+import { isAccessory } from '@/lib/catalogue/accessory'
+import { claimsFor } from '@/lib/consult/claims'
 
 /**
  * POST /api/cart
@@ -444,7 +446,7 @@ export async function POST(req: Request) {
    * for the deal that already exists. It is a deal for one product bought on
    * its own, so any other basket shape is refused rather than discounted.
    *
-   * Priced on its own (`priceOfferOrder`): no bundle tier, no code, and its
+   * Priced on its own (`priceOfferOrder`): no code, no stack deal, and its
    * own delivery (`offerDeliveryOptions`) — free or reduced on the mainland,
    * the Highlands surcharge still on top up there.
    */
@@ -456,13 +458,23 @@ export async function POST(req: Request) {
       expectedDelivery?: unknown
     }
     const only = matched.length === 1 && matched[0].quantity === 1 ? matched[0] : null
-    if (!only || only.variant.id !== want.variantId || founder || starter) {
+    // The same products the card would ever offer: nothing that cannot be
+    // bought on its own (a subscription-only refill) or is not a supplement
+    // (an accessory). The card filters these out; a hand-made request must
+    // not get round it.
+    const eligible = only && !only.product.isSubscriptionOnly && !isAccessory(only.product)
+    if (!only || !eligible || only.variant.id !== want.variantId || founder || starter) {
       await releaseClaim()
       return NextResponse.json({ error: 'That offer is for one product on its own.' }, { status: 400 })
     }
     const quote = quoteOffer(offerProductFor(only.product, only.variant), config)
     if (!quote.viable) {
-      return NextResponse.json({ error: 'This offer isn’t available any more.', offerChanged: true }, { status: 409 })
+      // The quote goes back too — not viable — so the card can stand down
+      // rather than keep showing a deal the shop will no longer sell.
+      return NextResponse.json(
+        { error: 'This deal isn’t available any more.', offerChanged: true, quote: publicQuote(quote) },
+        { status: 409 },
+      )
     }
     // Shown one price and about to be charged a higher one — for the product
     // or for its delivery: stop and say so. Lower is only ever good news and
@@ -483,10 +495,17 @@ export async function POST(req: Request) {
         { status: 409 },
       )
     }
+    // The register claim the card showed, kept with the order (OC-C-006) — but
+    // only an id this product's kind actually carries, never free text.
+    const shownClaim = lines[0]?.attributes?.find((a) => a.key === 'claim')?.value ?? null
+    const claimId = shownClaim && claimsFor(only.product.swapGroup).includes(shownClaim) ? shownClaim : null
     lastChance = {
       quote,
-      note: `last-chance offer: ${describeDeal(quote)} on ${only.product.title} (list ${formatGBP(quote.listPrice)}, ${formatGBP(quote.total)} delivered)`,
+      note:
+        `last-chance offer: ${describeDeal(quote)} on ${only.product.title} (list ${formatGBP(quote.listPrice)}, ${formatGBP(quote.total)} delivered)` +
+        (claimId ? `; claim shown: ${claimId}` : ''),
       snapshot: {
+        claimId,
         listPrice: quote.listPrice,
         offerPrice: quote.offerPrice,
         discountPct: quote.discountPct,

@@ -396,4 +396,6 @@ export interface LastChanceSnapshot {
   /** What mainland delivery cost in the deal (£). */
   deliveryCharge: number
   deliveryDeal: 'free' | 'reduced' | 'included' | 'standard'
+  /** The GB-register claim the card showed, when it showed one (OC-C-006). */
+  claimId?: string | null
 }

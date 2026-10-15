@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { track } from '@/lib/analytics/events'
 import { LAST_CHANCE_SOURCE } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
@@ -29,6 +29,19 @@ export function useOfferCheckout() {
   const [state, setState] = useState<OfferCheckoutState>({ status: 'idle' })
   // A ref, not state: a double tap must not slip between two renders.
   const inFlight = useRef(false)
+
+  // Back from Stripe, a browser can restore this page from its cache exactly
+  // as it was left — "Taking you to checkout…", button stood down — and
+  // nothing would ever wake it. Come back to a card that can be tapped again.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      inFlight.current = false
+      setState({ status: 'idle' })
+    }
+    window.addEventListener('pageshow', onShow)
+    return () => window.removeEventListener('pageshow', onShow)
+  }, [])
 
   const buy = useCallback(async (offer: {
     variantId: string

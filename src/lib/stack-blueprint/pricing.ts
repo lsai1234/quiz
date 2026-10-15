@@ -262,8 +262,9 @@ export const PRICING_CONFIG = {
    * The last-chance offer at the foot of the results page: one product from the
    * stack, on a deal worked out for it (`lib/last-chance/economics.ts`).
    *
-   * Priced on its own, never with the bundle tiers or a code. Free delivery
-   * comes first, then a percentage off the product as far as these allow; where
+   * Priced on its own, never with a code or the stack's deal: the percentage
+   * comes off what the product costs alone at the ordinary checkout. Free
+   * delivery comes first, then a percentage off as far as these allow; where
    * free delivery would sell at a loss, delivery is reduced instead. Every deal
    * still keeps at least `minContribution`, and at least `minMarginPct` of what
    * we keep, after VAT, the goods, both sides of delivery, card fees and returns.
@@ -377,13 +378,14 @@ export const PRICING_CONFIG = {
      * their prices as quoted, ex VAT. Irrelevant once `registered` is true —
      * registered, any VAT they charge is reclaimed either way.
      *
-     * Defaults to FALSE because the founder says we are not paying VAT at the
-     * moment. If their invoices do carry VAT, flip it on in Founders Hub →
-     * Pricing → Rules → VAT — left off when they do, every margin, the
-     * last-chance offer and cost-price codes are about a fifth of cost too
-     * generous.
+     * Defaults to TRUE, which is the position today: the supplier prices we
+     * store are ex VAT, PowerBody add VAT to every invoice, and until we are
+     * registered none of it comes back. Turn it off only if they stop charging
+     * it; turned off while they still do, every margin, the last-chance offer
+     * and cost-price codes are about a fifth of cost too generous. Registering
+     * is `registered`, not this.
      */
-    supplierChargesVat: false,
+    supplierChargesVat: true,
     /**
      * HMRC's compulsory registration threshold — taxable turnover over any
      * rolling 12 months (£). Public figure, £90,000 since April 2024.

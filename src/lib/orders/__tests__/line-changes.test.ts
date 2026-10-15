@@ -146,6 +146,15 @@ describe('swapping', () => {
     expect(email?.rendered.text).toMatch(/we've refunded £0\.77/)
   })
 
+  it('drops a last-chance deal from an order whose deal product has been swapped out', async () => {
+    const order = await paidOrder()
+    await updateOrder(order.id, (o) => {
+      o.lastChance = { listPrice: 9.99, offerPrice: 8.27, discountPct: 17, standardDelivery: 4.95, deliveryCharge: 0, deliveryDeal: 'free' }
+    })
+    const after = await swapLine(order.id, 1, D3_SKU, { productId: 'd3-cheaper', variantId: 'v-P60001' }, { notify: false }, deps())
+    expect(after.lastChance).toBeNull()
+  })
+
   it('can update the order without refunding the gap, when the founder says so', async () => {
     mockPaymentSource = 'stripe'
     const order = await paidOrder()
@@ -248,6 +257,10 @@ describe('sending the rest now, this later', () => {
   it('moves the item into its own held order sharing the payment, and the rest stays sendable', async () => {
     const order = await paidOrder()
     const { order: parent, backorder } = await backorderLine(order.id, 1, D3_SKU, { by: 'Lewis', notify: false })
+
+    // Its £0 postage is what it was meant to carry, so the queue must not read
+    // it as short — whatever the parent was offered.
+    expect((await getOrder(backorder.id))?.deliveryDue).toEqual({ 'uk-1': 0, 'uk-2': 0 })
 
     expect(parent.lines.map((l) => l.sku)).toEqual(['P47499'])
     expect(parent).toMatchObject({ subtotal: 19.31, total: 22.26, splitInto: [backorder.id] })

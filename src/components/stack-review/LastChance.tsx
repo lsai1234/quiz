@@ -10,6 +10,7 @@ import type { PublicOfferQuote } from '@/lib/last-chance/economics'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
 import { track } from '@/lib/analytics/events'
 import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
+import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import { LastChanceView } from './LastChanceView'
 
 /**
@@ -49,12 +50,22 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
   )
 
   const { state, buy } = useOfferCheckout()
-  // When the server says the price moved, show its figure and buy at that.
+  // When the server says the deal moved, show its figures and buy at those.
   const [override, setOverride] = useState<PublicOfferQuote | null>(null)
   useEffect(() => {
-    if (state.status === 'changed' && state.quote) setOverride(state.quote)
+    if (state.status === 'changed' && state.quote?.viable) setOverride(state.quote)
   }, [state])
   useEffect(() => setOverride(null), [hero?.variant.id])
+  // …and when it says there is no deal any more, the card stays as it was
+  // with its button stood down and the reason under it, rather than offering
+  // a price the shop will refuse every time it is tapped.
+  const withdrawn = state.status === 'changed' && !state.quote?.viable
+
+  // A one-time deal: once this browser has had it, it is not offered again.
+  const [used, setUsed] = useState(false)
+  useEffect(() => {
+    try { setUsed(window.localStorage.getItem(LAST_CHANCE_USED_KEY) === '1') } catch { /* no storage: offer it */ }
+  }, [])
 
   const [phase, setPhase] = useState<'wait' | 'go'>('wait')
   const [section, setSection] = useState<HTMLElement | null>(null)
@@ -84,11 +95,11 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
 
   const quote: PublicOfferQuote | null = override ?? hero?.quote ?? null
   const onBuy = useCallback(() => {
-    if (!hero || !quote || blocked) return
+    if (!hero || !quote || blocked || withdrawn) return
     void buy({ variantId: hero.variant.id, productTitle: hero.product.title, quote, claimId: hero.claim?.id ?? null })
-  }, [buy, hero, quote, blocked])
+  }, [buy, hero, quote, blocked, withdrawn])
 
-  if (!hero || !quote || !quote.viable) return null
+  if (!hero || !quote || !quote.viable || used) return null
 
   return (
     <LastChanceView
@@ -104,7 +115,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
       remoteSurcharge={getPricingConfig().delivery.zone2Surcharge}
       status={state.status}
       message={state.status === 'error' || state.status === 'changed' ? state.message : null}
-      blocked={blocked}
+      blocked={blocked || withdrawn}
       phase={phase}
       sectionRef={setSection}
       onBuy={onBuy}

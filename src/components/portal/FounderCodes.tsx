@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, Note } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
 import { supplierVatIsCost } from '@/lib/pricing/vat'
-import { PRICING_CONFIG, getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { PRICING_CONFIG, getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
 import {
   FOUNDER_CODE_LABELS,
@@ -48,7 +48,12 @@ const ORDER: FounderCodeKind[] = ['free', 'cost', 'unlock']
  * code (`priceAtFounderTerms` → `costFromSupplierPrice`), so the screen never
  * promises a VAT gross-up the order does not apply — or hides one it does.
  */
-function detailFor(kind: FounderCodeKind, vatIsCost: boolean): string[] {
+/** How PowerBody's VAT stands in our costs: a cost, reclaimed (registered), or not charged. */
+type SupplierVat = 'cost' | 'reclaimed' | 'none'
+const supplierVatOf = (config: PricingConfig): SupplierVat =>
+  supplierVatIsCost(config) ? 'cost' : config.vat.registered ? 'reclaimed' : 'none'
+
+function detailFor(kind: FounderCodeKind, vat: SupplierVat): string[] {
   switch (kind) {
     case 'free':
       return [
@@ -58,9 +63,11 @@ function detailFor(kind: FounderCodeKind, vatIsCost: boolean): string[] {
       ]
     case 'cost':
       return [
-        vatIsCost
+        vat === 'cost'
           ? 'Products at what PowerBody charge us, including the VAT we cannot reclaim while we are unregistered.'
-          : 'Products at what PowerBody charge us, ex VAT — their invoices carry no VAT for us (Pricing → Rules → VAT).',
+          : vat === 'reclaimed'
+            ? 'Products at what PowerBody charge us, ex VAT — any VAT they charge us is reclaimed.'
+            : 'Products at what PowerBody charge us, ex VAT — their invoices carry no VAT for us (Pricing → Rules → VAT).',
         'Delivery goes UP, to what PowerBody actually charge to ship the parcel — not our customer rate, which is often free.',
         'A product with no recorded supplier cost falls back to the modelled cost ratio, so it is an estimate rather than the invoice.',
       ]
@@ -179,11 +186,11 @@ export function FounderCodes() {
    * that differs between the two is a hydration error. Re-read when the codes
    * arrive and on the minute tick, by which time the sync has landed.
    */
-  const [vatIsCost, setVatIsCost] = useState(() => supplierVatIsCost(PRICING_CONFIG))
-  useEffect(() => { setVatIsCost(supplierVatIsCost(getPricingConfig())) }, [codes, now])
+  const [vat, setVat] = useState<SupplierVat>(() => supplierVatOf(PRICING_CONFIG))
+  useEffect(() => { setVat(supplierVatOf(getPricingConfig())) }, [codes, now])
   // And the moment the saved settings reach the browser, rather than at the next tick.
   useEffect(() => {
-    const reread = () => setVatIsCost(supplierVatIsCost(getPricingConfig()))
+    const reread = () => setVat(supplierVatOf(getPricingConfig()))
     window.addEventListener(PRICING_SYNCED_EVENT, reread)
     return () => window.removeEventListener(PRICING_SYNCED_EVENT, reread)
   }, [])
@@ -225,7 +232,7 @@ export function FounderCodes() {
                   {FOUNDER_CODE_LABELS[kind].title}
                 </h3>
                 <ul style={{ display: 'grid', gap: 'var(--space-1)', margin: 0, padding: 0, listStyle: 'none' }}>
-                  {detailFor(kind, vatIsCost).map((line) => (
+                  {detailFor(kind, vat).map((line) => (
                     <li
                       key={line}
                       style={{

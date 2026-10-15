@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LastChance } from '../LastChance'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { offerProductFor, publicQuote, quoteOffer } from '@/lib/last-chance/economics'
+import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 
 jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
 
@@ -88,6 +89,37 @@ it('shows the server’s new deal when it moved, and says so', async () => {
   await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
   expect(await screen.findByRole('alert')).toHaveTextContent(/deal has changed/i)
   expect(screen.getByRole('button', { name: new RegExp(`get it for £${moved.total.toFixed(2)}`, 'i') })).toBeInTheDocument()
+})
+
+it('stands down when the server says the deal is gone, rather than offering it again', async () => {
+  const gone = { ...publicQuote(quote), viable: false }
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: false, status: 409, json: async () => ({ error: 'This deal isn’t available any more.', offerChanged: true, quote: gone }),
+  }) as unknown as typeof fetch
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
+  await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(/isn’t available any more/i)
+  expect(screen.getByRole('button', { name: /get it for/i })).toBeDisabled()
+})
+
+it('comes back to a card that can be tapped after Back from the payment page', async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ checkoutUrl: 'https://checkout.stripe.test/x', orderId: 'o1' }) }) as unknown as typeof fetch
+  render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
+  await userEvent.click(screen.getByRole('button', { name: /get it for/i }))
+  expect(await screen.findByRole('button', { name: /taking you to checkout/i })).toBeDisabled()
+  // The browser restores the page from its back/forward cache.
+  act(() => { window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true })) })
+  expect(screen.getByRole('button', { name: /get it for/i })).toBeEnabled()
+})
+
+it('is not offered again to a browser that has already had it', () => {
+  window.localStorage.setItem(LAST_CHANCE_USED_KEY, '1')
+  try {
+    const { container } = render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
+    expect(container).toBeEmptyDOMElement()
+  } finally {
+    window.localStorage.removeItem(LAST_CHANCE_USED_KEY)
+  }
 })
 
 it('renders nothing when no product in the stack has a deal it can afford', () => {

@@ -450,6 +450,9 @@ export async function swapLine(
     o.lines[index] = next
     o.subtotal = round(o.subtotal - refund)
     o.total = round(o.subtotal + o.shipping)
+    // A last-chance deal was on the product that has just gone: the receipt
+    // must not go on showing a discount off a shelf price this line never had.
+    if (o.lastChance) o.lastChance = null
     if (refund > 0) o.refundedAmount = round((o.refundedAmount ?? 0) + refund)
     o.events.push({
       at: at(),
@@ -548,8 +551,11 @@ export async function backorderLine(
     lines: [{ ...line }],
     subtotal: amount,
     // The parcel the customer already paid postage for is the first one. This
-    // one is on us.
+    // one is on us — and recorded as due nothing, so the queue does not flag
+    // the £0 as postage short.
     shipping: 0,
+    deliveryDue: { 'uk-1': 0, 'uk-2': 0 },
+    lastChance: null,
     total: amount,
     review: { state: 'held', by: options.by ?? null, at: since, note },
     supplierOrderId: null,

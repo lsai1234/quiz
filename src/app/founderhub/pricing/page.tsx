@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { formatGBP, effectiveIntroDiscount, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, effectiveIntroDiscount, setPricingOverrides, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
+import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
 import { priceProduct, listPriceFor, reviewCatalogue, type CatalogueReview } from '@/lib/pricing/list-price'
 import { checkScenarios, type ScenarioCheck } from '@/lib/pricing/scenarios'
 import { pricingThresholds } from '@/lib/pricing/thresholds'
@@ -104,15 +105,27 @@ export default function PricingPage() {
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
 
+  /**
+   * The browser keeps its own copy of the pricing config (`PortalSync` loads
+   * it once). After a save, bring it into line and say so, or the rest of the
+   * hub — the founder codes' cost line, any deal on screen — goes on reading
+   * the old rules until a hard reload.
+   */
+  function mirror(overrides: Partial<PricingConfig>) {
+    setPricingOverrides(overrides)
+    window.dispatchEvent(new Event(PRICING_SYNCED_EVENT))
+  }
   async function save() {
     setSaving(true)
     await fetch('/api/portal/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ overrides: draft }) })
+    mirror(draft!)
     setSaving(false); setSavedFlag(true); setSavedConfig(draft)
   }
   async function reset() {
     setSaving(true)
     const r = await fetch('/api/portal/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true }) })
     const next = (await r.json()).current
+    mirror({})
     setDraft(next); setSavedConfig(next); setSaving(false); setSavedFlag(true)
   }
 
@@ -257,7 +270,7 @@ export default function PricingPage() {
               onRemove={(i) => set({ bundleTiers: draft.bundleTiers.filter((_, idx) => idx !== i) })} />
           </Section>
 
-          <Section title="Last-chance offer" desc="One product from the stack at the foot of the results page, on a deal worked out for it: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with the bundle tiers or a code.">
+          <Section title="Last-chance offer" desc="One product from the stack at the foot of the results page, on a deal worked out for it: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with a code — and measured against what the product costs alone at the ordinary checkout.">
             <Num label="Keep at least (£ per order)" value={draft.lastChance.minContribution} suffix="£" step={0.5} onChange={(n) => setNested('lastChance', { minContribution: n })}
               help="After every cost — the goods, both sides of delivery, card fees and returns. No deal is offered that keeps less." />
             <Num label="And at least (% of what we keep)" value={pct(draft.lastChance.minMarginPct)} suffix="%" onChange={(n) => setNested('lastChance', { minMarginPct: n / 100 })}
@@ -383,19 +396,33 @@ export default function PricingPage() {
                   ? 'On: we hand over VAT on sales and reclaim what PowerBody charge. Off: we keep the whole shelf price but their VAT is a cost. Genuinely different businesses.'
                   : 'On: we hand over VAT on sales and reclaim any VAT PowerBody charge. Off: we keep the whole shelf price and hand nothing over. Genuinely different businesses.'
               } />
-            {/* Only a question while we can't reclaim: registered, their VAT
-                comes back either way, so the switch would change nothing. */}
-            {!draft.vat.registered && (
-              <Toggle label="PowerBody charge us VAT" value={draft.vat.supplierChargesVat} onChange={(v) => setNested('vat', { supplierChargesVat: v })}
-                help={
-                  draft.vat.supplierChargesVat
-                    ? `Their ${Math.round(draft.vat.standardRate * 1000) / 10}% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered.`
-                    : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Right while their invoices to us carry no VAT. If they do, turn this on — otherwise every margin here, the last-chance offer and cost-price codes are about a fifth of cost too generous."
-                } />
-            )}
+            {/* Shown registered too: it no longer moves a cost then (their VAT
+                comes back), but it still decides what the panel below says
+                registering reclaims. */}
+            <Toggle label="PowerBody charge us VAT" value={draft.vat.supplierChargesVat} onChange={(v) => setNested('vat', { supplierChargesVat: v })}
+              help={
+                draft.vat.registered
+                  ? 'Registered, any VAT on their invoices is reclaimed, so this no longer changes a cost — only what the figures below count as reclaimed.'
+                  : draft.vat.supplierChargesVat
+                    ? `Their ${Math.round(draft.vat.standardRate * 1000) / 10}% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered. The supplier prices we store are ex VAT.`
+                    : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Only right if their invoices to us carry no VAT. While they do, turn this on — otherwise every margin here, the last-chance offer and cost-price codes are about a fifth of cost too generous."
+              } />
             <Num label="Standard rate" value={pct(draft.vat.standardRate)} suffix="%" onChange={(n) => setNested('vat', { standardRate: n / 100 })} />
             <Num label="Registration threshold" value={draft.vat.registrationThreshold} suffix="£" onChange={(n) => setNested('vat', { registrationThreshold: n })} help="HMRC's figure — £90,000 since April 2024." />
-            <div className="pt-3"><VatPanel registered={draft.vat.registered} supplierChargesVat={draft.vat.supplierChargesVat} /></div>
+            {/* The panel's figures come from the SAVED rules (the server works
+                them out), so it follows those — and says when the switches
+                above have moved ahead of it. */}
+            {saved && (saved.vat.registered !== draft.vat.registered || saved.vat.supplierChargesVat !== draft.vat.supplierChargesVat) && (
+              <p className="pt-3" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>
+                Save to see the figures below with these changes.
+              </p>
+            )}
+            <div className="pt-3">
+              <VatPanel
+                registered={(saved ?? draft).vat.registered}
+                supplierChargesVat={(saved ?? draft).vat.supplierChargesVat}
+              />
+            </div>
           </Section>
 
           <Section title="Bundles & budgets" desc="How big a stack the quiz builds, and the most it may cost.">

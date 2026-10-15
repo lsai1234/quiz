@@ -25,9 +25,13 @@
  *    there is no deal, and the offer is not made.
  *
  * ── Priced on its own ───────────────────────────────────────────────────────
- * Nothing on the page above changes it: no bundle tier, no daily code, no
- * partner's code. The offer is its own price, and the checkout bills exactly
- * this figure and this delivery (the server re-runs this same function first).
+ * Nothing on the page above changes it: not the stack's bundle deal, not the
+ * daily code, not a partner's code. The percentage comes off what the product
+ * costs on its own at the ordinary checkout (`ordinaryPriceOf` — the shelf
+ * price, less the bundle tier a single £50+ product earns anyway), so every
+ * saving it states is one the customer would not otherwise have had. The
+ * checkout bills exactly this figure and this delivery (the server re-runs
+ * this same function first).
  *
  * ── The floor ───────────────────────────────────────────────────────────────
  * `config.lastChance`: at least `minContribution` (£) AND at least
@@ -52,6 +56,7 @@ import {
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { customerDeliveryCharge, deliveryOptions, type DeliveryOption } from '@/lib/pricing/delivery'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
+import { revenueFromShelfPrice, vatRateFor } from '@/lib/pricing/vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -89,8 +94,9 @@ export function offerProductFor(
  * What this product costs bought on its own through the ordinary checkout —
  * the shop's automatic bundle tier included (a £50+ product earns it alone).
  *
- * The deal has to beat THIS, not just the shelf price, or a £59.99 tub on a
- * small percentage could come out dearer than simply adding it to a basket.
+ * This is the price the deal comes off and is measured against. Measured
+ * against the shelf price instead, a £59.99 tub would claim a saving of 8% it
+ * would have had anyway — "you save £17.95" on an order that saves £13.15.
  */
 export function ordinaryPriceOf(product: OfferProduct, config: PricingConfig = getPricingConfig()): number {
   const cost = product.supplierCost ?? unitCostOf({ basePrice: product.price }, product.price, config)
@@ -107,14 +113,21 @@ export function ordinaryPriceOf(product: OfferProduct, config: PricingConfig = g
 export type DeliveryDeal = 'free' | 'reduced' | 'included' | 'standard'
 
 export interface OfferQuote {
+  /** Shelf price (£ inc VAT). */
   listPrice: number
+  /**
+   * What it costs on its own through the ordinary checkout (`ordinaryPriceOf`)
+   * — the shelf price, less the bundle tier where a single one earns it. The
+   * percentage comes off this, and every saving is measured from it.
+   */
+  basePrice: number
   /** What the product sells for in this deal (£ inc VAT). */
   offerPrice: number
-  /** Whole percent off the product, e.g. 15. 0 when the deal is delivery alone. */
+  /** Whole percent off `basePrice`, e.g. 15. 0 when the deal is delivery alone. */
   discountPct: number
   /** discountPct as a fraction (0–1). */
   rate: number
-  /** Off the product (£). */
+  /** Off the product: basePrice − offerPrice (£). */
   saving: number
   /** What mainland delivery would cost on this product alone, at full price (£). */
   standardDelivery: number
@@ -123,17 +136,14 @@ export interface OfferQuote {
   deliveryDeal: DeliveryDeal
   /** standardDelivery − deliveryCharge (£). */
   deliverySaving: number
-  /** listPrice + standardDelivery: what it costs delivered without the deal (£). */
+  /**
+   * basePrice + standardDelivery: what the ordinary checkout would charge for
+   * it delivered, without the deal (£).
+   */
   normalTotal: number
   /** offerPrice + deliveryCharge: what it costs delivered with it (£). */
   total: number
-  /**
-   * What the ordinary checkout would charge for it delivered — its own bundle
-   * tier included (£). The deal is only made when it beats this by at least
-   * £1, so it is never worse than just buying the product.
-   */
-  ordinaryTotal: number
-  /** normalTotal − total (£). */
+  /** normalTotal − total (£). A deal is only made when this is at least £1. */
   totalSaving: number
   /** What the business keeps after every cost, in this deal (£). */
   contribution: number
@@ -163,16 +173,24 @@ export function quoteOffer(
 ): OfferQuote {
   const costKnown = product.supplierCost != null && product.supplierCost > 0
   const listPrice = round(product.price)
+  const basePrice = listPrice > 0 ? ordinaryPriceOf(product, config) : 0
+  // Delivery bands on the undiscounted value, as the checkout does.
   const standardDelivery = listPrice > 0 ? customerDeliveryCharge(listPrice, 'uk-1', config) : 0
-  const normalTotal = round(listPrice + standardDelivery)
-  const ordinaryTotal = listPrice > 0 ? round(ordinaryPriceOf(product, config) + standardDelivery) : 0
+  const normalTotal = round(basePrice + standardDelivery)
+  // With no cost on file, estimate it ONCE, from the shelf price — the way
+  // `unitEconomics` would at full price. Left to `unitEconomics` at each
+  // discounted price, the guessed cost would fall with every percent off,
+  // which PowerBody's never does, and the floor would let too much go.
+  const supplierCost = costKnown
+    ? product.supplierCost!
+    : round(revenueFromShelfPrice(listPrice, vatRateFor(product, config), config) * config.defaultCostRatio)
 
   const at = (pct: number, deliveryCharge: number, deliveryDeal: DeliveryDeal): OfferQuote => {
-    const offerPrice = round(listPrice * (1 - pct / 100))
+    const offerPrice = round(basePrice * (1 - pct / 100))
     const econ = unitEconomics(
       {
         shelfPrice: offerPrice,
-        supplierCost: costKnown ? product.supplierCost : null,
+        supplierCost,
         grams: product.grams ?? null,
         vatRate: product.vatRate ?? null,
         customerDelivery: deliveryCharge,
@@ -182,17 +200,17 @@ export function quoteOffer(
     const total = round(offerPrice + deliveryCharge)
     return {
       listPrice,
+      basePrice,
       offerPrice,
       discountPct: pct,
       rate: pct / 100,
-      saving: round(listPrice - offerPrice),
+      saving: round(basePrice - offerPrice),
       standardDelivery,
       deliveryCharge,
       deliveryDeal,
       deliverySaving: round(standardDelivery - deliveryCharge),
       normalTotal,
       total,
-      ordinaryTotal,
       totalSaving: round(normalTotal - total),
       contribution: econ.contribution,
       marginPct: econ.marginPct,
@@ -202,12 +220,8 @@ export function quoteOffer(
     }
   }
   const clears = (q: OfferQuote) => q.contribution >= q.floor && q.offerPrice >= config.minOrderValue
-  // A deal is a deal: something comes off, and it beats the ordinary checkout
-  // by at least a pound.
-  const deal = (q: OfferQuote): OfferQuote => ({
-    ...q,
-    viable: clears(q) && q.totalSaving > 0 && q.ordinaryTotal - q.total >= 1,
-  })
+  // A deal is a deal: it beats the ordinary checkout by at least a pound.
+  const deal = (q: OfferQuote): OfferQuote => ({ ...q, viable: clears(q) && q.totalSaving >= 1 })
 
   const full = at(0, standardDelivery, 'standard')
   // Nothing to give away when the order does not pay its way at full price.

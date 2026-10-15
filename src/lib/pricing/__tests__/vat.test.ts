@@ -4,8 +4,9 @@
  *
  * Two switches decide it: `vat.registered` (can we reclaim?) and
  * `vat.supplierChargesVat` (is there any to reclaim?). It is a cost only when
- * they charge it AND we cannot reclaim it. The founder's position is that we
- * are not paying VAT at the moment, so the second ships off.
+ * they charge it AND we cannot reclaim it. PowerBody do charge it — the prices
+ * we store are ex VAT and their invoices add it — and we are not registered,
+ * so it ships as a cost.
  */
 import { costFromSupplierPrice, supplierVatIsCost } from '../vat'
 import { priceForMargin, unitEconomics } from '../unit-economics'
@@ -20,9 +21,10 @@ const withVat = (registered: boolean, supplierChargesVat: boolean): PricingConfi
 const VAT_ON_COSTS_WORDING = /plus VAT|cannot reclaim|can't reclaim|nothing can be reclaimed on costs/i
 
 describe('whether PowerBody’s VAT is a cost', () => {
-  it('ships off, as the founder asked', () => {
-    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(false)
-    expect(supplierVatIsCost(PRICING_CONFIG)).toBe(false)
+  it('ships as a cost: PowerBody charge VAT and we cannot reclaim it yet', () => {
+    expect(PRICING_CONFIG.vat.supplierChargesVat).toBe(true)
+    expect(PRICING_CONFIG.vat.registered).toBe(false)
+    expect(supplierVatIsCost(PRICING_CONFIG)).toBe(true)
   })
 
   it.each([

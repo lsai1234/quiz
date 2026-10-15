@@ -68,6 +68,8 @@ export interface ConfirmationOrder {
   /** Set once a refund has been applied, so a revisit tells the truth (OC-E-006). */
   refunded?: boolean
   status: Order['status']
+  /** Bought on the last-chance deal — so this browser is not offered it again. */
+  lastChanceDeal?: true
 }
 
 export interface ConfirmationSubscription {
@@ -161,22 +163,36 @@ export function deliveryEstimate(placedAt: string): { from: string; to: string }
 }
 
 function toLines(order: Order): ConfirmationLine[] {
+  // A last-chance line reads at its shelf price, so the items add up to the
+  // subtotal and the "Discount" row below says what came off — once.
+  const shelf = lastChanceApplies(order) ? order.lastChance!.listPrice : null
   return order.lines.map((l: OrderLine) => ({
     sku: l.sku,
     name: l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title,
     qty: l.quantity,
-    unitAmount: round(l.unitPrice),
+    unitAmount: round(shelf ?? l.unitPrice),
     // A quiz-built stack is a bundle; a shop basket is not.
     isBundleComponent: order.channel === 'quiz' || order.channel === 'subscription',
   }))
 }
 
+/**
+ * Whether the order is still the one the last-chance deal was sold on: one
+ * unit, at the deal's price. A line swapped or re-priced since is not, and gets
+ * no "Discount" against a shelf price it was never sold at.
+ */
+function lastChanceApplies(order: Order): boolean {
+  const lc = order.lastChance
+  if (!lc) return false
+  const units = order.lines.reduce((n, l) => n + l.quantity, 0)
+  return units === 1 && Math.abs(order.lines[0].unitPrice - lc.offerPrice) < 0.005
+}
+
 /** What the last-chance deal took off the product (£), by the snapshot taken at checkout. */
 function lastChanceDiscount(order: Order): number {
-  const lc = order.lastChance
-  if (!lc) return 0
-  const units = order.lines.reduce((n, l) => n + l.quantity, 0)
-  return units === 1 ? Math.max(0, Math.round((lc.listPrice - lc.offerPrice) * 100) / 100) : 0
+  if (!lastChanceApplies(order)) return 0
+  const lc = order.lastChance!
+  return Math.max(0, Math.round((lc.listPrice - lc.offerPrice) * 100) / 100)
 }
 
 /**
@@ -205,6 +221,7 @@ export function toConfirmationOrder(order: Order): ConfirmationOrder {
     deliveryEstimate: deliveryEstimate(order.createdAt),
     refunded: order.status === 'refunded' ? true : undefined,
     status: order.status,
+    ...(order.lastChance ? { lastChanceDeal: true as const } : {}),
   }
 }
 
