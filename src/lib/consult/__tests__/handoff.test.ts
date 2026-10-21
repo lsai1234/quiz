@@ -2,6 +2,7 @@ import { CLAIMS } from '../claims'
 import { trainingDays } from '@/lib/consult/training'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { planTiers } from '@/lib/stack-blueprint/tier-plan'
+import { stackNameFor } from '@/lib/stack-blueprint/factory'
 import { identityFor, toBlueprint, toQuizAnswers } from '../adapter'
 import { runStackEngine } from '../engine'
 import { HANDOFF_VERSION, buildHandoff, loadHandoffLocally, saveHandoffLocally, validateHandoff, type HandoffPayload } from '../handoff'
@@ -178,5 +179,11 @@ describe('H8 results page adapter', () => {
     const bundle = prepareResults({ ...initialFlow('c_bundle00001', 0, answers), phase: 'analysis' }, MOCK_CATALOGUE)
     expect(bundle.blueprint.slots.length).toBe(bundle.payload.tiers.complete.length)
     expect(bundle.identity.name).toBeTruthy()
+  })
+
+  it('names the stack the way the quiz does, not by the identity card', () => {
+    const bundle = prepareResults({ ...initialFlow('c_bundle00001', 0, answers), phase: 'analysis' }, MOCK_CATALOGUE)
+    expect(bundle.blueprint.stackName).toBe(stackNameFor(bundle.answers))
+    expect(bundle.blueprint.stackName).not.toBe(bundle.identity.name)
   })
 })

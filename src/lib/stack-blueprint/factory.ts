@@ -111,6 +111,11 @@ export function getArchetype(goals: Goal[]): Archetype {
   return 'health'
 }
 
+/**
+ * The stack's one name, by rules: the archetype and how often they train.
+ * It is said everywhere the stack is named (the reveal, the share card, the
+ * receipt, Stripe metadata).
+ */
 function getStackName(archetype: Archetype, trainingFrequency: string | null): string {
   const highFreq = trainingFrequency === '5-6x' || trainingFrequency === 'daily'
   const names: Record<Archetype, [string, string]> = {
@@ -121,6 +126,11 @@ function getStackName(archetype: Archetype, trainingFrequency: string | null): s
     'wellbeing':   ['Daily Reset Stack', 'Everyday Wellbeing Stack'],
   }
   return highFreq ? names[archetype][0] : names[archetype][1]
+}
+
+/** The rule-based stack name for these answers: the name `buildStackBlueprint` gives. */
+export function stackNameFor(answers: Pick<QuizAnswers, 'goals' | 'trainingFrequency'>): string {
+  return getStackName(getArchetype(answers.goals), answers.trainingFrequency)
 }
 
 const ARCHETYPE_SUMMARIES: Record<Archetype, string> = {

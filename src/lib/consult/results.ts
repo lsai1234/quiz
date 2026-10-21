@@ -16,6 +16,7 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { useQuizStore } from '@/lib/store'
 import type { StackBlueprint } from '@/lib/stack-blueprint/types'
+import { stackNameFor } from '@/lib/stack-blueprint/factory'
 import type { QuizAnswers, StackIdentity } from '@/lib/types'
 import { identityFor, toBlueprint, toQuizAnswers } from './adapter'
 import { runStackEngine, type EngineResult } from './engine'
@@ -51,11 +52,14 @@ export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], 
   })
   const checked = validateHandoff(payload)
   if (!checked.ok) throw new Error(`Invalid handoff payload: ${checked.errors.join('; ')}`)
+  const answers = toQuizAnswers(state.answers)
   return {
     payload,
     engine,
-    blueprint: toBlueprint(payload, catalogue),
-    answers: toQuizAnswers(state.answers),
+    // One name for the stack everywhere: the quiz's rule-based name, not the
+    // consult identity's ("Lean Line", "Night Shift"), which named an effect.
+    blueprint: { ...toBlueprint(payload, catalogue), stackName: stackNameFor(answers) },
+    answers,
     identity: identityFor(payload),
     catalogue,
   }

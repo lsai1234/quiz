@@ -59,7 +59,9 @@ function ProductBundleCard({
 }
 
 export function Act5Bundle({ reducedMotion }: Props) {
-  const { selectedProducts, answers, identity, stackLevel } = useQuizStore()
+  const { selectedProducts, answers, stackBlueprint, stackLevel } = useQuizStore()
+  // The stack's one name (blueprint.stackName), never the identity card's.
+  const stackName = stackBlueprint?.stackName ?? null
   const cart = useLocalCart()
   const isLive = isLiveCatalogue()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -132,10 +134,10 @@ export function Act5Bundle({ reducedMotion }: Props) {
         discount,
         discountPct: subPct,
         total: discountedTotal,
-        stackName: identity?.name ?? null,
+        stackName,
         now: printedAt.current,
       }),
-    [activeItems, quantities, total, discount, subPct, discountedTotal, identity],
+    [activeItems, quantities, total, discount, subPct, discountedTotal, stackName],
   )
 
   function handleQtyChange(product: Product, newQty: number) {
@@ -159,10 +161,10 @@ export function Act5Bundle({ reducedMotion }: Props) {
             stack builder.
           </p>
           <ReceiptPrinter receipt={demoReceipt} className="w-full mt-7" />
-          {identity && (
+          {stackName && (
             <div className="mt-7 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-xs text-white/40">
               <span className="w-2 h-2 rounded-full bg-[#00D4FF]" />
-              {identity.name} stack confirmed
+              {stackName} confirmed
             </div>
           )}
         </div>
