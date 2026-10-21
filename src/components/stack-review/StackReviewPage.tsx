@@ -230,11 +230,17 @@ export function deckHeading(count: number): string {
  * scene as a deliberate scene cut: a rounded lip, a drawn shadow and a grab
  * handle.
  */
+/*
+  The dark panel runs to the foot of the page. Its 2.5rem bottom padding and
+  the main view's pb-28 leave 9.5rem under the last content; the sticky
+  checkout bar is about 5.6rem plus max(0.9rem, the bottom inset), so adding
+  the inset keeps it clear on any device.
+*/
 function StackPanel({ children }: { children: ReactNode }) {
   return (
     <div
       id="scene-stack"
-      className="mt-8 rounded-t-[2rem] scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]"
+      className="mt-8 rounded-t-[2rem] pb-[calc(2.5rem+env(safe-area-inset-bottom))] scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]"
       style={{ background: 'var(--color-bg)', boxShadow: '0 -18px 44px -22px rgba(10,10,10,0.55)' }}
     >
       <div className="flex justify-center pt-3.5 pb-0.5">

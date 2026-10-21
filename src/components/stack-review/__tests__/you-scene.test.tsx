@@ -8,6 +8,7 @@ import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { invalidateCatalogue } from '@/lib/catalogue/load'
 import { CLAIMS } from '@/lib/consult/claims'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { CHECK_LINES, GOAL_LINES, RESULTS_HEADINGS } from '@/lib/results'
 import { defaultAnswers, useQuizStore } from '@/lib/store'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -92,7 +93,7 @@ describe('YouScene', () => {
   it('puts the claim beside every goal line, verbatim and quoted', () => {
     render(<YouScene stackName="S" items={[GOAL_ITEM]} checks={[]} reducedMotion />)
     const row = document.querySelector(`[data-explained="${WHEY.id}"]`) as HTMLElement
-    expect(within(row).getByText(GOAL_LINES.muscle!)).toBeInTheDocument()
+    expect(within(row.closest('[data-line]') as HTMLElement).getByText(GOAL_LINES.muscle!)).toBeInTheDocument()
     expect(within(row).getByText(WHEY.title)).toBeInTheDocument()
     expect(within(row).getByText(`“${CLAIMS['protein-muscle-growth'].wording}”`)).toBeInTheDocument()
     expect(within(row).getByText(YOU_SCENE_COPY.claimLabel)).toBeInTheDocument()
@@ -106,6 +107,35 @@ describe('YouScene', () => {
     expect([...rows].map((r) => r.getAttribute('data-explained'))).toEqual([WHEY.id, MAGNESIUM.id])
     expect(within(screen.getByRole('list', { name: 'In your stack' })).getAllByRole('listitem')).toHaveLength(3)
     expect(screen.getByText('3 products')).toBeInTheDocument()
+  })
+
+  it('says a shared line once, with each of its products and their own claims under it', () => {
+    const CREATINE = byGroup('creatine')
+    const creatine = item(CREATINE, { kind: 'goal', goal: 'muscle', sentence: GOAL_LINES.muscle!, claim: CLAIMS['creatine-performance'] })
+    render(<YouScene stackName="S" items={[GOAL_ITEM, ANSWER_ITEM, creatine]} checks={[]} reducedMotion />)
+    expect(screen.getAllByText(GOAL_LINES.muscle!)).toHaveLength(1)
+    const group = screen.getByText(GOAL_LINES.muscle!).closest('[data-line]') as HTMLElement
+    expect([...group.querySelectorAll('[data-explained]')].map((r) => r.getAttribute('data-explained'))).toEqual([WHEY.id, CREATINE.id])
+    for (const id of ['protein-muscle-growth', 'creatine-performance']) {
+      expect(within(group).getByText(`“${CLAIMS[id].wording}”`)).toBeInTheDocument()
+    }
+    expect([...document.querySelectorAll('[data-line]')].map((g) => g.getAttribute('data-line')))
+      .toEqual([GOAL_LINES.muscle, ANSWER_ITEM.explanation!.sentence])
+  })
+
+  it('lists products with no line by name and type only, under their own heading', () => {
+    render(<YouScene stackName="S" items={[GOAL_ITEM, item(OTHER)]} checks={[]} reducedMotion />)
+    const section = screen.getByRole('heading', { name: RESULTS_HEADINGS.alsoInStack }).closest('section')!
+    const row = section.querySelector(`[data-listed="${OTHER.id}"]`) as HTMLElement
+    expect(row.textContent).toBe(`${OTHER.title}${productTypeLabel(OTHER)}`)
+    expect(section.querySelector('blockquote')).toBeNull()
+  })
+
+  it('calls that list "In your stack" when no product has a line', () => {
+    render(<YouScene stackName="S" items={[item(OTHER), item(MAGNESIUM)]} checks={[]} reducedMotion />)
+    expect(screen.getByRole('heading', { name: RESULTS_HEADINGS.inStack })).toBeInTheDocument()
+    expect(screen.queryByText(RESULTS_HEADINGS.alsoInStack)).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[data-listed]')).toHaveLength(2)
   })
 
   it('shows an answer line without a claim when there is none', () => {
@@ -236,6 +266,8 @@ describe('the results page', () => {
     for (const el of els) expect(el).toHaveClass('scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]')
     expect(els[0].compareDocumentPosition(els[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(els[1]).toContainElement(els[2])
+    // The dark panel runs to the foot of the page and keeps the checkout bar clear.
+    expect(els[1]).toHaveClass('pb-[calc(2.5rem+env(safe-area-inset-bottom))]')
   })
 
   it('lists the products on screen in the You scene, and the deck says how many', async () => {

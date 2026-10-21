@@ -157,12 +157,14 @@ describe('Act4Reveal and the bar', () => {
    */
   afterEach(() => act(() => useQuizStore.setState({ identity: null })))
 
-  it('reserves the bar at the top and the checkout bar at the bottom', () => {
+  it('reserves the bar at the top and the checkout bar at the bottom, on the dark panel', () => {
     render(<Act4Reveal reducedMotion />)
     const root = document.querySelector('[data-reveal-shell]')!
     expect(root.getAttribute('style')).toContain('safe-area-inset-top')
     expect(root.getAttribute('style')).toContain(SCENE_RAIL_HEIGHT)
-    expect(root).toHaveClass('pb-[calc(2.5rem+env(safe-area-inset-bottom))]')
+    // On the light shell it showed as a light strip under the dark panel; the
+    // panel carries it now (checked against the real page in you-scene.test).
+    expect(root.className).not.toMatch(/\bpb-/)
   })
 
   it('renders without an AI identity', () => {

@@ -22,6 +22,10 @@ import type { DietLevel, Goal, TrainingExperience, TrainingFrequency } from '@/l
 export const RESULTS_HEADINGS = {
   builtFromAnswers: 'Built from your answers',
   whatWeChecked: 'What we checked',
+  /** Products with no line, by name and type only, after the ones that have one. */
+  alsoInStack: 'Also in your stack',
+  /** The same list when no product has a line. */
+  inStack: 'In your stack',
 } as const
 
 /**

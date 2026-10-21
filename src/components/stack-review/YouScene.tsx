@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef } from 'react'
 import gsap from 'gsap'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { RESULTS_HEADINGS, type ProductExplanation } from '@/lib/results'
 import { ProductTile } from './ProductTile'
 import { YOU_PALETTE as P } from './you-palette'
@@ -56,6 +57,31 @@ export function greetingFor(name: string | null | undefined): string {
   return first ? YOU_SCENE_COPY.greetingNamed(first) : YOU_SCENE_COPY.greeting
 }
 
+type ExplainedItem = YouSceneItem & { explanation: ProductExplanation }
+
+/** One "Built from your answers" sentence and the products it was said for. */
+export interface AnswerGroup {
+  sentence: string
+  items: ExplainedItem[]
+}
+
+/**
+ * The explained products, one group per sentence, in the order each sentence
+ * first appears. Two products both there because they want to build muscle
+ * read as one answer with two products under it, not the same line twice.
+ */
+export function groupBySentence(items: readonly YouSceneItem[]): AnswerGroup[] {
+  const groups: AnswerGroup[] = []
+  for (const item of items) {
+    if (!item.explanation) continue
+    const sentence = item.explanation.sentence
+    const group = groups.find((g) => g.sentence === sentence)
+    if (group) group.items.push(item as ExplainedItem)
+    else groups.push({ sentence, items: [item as ExplainedItem] })
+  }
+  return groups
+}
+
 /** How many tiles the strip shows before it says "+n". */
 const STRIP_MAX = 6
 
@@ -69,8 +95,8 @@ const DISPLAY = 'var(--font-display)'
  * rule-based name, product names, or a claim from the GB register quoted
  * verbatim beside the answer it backs (see `@/lib/results`). Nothing here is
  * written by AI, and no line links a goal to a product except through the
- * goal-to-claim map. A product with no line is simply not listed, and a
- * section with no lines is left out.
+ * goal-to-claim map. A product with no line is listed after them by name
+ * and type only, and a section with nothing in it is left out.
  */
 export function YouScene({ name, stackName, items, checks, reducedMotion }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -78,9 +104,9 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
   const builtId = useId()
   const checkedId = useId()
 
-  const lines = items.filter(
-    (item): item is YouSceneItem & { explanation: ProductExplanation } => item.explanation !== null,
-  )
+  const groups = groupBySentence(items)
+  const quiet = items.filter((item) => item.explanation === null)
+  const alsoId = useId()
   const shown = items.slice(0, items.length > STRIP_MAX ? STRIP_MAX - 1 : STRIP_MAX)
   const extra = items.length - shown.length
 
@@ -183,23 +209,45 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
           </div>
         )}
 
-        {lines.length > 0 && (
+        {groups.length > 0 && (
           <section
             data-reveal
             aria-labelledby={builtId}
             className="relative mt-7 pt-6"
             style={{ borderTop: `1px solid ${P.hairline}` }}
           >
-            <h3
-              id={builtId}
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: P.ink3, fontFamily: DISPLAY }}
-            >
-              {RESULTS_HEADINGS.builtFromAnswers}
-            </h3>
-            <ul className="mt-4 space-y-5">
-              {lines.map((item) => (
-                <AnswerRow key={item.key} item={item} />
+            <SectionHeading id={builtId}>{RESULTS_HEADINGS.builtFromAnswers}</SectionHeading>
+            <ul className="mt-4 space-y-6">
+              {groups.map((group) => (
+                <AnswerGroupRow key={group.sentence} group={group} />
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {quiet.length > 0 && (
+          <section
+            data-reveal
+            aria-labelledby={alsoId}
+            className="relative mt-7 pt-6"
+            style={{ borderTop: `1px solid ${P.hairline}` }}
+          >
+            <SectionHeading id={alsoId}>
+              {groups.length > 0 ? RESULTS_HEADINGS.alsoInStack : RESULTS_HEADINGS.inStack}
+            </SectionHeading>
+            <ul className="mt-4 space-y-3">
+              {quiet.map((item) => (
+                <li key={item.key} className="flex items-center gap-3.5" data-listed={item.product.id}>
+                  <ProductTile imageUrl={item.product.imageUrl} slot={item.slotType} title={item.product.title} size={40} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold leading-snug" style={{ color: P.ink }}>
+                      {item.product.title}
+                    </p>
+                    <p className="mt-0.5 text-[13px] leading-snug" style={{ color: P.ink3 }}>
+                      {productTypeLabel(item.product)}
+                    </p>
+                  </div>
+                </li>
               ))}
             </ul>
           </section>
@@ -212,13 +260,7 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
             className="relative mt-7 pt-6"
             style={{ borderTop: `1px solid ${P.hairline}` }}
           >
-            <h3
-              id={checkedId}
-              className="text-[11px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: P.ink3, fontFamily: DISPLAY }}
-            >
-              {RESULTS_HEADINGS.whatWeChecked}
-            </h3>
+            <SectionHeading id={checkedId}>{RESULTS_HEADINGS.whatWeChecked}</SectionHeading>
             <ul className="mt-4 space-y-3">
               {checks.map((line) => (
                 <li key={line} className="flex items-start gap-3 text-[14px] leading-snug" style={{ color: P.ink2 }}>
@@ -234,22 +276,46 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
   )
 }
 
+function SectionHeading({ id, children }: { id: string; children: string }) {
+  return (
+    <h3
+      id={id}
+      className="text-[11px] font-bold uppercase tracking-[0.16em]"
+      style={{ color: P.ink3, fontFamily: DISPLAY }}
+    >
+      {children}
+    </h3>
+  )
+}
+
 /**
- * One "Built from your answers" row: the answer, then the product, then the
- * claim that backs it, quoted. In that order and always together, so a goal is
- * never on screen without the register's words beside it.
+ * One "Built from your answers" group: the answer, then each product it was
+ * said for, each with the claim that backs it, quoted. Always together, so a
+ * goal is never on screen without the register's words beside the product.
  */
-function AnswerRow({ item }: { item: YouSceneItem & { explanation: ProductExplanation } }) {
+function AnswerGroupRow({ group }: { group: AnswerGroup }) {
+  return (
+    <li data-line={group.sentence}>
+      <p className="text-[17px] font-bold leading-snug tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }}>
+        {group.sentence}
+      </p>
+      <ul className="mt-3 space-y-4">
+        {group.items.map((item) => (
+          <AnswerProduct key={item.key} item={item} />
+        ))}
+      </ul>
+    </li>
+  )
+}
+
+function AnswerProduct({ item }: { item: ExplainedItem }) {
   const { product, explanation } = item
   const claim = explanation.claim
   return (
     <li className="flex gap-3.5" data-explained={product.id}>
       <ProductTile imageUrl={product.imageUrl} slot={item.slotType} title={product.title} size={40} />
       <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-semibold leading-snug" style={{ color: P.ink }}>
-          {explanation.sentence}
-        </p>
-        <p className="mt-0.5 text-[13px] font-medium leading-snug" style={{ color: P.ink2 }}>
+        <p className="pt-0.5 text-[15px] font-semibold leading-snug" style={{ color: P.ink }}>
           {product.title}
         </p>
         {claim ? (

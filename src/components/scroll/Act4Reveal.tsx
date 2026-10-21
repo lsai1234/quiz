@@ -20,14 +20,13 @@ export function Act4Reveal({ reducedMotion }: Props) {
   return (
     /*
       The top padding is the space the You · Stack · Plan bar takes, so the
-      first card starts below the bar rather than under it. At the bottom, this
-      2.5rem and StackReviewPage's pb-28 leave 9.5rem under the last content;
-      the sticky checkout bar is about 5.6rem plus max(0.9rem, the bottom
-      inset), so adding the inset here keeps it clear on any device.
+      first card starts below the bar rather than under it. The bottom space
+      for the sticky checkout bar is inside the dark Stack panel
+      (StackReviewPage), so the page ends on dark rather than a light strip.
     */
     <div
       data-reveal-shell
-      className="bg-[#F5F5F0] min-h-screen pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
+      className="bg-[#F5F5F0] min-h-screen"
       style={{ paddingTop: SCENE_RAIL_RESERVE }}
     >
       {/* Pinned wayfinding: You · Stack · Plan */}
