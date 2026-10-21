@@ -208,12 +208,14 @@ describe('the giveaway card', () => {
   const LONG_NAMES: ShareCardPayload = {
     ...sharePersonas().find((p) => p.id === 'long-everything')!.payload,
     lineup: [
-      ['Applied Nutrition Critical Whey Protein Isolate', 'Protein'],
-      ['Creatine Monohydrate Micronised Unflavoured', 'Performance'],
-      ['Magnesium Bisglycinate Chelate Night Formula', 'Sleep'],
-      ['Omega-3 Triple Strength', 'Health'],
-      ['Vitamin D3 + K2', 'Energy / Pre-Workout'],
-      ['Never shown — the sixth product', 'Health'],
+      // Product types, as rows now carry. A stored slot title prints no
+      // category, which would leave the name-beside-category path untested.
+      ['Applied Nutrition Critical Whey Protein Isolate', 'Whey protein'],
+      ['Creatine Monohydrate Micronised Unflavoured', 'Creatine'],
+      ['Magnesium Bisglycinate Chelate Night Formula', 'Night-time blend'],
+      ['Omega-3 Triple Strength', 'Omega-3'],
+      ['Stim-Free Pre-Workout Pump Matrix', 'Stim-free pre-workout'],
+      ['Never shown — the sixth product', 'Supplement'],
     ].map(([product, slot]) => ({ slot, product, reason: '', dose: '30 G / DAY' })),
   }
 

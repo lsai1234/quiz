@@ -45,8 +45,18 @@ export function formatFact(formats: string[]): { glyph: string; label: string } 
   return { glyph: 'capsule', label }
 }
 
+export interface ProductFactsOptions {
+  /**
+   * Include the "You'll feel it" fact. Default true. The quiz results sheet
+   * passes false: a felt-effect window is an implied claim, and Phase 1
+   * removed it there. The shop sheet still shows it until that is decided.
+   */
+  onset?: boolean
+}
+
 /**
- * The three headline facts: format, servings per unit, when you'll feel it.
+ * The headline facts: format, servings per unit, and (unless `onset: false`)
+ * when you'll feel it.
  *
  * `variant` is the one the shopper is looking at. It matters wherever a product
  * holds more than one size — the 454g glycine powder is 454 servings and the
@@ -57,7 +67,11 @@ export function formatFact(formats: string[]): { glyph: string; label: string } 
  * is nothing to feel: "you'll feel it within a few weeks" under a shaker is a
  * claim about a plastic bottle. What is left is what it is.
  */
-export function productFacts(product: CatalogueProduct, variant?: CatalogueVariant): ProductFact[] {
+export function productFacts(
+  product: CatalogueProduct,
+  variant?: CatalogueVariant,
+  { onset = true }: ProductFactsOptions = {},
+): ProductFact[] {
   const format = formatFact(product.formats)
   const formatFactEntry = { key: 'format', glyph: format.glyph, label: 'Format', value: format.label }
   if (isAccessory(product)) return [formatFactEntry]
@@ -68,7 +82,9 @@ export function productFacts(product: CatalogueProduct, variant?: CatalogueVaria
     ...(servings != null && servings > 0
       ? [{ key: 'servings', glyph: 'bar', label: 'Per unit', value: servingsLabel(servings) }]
       : []),
-    { key: 'onset', glyph: 'clock', label: "You'll feel it", value: onsetWindowLabel(effectOnsetForProduct(product)) },
+    ...(onset
+      ? [{ key: 'onset', glyph: 'clock', label: "You'll feel it", value: onsetWindowLabel(effectOnsetForProduct(product)) }]
+      : []),
   ]
 }
 

@@ -1,35 +1,26 @@
 'use client'
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { StatAxis } from '@/lib/stack-stats'
 import { ProductTile } from './ProductTile'
 import { shortNameOf } from '@/lib/catalogue/short-name'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 
 const ACCENT = '#00D4FF'
 
 interface Props {
   boosters: CatalogueProduct[]
-  axes: StatAxis[]
   onAdd: (product: CatalogueProduct) => void
 }
 
-function prettify(goal: string) {
-  return goal.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-/** The user-facing "what this adds" chips — the shared axes it hits, else its own top goal. */
-function deltas(product: CatalogueProduct, axes: StatAxis[]): string[] {
-  const onAxis = axes.filter((a) => product.goals.includes(a.goal)).map((a) => a.label)
-  if (onAxis.length > 0) return onAxis.slice(0, 2)
-  return product.goals[0] ? [prettify(product.goals[0])] : []
-}
-
 /**
- * The final card in the stack deck: optional add-ons, each with a one-tap add
- * and the stat axes it would boost. Adding one inserts its own stat card into
- * the deck (and drops it from this list).
+ * The final card in the stack deck: optional add-ons, each with its product
+ * type and a one-tap add. Adding one inserts its own card into the deck (and
+ * drops it from this list).
+ *
+ * The chip is the product type ("Magnesium"). It used to be "+Sleep", the goal
+ * the product would add, which links a health goal to a product — a claim.
  */
-export function UpgradesCard({ boosters, axes, onAdd }: Props) {
+export function UpgradesCard({ boosters, onAdd }: Props) {
   return (
     <div
       className="flex flex-col rounded-2xl overflow-hidden h-full"
@@ -63,7 +54,6 @@ export function UpgradesCard({ boosters, axes, onAdd }: Props) {
           {boosters.map((product) => {
             const firstVariant = product.variants.find((v) => v.available) ?? product.variants[0]
             const price = firstVariant?.price ?? product.basePrice
-            const tags = deltas(product, axes)
             return (
               <div
                 key={product.id}
@@ -76,15 +66,12 @@ export function UpgradesCard({ boosters, axes, onAdd }: Props) {
                     {shortNameOf(product)}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-0.5">
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        className="text-[8px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, fontFamily: 'var(--font-display)' }}
-                      >
-                        +{t}
-                      </span>
-                    ))}
+                    <span
+                      className="text-[8px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, fontFamily: 'var(--font-display)' }}
+                    >
+                      {productTypeLabel(product)}
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">

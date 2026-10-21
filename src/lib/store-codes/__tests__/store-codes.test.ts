@@ -3,13 +3,14 @@
  */
 import {
   createStoreCode, deleteStoreCode, listStoreCodes, validateStoreCode, setStoreCodeEnd, setCheckoutPromo, liveCheckoutPromo,
-  dailyCodeStatus,
+  dailyCodeStatus, ensureHousePartner,
 } from '@/lib/store-codes'
-import { DAILY_CODES, setDailyCodesEnabled } from '@/lib/store-codes/daily'
+import { DAILY_CODES, dailyCodesEnabled, ensureDailyCodes, setDailyCodesEnabled } from '@/lib/store-codes/daily'
 import { createPartner, listPartnerRecords } from '@/lib/partners'
 import { recordCodeUse, redeemPartnerCode } from '@/lib/partners/redeem'
 import { accrueForOrder } from '@/lib/partners/ledger'
 import { listPartners } from '@/lib/partners/repo'
+import * as repo from '@/lib/partners/repo'
 import { HOUSE_PARTNER_ID } from '@/lib/partners/house'
 import { priceOneOffLines } from '@/lib/stack-blueprint/pricing'
 import type { Order } from '@/lib/orders/types'
@@ -114,10 +115,8 @@ describe('store codes', () => {
 
 describe('ending a code, and advertising one at checkout', () => {
   const now = new Date('2026-10-13T15:00:00Z') // 16:00 in London
-  // These are about a code chosen in the hub; the daily codes would take the
-  // card from 14 October, so they are switched off here and tested below.
-  beforeAll(() => setDailyCodesEnabled(false))
-  afterAll(() => setDailyCodesEnabled(true))
+  // About a code chosen in the hub. The daily codes are off by default, so
+  // nothing here competes with it for the card (tested below).
 
   it('ends a code at London midnight on the day chosen, and checkout refuses it after', async () => {
     await createStoreCode({ name: 'TONIGHT20', percent: 20 })
@@ -172,8 +171,23 @@ describe('ending a code, and advertising one at checkout', () => {
   })
 })
 
-describe('a different 25% code every day to the end of November', () => {
+describe('the daily 25% codes — off by default, and no longer made', () => {
   const at = (iso: string) => new Date(iso)
+  const ctx = (iso: string) => ({ subtotal: 60, channel: 'quiz' as const, now: at(iso) })
+
+  /** A row as `ensureDailyCodes` used to make it, ahead of its day — the database may still hold these. */
+  async function madeBefore(code: string) {
+    const d = DAILY_CODES.find((x) => x.code === code)!
+    await ensureHousePartner()
+    await repo.createCode({
+      code: d.code,
+      partnerId: HOUSE_PARTNER_ID,
+      discountPct: 0.25,
+      terms: { firstOrderOnly: false, maxUses: null, uses: 0, startsAt: d.startsAt, endsAt: d.endsAt, minSpend: null },
+    })
+  }
+
+  beforeAll(() => setCheckoutPromo(null))
 
   it('is one code a day, a word then 25, from 14 October to 30 November', () => {
     expect(DAILY_CODES).toHaveLength(48)
@@ -187,36 +201,77 @@ describe('a different 25% code every day to the end of November', () => {
     for (let i = 1; i < DAILY_CODES.length; i++) expect(DAILY_CODES[i].startsAt).toBe(DAILY_CODES[i - 1].endsAt)
   })
 
-  it('advertises today’s code with a countdown to London midnight', async () => {
+  it('is off unless a founder switches it on', async () => {
+    expect(await dailyCodesEnabled()).toBe(false)
+    expect(await dailyCodeStatus(at('2026-10-14T10:00:00Z'))).toMatchObject({
+      enabled: false, today: { code: 'SPARK25' }, lastDay: '2026-11-30',
+    })
+    await setDailyCodesEnabled(true)
+    expect(await dailyCodesEnabled()).toBe(true)
+    await setDailyCodesEnabled(false)
+    expect(await dailyCodesEnabled()).toBe(false)
+  })
+
+  it('makes no codes, switched on or off', async () => {
+    await ensureDailyCodes(at('2026-10-14T10:00:00Z'))
+    expect(await repo.getCode('SPARK25')).toBeNull()
+    // Typed on its day, a code that was never made is just an unknown code.
+    expect(await redeemPartnerCode('SPARK25', ctx('2026-10-14T10:00:00Z'), never)).toEqual({
+      ok: false, reason: 'We don’t recognise that code.',
+    })
+    await setDailyCodesEnabled(true)
+    expect(await liveCheckoutPromo(at('2026-10-14T10:00:00Z'))).toBeNull()
+    expect(await repo.getCode('SPARK25')).toBeNull()
+    expect(await repo.getCode('FINALE25')).toBeNull()
+    await setDailyCodesEnabled(false)
+  })
+
+  it('switched on, advertises today’s code with a countdown to London midnight — if it was made before', async () => {
+    await madeBefore('SPARK25')
+    await madeBefore('POWER25')
+    expect(await liveCheckoutPromo(at('2026-10-14T10:00:00Z'))).toBeNull()
+
+    await setDailyCodesEnabled(true)
     expect(await liveCheckoutPromo(at('2026-10-14T10:00:00Z'))).toEqual({
       code: 'SPARK25', percent: 25, endsAt: '2026-10-14T23:00:00.000Z', kind: 'daily',
     })
     // The night the clocks go back, midnight is an hour later in UTC.
     expect(await liveCheckoutPromo(at('2026-10-25T12:00:00Z'))).toMatchObject({ code: 'POWER25', endsAt: '2026-10-26T00:00:00.000Z' })
+    // A day whose code was never made has no card.
+    expect(await liveCheckoutPromo(at('2026-10-15T10:00:00Z'))).toBeNull()
+    await setDailyCodesEnabled(false)
   })
 
-  it('works only on its own day — not before, not after midnight', async () => {
-    const ctx = (iso: string) => ({ subtotal: 60, channel: 'quiz' as const, now: at(iso) })
+  it('a code made before still works when typed on its own day, with the switch off', async () => {
+    expect(await dailyCodesEnabled()).toBe(false)
+    await madeBefore('SURGE25')
     expect(await redeemPartnerCode('spark25', ctx('2026-10-14T22:59:00Z'), never)).toMatchObject({ ok: true, discountPct: 0.25 })
     expect(await redeemPartnerCode('SPARK25', ctx('2026-10-14T23:00:01Z'), never)).toEqual({ ok: false, reason: 'That code has expired.' })
     expect(await redeemPartnerCode('SURGE25', ctx('2026-10-14T22:59:00Z'), never)).toEqual({ ok: false, reason: 'That code is not active yet.' })
     expect(await redeemPartnerCode('SURGE25', ctx('2026-10-15T09:00:00Z'), never)).toMatchObject({ ok: true, discountPct: 0.25 })
   })
 
-  it('stays off the founders’ own list, and can be switched off', async () => {
-    const now = at('2026-10-14T10:00:00Z')
-    await liveCheckoutPromo(now)
-    expect((await listStoreCodes()).some((c) => c.code.endsWith('25') && DAILY_CODES.some((d) => d.code === c.code))).toBe(false)
-    expect(await dailyCodeStatus(now)).toMatchObject({ enabled: true, today: { code: 'SPARK25' }, lastDay: '2026-11-30' })
-
-    await setDailyCodesEnabled(false)
-    expect(await liveCheckoutPromo(now)).toBeNull()
-    // A code already handed out still works until its midnight.
-    expect(await redeemPartnerCode('SPARK25', { subtotal: 60, channel: 'quiz', now }, never)).toMatchObject({ ok: true })
-    await setDailyCodesEnabled(true)
+  it('a paused one is refused on its day, and its row is kept', async () => {
+    await madeBefore('VOLT25')
+    await repo.updateCode('VOLT25', { status: 'paused' })
+    expect(await redeemPartnerCode('VOLT25', ctx('2026-10-16T09:00:00Z'), never)).toEqual({ ok: false, reason: 'That code is paused.' })
+    expect(await repo.getCode('VOLT25')).toMatchObject({ status: 'paused' })
   })
 
-  it('shows nothing once the schedule has run out', async () => {
+  it('leaves the card to the code chosen in the hub while it is off', async () => {
+    await createStoreCode({ name: 'PUBLIC20', percent: 20 })
+    await setCheckoutPromo('PUBLIC20', at('2026-10-14T10:00:00Z'))
+    expect(await liveCheckoutPromo(at('2026-10-14T10:00:00Z'))).toEqual({ code: 'PUBLIC20', percent: 20, endsAt: null, kind: 'store' })
+    await setCheckoutPromo(null)
+  })
+
+  it('stays off the founders’ own list', async () => {
+    expect((await listStoreCodes()).some((c) => DAILY_CODES.some((d) => d.code === c.code))).toBe(false)
+  })
+
+  it('shows nothing once the schedule has run out, even switched on', async () => {
+    await setDailyCodesEnabled(true)
     expect(await liveCheckoutPromo(at('2026-12-01T12:00:00Z'))).toBeNull()
+    await setDailyCodesEnabled(false)
   })
 })

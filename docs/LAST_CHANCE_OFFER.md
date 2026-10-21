@@ -2,8 +2,8 @@
 
 At the very foot of the quiz results page, below the plan, the small print and
 the giveaway, somebody who has scrolled past their whole stack without buying
-it gets one more, smaller, yes: **a one-time deal on the single product from
-their stack that fits them best: free delivery first, then as much off as the
+it gets one more, smaller, yes: **a deal on the single product from their
+stack that fits them best: free delivery first, then as much off as the
 business can afford while still making a little, one tap from paying.**
 
 Review every state at `/styleguide/last-chance`. Tune it in the Founders Hub:
@@ -13,39 +13,40 @@ Pricing → Rules → Last-chance offer.
 
 ## What the customer sees
 
-> **NOT READY FOR THE WHOLE STACK?**
-> **Then here's a one-time deal on your top pick.**
-> Worked out for your stack, just now. It only exists on this page: it isn't
-> in the shop, and no code unlocks it.
+> **Not ready for the whole stack? Start with your top pick.**
+
+The copy was rewritten in Phase 1 of the results-page plan: no "one-time",
+"only on this page" or "no code unlocks it" wording, and no sentence linking
+the person's goal to the product (that is a health claim unless the register
+backs it).
 
 A spotlight card that arrives once as it scrolls into view, then stays still:
 
-- **One-time offer**: their best-fitting product lifts into a beam of light
-  while a ring charges round it. A **FREE DELIVERY** ribbon sits across it, and
-  a **−8% OFF** stamp is pressed on when there is a percentage too.
-- **Why it's theirs**: in terms of the goal they gave us, e.g. *You told us
-  your top goal is "Build muscle". Of the 3 products in your stack, this is
-  the one built around it.*
+- **The product**, with its type on the right ("Creatine", "Omega-3"). It lifts
+  into a beam of light while a ring charges round it. A ribbon states the
+  delivery deal ("Free delivery", or "Delivery £3.49"), and a **−8% OFF**
+  stamp is pressed on when there is a percentage too.
+- **Why it's theirs**: *One of the 3 products we picked for you.* (Phase 2
+  replaces this with a line built from their answers, backed by the register.)
 - **What it does**: one claim from the GB register, verbatim
   (`lib/consult/claims.ts`), or no row at all.
 - **What you get**: facts only. *30 servings, £1.11 each, lasts about a month
   at your usage.*
-- **Your deal · only on this page**: the deal assembles line by line as it
-  arrives:
-  - Free delivery, with ~~£4.95~~ struck through.
+- **Your deal**, line by line:
+  - Free delivery, with ~~£4.95~~ struck through — or, when delivery is
+    reduced rather than free, "Delivery £3.49 instead of £4.95".
   - 8% off, with ~~£39.99~~ struck through, now £36.79.
-  - The delivered price counts down from £44.94 to **£36.79**, with **You save
+  - The total, "£36.79 delivered", counting down from £44.94, with **You save
     £8.15**.
 - One button: **Get it for £36.79 →**, the delivered price. Below it: "Just
-  this, once. No subscription. Pay on the next screen." and the Highlands
+  this product — no subscription. Pay on the next screen." and the Highlands
   surcharge, stated.
 
-**"One-time", honestly.** Everything the card claims about the deal is true by
-construction:
+**What is true about it**, by construction:
 
 - It is worked out here, for this stack.
-- It is not in the shop.
-- No code unlocks it.
+- It is not in the shop, and no code unlocks it — but the card no longer says
+  so: that is scarcity wording, and it does not help anyone decide.
 - It is one product, once. Once an order on the deal is confirmed, that
   browser is not offered it again.
 

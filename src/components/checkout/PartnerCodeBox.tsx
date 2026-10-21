@@ -11,9 +11,18 @@ const ACCENT = '#00D4FF'
 /** Set by `middleware.ts` when someone arrives on a partner's `?ref=` link. */
 const REFERRAL_COOKIE = 'partner_ref'
 
+/**
+ * Which kind of code it is, as `/api/partner-code` reports it. A store code
+ * (the founders' campaign codes, the daily code) and a founder code work on
+ * single shop products; a partner's code works on stacks and subscriptions only.
+ */
+export type CodeKind = 'store' | 'partner' | 'founder'
+
 export interface AppliedCode {
   code: string
   discountPct: number
+  /** Null when the server did not say. */
+  kind?: CodeKind | null
   /** Null for one of the store's own codes, which belong to nobody. */
   partnerName: string | null
   /**
@@ -56,6 +65,7 @@ export async function checkDiscountCode(input: {
       applied: {
         code: d.code,
         discountPct: d.discountPct,
+        kind: d.kind ?? null,
         partnerName: d.partnerName,
         founderKind: d.founderKind ?? null,
         founderLabel: d.label ?? null,

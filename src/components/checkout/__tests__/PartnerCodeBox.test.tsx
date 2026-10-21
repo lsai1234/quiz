@@ -17,10 +17,12 @@ import { PartnerCodeBox } from '../PartnerCodeBox'
 
 // The exact object the box now emits. The three founder fields are null on a
 // partner code and present rather than absent, so one `AppliedCode` shape
-// describes both kinds and no caller has to test for `undefined`.
+// describes both kinds and no caller has to test for `undefined`. `kind` is
+// passed through from the server as it is.
 const JOHN20 = {
   code: 'JOHN20',
   discountPct: 0.2,
+  kind: 'partner' as const,
   partnerName: 'John Smith',
   founderKind: null,
   founderLabel: null,

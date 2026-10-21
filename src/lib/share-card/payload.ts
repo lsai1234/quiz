@@ -5,6 +5,7 @@ import type { StackIdentity } from '@/lib/types'
 import { selectStatAxes, stackStatScore, MAX_STAT } from '@/lib/stack-stats'
 import { focusAreaGlyph } from '@/lib/identity-visuals'
 import { shortNameOf } from '@/lib/catalogue/short-name'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { pickArtKey } from './art'
 import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } from './types'
 
@@ -232,7 +233,10 @@ export function buildSharePayload(
     // it is worse than a shorter one.
     .filter((e): e is { slot: (typeof e)['slot']; product: CatalogueProduct } => !!e.product)
     .map(({ slot, product }) => ({
-      slot: slot.title,
+      // The product type ("Vitamin C"), not the slot title ("Immune Support"):
+      // a goal printed beside a product is a health claim, and this one is on
+      // a public card. Same field name, so the payload shape is unchanged.
+      slot: productTypeLabel(product),
       // The spec table is a fixed-width column, and a wrapped row costs the
       // card a product. This used to strip a literal "CHRGD " prefix, which
       // worked only because every mock product carries one — a real supplier

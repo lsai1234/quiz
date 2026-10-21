@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useBasket } from '@/lib/basket/store'
-import { markCameFromStack, whatIsLost } from '@/lib/shop/stack-handoff'
+import { leavingStackNotes, markCameFromStack, stackOnlyRate } from '@/lib/shop/stack-handoff'
 import { track } from '@/lib/analytics/events'
+import type { CodeKind } from '@/components/checkout/PartnerCodeBox'
 
 interface Props {
   /**
@@ -18,10 +19,17 @@ interface Props {
    * Taking pre-resolved lines makes that mistake impossible to repeat — there
    * is nothing here to filter or guess at — and it carries the variant the
    * customer actually chose rather than the product's default.
+   *
+   * `price` is that variant's, so the bundle deal can be judged on the basket
+   * these lines will actually make.
    */
-  lines: { productId: string; variantId: string }[]
-  /** The partner rate being given up, as a whole percent. 0 when there is none. */
+  lines: { productId: string; variantId: string; price: number }[]
+  /** The applied code's rate, as a whole percent. 0 when there is none. */
   partnerDiscountPct: number
+  /** The applied code, as the receipt names it. */
+  code?: string | null
+  /** Which kind of code it is — decides whether it works in the shop. */
+  codeKind?: CodeKind | null
 }
 
 /**
@@ -39,14 +47,16 @@ interface Props {
  * which is the correct weighting for a last resort.
  *
  * ── Why it confirms instead of just going ───────────────────────────────────
- * Because it costs them money and they cannot see that from the link. A code's
- * discount works on stacks and subscriptions, not on single products off the
- * shelf, so walking out of the stack means paying full price. Finding that out
- * at checkout, after the total has quietly gone up from the one on this page,
- * is the kind of surprise that loses a customer rather than an order.
+ * Because it can cost them money and they cannot see that from the link. What
+ * it costs depends on what is on the stack (`leavingStackNotes`): a partner's
+ * code does not discount single products; a store or founder code does, but
+ * has to be in the shop basket; the bundle deal holds only while the basket
+ * stays over its threshold. Finding that out at checkout, after the total has
+ * quietly gone up from the one on this page, is the kind of surprise that
+ * loses a customer rather than an order.
  *
- * So the price of the door is stated on the door. The confirm step is one
- * sentence and two buttons, and "Never mind" is the one that looks like the
+ * So the price of the door is stated on the door — only the sentences that
+ * apply — with two buttons, and "Never mind" is the one that looks like the
  * default, because it usually is.
  *
  * ── What it does not say ────────────────────────────────────────────────────
@@ -56,14 +66,19 @@ interface Props {
  * the customer's purchase, and a shopper deciding how to spend forty pounds
  * does not need our commission structure in the middle of it.
  */
-export function ShopAlaCarte({ lines, partnerDiscountPct }: Props) {
+export function ShopAlaCarte({ lines, partnerDiscountPct, code = null, codeKind = null }: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const add = useBasket((s) => s.add)
 
   if (lines.length === 0) return null
 
-  const lost = whatIsLost(partnerDiscountPct / 100)
+  const notes = leavingStackNotes({
+    code,
+    kind: codeKind,
+    rate: partnerDiscountPct / 100,
+    prices: lines.map((l) => l.price),
+  })
 
   /*
     A `Link`, not `router.push` and certainly not `location.assign`.
@@ -77,7 +92,7 @@ export function ShopAlaCarte({ lines, partnerDiscountPct }: Props) {
   function go() {
     setBusy(true)
     for (const line of lines) add(line.productId, line.variantId, 1)
-    markCameFromStack({ items: lines.length, discountPct: partnerDiscountPct / 100 })
+    markCameFromStack({ items: lines.length, discountPct: stackOnlyRate(codeKind, partnerDiscountPct / 100) })
     track('stack_shop_alacarte', { items: lines.length })
   }
 
@@ -106,10 +121,9 @@ export function ShopAlaCarte({ lines, partnerDiscountPct }: Props) {
           : `We’ll put all ${lines.length} in your shop basket so you can change the quantities or drop what you don’t want.`}
       </p>
 
-      {lost && (
+      {notes.length > 0 && (
         <p className="text-xs leading-relaxed mt-2" style={{ color: 'var(--tone-attention, #E5A13B)' }}>
-          Your {lost} applies to this stack, not to single products — so buying them separately means paying
-          full price. Your stack stays saved, and you can come back to it whenever you like.
+          {notes.join(' ')}
         </p>
       )}
 

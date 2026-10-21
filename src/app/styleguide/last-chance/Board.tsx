@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { LastChanceView, type LastChanceDeal, type LastChanceViewProps } from '@/components/stack-review/LastChanceView'
+import { PRODUCT_TYPE_LABELS as TYPE } from '@/lib/catalogue/product-type'
 
 /**
  * Every state of the last-chance card, each in its own phone-width frame, so
@@ -43,10 +44,10 @@ function deal(
 
 const BASE: LastChanceViewProps = {
   title: 'CHRGD Pre-Workout',
-  role: 'Energy / Pre-Workout',
+  role: TYPE['pre-workout-stim'],
   imageUrl: null,
   slotType: 'energy',
-  goalLine: 'You told us your top goal is “More energy”. Of the 4 products in your stack, this is the one built around it.',
+  goalLine: 'One of the 4 products we picked for you.',
   claim: null,
   servings: 30,
   packMonths: 1.5,
@@ -62,10 +63,10 @@ const BASE: LastChanceViewProps = {
 const STATES: Array<[string, Partial<LastChanceViewProps>]> = [
   ['free-delivery-and-percent', {}],
   ['free-delivery-only', { deal: deal(29.99, 0, 4.95, 0, 'free') }],
-  ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: 'Strength', slotType: 'strength', deal: deal(19.99, 0, 4.95, 1.49, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
-  ['with-claim', { title: 'CHRGD Whey Protein', role: 'Protein', slotType: 'protein', goalLine: 'You told us your top goal is “Build muscle”. Of the 5 products in your stack, this is the one built around it. It’s the core of your stack.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 5, 4.95, 0, 'free'), packMonths: 1 }],
-  ['delivery-already-free', { title: 'CHRGD Mass Builder', role: 'Protein', slotType: 'protein', deal: deal(109.99, 24, 0, 0, 'included', 101.19), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
-  ['long-name-no-facts', { title: 'Collagen Hydrolysed Type I & III, Unflavoured — 300g', role: 'Recovery', slotType: 'recovery', packMonths: null, servings: null, goalLine: 'Picked for your goal “Recovery”.' }],
+  ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: TYPE.creatine, slotType: 'strength', deal: deal(19.99, 0, 4.95, 1.49, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
+  ['with-claim', { title: 'CHRGD Whey Protein', role: TYPE['protein-whey'], slotType: 'protein', goalLine: 'One of the 5 products we picked for you.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 5, 4.95, 0, 'free'), packMonths: 1 }],
+  ['delivery-already-free', { title: 'CHRGD Mass Builder', role: TYPE['protein-mass'], slotType: 'protein', deal: deal(109.99, 24, 0, 0, 'included', 101.19), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
+  ['long-name-no-facts', { title: 'Collagen Hydrolysed Type I & III, Unflavoured — 300g', role: TYPE.collagen, slotType: 'recovery', packMonths: null, servings: null }],
   ['loading', { status: 'loading' }],
   ['redirecting', { status: 'redirecting' }],
   ['blocked', { blocked: true }],

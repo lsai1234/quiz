@@ -16,10 +16,13 @@ import { track } from '@/lib/analytics/events'
  *
  * ── Why it is here at all ───────────────────────────────────────────────────
  * The reveal offers a quiet door into the shop for people who want two of the
- * five products rather than all of them. Taking it costs them their code's
- * discount, which is said before they go — but a decision made on a price is
- * one people reverse, and someone who looks at the shelf and changes their mind
- * must not have to redo the quiz to get their discount back.
+ * five products rather than all of them. Taking it gives up a partner code's
+ * discount (a store code still works here), which is said before they go — but
+ * a decision made on a price is one people reverse, and someone who looks at
+ * the shelf and changes their mind should have a way back.
+ *
+ * The stack is held in memory, not saved (see `lib/shop/stack-handoff`), so the
+ * bar does not say it is saved.
  *
  * ── Why it is a bar and not a toast ─────────────────────────────────────────
  * A toast is gone in four seconds and this has to survive them browsing. It
@@ -29,7 +32,9 @@ import { track } from '@/lib/analytics/events'
  * "Back to your stack" is a navigation label. "Back to your stack · 25% off
  * there" is the reason to press it, and it is the same number they were shown
  * on the way out — so the two screens agree rather than one of them selling
- * and the other hedging.
+ * and the other hedging. Only a partner's code is named (`stackOnlyRate`).
+ * It does not say "full price here": the bundle deal and store codes apply in
+ * the shop too.
  */
 export function StackReturnBar() {
   const [handoff, setHandoff] = useState<StackHandoff | null>(null)
@@ -58,11 +63,11 @@ export function StackReturnBar() {
       >
         <div style={{ minWidth: 0 }}>
           <p className="sf-body" style={{ color: 'var(--text)' }}>
-            Your stack is saved
+            Your stack
           </p>
           <p className="sf-meta">
             {handoff.items} product{handoff.items === 1 ? '' : 's'}
-            {lost ? ` · ${lost} there` : ''} · full price here
+            {lost ? ` · ${lost} there` : ''}
           </p>
         </div>
 

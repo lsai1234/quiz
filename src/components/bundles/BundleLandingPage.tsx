@@ -9,7 +9,6 @@ import type { ResolvedBundle } from '@/lib/bundles/resolve'
 import type { StackBlueprint, StackSlotEntry } from '@/lib/stack-blueprint'
 import { updateStackSlotVariant, removeOptionalSlot } from '@/lib/stack-blueprint/helpers'
 import { calculatePricing, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
-import { selectStatAxes } from '@/lib/stack-stats'
 import type { PlanType } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
@@ -151,7 +150,6 @@ export function BundleLandingPage({ bundle }: Props) {
   // One to many, and read through the resolver because a bundle saved before
   // the change carries a single `workout` instead of the list.
   const workouts = useMemo(() => bundleWorkouts(bundle), [bundle])
-  const statAxes = useMemo(() => selectStatAxes(blueprint, products), [blueprint, products])
   const pricing = calculatePricing(blueprint, products, null, undefined, subOpts)
   const subscriptionPlan = useMemo(
     () => buildSubscriptionPlan(blueprint, products, null, undefined, subOpts),
@@ -255,7 +253,6 @@ export function BundleLandingPage({ bundle }: Props) {
           slots={sortedSlots}
           products={products}
           planType={planType}
-          axes={statAxes}
           onChangeVariant={handleChangeVariant}
           onRemove={handleRemove}
         />
@@ -349,12 +346,12 @@ export function BundleLandingPage({ bundle }: Props) {
           slots={sortedSlots}
           products={products}
           subscriptionPlan={subscriptionPlan}
-          slotTitleById={slotTitleById}
           pricing={pricing}
           planType={planType}
           onPlanChange={setPlanType}
           onCheckout={handleCheckout}
           partnerCode={partnerCode?.code ?? null}
+          codeKind={partnerCode?.kind ?? null}
           onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           isLoading={checkoutState.status === 'loading'}
         />

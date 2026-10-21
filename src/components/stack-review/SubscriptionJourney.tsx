@@ -18,6 +18,7 @@ import {
 import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
 import { describeConstraints, safetyConstraintsFrom } from '@/lib/changes/safety'
 import type { ChangePolicy } from '@/lib/recharge/types'
+import { TIER_META } from '@/lib/quiz-core'
 
 const ACCENT = '#00D4FF'
 
@@ -28,8 +29,6 @@ const FREQ_OPTIONS: { id: NonNullable<QuizAnswers['trainingFrequency']>; label: 
   { id: '5-6x', label: '5–6× a week' },
   { id: 'daily', label: 'Every day' },
 ]
-
-const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', performance: 'Performance', complete: 'Complete' }
 
 function unitNoun(formats: string[]): string {
   return (formats[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
@@ -122,7 +121,7 @@ export function SubscriptionJourney({
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
         <div>
           <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-            {LEVEL_LABEL[level]} bundle · Subscribe & save up to {pricing.subscriptionDiscountPct}%
+            {TIER_META[level].label} bundle · Subscribe & save up to {pricing.subscriptionDiscountPct}%
           </p>
           <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
             Tune your monthly plan

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { IconButton } from '@/components/ui/IconButton'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
 
 interface Props {
@@ -16,6 +17,15 @@ interface Props {
 }
 
 const ACCENT = '#00D4FF'
+
+/**
+ * A type label as it reads mid-sentence: "Change your vitamin C", not "your
+ * Vitamin C" or "your vitamin c". Only a leading capital followed by a
+ * lower-case letter drops, so "ZMA" and "B-complex" keep theirs.
+ */
+function inSentence(label: string): string {
+  return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+}
 
 function priceDiff(current: number, candidate: number): string {
   const diff = candidate - current
@@ -55,6 +65,8 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
   }, [onClose])
 
   const currentPrice = currentProduct?.basePrice ?? 0
+  // The product type, not the slot title: "Immune Support" names a benefit.
+  const typeLabel = productTypeLabel(currentProduct)
 
   if (!mounted) return null
 
@@ -85,10 +97,10 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
               className="text-[10px] font-bold tracking-widest uppercase mb-0.5"
               style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
             >
-              {slot.title}
+              {typeLabel}
             </p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-              Change your {slot.title.toLowerCase()}
+              Change your {inSentence(typeLabel)}
             </h3>
             {currentProduct && (
               <p className="text-xs text-[var(--color-muted)] mt-0.5">
@@ -141,7 +153,7 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
                         />
                       ) : (
                         <span className="text-xl font-black opacity-40" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                          {slot.title.charAt(0)}
+                          {productTypeLabel(alt).charAt(0)}
                         </span>
                       )}
                     </div>

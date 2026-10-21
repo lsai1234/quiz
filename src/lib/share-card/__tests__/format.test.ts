@@ -161,6 +161,32 @@ describe('the entry card', () => {
     expect(view.entry?.products.every((p) => !/\d\s*(MG|G)\b/.test(p.category))).toBe(true)
   })
 
+  it('names each product’s type beside it, not the benefit its slot is for', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry?.products.map((p) => p.category))
+      .toEqual(PERSONAS.complete.lineup.slice(0, 5).map((r) => r.slot.toUpperCase()))
+    expect(view.entry?.products.map((p) => p.category)).toContain('WHEY PROTEIN')
+  })
+
+  it('prints no category on a card stored before rows carried a product type', () => {
+    // Stored payloads are never rewritten, and the old ones hold slot titles.
+    // A benefit label beside a product is a claim, so it is dropped; a stored
+    // title that is also a type still prints.
+    const legacy = {
+      ...PERSONAS.complete,
+      lineup: [
+        { slot: 'Immune Support', product: 'Vitamin C 1000', reason: '' },
+        { slot: 'Energy / Pre-Workout', product: 'Pre Fuel', reason: '' },
+        { slot: 'Sleep', product: 'Night Blend', reason: '' },
+        { slot: 'Omega-3', product: 'Omega-3 Fish Oil', reason: '' },
+        { slot: 'Amino Acids', product: 'EAA Matrix', reason: '' },
+      ],
+    }
+    const view = buildShareCardView(legacy, 'entry', BAND)
+    expect(view.entry?.products.map((p) => p.category)).toEqual(['', '', '', 'OMEGA-3', 'AMINO ACIDS'])
+    expect(view.entry?.products.map((p) => p.name)).toEqual(legacy.lineup.map((r) => r.product))
+  })
+
   it('says so on the card while the draw is a rehearsal', () => {
     expect(buildShareCardView(PERSONAS.complete, 'entry', BAND).entry?.label).toBe('LAUNCH GIVEAWAY')
     expect(buildShareCardView(PERSONAS.complete, 'entry', { ...BAND, test: true }).entry?.label)

@@ -14,7 +14,6 @@ import {
 } from '@/lib/stack-blueprint/helpers'
 import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
-import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -535,9 +534,6 @@ export function StackReviewPage() {
     void placeOrder()
   }, [claiming, freeCode, placeOrder])
 
-  // Shared top-trumps axes for the deck — the user's own goals, so every card
-  // compares on the same footing.
-  const statAxes = useMemo(() => selectStatAxes(activeBlueprint, products), [activeBlueprint, products])
   const pricing = calculatePricing(activeBlueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
     () => buildSubscriptionPlan(activeBlueprint, products, answers, undefined, subOpts),
@@ -930,7 +926,6 @@ export function StackReviewPage() {
             slots={activeSlots}
             products={products}
             planType={planType}
-            axes={statAxes}
             onChangeProduct={handleOpenSwap}
             onChangeVariant={handleChangeVariant}
             onRemove={handleRemove}
@@ -945,7 +940,7 @@ export function StackReviewPage() {
              */
             trailing={
               boosters.length > 0
-                ? <UpgradesCard boosters={boosters} axes={statAxes} onAdd={handleAddBooster} />
+                ? <UpgradesCard boosters={boosters} onAdd={handleAddBooster} />
                 : undefined
             }
           />
@@ -955,7 +950,7 @@ export function StackReviewPage() {
         <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
         {/* Price summary + checkout */}
-        <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-20">
+        <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
               {checkoutState.messages.map((msg, i) => (
@@ -1011,12 +1006,12 @@ export function StackReviewPage() {
             slots={activeSlots}
             products={products}
             subscriptionPlan={subscriptionPlan}
-            slotTitleById={slotTitleById}
             pricing={pricing}
             planType={planType}
             onPlanChange={setPlanType}
             onCheckout={handleCheckout}
           partnerCode={partnerCode?.code ?? null}
+            codeKind={partnerCode?.kind ?? null}
             starterStack={starterStack}
             oneOffOnly={founderKind ? 'Your code is for a one-off order, so subscribing isn’t available with it.' : null}
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}

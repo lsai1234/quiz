@@ -198,11 +198,11 @@ export function StoreCodes() {
               </p>
             )}
             <p style={meta}>
-              A different 25% code every day until {shortDay(daily.lastDay)}, each working from midnight to
-              midnight and replacing the bundle deal like any code. The results page shows today’s with a
-              countdown to midnight, and says the <em>code</em> expires — never that 25% off ends, because
-              tomorrow there is another. While it is on, it takes the place of a code chosen with “Show at
-              checkout” below; codes you make here keep working wherever they are typed.
+              Off unless turned on here, and no new daily codes are made. While it is on, the results page
+              shows today’s code with a countdown to midnight, in place of a code chosen with “Show at
+              checkout” below — but only if that code was made before. Turning it off only hides the card:
+              a daily code already made still works at checkout on its own day, until{' '}
+              {shortDay(daily.lastDay)}, for anyone who types it.
             </p>
           </div>
         </Card>

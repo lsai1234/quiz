@@ -8,11 +8,12 @@ import { completeQuiz } from '../support/quiz'
  * flow existed their only door was "Swap products" — which still ends in a
  * stack — so they left with nothing.
  *
- * The door is deliberately quiet, and it costs them their code's discount:
- * a partner code works on stacks and subscriptions, not on single products off
- * the shelf. That trade is stated before it is made, and the stack is kept so
- * the decision is reversible. All three of those are what these tests are for —
- * a door that silently cost somebody 25% would be worse than no door.
+ * The door is deliberately quiet, and it can cost them a partner code's
+ * discount: a partner code works on stacks and subscriptions, not on single
+ * products off the shelf. That trade is stated before it is made, and the shop
+ * offers a way back to the stack for as long as the tab holds it. All three of
+ * those are what these tests are for — a door that silently cost somebody 25%
+ * would be worse than no door.
  */
 
 test('the landing page offers the shop to somebody who does not want a quiz', async ({ page }) => {
@@ -43,11 +44,12 @@ test.describe('the door out of a stack', () => {
     await expect(page).toHaveURL(/\/shop/)
 
     /*
-      The stack is not gone. The bar is the promise that the decision is
-      reversible — somebody who leaves to look at prices and thinks better of
-      it must not have to redo the quiz to get their discount back.
+      The stack is not gone. The bar is the way back — somebody who leaves to
+      look at prices and thinks better of it must not have to redo the quiz.
+      It no longer says "saved": the stack lives in memory and a reload loses
+      it, so the bar reads plainly "Your stack".
     */
-    const bar = page.getByText(/your stack is saved/i)
+    const bar = page.getByText('Your stack', { exact: true })
     await expect(bar).toBeVisible()
 
     await page.getByRole('link', { name: /back to it/i }).click()
@@ -97,6 +99,6 @@ test.describe('the door out of a stack', () => {
     // Back in the shop under their own steam: they are not mid-handoff any
     // more, so the shop should not still be offering to rescue them from one.
     await page.goto('/shop')
-    await expect(page.getByText(/your stack is saved/i)).toHaveCount(0)
+    await expect(page.getByText('Your stack', { exact: true })).toHaveCount(0)
   })
 })

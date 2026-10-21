@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SLOT_LABELS, type CatalogueProduct, type StackSlot } from '@/lib/catalogue/types'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import { getPricingConfig, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { Goal, QuizAnswers } from '@/lib/types'
@@ -61,7 +62,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
   // a price the shop will refuse every time it is tapped.
   const withdrawn = state.status === 'changed' && !state.quote?.viable
 
-  // A one-time deal: once this browser has had it, it is not offered again.
+  // One per browser: once this browser has had it, it is not offered again.
   const [used, setUsed] = useState(false)
   useEffect(() => {
     try { setUsed(window.localStorage.getItem(LAST_CHANCE_USED_KEY) === '1') } catch { /* no storage: offer it */ }
@@ -104,7 +105,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
   return (
     <LastChanceView
       title={hero.product.title}
-      role={SLOT_LABELS[hero.slotType as StackSlot] ?? hero.product.category ?? ''}
+      role={productTypeLabel(hero.product)}
       imageUrl={hero.product.imageUrl ?? null}
       slotType={hero.slotType}
       goalLine={hero.goalLine}

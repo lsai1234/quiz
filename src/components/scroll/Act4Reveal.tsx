@@ -5,7 +5,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useQuizStore } from '@/lib/store'
 import { StackReviewPage } from '@/components/stack-review/StackReviewPage'
-import { SceneRail } from '@/components/stack-review/SceneRail'
+import { SceneRail, SCENE_RAIL_RESERVE } from '@/components/stack-review/SceneRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { focusAreaGlyph } from '@/lib/identity-visuals'
 
@@ -87,12 +87,24 @@ export function Act4Reveal({ reducedMotion }: Props) {
   if (!identity) return null
 
   return (
-    <div className="bg-[#F5F5F0] min-h-screen pb-10">
+    /*
+      The top padding is the space the You · Stack · Plan bar takes, so the
+      first card starts below the bar rather than under it. At the bottom, this
+      2.5rem and StackReviewPage's pb-28 leave 9.5rem under the last content;
+      the sticky checkout bar is about 5.6rem plus max(0.9rem, the bottom
+      inset), so adding the inset here keeps it clear on any device.
+    */
+    <div
+      className="bg-[#F5F5F0] min-h-screen pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
+      style={{ paddingTop: SCENE_RAIL_RESERVE }}
+    >
       {/* Pinned wayfinding: You · Stack · Plan */}
       <SceneRail />
 
-      {/* Scene 1 — Identity header, a poster-style reveal card */}
-      <div id="scene-you" className="px-5 pt-14 pb-10 max-w-lg mx-auto scroll-mt-20">
+      {/* Scene 1 — Identity header, a poster-style reveal card. The anchors'
+          scroll margin is the bar plus a 1rem gap, so a jump lands a scene
+          below the bar, as the 1rem top padding here does for the first card. */}
+      <div id="scene-you" className="px-5 pt-4 pb-10 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
         <div
           ref={headlineRef}
           className="rounded-3xl p-6"
@@ -170,7 +182,7 @@ export function Act4Reveal({ reducedMotion }: Props) {
           a deliberate scene cut (rounded lip + drawn shadow + grab handle). */}
       <div
         id="scene-stack"
-        className="mt-8 rounded-t-[2rem] scroll-mt-20"
+        className="mt-8 rounded-t-[2rem] scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]"
         style={{ background: 'var(--color-bg)', boxShadow: '0 -18px 44px -22px rgba(10,10,10,0.55)' }}
       >
         <div className="flex justify-center pt-3.5 pb-0.5">

@@ -6,14 +6,14 @@ import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { StackPricing, SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import { cadenceLine, formatGBP, getPricingConfig, planComparison, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import type { PlanType } from '@/lib/store'
-import type { StackLevel } from '@/lib/types'
+import { TIER_META } from '@/lib/quiz-core'
 import { Icon } from '@/components/ui/Icon'
+import type { CodeKind } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from './ProductTile'
 import { ShopAlaCarte } from './ShopAlaCarte'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
-
-const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', performance: 'Performance', complete: 'Complete' }
 
 interface LineItem {
   key: string
@@ -24,7 +24,7 @@ interface LineItem {
   suffix?: string
   /** How it is taken and how often it lands. Subscription lines only. */
   note?: string
-  /** What it is for — the slot it fills ("Electrolytes"). One-off lines, where there is no cadence to say. */
+  /** What it is — the product type ("Electrolytes"). One-off lines, where there is no cadence to say. */
   role?: string
 }
 
@@ -32,7 +32,6 @@ interface Props {
   slots: StackSlotEntry[]
   products: CatalogueProduct[]
   subscriptionPlan: SubscriptionLine[]
-  slotTitleById: Record<string, string>
   pricing: StackPricing
   planType: PlanType
   onPlanChange: (plan: PlanType) => void
@@ -41,6 +40,8 @@ interface Props {
   isLoading?: boolean
   /** The applied partner code, so its line can be named rather than anonymous. */
   partnerCode?: string | null
+  /** Which kind of code that is, so the shop handoff can say whether it still works there. */
+  codeKind?: CodeKind | null
   /**
    * Set when a partner's starter stack is paying for this order.
    *
@@ -191,7 +192,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, starterStack = null, oneOffOnly = null, onCtaRef,
+  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -284,7 +285,9 @@ export function PlanReceipt({
     : slots.map((slot) => {
         const line = stackLines.find((l) => l.slot.slotId === slot.slotId)
         const title = line?.product.title ?? slot.title
-        const role = slotTitleById[slot.slotId] ?? slot.title
+        // The product's type, never the slot title: a slot names a job
+        // ("Immune Support"), and under a product that reads as a claim.
+        const role = line ? productTypeLabel(line.product) : undefined
         return {
           key: slot.slotId,
           slotType: slot.slotType,
@@ -340,8 +343,8 @@ export function PlanReceipt({
           Two lines for a name, not one cut short. "Endurance Breathe Isotonic
           Energy …" and "Collagen Hydrolysed Type I & III, Unfl…" were the two
           products somebody most needed to recognise, and the ellipsis took the
-          part that said what they were. The slot underneath says what each one
-          is for, which is the question a list of brand names leaves open.
+          part that said what they were. The product type underneath says what
+          each one is, which is the question a list of brand names leaves open.
         */}
         <div className="space-y-3">
           {items.map((it) => (
@@ -374,8 +377,11 @@ export function PlanReceipt({
         <div className="mt-3.5 pt-3.5 space-y-2" style={{ borderTop: '1px solid var(--color-border)' }}>
           {isSub ? (
             <>
+              {/* The depth picker's own name for the level (`TIER_META`), so the
+                  two cannot drift apart — this line once said "Performance"
+                  for the depth the picker calls "Balanced". */}
               {subscriptionDiscountPct > 0 && (
-                <Row label={`${LEVEL_LABEL[bundleLevel]} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
+                <Row label={`${TIER_META[bundleLevel].label} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
               )}
               {hasIntro && (
                 <Row
@@ -622,8 +628,10 @@ export function PlanReceipt({
             the five and would otherwise leave with nothing.
           */}
           <ShopAlaCarte
-            lines={stackLines.map((l) => ({ productId: l.product.id, variantId: l.variant.id }))}
+            lines={stackLines.map((l) => ({ productId: l.product.id, variantId: l.variant.id, price: l.variant.price }))}
             partnerDiscountPct={pricing.partnerDiscountPct}
+            code={partnerCode}
+            codeKind={codeKind}
           />
         </div>
       </div>

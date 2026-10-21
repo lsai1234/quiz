@@ -1,5 +1,6 @@
 import type { ShareCardPayload, ShareLineupEntry } from './types'
 import { ART_SET, ART_KEYS, isPlaceholder, type ArtKey } from './art'
+import { PRODUCT_TYPE_LABELS } from '@/lib/catalogue/product-type'
 
 /**
  * The card's formats, and what each one has room to say.
@@ -291,9 +292,9 @@ export interface ShareEntry {
   /** The panel's title: the archetype, or the stack's name without one. */
   title: string
   /**
-   * Up to five products: the name, and the slot it fills ("PROTEIN") for the
-   * far end of the row's leader. No doses — this card is an advert, not a
-   * protocol.
+   * Up to five products: the name, and its product type ("WHEY PROTEIN") for
+   * the far end of the row's leader, or "" when there is none to print. No
+   * doses — this card is an advert, not a protocol.
    */
   products: Array<{ name: string; category: string }>
   /** "STACK REPORT — 05", the poster's stamp, in the panel's corner. */
@@ -331,12 +332,21 @@ export function splitPrize(prize: string): { hero: string; rest: string } {
   return { hero: `Win ${match[0].replace(/\s+/g, '')}`, rest: rest || PRIZE_REST }
 }
 
+/** Every product type label, lower-cased, for matching a stored row. */
+const TYPE_LABELS = new Set(Object.values(PRODUCT_TYPE_LABELS).map((l) => l.toLowerCase()))
+
 /**
- * The slot, as a one-word category. "Energy / Pre-Workout" is two names for
- * one slot, and the row only has room for the first.
+ * A row's category: its product type, upper-cased.
+ *
+ * Payloads built before Phase 1 stored the slot title in `slot` ("Immune
+ * Support", "Sleep"), and stored cards are never rewritten. Those print no
+ * category rather than a benefit label beside a product. A stored title that
+ * is also a type ("Omega-3", "Magnesium") still prints. The row already gives
+ * up its category when the name needs the room, so an empty one renders.
  */
 function category(slot: string): string {
-  return slot.split('/')[0].trim().toUpperCase()
+  const label = slot.trim()
+  return TYPE_LABELS.has(label.toLowerCase()) ? label.toUpperCase() : ''
 }
 
 function buildEntry(payload: ShareCardPayload, competition: CompetitionBand, stamp: string): ShareEntry {

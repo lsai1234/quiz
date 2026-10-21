@@ -20,11 +20,11 @@
  * not a subscription-only refill, not ruled out for this person by a hard
  * gate, and `quoteOffer` viable — which means something genuinely comes off
  * the delivered price. A product with no deal is never shown at full price
- * under a "one-time offer" heading; if nothing in the stack has one, the
- * section does not render.
+ * as an offer; if nothing in the stack has one, the section does not render.
  *
  * ── What the card may say (docs/ORDER_CONFIRMATION_SPEC.md §5) ──────────────
- * - Why you: built here from the goals they gave us (OC-C-004) — never the
+ * - Why you: only that it is one of the products picked for them. Tying it to
+ *   a goal they gave us reads as a claim, so that waits for Phase 2. Never the
  *   engine's free-text `reason`, which no claim check has seen.
  * - What it does: one GB-register claim, verbatim (`consult/claims.ts`), or
  *   nothing. Pre-workouts, probiotics, greens, collagen and the rest
@@ -37,7 +37,6 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { Goal, QuizAnswers } from '@/lib/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import { CLAIMS, claimsFor } from '@/lib/consult/claims'
-import { GOAL_LABELS } from '@/lib/quiz-goals'
 import { getArchetype, scoreProduct, type SlotType } from '@/lib/stack-blueprint/factory'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { isAccessory } from '@/lib/catalogue/accessory'
@@ -58,7 +57,7 @@ export interface HeroOffer {
   product: CatalogueProduct
   variant: CatalogueVariant
   quote: OfferQuote
-  /** Why this one, in terms of what they told us — personalisation, not a claim. */
+  /** The line under its name: that it is one of their picks, and nothing more. */
   goalLine: string
   /** One register claim, verbatim, or null when the kind has none. */
   claim: { id: string; wording: string } | null
@@ -104,18 +103,13 @@ function claimFor(product: CatalogueProduct, goals: Goal[]): HeroOffer['claim'] 
   return first ? { id: first.id, wording: first.wording } : null
 }
 
-const label = (goal: Goal) => GOAL_LABELS[goal] ?? goal
-
-/** Their goal, in their own option words, and how this product relates to it. */
-function goalLineFor(product: CatalogueProduct, slot: StackSlotEntry, goals: Goal[], primary: Goal | null, stackSize: number): string {
-  const productGoals = product.goals ?? []
-  const core = slot.required ? ' It’s the core of your stack.' : ''
-  if (primary && productGoals.includes(primary)) {
-    return `You told us your top goal is “${label(primary)}”. Of the ${stackSize} products in your stack, this is the one built around it.${core}`
-  }
-  const served = goals.find((g) => productGoals.includes(g))
-  if (served) return `Picked for your goal “${label(served)}”.${core}`
-  return `One of the ${stackSize} products we picked for you.${core}`
+/**
+ * The same line for every pick, until Phase 2. Saying a product was picked for
+ * their goal, or is the core of their stack, links a health goal to a product,
+ * which is a claim. The goal still counts in the ranking; it is just not said.
+ */
+function goalLineFor(stackSize: number): string {
+  return `One of the ${stackSize} products we picked for you.`
 }
 
 function variantFor(product: CatalogueProduct, slot: StackSlotEntry): CatalogueVariant | null {
@@ -203,7 +197,7 @@ export function pickHeroOffer(
       product,
       variant,
       quote,
-      goalLine: goalLineFor(product, slot, goals, primary, slots.length),
+      goalLine: goalLineFor(slots.length),
       claim,
       servings: knownServings(product, variant),
       packMonths: packMonthsFor(product, variant, answers, ctx.usage?.[product.id]),

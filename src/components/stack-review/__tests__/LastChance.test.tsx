@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LastChance } from '../LastChance'
+import { LastChanceView, type LastChanceDeal } from '../LastChanceView'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { offerProductFor, publicQuote, quoteOffer } from '@/lib/last-chance/economics'
@@ -38,9 +39,14 @@ afterEach(() => jest.restoreAllMocks())
 
 it('shows the quote for the stack’s best product, and says only what is allowed', () => {
   render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} primaryGoal="energy" onBackToStack={() => {}} />)
-  expect(screen.getByRole('heading', { name: /one-time deal on your top pick/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Not ready for the whole stack? Start with your top pick.' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'CHRGD pre' })).toBeInTheDocument()
-  expect(screen.getByText(/you told us your top goal is “more energy”/i)).toBeInTheDocument()
+  // Its type, not the slot's job ("Energy / Pre-Workout").
+  expect(screen.getByText('Pre-workout')).toBeInTheDocument()
+  expect(screen.queryByText(/energy \/ pre-workout/i)).not.toBeInTheDocument()
+  // One of their picks — not tied to the goal it serves, which would be a claim.
+  expect(screen.getByText('One of the 2 products we picked for you.')).toBeInTheDocument()
+  expect(document.body.textContent).not.toMatch(/your top goal|picked for your goal|built around it|core of your stack|more energy/i)
   // A pre-workout has no authorised claim: no "what it does", and none of the engine's free text.
   expect(screen.queryByText(/what it does/i)).not.toBeInTheDocument()
   expect(screen.queryByText(/picked for your evening sessions/i)).not.toBeInTheDocument()
@@ -51,17 +57,18 @@ it('shows the quote for the stack’s best product, and says only what is allowe
   expect(screen.getByText(`£${quote.total.toFixed(2)} delivered, down from £${quote.normalTotal.toFixed(2)}`)).toBeInTheDocument()
 })
 
-it('leads with free delivery, then the percentage, and says the deal is only here', () => {
+it('leads with free delivery, then the percentage, and puts no pressure on it', () => {
   expect(quote.deliveryDeal).toBe('free')
   render(<LastChance slots={[slot('pre', 90), slot('other', 40)]} products={[PRE, OTHER]} onBackToStack={() => {}} />)
   expect(screen.getByText(`Free delivery to the UK mainland, instead of £${quote.standardDelivery.toFixed(2)}.`)).toBeInTheDocument()
   if (quote.discountPct > 0) {
     expect(screen.getByText(`${quote.discountPct}% off: £${quote.offerPrice.toFixed(2)} instead of £${quote.listPrice.toFixed(2)}.`)).toBeInTheDocument()
   }
-  expect(screen.getByText(/only on this page/i)).toBeInTheDocument()
-  expect(screen.getByText(/isn’t in the shop, and no code unlocks it/i)).toBeInTheDocument()
-  // No invented deadline.
-  expect(document.body.textContent).not.toMatch(/ends|tonight|hurry|left to|expires/i)
+  expect(screen.getByText(/^Just this product — no subscription\. Pay on the next screen\./)).toBeInTheDocument()
+  // No scarcity, and no invented deadline.
+  const text = document.body.textContent ?? ''
+  expect(text).not.toMatch(/one-time|only on this page|exists on this page|in the shop|no code unlocks|worked out for|just now|\bonce\b/i)
+  expect(text).not.toMatch(/ends|tonight|hurry|left to|expires|last chance/i)
 })
 
 it('sends the variant and the price it showed, nothing to charge', async () => {
@@ -128,4 +135,35 @@ it('renders nothing when no product in the stack has a deal it can afford', () =
     <LastChance slots={[slot('a', 90), slot('b', 80)]} products={[cheap('a'), cheap('b')]} onBackToStack={() => {}} />,
   )
   expect(container).toBeEmptyDOMElement()
+})
+
+/** A deal's figures from its levers, the way `quoteOffer` derives them. */
+function viewDeal(price: number, pct: number, standardDelivery: number, deliveryCharge: number, deliveryDeal: LastChanceDeal['deliveryDeal']): LastChanceDeal {
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const offerPrice = r2(price * (1 - pct / 100))
+  const normalTotal = r2(price + standardDelivery)
+  const total = r2(offerPrice + deliveryCharge)
+  return {
+    listPrice: price, basePrice: price, offerPrice, discountPct: pct, saving: r2(price - offerPrice),
+    standardDelivery, deliveryCharge, deliveryDeal, deliverySaving: r2(standardDelivery - deliveryCharge),
+    normalTotal, total, totalSaving: r2(normalTotal - total),
+  }
+}
+
+it('says reduced delivery in plain words: what it costs, instead of what it would', () => {
+  render(
+    <LastChanceView
+      title="CHRGD Creatine" role="Creatine" imageUrl={null} slotType="strength"
+      goalLine="One of the 4 products we picked for you." claim={null} servings={null} packMonths={null}
+      deal={viewDeal(19.99, 0, 4.95, 1.49, 'reduced')} remoteSurcharge={2.95} status="idle"
+      onBuy={() => {}} onBackToStack={() => {}}
+    />,
+  )
+  expect(screen.getByText('Delivery £1.49 instead of £4.95')).toBeInTheDocument()
+  expect(screen.getByText('Delivery £1.49')).toBeInTheDocument()
+  expect(screen.getByText('£21.48 delivered, down from £24.94')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /get it for £21\.48/i })).toBeInTheDocument()
+  expect(screen.getByText(/Highlands, Islands & Isle of Man add £2\.95\./)).toBeInTheDocument()
+  const text = document.body.textContent ?? ''
+  expect(text).not.toMatch(/delivery, cut|just £|one-time|only on this page/i)
 })

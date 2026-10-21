@@ -34,19 +34,6 @@ export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, c
         >
           Your CHRGD Stack
         </span>
-        {blueprint.personalised && (
-          <span
-            className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase"
-            style={{
-              fontFamily: 'var(--font-display)',
-              color: 'var(--color-accent)',
-              background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
-            }}
-          >
-            ✦ AI personalised
-          </span>
-        )}
       </div>
       <h2
         className="text-4xl font-black leading-tight tracking-tight"

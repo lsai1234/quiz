@@ -214,15 +214,20 @@ describe('rosterRowToProduct', () => {
 describe('the CHRGD roster file', () => {
   const csv = fs.readFileSync('docs/rosters/chrgd-roster.csv', 'utf8')
 
-  it('classifies every product — none fall through to "general"', () => {
+  it('classifies every product — only the zinc is left in "general", on purpose', () => {
     // A product left in `general` gets no swap alternatives and no targeted
     // scoring: it is invisible to the quiz's affinity pass. Seven of the
     // founder's top-25 picks used to land there because the engine had no
     // group for a protein bar, a nootropic, a B-complex, ZMA or an energy gel.
+    //
+    // P53879 (zinc bisglycinate) is the one deliberate exception. There is no
+    // zinc group, and every neighbouring one (magnesium, zma, vitamin-c) would
+    // give it another nutrient's claims and scoring — it was filed under
+    // magnesium until this was noticed.
     const { rows } = parseRosterCsv(csv)
 
     expect(rows).toHaveLength(48)
-    expect(rows.filter((r) => r.swapGroup === 'general')).toEqual([])
+    expect(rows.filter((r) => r.swapGroup === 'general').map((r) => r.sku)).toEqual(['P53879'])
     expect(rows.filter((r) => r.unrecognisedSwapGroup !== null)).toEqual([])
   })
 

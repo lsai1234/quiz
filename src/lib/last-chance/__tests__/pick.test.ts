@@ -81,11 +81,18 @@ it('says what it does only in register wording, verbatim — or not at all', () 
   expect(hero?.claim).toBeNull()
 })
 
-it('explains the pick in their own goal words, never the engine’s free text', () => {
+it('says only that it is one of their picks — no goal tied to it, never the engine’s free text', () => {
+  // Saying it was picked for their goal links a health goal to a product: a claim.
   const hero = pickHeroOffer([slot('whey', { required: true }), slot('b', { confidenceScore: 10 })], [product('whey'), product('b')], { primaryGoal: 'muscle' })
-  expect(hero?.goalLine).toBe('You told us your top goal is “Build muscle”. Of the 2 products in your stack, this is the one built around it. It’s the core of your stack.')
-  expect(hero?.goalLine).not.toMatch(/boost|improv|increas|speed|faster|cure|treat|prevent|feel/i)
+  expect(hero?.goalLine).toBe('One of the 2 products we picked for you.')
+  expect(hero?.goalLine).not.toMatch(/goal|muscle|core|built around|boost|improv|increas|speed|faster|cure|treat|prevent|feel/i)
   expect(JSON.stringify(hero)).not.toMatch(/Speeds up repair/)
+
+  // The same line whichever goal it serves, or none.
+  const three = [slot('a'), slot('b', { confidenceScore: 10 }), slot('c', { confidenceScore: 5 })]
+  const products = [product('a', { goals: ['recovery'] as never }), product('b'), product('c')]
+  expect(pickHeroOffer(three, products, { primaryGoal: 'muscle' })?.goalLine).toBe('One of the 3 products we picked for you.')
+  expect(pickHeroOffer(three, products)?.goalLine).toBe('One of the 3 products we picked for you.')
 })
 
 it('skips what cannot be bought on its own: sold out, a refill, an accessory', () => {

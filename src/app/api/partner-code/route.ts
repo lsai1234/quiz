@@ -11,7 +11,11 @@ import { requestMetadata } from '@/lib/legal/consent'
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/partner-code → { ok, code, discountPct } | { ok: false, reason }
+ * POST /api/partner-code → { ok, code, discountPct, kind } | { ok: false, reason }
+ *
+ * `kind` is 'store', 'partner' or 'founder'. It changes nothing here; it lets
+ * the results page say which codes still work on single products in the shop
+ * (store and founder codes do, a partner's code does not — `worksOn`).
  *
  * Checks a code while someone is typing it, so the basket can say what it takes
  * off before they commit to paying. Advisory only — every checkout re-validates
@@ -68,6 +72,7 @@ export async function POST(req: Request) {
       // rather than discounting them, and reporting a rate here would put an
       // invented "100% off" on a receipt that has no such line.
       discountPct: 0,
+      kind: 'founder',
       founderKind: founder.kind,
       label: FOUNDER_CODE_LABELS[founder.kind].title,
       note: FOUNDER_CODE_LABELS[founder.kind].blurb,
@@ -94,11 +99,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: result.reason })
   }
 
+  const storeCode = isHousePartner(result.partner.id)
   return NextResponse.json({
     ok: true,
     code: result.code.code,
     discountPct: result.discountPct,
+    kind: storeCode ? 'store' : 'partner',
     // A store code is ours, not a person's, so the basket has no name to show.
-    partnerName: isHousePartner(result.partner.id) ? null : result.partner.name,
+    partnerName: storeCode ? null : result.partner.name,
   })
 }

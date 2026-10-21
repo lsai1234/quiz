@@ -6,7 +6,6 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
-import type { StatAxis } from '@/lib/stack-stats'
 import { getSubscriptionProduct } from '@/lib/stack-blueprint/pricing'
 import { StatCard } from './StatCard'
 
@@ -18,7 +17,6 @@ interface Props {
   slots: StackSlotEntry[]
   products: CatalogueProduct[]
   planType: PlanType
-  axes: StatAxis[]
   onChangeProduct?: (slotId: string) => void
   onChangeVariant?: (slotId: string, variantId: string) => void
   onRemove?: (slotId: string) => void
@@ -27,18 +25,13 @@ interface Props {
 }
 
 /**
- * A horizontal, snap-scrolling deck of top-trumps stat cards — one card per
- * product, with an optional trailing card for upgrades. This is what keeps the
- * stack section short: N products cost one viewport of height, not N.
+ * A horizontal, snap-scrolling deck of product cards — one card per product,
+ * with an optional trailing card for upgrades. This is what keeps the stack
+ * section short: N products cost one viewport of height, not N.
  */
-export function StackDeck({ slots, products, planType, axes, onChangeProduct, onChangeVariant, onRemove, trailing }: Props) {
+export function StackDeck({ slots, products, planType, onChangeProduct, onChangeVariant, onRemove, trailing }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
-  const [reduced, setReduced] = useState(false)
-
-  useEffect(() => {
-    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  }, [])
 
   const total = slots.length + (trailing ? 1 : 0)
 
@@ -92,9 +85,12 @@ export function StackDeck({ slots, products, planType, axes, onChangeProduct, on
 
   return (
     <div>
+      {/* `items-start`: each card is as tall as its own content. Stretched, the
+          product cards took the add-ons card's height and, without the stat
+          bars that used to fill them, were mostly empty space. */}
       <div
         ref={scrollRef}
-        className="flex gap-3 overflow-x-auto px-5 pb-2 max-w-lg mx-auto snap-x snap-mandatory"
+        className="flex items-start gap-3 overflow-x-auto px-5 pb-2 max-w-lg mx-auto snap-x snap-mandatory"
         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
       >
         {slots.map((slot) => {
@@ -107,8 +103,6 @@ export function StackDeck({ slots, products, planType, axes, onChangeProduct, on
                 product={product}
                 planType={planType}
                 subscriptionProduct={subscriptionProduct}
-                axes={axes}
-                animate={!reduced}
                 onChangeProduct={onChangeProduct}
                 onChangeVariant={onChangeVariant}
                 onRemove={onRemove}

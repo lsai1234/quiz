@@ -9,13 +9,12 @@ import type { OfferQuote } from '@/lib/last-chance/economics'
 import { ProductTile } from './ProductTile'
 
 /**
- * The last-chance offer, drawn — a one-time deal on their top pick.
+ * The last-chance offer, drawn — a deal on their top pick.
  *
  * Somebody has scrolled past their whole stack, the price, the giveaway and the
  * small print without buying. This is the smaller yes: the one product from it
- * that fits them best, on a deal worked out for it on this page — free
- * delivery first, then a percentage off as far as the margin allows — one tap
- * from paying for it.
+ * that fits them best, on a deal worked out for it — free delivery first, then
+ * a percentage off as far as the margin allows — one tap from paying for it.
  *
  * ── Why it reveals rather than waits behind a button ────────────────────────
  * A "tap to reveal" asks for a tap at the exact point attention is lowest, and
@@ -25,17 +24,16 @@ import { ProductTile } from './ProductTile'
  * off — and the delivered price drops to what they will pay. About a second
  * and a half, once; then it is still. Reduced motion gets the finished card.
  *
- * ── "One-time", honestly ────────────────────────────────────────────────────
- * Everything it claims about the deal is true by construction: it is worked
- * out here, for this stack; it is not in the shop; no code unlocks it; and it
- * is one product, once. No countdown and no "ends tonight" — there is no
- * deadline to state, so none is invented.
+ * ── The deal, in plain words ────────────────────────────────────────────────
+ * What delivery costs instead of what it would, the percentage off, and the
+ * delivered price. Nothing about scarcity: no "one-time", no "only on this
+ * page", no countdown and no "ends tonight".
  *
  * ── What it may say about the product (docs/ORDER_CONFIRMATION_SPEC.md §5) ──
- * Why it is theirs, in terms of the goal they gave us (OC-C-004); one register
- * claim verbatim, or no "what it does" row at all (OC-C-001/002); and facts —
- * servings, price per serving, how long a pack lasts. Never a timeframe for
- * results (OC-C-003), never an outcome.
+ * That it is one of their picks — not which of their goals it is for, which
+ * would be a claim; one register claim verbatim, or no "what it does" row at
+ * all (OC-C-001/002); and facts — servings, price per serving, how long a pack
+ * lasts. Never a timeframe for results (OC-C-003), never an outcome.
  *
  * Purely presentational — `LastChance` owns choosing, pricing and buying — so
  * `/styleguide/last-chance` can show every state without a quiz or a network.
@@ -51,11 +49,11 @@ export type LastChanceDeal = Pick<
 
 export interface LastChanceViewProps {
   title: string
-  /** e.g. "Pre-workout" — what kind of thing it is. */
+  /** e.g. "Pre-workout" — what kind of thing it is (`productTypeLabel`). */
   role: string
   imageUrl: string | null
   slotType: string
-  /** Why it is theirs, from the goals they gave us. */
+  /** The line under its name — "One of the 4 products we picked for you." */
   goalLine: string
   /** One GB-register claim, verbatim — or null, and the row is not shown. */
   claim: string | null
@@ -218,10 +216,12 @@ export function LastChanceView(p: LastChanceViewProps) {
 
   const freeDelivery = deal.deliveryDeal === 'free' || deal.deliveryDeal === 'included'
   const pct = deal.discountPct > 0 ? deal.discountPct : 0
+  // Short enough to sit over the product on a 360px phone; the delivery row
+  // below gives both figures.
   const ribbon = freeDelivery
     ? 'Free delivery'
     : deal.deliveryDeal === 'reduced'
-      ? `Delivery just ${formatGBP(deal.deliveryCharge)}`
+      ? `Delivery ${formatGBP(deal.deliveryCharge)}`
       : null
 
   // The ring's circumference, for the stroke that charges round it.
@@ -241,10 +241,11 @@ export function LastChanceView(p: LastChanceViewProps) {
         sr: `Free delivery to the UK mainland, instead of ${formatGBP(deal.standardDelivery)}.`,
       }
     }
+    // The words say what it was, so the figure is not struck through as well.
     return {
-      label: 'Delivery, cut',
+      label: `Delivery ${formatGBP(deal.deliveryCharge)} instead of ${formatGBP(deal.standardDelivery)}`,
       sub: 'UK mainland',
-      was: formatGBP(deal.standardDelivery),
+      was: null,
       now: formatGBP(deal.deliveryCharge),
       sr: `Delivery to the UK mainland ${formatGBP(deal.deliveryCharge)}, instead of ${formatGBP(deal.standardDelivery)}.`,
     }
@@ -286,19 +287,17 @@ export function LastChanceView(p: LastChanceViewProps) {
         @keyframes lc-pop { from { opacity: 0; transform: scale(1.35); } to { opacity: 1; transform: none; } }
       `}</style>
 
-      {/* ── The lead-in: a beat of copy that reframes the scroll ─────────── */}
+      {/* ── The lead-in: one heading, its question set small above it ─────── */}
       <div className="lc-rise px-1 text-center" style={d(0)}>
-        <p style={mono(11, INK_2, 0.22)}>Not ready for the whole stack?</p>
-        <h2
-          id={titleId}
-          className="mx-auto mt-2"
-          style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.02em', color: INK, maxWidth: 360 }}
-        >
-          Then here’s a one-time deal on your top pick.
+        <h2 id={titleId} className="mx-auto" style={{ maxWidth: 360 }}>
+          <span className="block" style={mono(11, INK_2, 0.22)}>Not ready for the whole stack?</span>{' '}
+          <span
+            className="mt-2 block"
+            style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.02em', color: INK }}
+          >
+            Start with your top pick.
+          </span>
         </h2>
-        <p className="mx-auto mt-2.5" style={{ fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 360 }}>
-          Worked out for your stack, just now. It only exists on this page — it isn’t in the shop, and no code unlocks it.
-        </p>
       </div>
 
       {/* ── The card ─────────────────────────────────────────────────────── */}
@@ -315,12 +314,8 @@ export function LastChanceView(p: LastChanceViewProps) {
       >
         <span aria-hidden className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, opacity: 0.06, mixBlendMode: 'overlay' }} />
 
-        {/* Header row */}
-        <div className="relative flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5" style={mono(11, ACCENT, 0.22)}>
-            <Icon name="bolt" size={13} />
-            One-time offer
-          </span>
+        {/* Header row: what kind of product it is */}
+        <div className="relative flex items-center justify-end">
           <span style={mono(10.5, INK_2, 0.16)}>{p.role}</span>
         </div>
 
@@ -456,13 +451,7 @@ export function LastChanceView(p: LastChanceViewProps) {
           className="lc-rise relative mt-6 rounded-2xl p-4"
           style={{ ...d(560), background: 'color-mix(in srgb, var(--color-bg) 55%, transparent)', border: '1px solid var(--color-border)' }}
         >
-          <div className="flex items-center justify-between">
-            <span style={mono(10.5, INK_2, 0.18)}>Your deal</span>
-            <span className="inline-flex items-center gap-1" style={mono(10, INK_2, 0.14)}>
-              <Icon name="lock" size={11} />
-              Only on this page
-            </span>
-          </div>
+          <div style={mono(10.5, INK_2, 0.18)}>Your deal</div>
 
           <ul className="mt-3 grid gap-3">
             <DealLine
@@ -481,7 +470,7 @@ export function LastChanceView(p: LastChanceViewProps) {
               // Off what it would cost on its own — which, for a £50+ product,
               // already has the bundle deal in it. Said, so the struck-through
               // figure is never mistaken for a price the shop invented.
-              sub={pct > 0 ? (deal.basePrice < deal.listPrice ? `Off the ${formatGBP(deal.basePrice)} it’d cost on its own` : 'Worked out for this order') : undefined}
+              sub={pct > 0 && deal.basePrice < deal.listPrice ? `Off the ${formatGBP(deal.basePrice)} it’d cost on its own` : undefined}
               was={pct > 0 ? formatGBP(deal.basePrice) : null}
               now={formatGBP(deal.offerPrice)}
               srText={pct > 0 ? `${pct}% off: ${formatGBP(deal.offerPrice)} instead of ${formatGBP(deal.basePrice)}.` : `${formatGBP(deal.offerPrice)}.`}
@@ -491,15 +480,16 @@ export function LastChanceView(p: LastChanceViewProps) {
           </ul>
 
           <div className="lc-rise mt-4 flex items-end justify-between gap-3 border-t pt-3.5" style={{ ...d(T.total - 100), borderColor: 'var(--color-border)' }}>
+            {/* Read top to bottom: "£X delivered". */}
             <div className="min-w-0">
-              <span className="block" style={mono(10.5, INK_2, 0.16)}>Delivered for</span>
               <span
                 aria-hidden
-                className="mt-1 block tabular-nums"
+                className="block tabular-nums"
                 style={{ fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em', color: INK }}
               >
                 {formatGBP(Math.round(total * 100) / 100)}
               </span>
+              <span aria-hidden className="mt-1 block" style={mono(10.5, INK_2, 0.16)}>Delivered</span>
               <span className="sr-only">
                 {deal.totalSaving > 0
                   ? `${formatGBP(deal.total)} delivered, down from ${formatGBP(deal.normalTotal)}`
@@ -541,7 +531,7 @@ export function LastChanceView(p: LastChanceViewProps) {
           )}
 
           <p className="mt-3 text-center text-[11.5px] leading-snug" style={{ color: INK_2 }}>
-            Just this, once — no subscription. Pay on the next screen.
+            Just this product — no subscription. Pay on the next screen.
             {p.remoteSurcharge > 0 && (
               <>
                 <br />

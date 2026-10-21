@@ -39,7 +39,7 @@ P52543,Doctor's Best,High Absorption Magnesium Powder,magnesium,swap,FALSE,0,120
 P53878,SciTec,Magnesium Bisglycinate - 90 caps,magnesium,swap,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium bisglycinate,100,1,P53878
 P44774,NOW Foods,Magnesium Glycinate - 180 tabs,magnesium,default-magnesium,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium glycinate 200mg,255,1,P44774
 P44069,NOW Foods,Magnesium Malate Caps - 180 vcaps,magnesium,swap,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium malate 1000mg,235,2,"P44069,P2894"
-P53879,SciTec,Zinc Bisglycinate - 100 tabs,magnesium,swap,FALSE,0,100,TRUE,daily,30,capsule,vegan,FALSE,copper deficiency risk long-term,zinc bisglycinate 15mg,115,1,P53879
+P53879,SciTec,Zinc Bisglycinate - 100 tabs,general,swap,FALSE,0,100,TRUE,daily,30,capsule,vegan,FALSE,copper deficiency risk long-term,zinc bisglycinate 15mg,115,1,P53879
 P24551,NOW Foods,Double Strength L-Theanine,nootropic,swap,FALSE,0,60,TRUE,daily,30,capsule,vegan,FALSE,,L-theanine 200mg,80,1,P24551
 P21649,Nordic Naturals,Omega-3,omega-3,premium,FALSE,0,40,TRUE,daily,30,liquid,,FALSE,blood thinners,EPA/DHA 1560mg per serving,395,1,P21649
 P5097,NOW Foods,Omega-3 Fish Oil,omega-3,budget,FALSE,0,100,TRUE,daily,30,capsule,,FALSE,blood thinners,EPA/DHA fish oil,190,1,P5097

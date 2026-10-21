@@ -27,7 +27,7 @@
  */
 import { kvGet, kvSet } from '@/lib/db/kv'
 import { ensureHousePartner } from './house-account'
-import { DAILY_CODES, dailyCodeFor, dailyCodesEnabled, ensureDailyCodes, isDailyCode } from './daily'
+import { DAILY_CODES, dailyCodeFor, dailyCodesEnabled, isDailyCode } from './daily'
 import { isExpired, normaliseCode } from '@/lib/partners/codes'
 import { HOUSE_PARTNER_ID } from '@/lib/partners/house'
 import * as repo from '@/lib/partners/repo'
@@ -79,9 +79,9 @@ function storeCodeTerms(): CodeTerms {
 /**
  * Every store code, newest first — ended ones included, marked as such.
  *
- * Not the daily codes: there are forty-eight of them and they run themselves,
- * so they are summarised separately (`dailyCodeStatus`) rather than burying
- * the founders' own codes.
+ * Not the daily codes: there are up to forty-eight of them, made by the
+ * schedule rather than by a founder, so they are summarised separately
+ * (`dailyCodeStatus`) rather than burying the founders' own codes.
  */
 export async function listStoreCodes(): Promise<StoreCode[]> {
   const codes = (await repo.listCodes(HOUSE_PARTNER_ID)).filter((c) => !isDailyCode(c.code))
@@ -217,7 +217,8 @@ export interface CheckoutPromo {
  * a false "limited time" claim, which UK consumer law bans outright.
  */
 export async function liveCheckoutPromo(now = new Date()): Promise<CheckoutPromo | null> {
-  // Today's code first, while the schedule runs and the switch is on.
+  // Today's code first, only while the schedule runs and a founder has
+  // switched the daily codes on (off by default).
   const daily = await liveDailyCode(now)
   if (daily) return daily
 
@@ -229,14 +230,17 @@ export async function liveCheckoutPromo(now = new Date()): Promise<CheckoutPromo
   return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt, kind: 'store' }
 }
 
-/** Today's code, if the schedule covers today, the switch is on, and the code really works. */
+/**
+ * Today's code, if the schedule covers today, the switch is on, and the code
+ * already exists and really works. Nothing makes a missing one any more.
+ */
 async function liveDailyCode(now: Date): Promise<CheckoutPromo | null> {
   const today = dailyCodeFor(now)
   if (!today || !(await dailyCodesEnabled())) return null
-  await ensureDailyCodes(now)
   const code = await storeCode(today.code)
-  // A partner holding the word, or a founder having paused or deleted the code,
-  // means no card today rather than a card for a code checkout would refuse.
+  // A code that was never made, a partner holding the word, or a founder having
+  // paused or deleted the code means no card today rather than a card for a
+  // code checkout would refuse.
   if (!code || code.status !== 'active' || isExpired(code, now)) return null
   if (code.terms.startsAt && now < new Date(code.terms.startsAt)) return null
   return { code: code.code, percent: Math.round(code.discountPct * 100), endsAt: code.terms.endsAt, kind: 'daily' }

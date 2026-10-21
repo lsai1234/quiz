@@ -1,6 +1,7 @@
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { ALL_GOALS, type QuizAnswers, type StackIdentity } from '@/lib/types'
+import { PRODUCT_TYPE_LABELS, productTypeLabel } from '@/lib/catalogue/product-type'
 import { buildSharePayload, shortReason } from '../payload'
 import { SHARE_PAYLOAD_VERSION } from '../types'
 
@@ -252,8 +253,21 @@ describe('buildSharePayload', () => {
     const expected = blueprint.slots
       .slice()
       .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map((s) => s.title)
+      .map((s) => productTypeLabel(MOCK_CATALOGUE.find((p) => p.id === s.selectedProductId)))
     expect(build(PERSONAS.complete).lineup.map((r) => r.slot)).toEqual(expected)
+  })
+
+  it.each(Object.entries(PERSONAS))('labels every %s row with a product type, never a slot title', (_name, answers) => {
+    // A slot title names a benefit ("Immune Support", "Sleep"); printed beside
+    // a product on a public card, that is a health claim.
+    const types = new Set(Object.values(PRODUCT_TYPE_LABELS))
+    const benefitTitles = buildStackBlueprint(answers, MOCK_CATALOGUE).slots
+      .map((s) => s.title)
+      .filter((t) => !types.has(t))
+    for (const row of build(answers).lineup) {
+      expect(types).toContain(row.slot)
+      expect(benefitTitles).not.toContain(row.slot)
+    }
   })
 
   it('freezes the moment it was shared', () => {

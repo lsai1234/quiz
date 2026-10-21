@@ -1,6 +1,13 @@
 /**
  * Today's code — a different 25%-off code every day, 14 October to 30 November.
  *
+ * ── Retired ─────────────────────────────────────────────────────────────────
+ * Off unless a founder switches it on in the hub, and no new codes are made.
+ * Rows already in the database are left alone: they are ordinary store codes,
+ * so a typed one is still accepted at checkout on its own day whether the
+ * switch is on or off. The schedule stays so the hub can keep those rows off
+ * its ordinary list (`isDailyCode`).
+ *
  * ── Why a new code each day rather than one code on a countdown ─────────────
  * The checkout card counts down to midnight. A countdown is only honest if
  * something really ends when it reaches zero, so each day's code is valid from
@@ -10,21 +17,17 @@
  * midnight" — never the 25% off, because tomorrow there is another one, and
  * saying the discount ends tonight would be the false deadline this replaces.
  *
- * ── Why they are made lazily ────────────────────────────────────────────────
+ * ── How they were made ──────────────────────────────────────────────────────
  * They are ordinary store codes, so every checkout path already knows how to
- * redeem them. They have to exist in the database to be redeemed, so
- * `ensureDailyCodes` creates any that are missing the first time a code is
- * looked up each day — from the code box, the cart or the checkout alike.
- * Past days are never created; a code is made before its day, and refused
- * until its day starts.
+ * redeem them. `ensureDailyCodes` used to create every missing one from today
+ * to the end of the schedule the first time a code was looked up each day, so
+ * future days' rows were made well before their day and refused until it
+ * started. It now makes nothing.
  *
  * Server-only.
  */
 import { kvGet, kvSet } from '@/lib/db/kv'
-import { HOUSE_PARTNER_ID } from '@/lib/partners/house'
-import * as repo from '@/lib/partners/repo'
 import { addDays, londonDate, londonEndOfDay } from './deadline'
-import { ensureHousePartner } from './house-account'
 
 /** Every daily code is this much off, replacing (never stacking on) the bundle deal. */
 export const DAILY_CODE_PCT = 25
@@ -33,8 +36,8 @@ export const DAILY_CODE_PCT = 25
  * The words, one per day from 14 October. Each code is the word then "25".
  *
  * Fixed rather than generated, so a code is something a founder can read out,
- * post, or look up — and so nobody can work tomorrow's out from today's. Any
- * word that collides with a partner's code is skipped for its day.
+ * post, or look up — and so nobody can work tomorrow's out from today's. A
+ * word that collided with a partner's code was not made for its day.
  */
 const FIRST_DAY = '2026-10-14'
 const WORDS = [
@@ -86,10 +89,13 @@ export function isDailyCode(code: string): boolean {
 
 const ENABLED_KEY = 'store-codes:daily'
 
-/** On unless a founder has switched it off. Off hides the card; codes already made still work until their day ends. */
+/**
+ * Off unless a founder has switched it on. Off hides the card only: a code
+ * already in the database still works at checkout on its own day.
+ */
 export async function dailyCodesEnabled(): Promise<boolean> {
   const stored = await kvGet<{ enabled: boolean }>(ENABLED_KEY)
-  return stored?.enabled !== false
+  return stored?.enabled === true
 }
 
 export async function setDailyCodesEnabled(enabled: boolean): Promise<void> {
@@ -98,54 +104,8 @@ export async function setDailyCodesEnabled(enabled: boolean): Promise<void> {
 
 // ─── Making them ─────────────────────────────────────────────────────────────
 
-/** The London day this process last checked, so the check costs one query a day. */
-let checkedOn: string | null = null
-
 /**
- * Create every daily code from today to the end of the schedule that does not
- * exist yet. Idempotent and safe to race: a code another request created first
- * is simply left alone.
- *
- * Never throws — a code that could not be made is a code the customer is told
- * we don't recognise, which is not worth failing a checkout over.
+ * Makes nothing. Kept, with its signature, for the callers that still ask
+ * before a lookup (`redeemPartnerCode`). Codes it made before are not touched.
  */
-export async function ensureDailyCodes(now: Date = new Date()): Promise<void> {
-  const today = londonDate(now)
-  if (checkedOn === today) return
-  const due = DAILY_CODES.filter((d) => d.date >= today)
-  if (due.length === 0) {
-    checkedOn = today
-    return
-  }
-  try {
-    await ensureHousePartner()
-    for (const d of due) {
-      if (await repo.getCode(d.code)) continue
-      try {
-        await repo.createCode({
-          code: d.code,
-          partnerId: HOUSE_PARTNER_ID,
-          discountPct: DAILY_CODE_PCT / 100,
-          terms: {
-            firstOrderOnly: false,
-            maxUses: null,
-            uses: 0,
-            startsAt: d.startsAt,
-            endsAt: d.endsAt,
-            minSpend: null,
-          },
-        })
-      } catch {
-        /* Another request made it first, or a partner holds the name. */
-      }
-    }
-    checkedOn = today
-  } catch {
-    /* Database unavailable — try again on the next lookup. */
-  }
-}
-
-/** For tests: forget that today has been checked, after the database is reset. */
-export function resetDailyCodeCheck(): void {
-  checkedOn = null
-}
+export async function ensureDailyCodes(_now?: Date): Promise<void> {}
