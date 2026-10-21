@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
-import { completeQuiz, startQuiz, answerAllQuestions, QUIZ_NAME } from '../support/quiz'
+import { completeQuiz, startQuiz, answerAllQuestions, QUIZ_NAME, REVEAL_HEADING } from '../support/quiz'
 
 test('performance track: quiz runs start to finish and produces a stack', async ({ page }) => {
   await completeQuiz(page, 'performance')
-  await expect(page.getByText('Routine fit')).toBeVisible()
+  await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible()
 })
 
 test('the review step shows the answers back as labels, not ids', async ({ page }) => {

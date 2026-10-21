@@ -11,7 +11,7 @@ import { StatCard } from '../StatCard'
 import { StackDeck } from '../StackDeck'
 import { StackHero } from '../StackHero'
 import { UpgradesCard } from '../UpgradesCard'
-import { ProductSwapModal } from '../ProductSwapModal'
+import { ProductSwapModal, priceDiff } from '../ProductSwapModal'
 
 /**
  * The results page's product cards and detail sheet.
@@ -380,5 +380,35 @@ describe('ProductSwapModal', () => {
       <ProductSwapModal slot={slotFor(bComplex)} currentProduct={bComplex} alternatives={[]} onSelect={() => {}} onClose={() => {}} />,
     )
     expect(screen.getByRole('heading', { name: 'Change your B-complex' })).toBeInTheDocument()
+  })
+
+  it('lists alternatives by facts and price only: no description, no margin or tier tags', () => {
+    const pricey = { ...MAGNESIUM, id: 'alt-pricey', title: 'Alt Magnesium', marginPriority: 10, recommendationPriority: 10, basePrice: 10 }
+    render(
+      <ProductSwapModal
+        slot={slotFor(MAGNESIUM)}
+        currentProduct={MAGNESIUM}
+        alternatives={[MAGNESIUM, pricey]}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    )
+    for (const alt of [MAGNESIUM, pricey]) {
+      if (alt.description) expect(screen.queryByText(alt.description)).not.toBeInTheDocument()
+    }
+    for (const tag of ['Best value', 'Premium', 'Light option']) expect(screen.queryByText(tag)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\/month/)).not.toBeInTheDocument()
+    for (const el of screen.getAllByTestId('swap-facts')) {
+      expect(REGISTER.has(el.textContent ?? '')).toBe(false)
+      expect(el.textContent).toMatch(/^Magnesium/)
+    }
+  })
+})
+
+describe('priceDiff', () => {
+  it('says what one pack adds or saves, with no period it does not know', () => {
+    expect(priceDiff(10, 13)).toEqual({ text: '£3.00 more', sign: 1 })
+    expect(priceDiff(10, 8.5)).toEqual({ text: '£1.50 less', sign: -1 })
+    expect(priceDiff(10, 10.001)).toEqual({ text: 'Same price', sign: 0 })
   })
 })

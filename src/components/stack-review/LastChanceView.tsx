@@ -5,6 +5,7 @@ import { Button } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { packLengthLabel } from '@/lib/product-facts'
 import type { OfferQuote } from '@/lib/last-chance/economics'
 import { ProductTile } from './ProductTile'
 
@@ -100,16 +101,6 @@ function mono(size: number, color: string, tracking = 0.18): CSSProperties {
 }
 
 const d = (ms: number) => ({ ['--d' as string]: `${ms}ms` }) as CSSProperties
-
-/** "about two months" — how a person would say a pack's length. */
-function packLabel(months: number): string {
-  if (months < 0.8) return `about ${Math.max(1, Math.round(months * 4.3))} weeks`
-  if (months < 1.25) return 'about a month'
-  if (months < 1.75) return 'about six weeks'
-  const whole = Math.round(months)
-  const word = ['', '', 'two', 'three', 'four', 'five', 'six'][whole] ?? String(whole)
-  return `about ${word} months`
-}
 
 /** The delivered price falling from what it would have cost to what it costs. */
 function useCountDown(from: number, to: number, animated: boolean, go: boolean, delay: number, ms: number): number {
@@ -439,7 +430,7 @@ export function LastChanceView(p: LastChanceViewProps) {
               <Fact icon="box" label="What you get" delay={460}>
                 {[
                   p.servings ? `${p.servings} servings — ${formatGBP(Math.round((deal.offerPrice / p.servings) * 100) / 100)} each` : null,
-                  p.packMonths !== null ? `lasts ${packLabel(p.packMonths)} at your usage` : null,
+                  p.packMonths !== null ? `lasts ${packLengthLabel(p.packMonths)} at your usage` : null,
                 ].filter(Boolean).join(', ')}.
               </Fact>
             )}

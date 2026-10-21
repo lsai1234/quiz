@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { REVEAL_HEADING } from '../support/quiz'
 
 /**
  * The adaptive interview (v2).
@@ -88,7 +89,7 @@ test('runs start to finish and produces a stack', async ({ page }) => {
   await startV2(page)
   await toReview(page)
   await page.getByRole('button', { name: 'Build my stack' }).click()
-  await expect(page.getByText('Routine fit')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible({ timeout: 30_000 })
 })
 
 test('shows the answers back as labels, not ids', async ({ page }) => {
@@ -167,7 +168,7 @@ test.describe('when the AI steer fails', () => {
     await startV2(page)
     await toReview(page)
     await page.getByRole('button', { name: 'Build my stack' }).click()
-    await expect(page.getByText('Routine fit')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible({ timeout: 30_000 })
   })
 
   test('a hanging steer costs the user nothing', async ({ page }) => {

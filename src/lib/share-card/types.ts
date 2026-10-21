@@ -86,7 +86,7 @@ export interface ShareCoverageEntry {
 /** A focus area with the glyph that scans for it. */
 export interface ShareFocusArea {
   label: string
-  /** A `QuizIcon` glyph name, from `focusAreaGlyph`. */
+  /** A `QuizIcon` glyph name. */
   glyph: string
 }
 

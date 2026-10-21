@@ -63,7 +63,7 @@ export type AsNeededFrequency = 'often' | 'sometimes' | 'rarely'
 
 /** One answered AI deep-dive follow-up. Stores the display text alongside the
  *  engine signals so the Q&A can travel with the answers object into the AI
- *  prompts (personalise-stack / generate-identity) and the review screen. */
+ *  prompt (personalise-stack) and the review screen. */
 export interface DynamicAnswer {
   /** Chosen option id — selection state for re-rendering the step. */
   optionId: string

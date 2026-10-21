@@ -205,10 +205,7 @@ describe('what leaves the building', () => {
    * The name used to sit in both of these prompts and was read by neither.
    * It is the only piece of a customer's identity the quiz holds, and a third
    * party does not need it to rank follow-up questions or pick products.
-   *
-   * `generate-identity` is the deliberate exception and is NOT asserted here:
-   * that prompt greets the customer by name on the reveal, so there the name is
-   * the output rather than a passenger.
+   * (The reveal greets them by name itself; no prompt needs it.)
    */
   const named = makeAnswers({ name: 'Persephone Wintergreen' })
 

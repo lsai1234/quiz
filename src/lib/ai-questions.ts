@@ -95,8 +95,7 @@ Rules:
  * Deliberately no name. It was here and it bought nothing: this prompt picks
  * follow-up questions, and a question is no better for knowing the asker is
  * called Sam. Sending a customer's name to a third party needs a better reason
- * than that it was to hand. `generate-identity` still sends it, because that
- * one greets them by name and the name IS the output there.
+ * than that it was to hand.
  */
 export function buildQuestionsPrompt(answers: QuizAnswers): string {
   const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'

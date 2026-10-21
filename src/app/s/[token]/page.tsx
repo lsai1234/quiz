@@ -41,11 +41,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: 'CHRGD', description: 'Build your personalised supplement stack in 90 seconds.' }
   }
 
-  const { stackName, archetype } = card.payload
+  // Never the stored archetype: cards made before Phase 2 carry an AI-written
+  // identity line, and a link preview is customer-facing text like any other.
+  const { stackName } = card.payload
   const title = `${stackName} — a CHRGD stack`
-  const description = archetype
-    ? `${archetype}. Built from a 90-second quiz — build yours.`
-    : 'Built from a 90-second quiz — build yours.'
+  const description = 'Built from a 90-second quiz — build yours.'
   const image = `/api/share/${card.token}/image?format=og`
 
   return {

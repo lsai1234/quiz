@@ -7,6 +7,9 @@ import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
+import { productDietary } from '@/lib/product-facts'
+import { formatPerServing } from '@/lib/shop/per-serving'
+import { cardFacts } from '@/lib/results/card-facts'
 
 interface Props {
   slot: StackSlotEntry
@@ -27,22 +30,26 @@ function inSentence(label: string): string {
   return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
 }
 
-function priceDiff(current: number, candidate: number): string {
+/**
+ * The difference one pack makes to the order: "£3.00 more", "£2.00 less".
+ * A pack price, not a monthly one; packs last different lengths, which is
+ * what the per-serving figure beside it is for.
+ */
+export function priceDiff(current: number, candidate: number): { text: string; sign: -1 | 0 | 1 } {
   const diff = candidate - current
-  if (Math.abs(diff) < 0.01) return 'No price change'
-  const sign = diff > 0 ? '+' : '−'
-  return `${sign}£${Math.abs(diff).toFixed(2)}/month`
+  if (Math.abs(diff) < 0.005) return { text: 'Same price', sign: 0 }
+  const amount = `£${Math.abs(diff).toFixed(2)}`
+  return diff > 0 ? { text: `${amount} more`, sign: 1 } : { text: `${amount} less`, sign: -1 }
 }
 
-function productTags(p: CatalogueProduct): string[] {
-  const tags: string[] = []
-  if (p.dietaryTags.includes('vegan')) tags.push('Vegan')
-  if (p.dietaryTags.includes('dairy-free')) tags.push('Dairy-free')
-  if (p.dietaryTags.includes('gluten-free')) tags.push('Gluten-free')
-  if (p.marginPriority >= 8) tags.push('Best value')
-  if (p.recommendationPriority >= 9) tags.push('Premium')
-  if (p.basePrice < 30) tags.push('Light option')
-  return tags.slice(0, 3)
+/**
+ * What can be said of an alternative without saying what it does: its diet
+ * tags. No "Best value" (that one was our margin, not theirs) or "Premium".
+ * "Vegetarian" says nothing "Vegan" hasn't.
+ */
+export function productTags(p: CatalogueProduct): string[] {
+  const dietary = productDietary(p)
+  return dietary.filter((d) => !(d === 'Vegetarian' && dietary.includes('Vegan'))).slice(0, 3)
 }
 
 export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect, onClose }: Props) {
@@ -64,7 +71,9 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const currentPrice = currentProduct?.basePrice ?? 0
+  // Both sides priced the way the card prices them: the current product at the
+  // size on screen, an alternative at the size a swap would put there.
+  const currentPrice = currentProduct ? cardFacts({ product: currentProduct, selectedVariantId: slot.selectedVariantId }).price : 0
   // The product type, not the slot title: "Immune Support" names a benefit.
   const typeLabel = productTypeLabel(currentProduct)
 
@@ -122,10 +131,15 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
             alternatives.map((alt) => {
               const isRecommended = alt.id === slot.recommendedProductId
               const isCurrent = alt.id === slot.selectedProductId
-              const firstVariant = alt.variants.find((v) => v.available) ?? alt.variants[0]
-              const altPrice = firstVariant?.price ?? alt.basePrice
+              const facts = cardFacts({ product: alt, selectedVariantId: isCurrent ? slot.selectedVariantId : null })
+              const altPrice = facts.price
               const diff = priceDiff(currentPrice, altPrice)
               const tags = productTags(alt)
+              const factLine = [
+                productTypeLabel(alt),
+                facts.servings != null ? `${Math.max(1, Math.round(facts.servings))} servings` : null,
+                facts.perServing != null ? `${formatPerServing(facts.perServing)} per serving` : null,
+              ].filter(Boolean).join(' · ')
 
               return (
                 <button
@@ -169,21 +183,25 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
                         </p>
                       </div>
 
-                      <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">
-                        {alt.description}
+                      {/* Facts only. The catalogue description says what a
+                          product does, which is a health claim. */}
+                      <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed" data-testid="swap-facts">
+                        {factLine}
                       </p>
 
                       {/* Price diff + badges */}
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                        <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${
-                          diff === 'No price change'
-                            ? 'text-[var(--color-muted)] border border-[var(--color-border)]'
-                            : diff.startsWith('+')
-                              ? 'text-[var(--color-red)] bg-[var(--color-red)]/8'
-                              : 'text-emerald-400 bg-emerald-400/10'
-                        }`}>
-                          {diff}
-                        </span>
+                        {!isCurrent && (
+                          <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full ${
+                            diff.sign === 0
+                              ? 'text-[var(--color-muted)] border border-[var(--color-border)]'
+                              : diff.sign > 0
+                                ? 'text-[var(--color-red)] bg-[var(--color-red)]/8'
+                                : 'text-emerald-400 bg-emerald-400/10'
+                          }`}>
+                            {diff.text}
+                          </span>
+                        )}
                         {isRecommended && (
                           <span
                             className="text-[9px] font-bold px-2 py-0.5 rounded-full"
