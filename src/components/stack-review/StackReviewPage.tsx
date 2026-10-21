@@ -23,7 +23,7 @@ import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackDeck } from './StackDeck'
 import { YouScene, type YouSceneItem } from './YouScene'
-import { explainProduct, whatWeChecked } from '@/lib/results'
+import { explainProductSafe, whatWeChecked } from '@/lib/results'
 import type { SlotType } from '@/lib/stack-blueprint/factory'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
@@ -614,23 +614,18 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       activeSlots.flatMap((slot) => {
         const product = products.find((p) => p.id === slot.selectedProductId)
         if (!product) return []
-        let explanation: YouSceneItem['explanation'] = null
-        try {
-          explanation = explainProduct({ product, slotType: slot.slotType as SlotType, answers })
-        } catch {
-          // No line rather than no page: the line is an extra, the stack is not.
-        }
+        const explanation = explainProductSafe({ product, slotType: slot.slotType as SlotType, answers })
         return [{ key: slot.slotId, product, slotType: slot.slotType, explanation }]
       }),
     [activeSlots, products, answers],
   )
   const checkLines = useMemo(() => {
     try {
-      return whatWeChecked({ blueprint: activeBlueprint, products, slots: activeSlots })
+      return whatWeChecked({ blueprint: activeBlueprint, products, slots: activeSlots, answers })
     } catch {
       return []
     }
-  }, [activeBlueprint, products, activeSlots])
+  }, [activeBlueprint, products, activeSlots, answers])
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.

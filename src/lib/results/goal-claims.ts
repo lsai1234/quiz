@@ -66,14 +66,12 @@ export const GOAL_CLAIMS: Readonly<Record<Goal, GoalClaimEntry>> = {
   ],
   // "Gain mass". Protein's "growth in muscle mass" only.
   bulking: each(PROTEIN_KINDS, ['protein-muscle-growth']),
-  // "Peak performance". Both claims are about physical performance.
+  // "Peak performance". Creatine's claim is about physical performance.
+  // The carbohydrate-electrolyte endurance claim is left out: its condition of
+  // use is a carbohydrate-electrolyte solution, and an electrolyte product made
+  // of salts alone does not meet it. It can come back per product after sign-off.
   performance: [
     { kind: 'creatine', claimIds: ['creatine-performance'] },
-    { kind: 'electrolytes', claimIds: ['cho-electrolyte-endurance'] },
-  ],
-  // "Stay hydrated". The water-absorption claim (during exercise).
-  hydration: [
-    { kind: 'electrolytes', claimIds: ['cho-electrolyte-water'] },
   ],
   // "More energy". The "reduction of tiredness and fatigue" claims.
   energy: [
@@ -88,16 +86,19 @@ export const GOAL_CLAIMS: Readonly<Record<Goal, GoalClaimEntry>> = {
     { kind: 'vitamin-c', claimIds: ['vitc-immune'] },
     { kind: 'zma', claimIds: ['zinc-immune'] },
   ],
-  // "Focus & brain fog". Normal brain and cognitive function. The loosest fit
-  // in the map: the claims are about normal function, not improving it.
-  focus: [
-    { kind: 'omega-3', claimIds: ['dha-brain'] },
-    { kind: 'zma', claimIds: ['zinc-cognitive'] },
-  ],
   // "General health" / "Feel healthier": any authorised claim, shown beside it.
   health: ANY_CLAIM,
 
   // No authorised claim speaks to these, so they map to nothing.
+  //
+  // Two held back until the claims are signed off, though a claim exists:
+  // - "Stay hydrated": the water-absorption claim needs a carbohydrate-
+  //   electrolyte solution (see performance above).
+  // - "Focus & brain fog": the brain and cognitive claims are about NORMAL
+  //   function. Beside a goal about brain fog they would read as "improves
+  //   focus", which the register does not say.
+  hydration: [],
+  focus: [],
   recovery: [],
   cutting: [],
   'sleep-better': [],

@@ -87,6 +87,7 @@ export function toQuizAnswers(a: ConsultAnswers): QuizAnswers {
   if (counts.sport > 0) types.add('sport')
   return {
     ...defaultAnswers,
+    answerSource: 'consult',
     track: a.goals.includes('performance') ? 'performance' : 'wellbeing',
     goals,
     primaryGoal: goals[0] ?? null,

@@ -7,7 +7,7 @@ export {
   type AnyClaim, type GoalClaimEntry, type GoalClaimLink,
 } from './goal-claims'
 export {
-  ANSWER_LINE_NEEDS_CLAIM, MAX_CHECK_LINES, explainProduct, explainSlot, whatWeChecked,
+  ANSWER_LINE_NEEDS_CLAIM, MAX_CHECK_LINES, explainProduct, explainProductSafe, explainSlot, whatWeChecked,
   type ProductExplanation,
 } from './explain'
 export {

@@ -105,6 +105,7 @@ export function projectAnswers(state: InterviewState): QuizAnswers {
     tryOurs: [],
     wellbeingAnswers: {},
     dynamicAnswers: {},
+    answerSource: 'interview',
   }
 
   for (const option of chosenOptions(state)) {

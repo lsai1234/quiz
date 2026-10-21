@@ -58,8 +58,10 @@ describe('goalClaimFor', () => {
     ['muscle', 'protein-plant', 'protein-muscle-growth'],
     ['muscle', 'creatine', 'creatine-performance'],
     ['bulking', 'protein-mass', 'protein-muscle-growth'],
-    ['performance', 'electrolytes', 'cho-electrolyte-endurance'],
-    ['hydration', 'electrolytes', 'cho-electrolyte-water'],
+    // Held back until sign-off: the electrolyte claims need a carbohydrate-
+    // electrolyte solution, and the focus claims are about normal function only.
+    ['performance', 'electrolytes', null],
+    ['hydration', 'electrolytes', null],
     ['energy', 'vitamin-b', 'b12-tiredness'],
     ['energy', 'magnesium', 'magnesium-tiredness'],
     ['energy', 'vitamin-c', 'vitc-tiredness'],
@@ -67,8 +69,8 @@ describe('goalClaimFor', () => {
     ['immune', 'vitamin-d', 'vitd-immune'],
     ['immune', 'vitamin-c', 'vitc-immune'],
     ['immune', 'zma', 'zinc-immune'],
-    ['focus', 'omega-3', 'dha-brain'],
-    ['focus', 'zma', 'zinc-cognitive'],
+    ['focus', 'omega-3', null],
+    ['focus', 'zma', null],
     // General health: any claim, a protein's bones claim first.
     ['health', 'protein-whey', 'protein-bones'],
     ['health', 'protein-bar', 'protein-muscle-growth'],

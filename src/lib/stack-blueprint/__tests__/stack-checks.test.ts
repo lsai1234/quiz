@@ -190,12 +190,15 @@ describe('checksForSlots', () => {
     expect(checksForSlots(checks, slots, MOCK_CATALOGUE)).toEqual(checks)
   })
 
-  it('drops a product that is now in the stack, and the check once it is empty', () => {
+  it('drops a gate check as soon as any product it left out is back on screen', () => {
+    // "Left out anything that isn't vegan" is untrue the moment one of them is shown.
     const slots = [slot('chrgd-magnesium', 0), slot('chrgd-omega-3', 1)]
-    const out = checksForSlots(checks, slots, MOCK_CATALOGUE)
-    expect(find(out, 'vegan')[0].productIds).toEqual(['chrgd-whey-protein'])
-    const both = checksForSlots(checks, [...slots, slot('chrgd-whey-protein', 2)], MOCK_CATALOGUE)
-    expect(find(both, 'vegan')).toEqual([])
+    expect(find(checksForSlots(checks, slots, MOCK_CATALOGUE), 'vegan')).toEqual([])
+  })
+
+  it('drops a dedup check once no product on screen carries that active', () => {
+    const slots = [slot('chrgd-vitamin-c-zinc', 0)]
+    expect(find(checksForSlots(checks, slots, MOCK_CATALOGUE), 'dedup-active')).toEqual([])
   })
 
   it('drops a dedup check once two products in the stack share that active', () => {

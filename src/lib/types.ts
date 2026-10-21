@@ -184,6 +184,16 @@ export interface QuizAnswers {
    * run against one engine with byte-identical output for v1.
    */
   drivers?: DriverWeights
+  /**
+   * Which flow produced these answers, when it was not the v1 questionnaire.
+   *
+   * The v1 questionnaire asks every field directly. The v2 interview fills
+   * training and diet fields as side effects of the options it asks, and the
+   * consult works them out from its scenes. The results page plays answers
+   * back to the person ("You said …"), and may only quote what they actually
+   * chose, so it reads this. Absent means v1. The engine ignores it.
+   */
+  answerSource?: 'interview' | 'consult'
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null

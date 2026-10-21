@@ -37,7 +37,7 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { Goal, QuizAnswers } from '@/lib/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import { productClaim } from '@/lib/results/goal-claims'
-import { explainProduct, type ProductExplanation } from '@/lib/results/explain'
+import { explainProductSafe } from '@/lib/results/explain'
 import { getArchetype, scoreProduct, type SlotType } from '@/lib/stack-blueprint/factory'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { isAccessory } from '@/lib/catalogue/accessory'
@@ -93,14 +93,7 @@ function claimAndLine(
   goals: Goal[],
   stackSize: number,
 ): { claim: HeroOffer['claim']; goalLine: string } {
-  let explanation: ProductExplanation | null = null
-  if (answers) {
-    try {
-      explanation = explainProduct({ product, slotType: slot.slotType as SlotType, answers })
-    } catch {
-      /* No line is the safe answer; the card still has the neutral one. */
-    }
-  }
+  const explanation = answers ? explainProductSafe({ product, slotType: slot.slotType as SlotType, answers }) : null
   const claim = explanation?.claim ?? productClaim(product, goals)
   return {
     claim: claim ? { id: claim.id, wording: claim.wording } : null,

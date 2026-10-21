@@ -1,5 +1,5 @@
 import { buildStackBlueprint, type SlotType } from '@/lib/stack-blueprint/factory'
-import type { StackBlueprint } from '@/lib/stack-blueprint/types'
+import type { StackBlueprint, StackSlotEntry } from '@/lib/stack-blueprint/types'
 import type { StackCheck } from '@/lib/stack-blueprint/explain-types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -54,6 +54,13 @@ const product = (id: string): CatalogueProduct => {
   if (!p) throw new Error(`no mock product ${id}`)
   return p
 }
+
+/** A slot showing one product, as an add-on would be. */
+const slotFor = (id: string): StackSlotEntry => ({
+  slotId: `s-${id}`, slotType: 'health', title: 'X', description: '', recommendedProductId: id,
+  selectedProductId: id, selectedVariantId: null, required: false, canRemove: true, canSwap: true,
+  swapGroup: 'general', reason: '', confidenceScore: 50, displayOrder: 0,
+})
 
 function explainAll(answers: QuizAnswers) {
   const bp = buildStackBlueprint(answers, MOCK_CATALOGUE)
@@ -133,17 +140,26 @@ describe('explainProduct: the three demo personas', () => {
 
 describe('explainProduct: what it walks past', () => {
   it('skips an unbacked goal and carries on to a backed one', () => {
-    // Omega-3 for immune + focus: immune is not backed for omega-3, focus is.
+    // Omega-3 for sleep + health: sleep is not backed for anything, general
+    // health pairs with omega-3's own claim.
+    const answers = A({ track: 'wellbeing', goals: ['sleep-better', 'health'] })
+    const e = explainProduct({ product: product('chrgd-omega-3'), slotType: 'health', answers })
+    expect(e).toMatchObject({ kind: 'goal', goal: 'health', sentence: 'You said you want to feel healthier.' })
+    expect(e?.claim).toBe(CLAIMS['epa-dha-heart'])
+  })
+
+  it('says nothing about focus beside omega-3: the map holds focus back', () => {
     const e = explainAll(IMMUNE_FOCUS).byProduct['chrgd-omega-3']
-    expect(e).toMatchObject({ kind: 'goal', goal: 'focus', sentence: 'You said you want to stay focused.' })
-    expect(e?.claim).toBe(CLAIMS['dha-brain'])
+    expect(e?.kind === 'goal' && e.goal === 'focus').toBe(false)
   })
 
   it('keeps the engine order between equal terms', () => {
-    // Electrolytes: performance and hydration both +15; performance comes first.
-    const e = explainAll(FOOTBALL).byProduct['chrgd-electrolytes']
-    expect(e).toMatchObject({ kind: 'goal', goal: 'performance' })
-    expect(e?.claim).toBe(CLAIMS['cho-electrolyte-endurance'])
+    // Whey for muscle + general health: both goals add the same overlap
+    // points; muscle comes first in the answers, so muscle's line is used.
+    const answers = A({ goals: ['muscle', 'health'], trainingFrequency: '3-4x', trainingType: ['strength'] })
+    const e = explainProduct({ product: product('chrgd-whey-protein'), slotType: 'protein', answers })
+    expect(e).toMatchObject({ kind: 'goal', goal: 'muscle' })
+    expect(e?.claim).toBe(CLAIMS['protein-muscle-growth'])
   })
 
   it('never reads priority or Top 25 rank as a reason', () => {
@@ -272,17 +288,33 @@ describe('whatWeChecked', () => {
       'Left out anything that isn’t gluten-free, as you asked.',
       'Left out anything with stimulants: you asked us to keep it stim-free.',
     ])
-    const all = whatWeChecked({ blueprint: { slots: [], checks: checks.slice(0, 2) }, products: MOCK_CATALOGUE })
+    // A doubled-up line needs the one product it was kept for still on screen.
+    const kept = [slotFor('chrgd-magnesium')]
+    const all = whatWeChecked({ blueprint: { slots: kept, checks: checks.slice(0, 2) }, products: MOCK_CATALOGUE })
     expect(all).toEqual(['Removed a doubled-up ingredient: magnesium.', 'Kept caffeine to 200 mg a day or less.'])
+    const gone = whatWeChecked({ blueprint: { slots: [], checks: checks.slice(0, 2) }, products: MOCK_CATALOGUE })
+    expect(gone).toEqual(['Kept caffeine to 200 mg a day or less.'])
   })
 
   it('falls back to an unnamed line when an active name is not fit to show', () => {
+    const probiotic: CatalogueProduct = { ...product('chrgd-magnesium'), id: 'probiotic-x', actives: [{ name: '25 billion cfu' }] }
     const checks: StackCheck[] = [
       { kind: 'dedup-active', productIds: ['x1'], active: '25 billion cfu' },
       { kind: 'dose-cap', productIds: ['x2'], active: '10 probiotic strains', capMg: 10 },
     ]
-    expect(whatWeChecked({ blueprint: { slots: [], checks }, products: MOCK_CATALOGUE })).toEqual([
-      'Removed a doubled-up ingredient.',
-    ])
+    expect(whatWeChecked({
+      blueprint: { slots: [slotFor('probiotic-x')], checks },
+      products: [...MOCK_CATALOGUE, probiotic],
+    })).toEqual(['Removed a doubled-up ingredient.'])
+  })
+
+  it('drops a "left out" line when a product on screen fails the same gate for these answers', () => {
+    const bp = buildStackBlueprint(ALREADY_TAKING, MOCK_CATALOGUE)
+    expect(whatWeChecked({ blueprint: bp, products: MOCK_CATALOGUE, answers: ALREADY_TAKING }))
+      .toContain('Left out vitamin D: you said you already take it.')
+    // A vitamin D added on its own: the line would now sit above a vitamin D.
+    const added = [...bp.slots, slotFor('chrgd-vitamin-d3-k2')]
+    const lines = whatWeChecked({ blueprint: bp, products: MOCK_CATALOGUE, slots: added, answers: ALREADY_TAKING })
+    expect(lines).not.toContain('Left out vitamin D: you said you already take it.')
   })
 })

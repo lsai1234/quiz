@@ -12,7 +12,7 @@ import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { productDietary, stackProductFacts } from '@/lib/product-facts'
 import { interchangeableVariants } from '@/lib/shop/per-serving'
-import { explainProduct } from '@/lib/results'
+import { explainProductSafe } from '@/lib/results'
 import { cardClaim, cardFacts, usageFor } from '@/lib/results/card-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { IconButton } from '@/components/ui/IconButton'
@@ -141,7 +141,7 @@ export function ProductDetailSheet({
     [product, slot.selectedVariantId, answers, usage, subscriptionProduct],
   )
   const explanation = useMemo(
-    () => (product && answers ? explainProduct({ product, slotType: slot.slotType as SlotType, answers }) : null),
+    () => (product && answers ? explainProductSafe({ product, slotType: slot.slotType as SlotType, answers }) : null),
     [product, slot.slotType, answers],
   )
   // The card's claim. When the why-line carries it, it is said there, once.

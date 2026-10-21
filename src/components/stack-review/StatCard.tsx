@@ -11,7 +11,7 @@ import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { formatFact, packLengthShort, productDietary } from '@/lib/product-facts'
 import { formatPerServing } from '@/lib/shop/per-serving'
-import { explainProduct } from '@/lib/results'
+import { explainProductSafe } from '@/lib/results'
 import { cardClaim, cardFacts, usageFor } from '@/lib/results/card-facts'
 import { ProductTile } from './ProductTile'
 import { ProductDetailSheet } from './ProductDetailSheet'
@@ -83,7 +83,7 @@ export function StatCard({
   )
   const claim = useMemo(() => {
     if (!product) return null
-    const explanation = answers ? explainProduct({ product, slotType: slot.slotType as SlotType, answers }) : null
+    const explanation = answers ? explainProductSafe({ product, slotType: slot.slotType as SlotType, answers }) : null
     return cardClaim(product, explanation, answers)
   }, [product, slot.slotType, answers])
 

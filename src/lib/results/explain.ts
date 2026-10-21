@@ -75,6 +75,12 @@ export function explainProduct(input: {
   answers: QuizAnswers
 }): ProductExplanation | null {
   const { product, slotType } = input
+  // A consult names its goals in its own words and works the rest out from its
+  // scenes, so nothing here could be played back as something they said.
+  if (input.answers.answerSource === 'consult') return null
+  // The v2 interview asks goals directly but fills training and diet fields as
+  // side effects of other options, so only goal lines may be said for it.
+  const goalsOnly = input.answers.answerSource === 'interview'
   // The same answers the engine scored with: deep-dive signals folded in.
   const answers = withDeepDiveSignals(input.answers)
   const hasClaim = claimsFor(product.swapGroup).length > 0
@@ -92,7 +98,7 @@ export function explainProduct(input: {
       if (sentence && claim) return { kind: 'goal', goal: goal as Goal, sentence, claim }
       continue
     }
-    if (isAnswerField(term.field) && typeof term.value === 'string') {
+    if (!goalsOnly && isAnswerField(term.field) && typeof term.value === 'string') {
       const sentence = (ANSWER_LINES[term.field] as Record<string, string>)[term.value]
       if (!sentence) continue
       return {
@@ -105,6 +111,19 @@ export function explainProduct(input: {
     }
   }
   return null
+}
+
+/**
+ * `explainProduct`, never throwing. It re-scores with the full engine against
+ * whatever answers the store holds; if that ever fails, the product simply has
+ * no line rather than taking the page down with it.
+ */
+export function explainProductSafe(input: Parameters<typeof explainProduct>[0]): ProductExplanation | null {
+  try {
+    return explainProduct(input)
+  } catch {
+    return null
+  }
 }
 
 /** `explainProduct` for a slot, looking its product up in the catalogue. */
@@ -159,6 +178,32 @@ function dedupLine(checks: readonly StackCheck[]): string | null {
 }
 
 /**
+ * The gates a product on screen fails for these answers: what the stack itself
+ * now says against a "left out" line. Empty without answers.
+ */
+function contradictedGates(
+  slots: readonly StackSlotEntry[],
+  catalogue: readonly CatalogueProduct[],
+  answers: QuizAnswers | null | undefined,
+): Array<{ reason: StackCheckKind; value: string | number | null }> {
+  if (!answers) return []
+  const folded = withDeepDiveSignals(answers)
+  const archetype = getArchetype(folded.goals)
+  const out: Array<{ reason: StackCheckKind; value: string | number | null }> = []
+  for (const slot of slots) {
+    const product = catalogue.find((p) => p.id === slot.selectedProductId)
+    if (!product) continue
+    try {
+      const gate = scoreProductDetailed(product, slot.slotType as SlotType, folded, archetype).excludedBy
+      if (gate) out.push({ reason: gate.reason, value: gate.value })
+    } catch {
+      /* Unscoreable: nothing to say against the line. */
+    }
+  }
+  return out
+}
+
+/**
  * The "What we checked" list: only things that happened for this person and
  * are still true of the slots shown, at most `MAX_CHECK_LINES`, one line per
  * distinct thing. [] when nothing happened, or the blueprint carries no checks
@@ -171,8 +216,18 @@ export function whatWeChecked(input: {
   blueprint: Pick<StackBlueprint, 'checks' | 'slots'>
   products: readonly CatalogueProduct[]
   slots?: readonly StackSlotEntry[]
+  /**
+   * Their answers. When given, a "left out" line is dropped if a product on
+   * screen fails the same gate — an add-on of a kind they already take, say —
+   * because the line would then contradict the stack it sits above.
+   */
+  answers?: QuizAnswers | null
 }): string[] {
-  const checks = checksForSlots(input.blueprint.checks, input.slots ?? input.blueprint.slots, input.products)
+  const slots = input.slots ?? input.blueprint.slots
+  const contradicted = contradictedGates(slots, input.products, input.answers)
+  const checks = checksForSlots(input.blueprint.checks, slots, input.products).filter(
+    (c) => !contradicted.some((g) => g.reason === c.kind && (c.value == null || g.value === c.value)),
+  )
   const lines: Array<{ order: number; seq: number; text: string }> = []
   const seen = new Set<string>()
   checks.forEach((check, seq) => {

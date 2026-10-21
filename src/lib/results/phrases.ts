@@ -33,10 +33,8 @@ export const GOAL_LINES: Partial<Record<Goal, string>> = {
   muscle: 'You said you want to build muscle.',
   bulking: 'You said you want to gain mass.',
   performance: 'You said you’re after peak performance.',
-  hydration: 'You said you want to stay hydrated.',
   energy: 'You said you want more energy.',
   immune: 'You said you want immune support.',
-  focus: 'You said you want to stay focused.',
   health: 'You said you want to feel healthier.',
 }
 

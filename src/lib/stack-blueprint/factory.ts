@@ -1123,6 +1123,14 @@ export function buildStackBlueprint(
   }
 }
 
+const EXCLUSION_KINDS: ReadonlySet<string> = new Set<ExclusionReason>([
+  'safety', 'goal-gate', 'stimulant', 'vegan', 'gluten-free', 'already-taking', 'collagen-veggie',
+])
+
+function isExclusionKind(kind: StackCheck['kind']): boolean {
+  return EXCLUSION_KINDS.has(kind)
+}
+
 /**
  * The blueprint's checks that are still true of these slots.
  *
@@ -1146,9 +1154,15 @@ export function checksForSlots(
 
   const out: StackCheck[] = []
   for (const check of checks) {
+    // A gate (already taking it, stimulants, vegan…) is a statement about a
+    // kind of product: once any product it left out is back on screen, the
+    // line is no longer true of this stack, so the whole check goes.
+    if (isExclusionKind(check.kind) && check.productIds.some((id) => inStack.has(id))) continue
     const productIds = check.productIds.filter((id) => !inStack.has(id))
     if (productIds.length === 0) continue
-    if (check.kind === 'dedup-active' && check.active != null && sources(check.active) > 1) continue
+    // "Removed a doubled-up ingredient" is true only while exactly one product
+    // on screen carries it: none means the one it was kept for has gone too.
+    if (check.kind === 'dedup-active' && check.active != null && sources(check.active) !== 1) continue
     if (check.kind === 'dose-cap' && check.active != null && check.capMg != null && totalMg(check.active) > check.capMg) continue
     out.push({ ...check, productIds })
   }
