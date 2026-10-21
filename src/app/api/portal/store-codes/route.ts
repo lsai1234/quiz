@@ -66,8 +66,8 @@ export async function POST(req: Request) {
 
   if (action === 'daily') {
     // The daily codes' switch, off unless asked for in so many words. Off hides
-    // the card at checkout only: a daily code already in the database still
-    // works on its own day when typed.
+    // the card and checkout refuses every daily code, including those already
+    // in the database (`dailyCodeRefused`).
     await setDailyCodesEnabled(body.enabled === true)
     return NextResponse.json(await payload())
   }

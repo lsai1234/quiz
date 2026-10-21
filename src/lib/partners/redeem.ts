@@ -19,7 +19,7 @@
 import { checkCode, normaliseCode } from './codes'
 import * as repo from './repo'
 import { isHousePartner } from './house'
-import { ensureDailyCodes } from '@/lib/store-codes/daily'
+import { dailyCodeRefused } from '@/lib/store-codes/daily'
 import type { Partner, PartnerCode } from './types'
 
 /**
@@ -119,10 +119,6 @@ export async function redeemPartnerCode(
 
   const eligible = worksOn(context.channel)
 
-  // Today's 25% code is a store code like any other, but made on demand — so
-  // make sure it exists before looking it up, whichever checkout is asking.
-  await ensureDailyCodes(context.now)
-
   /*
     A TYPED code on an ineligible channel is refused before the lookup, so the
     answer is the same whether or not the code is real: in the shop no typed
@@ -151,6 +147,17 @@ export async function redeemPartnerCode(
   }
 
   if (!code) return { ok: false, reason: 'We don’t recognise that code.' }
+
+  /*
+    The daily 25% codes (`lib/store-codes/daily`) are off for good unless a
+    founder switches them back on. Every day's row is still in the database as
+    a working store code, so they are refused here, on every path, rather than
+    by deleting anything. Ours only: a partner who holds one of the words keeps
+    their code.
+  */
+  if (storeCode && (await dailyCodeRefused(code.code))) {
+    return { ok: false, reason: 'That code is no longer active.' }
+  }
 
   const partner = await repo.getPartner(code.partnerId)
   // A code whose partner has been deleted is not a code. Refuse rather than

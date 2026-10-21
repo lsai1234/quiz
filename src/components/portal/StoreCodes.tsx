@@ -198,11 +198,10 @@ export function StoreCodes() {
               </p>
             )}
             <p style={meta}>
-              Off unless turned on here, and no new daily codes are made. While it is on, the results page
-              shows today’s code and the day it is valid until, in place of a code chosen with “Show at
-              checkout” below — but only if that code was made before. Turning it off only hides the card:
-              a daily code already made still works at checkout on its own day, until{' '}
-              {shortDay(daily.lastDay)}, for anyone who types it.
+              Off unless turned on here, and no new daily codes are made. While it is off, checkout refuses
+              every daily code, including those already made, typed or from a link. While it is on, a code
+              made before works on its own day, until {shortDay(daily.lastDay)}, and the results page shows
+              today’s and the day it is valid until, in place of a code chosen with “Show at checkout” below.
             </p>
           </div>
         </Card>

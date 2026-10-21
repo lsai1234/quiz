@@ -3,10 +3,11 @@
  *
  * ── Retired ─────────────────────────────────────────────────────────────────
  * Off unless a founder switches it on in the hub, and no new codes are made.
- * Rows already in the database are left alone: they are ordinary store codes,
- * so a typed one is still accepted at checkout on its own day whether the
- * switch is on or off. The schedule stays so the hub can keep those rows off
- * its ordinary list (`isDailyCode`).
+ * Rows already in the database are left alone, but while the switch is off
+ * checkout refuses every one of them, typed or arriving on a link
+ * (`dailyCodeRefused`, asked by `redeemPartnerCode`). The schedule stays so
+ * checkout and the hub can still tell those rows from the founders' own codes
+ * (`isDailyCode`).
  *
  * ── Why a new code each day rather than one code on a countdown ─────────────
  * Each day's code is valid from the London midnight that starts its day to the
@@ -21,7 +22,7 @@
  * redeem them. `ensureDailyCodes` used to create every missing one from today
  * to the end of the schedule the first time a code was looked up each day, so
  * future days' rows were made well before their day and refused until it
- * started. It now makes nothing.
+ * started. It is gone; nothing makes them now.
  *
  * Server-only.
  */
@@ -89,8 +90,9 @@ export function isDailyCode(code: string): boolean {
 const ENABLED_KEY = 'store-codes:daily'
 
 /**
- * Off unless a founder has switched it on. Off hides the card only: a code
- * already in the database still works at checkout on its own day.
+ * Off unless a founder has switched it on. Off hides the card and refuses every
+ * daily code at checkout; on, a code already in the database works on its own
+ * day again.
  */
 export async function dailyCodesEnabled(): Promise<boolean> {
   const stored = await kvGet<{ enabled: boolean }>(ENABLED_KEY)
@@ -101,10 +103,13 @@ export async function setDailyCodesEnabled(enabled: boolean): Promise<void> {
   await kvSet(ENABLED_KEY, { enabled })
 }
 
-// ─── Making them ─────────────────────────────────────────────────────────────
-
 /**
- * Makes nothing. Kept, with its signature, for the callers that still ask
- * before a lookup (`redeemPartnerCode`). Codes it made before are not touched.
+ * Whether checkout must refuse this code as a daily one: any day's, on any day,
+ * while the switch is off. Asks the switch only for a daily code's name.
+ *
+ * By name alone, so the caller decides whose code it is: a partner holding one
+ * of the words keeps their code (`redeemPartnerCode` asks for store codes only).
  */
-export async function ensureDailyCodes(_now?: Date): Promise<void> {}
+export async function dailyCodeRefused(code: string): Promise<boolean> {
+  return isDailyCode(code) && !(await dailyCodesEnabled())
+}

@@ -5,7 +5,7 @@ import {
   createStoreCode, deleteStoreCode, listStoreCodes, validateStoreCode, setStoreCodeEnd, setCheckoutPromo, liveCheckoutPromo,
   dailyCodeStatus, ensureHousePartner,
 } from '@/lib/store-codes'
-import { DAILY_CODES, dailyCodesEnabled, ensureDailyCodes, setDailyCodesEnabled } from '@/lib/store-codes/daily'
+import { DAILY_CODES, dailyCodesEnabled, setDailyCodesEnabled } from '@/lib/store-codes/daily'
 import { createPartner, listPartnerRecords } from '@/lib/partners'
 import { recordCodeUse, redeemPartnerCode } from '@/lib/partners/redeem'
 import { accrueForOrder } from '@/lib/partners/ledger'
@@ -171,9 +171,13 @@ describe('ending a code, and advertising one at checkout', () => {
   })
 })
 
-describe('the daily 25% codes — off by default, and no longer made', () => {
+describe('the daily 25% codes — off by default, no longer made, and refused while off', () => {
   const at = (iso: string) => new Date(iso)
   const ctx = (iso: string) => ({ subtotal: 60, channel: 'quiz' as const, now: at(iso) })
+  /** A stack or bundle, a subscription and the shop basket, each typed or from a link. */
+  const everyPath = (['quiz', 'subscription', 'shop'] as const).flatMap((channel) =>
+    (['typed', 'referral'] as const).map((source) => ({ channel, source })),
+  )
 
   /** A row as `ensureDailyCodes` used to make it, ahead of its day — the database may still hold these. */
   async function madeBefore(code: string) {
@@ -213,8 +217,6 @@ describe('the daily 25% codes — off by default, and no longer made', () => {
   })
 
   it('makes no codes, switched on or off', async () => {
-    await ensureDailyCodes(at('2026-10-14T10:00:00Z'))
-    expect(await repo.getCode('SPARK25')).toBeNull()
     // Typed on its day, a code that was never made is just an unknown code.
     expect(await redeemPartnerCode('SPARK25', ctx('2026-10-14T10:00:00Z'), never)).toEqual({
       ok: false, reason: 'We don’t recognise that code.',
@@ -242,19 +244,53 @@ describe('the daily 25% codes — off by default, and no longer made', () => {
     await setDailyCodesEnabled(false)
   })
 
-  it('a code made before still works when typed on its own day, with the switch off', async () => {
+  it('refuses every one made before while it is off — on its own day, on every path, typed or from a link', async () => {
     expect(await dailyCodesEnabled()).toBe(false)
+    await madeBefore('BOOST25')
+    await madeBefore('FINALE25')
+    for (const [code, iso] of [['boost25', '2026-10-21T10:00:00Z'], ['FINALE25', '2026-11-30T10:00:00Z']] as const) {
+      for (const { channel, source } of everyPath) {
+        expect(await redeemPartnerCode(code, { subtotal: 60, channel, source, now: at(iso) }, never)).toEqual({
+          ok: false, reason: 'That code is no longer active.',
+        })
+      }
+    }
+    // Refused, not deleted: the rows are as they were made.
+    expect(await repo.getCode('BOOST25')).toMatchObject({ status: 'active', discountPct: 0.25 })
+    expect(await repo.getCode('FINALE25')).toMatchObject({ status: 'active', discountPct: 0.25 })
+  })
+
+  it('works on its own day again only once a founder switches it back on', async () => {
     await madeBefore('SURGE25')
-    expect(await redeemPartnerCode('spark25', ctx('2026-10-14T22:59:00Z'), never)).toMatchObject({ ok: true, discountPct: 0.25 })
-    expect(await redeemPartnerCode('SPARK25', ctx('2026-10-14T23:00:01Z'), never)).toEqual({ ok: false, reason: 'That code has expired.' })
+    await setDailyCodesEnabled(true)
     expect(await redeemPartnerCode('SURGE25', ctx('2026-10-14T22:59:00Z'), never)).toEqual({ ok: false, reason: 'That code is not active yet.' })
-    expect(await redeemPartnerCode('SURGE25', ctx('2026-10-15T09:00:00Z'), never)).toMatchObject({ ok: true, discountPct: 0.25 })
+    expect(await redeemPartnerCode('surge25', ctx('2026-10-15T09:00:00Z'), never)).toMatchObject({ ok: true, discountPct: 0.25 })
+    expect(await redeemPartnerCode('SURGE25', ctx('2026-10-15T23:00:01Z'), never)).toEqual({ ok: false, reason: 'That code has expired.' })
+    await setDailyCodesEnabled(false)
+    expect(await redeemPartnerCode('SURGE25', ctx('2026-10-15T09:00:00Z'), never)).toEqual({ ok: false, reason: 'That code is no longer active.' })
+  })
+
+  it('leaves the founders’ own codes working while it is off, on every path', async () => {
+    await createStoreCode({ name: 'STILL10', percent: 10 })
+    for (const { channel, source } of everyPath) {
+      const result = await redeemPartnerCode('STILL10', { subtotal: 60, channel, source, now: at('2026-10-21T10:00:00Z') }, never)
+      expect(result.ok && result.discountPct).toBe(0.1)
+    }
+  })
+
+  it('leaves a partner who holds one of the words their code', async () => {
+    // A word a partner already had was never made as a daily code.
+    const created = await createPartner({ email: 'rally@example.com', name: 'Rally', code: 'RALLY25' })
+    const result = await redeemPartnerCode('RALLY25', ctx('2026-10-22T10:00:00Z'), never)
+    expect(result.ok && result.discountPct).toBe(created.codes[0].discountPct)
   })
 
   it('a paused one is refused on its day, and its row is kept', async () => {
     await madeBefore('VOLT25')
     await repo.updateCode('VOLT25', { status: 'paused' })
+    await setDailyCodesEnabled(true)
     expect(await redeemPartnerCode('VOLT25', ctx('2026-10-16T09:00:00Z'), never)).toEqual({ ok: false, reason: 'That code is paused.' })
+    await setDailyCodesEnabled(false)
     expect(await repo.getCode('VOLT25')).toMatchObject({ status: 'paused' })
   })
 
