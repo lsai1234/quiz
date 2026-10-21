@@ -16,20 +16,9 @@ import { HealthDataConsent, healthDataConsentRecord } from '@/components/legal/H
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel,
-  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
+  TrainingExperience, StimPreference, AgeBracket, Gender,
   SafetyFlag, WeightBand,
 } from '@/lib/types'
-
-// Client-side fallback identity so the reveal is never empty if the identity
-// request fails outright (the API also returns its own fallback on a 200).
-const FALLBACK_IDENTITY: StackIdentity = {
-  name: 'Peak Protocol',
-  archetype: 'The Performance Athlete',
-  description:
-    'Your stack is built around output and recovery. These selections may suit your goals and are commonly used by people with similar profiles.',
-  focusAreas: ['Performance Output', 'Faster Recovery', 'Daily Energy'],
-  routineFitScore: 84,
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -406,7 +395,7 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
     step, answers, setStep,
-    setGoals, setAnswer, setIdentity, setStackLevel, setStackReady,
+    setGoals, setAnswer, setStackLevel, setStackReady,
     deepDiveQuestions, deepDiveStatus,
   } = useQuizStore()
 
@@ -750,19 +739,14 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       // AI prompts.
       const engineAnswers = withDeepDiveSignals(answers)
       const baseBlueprint = buildStackBlueprint(engineAnswers, catalogueProducts)
-      const [identity, blueprint] = await Promise.all([
-        fetch('/api/generate-identity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(engineAnswers),
-        }).then(r => r.json()).catch(() => FALLBACK_IDENTITY),
-        personaliseBlueprint(engineAnswers, baseBlueprint, catalogueProducts),
-      ])
-      setIdentity(identity ?? FALLBACK_IDENTITY)
+      // No AI identity call any more: the reveal opens on the stack's own,
+      // rule-based name (blueprint.stackName) rather than an AI-written one.
+      const blueprint = await personaliseBlueprint(engineAnswers, baseBlueprint, catalogueProducts)
       setStackLevel(levelForStackPreference(answers.stackPreference))
       useQuizStore.getState().setStackBlueprint(blueprint)
     } catch {
-      if (!useQuizStore.getState().identity) setIdentity(FALLBACK_IDENTITY)
+      // Nothing to fall back to here: with no stack the reveal says so itself
+      // (see StackReviewPage), and Act 3 still finishes on stackReady below.
     } finally {
       useQuizStore.getState().setStackReady(true)
     }

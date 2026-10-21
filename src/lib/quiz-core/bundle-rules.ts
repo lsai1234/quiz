@@ -16,6 +16,7 @@
  */
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { BundleRuleId } from '@/lib/stack-blueprint/explain-types'
 
 /** Total daily dose ceilings, summed across the whole bundle (mg unless noted). */
 export const DOSE_CAPS: Record<string, number> = {
@@ -35,6 +36,22 @@ export const BUNDLE_RULES = {
   confidenceFloor: 10,
 }
 
+/** A slot the rules pass removed, and the rule that removed it. */
+export interface BundleRuleDrop {
+  slotId: string
+  productId: string
+  rule: BundleRuleId
+  /** dedup-active: the active already in the bundle. dose-cap: the active over its cap. */
+  active?: string
+  /** dose-cap only: the ceiling it would have gone over. */
+  capMg?: number
+}
+
+export interface BundleRulesReport {
+  kept: StackSlotEntry[]
+  dropped: BundleRuleDrop[]
+}
+
 /**
  * Apply the construction rules to a set of selected slots. Returns a new slot
  * list (never empty when the input isn't — a degenerate all-dropped case keeps
@@ -46,9 +63,24 @@ export function applyBundleRules(
   cfg = BUNDLE_RULES,
   caps: Record<string, number> = DOSE_CAPS,
 ): StackSlotEntry[] {
+  return applyBundleRulesReport(slots, catalogue, cfg, caps).kept
+}
+
+/**
+ * `applyBundleRules`, plus what it dropped and which rule dropped it. The first
+ * rule that fires is the one reported. A slot brought back by the degenerate
+ * keep-best case is not reported as dropped.
+ */
+export function applyBundleRulesReport(
+  slots: StackSlotEntry[],
+  catalogue: CatalogueProduct[],
+  cfg = BUNDLE_RULES,
+  caps: Record<string, number> = DOSE_CAPS,
+): BundleRulesReport {
   const productOf = (id: string) => catalogue.find((p) => p.id === id)
 
   const kept: StackSlotEntry[] = []
+  const dropped: Array<{ slot: StackSlotEntry; drop: BundleRuleDrop }> = []
   const usedActives = new Set<string>()
   const doseTotals: Record<string, number> = {}
 
@@ -56,14 +88,22 @@ export function applyBundleRules(
   // gets dropped, not the anchor.
   for (const slot of [...slots].sort((a, b) => a.displayOrder - b.displayOrder)) {
     const actives = productOf(slot.selectedProductId)?.actives ?? []
+    const drop = (rule: BundleRuleId, extra: Partial<BundleRuleDrop> = {}) =>
+      dropped.push({ slot, drop: { slotId: slot.slotId, productId: slot.selectedProductId, rule, ...extra } })
 
     if (!slot.required) {
       // 1. Relevance floor.
-      if (cfg.relevanceFloor && slot.confidenceScore < cfg.confidenceFloor) continue
+      if (cfg.relevanceFloor && slot.confidenceScore < cfg.confidenceFloor) { drop('relevance-floor'); continue }
       // 2. Active-ingredient dedup — skip if it reintroduces an active already present.
-      if (cfg.dedupActives && actives.some((a) => usedActives.has(a.name))) continue
+      if (cfg.dedupActives) {
+        const shared = actives.find((a) => usedActives.has(a.name))
+        if (shared) { drop('dedup-active', { active: shared.name }); continue }
+      }
       // 3. Dose caps — skip if adding it would push any active over its ceiling.
-      if (cfg.doseCaps && actives.some((a) => a.mg != null && (doseTotals[a.name] ?? 0) + a.mg > (caps[a.name] ?? Infinity))) continue
+      if (cfg.doseCaps) {
+        const over = actives.find((a) => a.mg != null && (doseTotals[a.name] ?? 0) + a.mg > (caps[a.name] ?? Infinity))
+        if (over) { drop('dose-cap', { active: over.name, capMg: caps[over.name] }); continue }
+      }
     }
 
     kept.push(slot)
@@ -75,7 +115,8 @@ export function applyBundleRules(
 
   // Never return an empty bundle (degenerate config) — keep the best single pick.
   if (kept.length === 0 && slots.length > 0) {
-    return [[...slots].sort((a, b) => b.confidenceScore - a.confidenceScore)[0]]
+    const best = [...slots].sort((a, b) => b.confidenceScore - a.confidenceScore)[0]
+    return { kept: [best], dropped: dropped.filter((d) => d.slot !== best).map((d) => d.drop) }
   }
-  return kept
+  return { kept, dropped: dropped.map((d) => d.drop) }
 }

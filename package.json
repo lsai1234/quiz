@@ -24,7 +24,8 @@
     "e2e:reset": "rm -rf .data/e2e.db e2e/.artifacts e2e/.report",
     "build:favicon": "node scripts/build-favicon.mjs",
     "backfill:product-ids": "tsx scripts/backfill-product-ids.ts",
-    "clean:descriptions": "tsx scripts/clean-descriptions.ts"
+    "clean:descriptions": "tsx scripts/clean-descriptions.ts",
+    "claims:signoff": "tsx scripts/claims-signoff.ts"
   },
   "dependencies": {
     "@rive-app/canvas-lite": "^2.43.1",

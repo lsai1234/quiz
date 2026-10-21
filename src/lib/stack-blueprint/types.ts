@@ -1,5 +1,6 @@
 import type { Goal, StackLevel } from '@/lib/types'
 import type { StackSlot, SwapGroup } from '@/lib/catalogue/types'
+import type { StackCheck } from './explain-types'
 
 // NOTE: 'StackSlotEntry' is used instead of 'StackSlot' to avoid naming conflict with catalogue's StackSlot type
 export interface StackSlotEntry {
@@ -51,4 +52,12 @@ export interface StackBlueprint {
    * rate. When unset, derived from the product count via `stackLevelOf`.
    */
   level?: StackLevel
+  /**
+   * What the engine did for this person: products a hard gate left out (by
+   * reason and answer) and what the bundle rules dropped. Set by
+   * `buildStackBlueprint` (empty when nothing happened); absent on blueprints
+   * built elsewhere. Describes the engine's build, so read it through
+   * `checksForSlots` once slots may have changed. See explain-types.ts.
+   */
+  checks?: StackCheck[]
 }

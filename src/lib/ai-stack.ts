@@ -23,21 +23,23 @@ const GOAL_LABELS: Record<string, string> = {
   menopause: 'support hormonal balance through menopause',
 }
 
-const BUDGET_LABELS: Record<string, string> = {
-  'under-30': 'under £30/month',
-  '30-50': '£30–50/month',
-  '50-80': '£50–80/month',
-  '80-plus': '£80+/month',
-}
-
 const stripMd = (s: string) => s.replace(/\*+/g, '').replace(/_{2,}/g, '').trim()
 
 // ─── Blueprint slot personalisation ──────────────────────────────────────────
 // The main flow shows a slot-based stack (protein / performance / sleep …). The
 // deterministic factory decides which slots exist, the budget cap and every hard
 // gate (caffeine, vegan, allergens, already-taking, narrow-use exclusions); the
-// AI then picks the best product to fill each slot from that slot's
-// already-eligible options and writes the personalised, sales-style reason.
+// AI may then pick a different product for a slot from that slot's
+// already-eligible options. It returns product ids and nothing else.
+//
+// It used to write each slot's "why" as well. No one reviewed that text before
+// a customer read it, so the model now writes no customer text at all; the
+// parser drops any it sends anyway.
+//
+// No budget is sent either. The quiz does not ask for one, so the line the
+// prompt used to carry ("£50–80/month", with a rule never to exceed it) was a
+// default standing in for an answer nobody gave. Where a cap does apply, the
+// engine and `applyBlueprintAIResultWithinBudget` enforce it in code.
 
 /** One slot offered to the model, with its eligible product options. */
 export interface SlotOption {
@@ -52,8 +54,10 @@ export interface SlotOption {
     price: number
     vegan: boolean
     stimulant: boolean
+    /** The catalogue's own one-line summary, as context for the choice. */
     reason: string
-    /** Approved, advertising-compliant claims the AI may draw on for this product. */
+    /** The swap group's claims, as context for the choice. Never shown to a
+     *  customer, and the model writes nothing from them. */
     claims: string[]
   }>
 }
@@ -61,21 +65,19 @@ export interface SlotOption {
 export interface BlueprintAIResult {
   /** Chosen product id per slotId (already validated against that slot's options). */
   choices: Record<string, string>
-  /** Personalised reason per slotId. */
-  reasons: Record<string, string>
 }
 
-export const BLUEPRINT_SYSTEM_PROMPT = `You are a specialist nutrition advisor and copywriter for CHRGD, a premium UK supplement brand. You personalise a supplement stack for one person and write the sales copy that sells it back to them.
+export const BLUEPRINT_SYSTEM_PROMPT = `You choose products for one person's supplement stack at CHRGD, a UK supplement brand. You only choose. You do not write anything the customer will read.
 
-The stack has fixed slots (each a job like Protein or Sleep). For each slot you are given a short list of eligible product options, each with a set of pre-approved claims. Your job:
-- Pick the single best product option for this specific person for each slot — choose by id, from that slot's options only. Never invent ids or move a product between slots. Weigh their goals, training, lifestyle, diet and budget to make the best possible call — you have full discretion here, every option you're shown already passed the brand's hard safety/eligibility gates (e.g. no stimulant or allergen options are ever shown if the person opted out).
-- Write one reason per slot: 1-2 sentences (roughly 25-40 words), warm, premium and specific to this person — sell them on why this exact product fits their goals and life. Ground every factual/benefit claim ONLY in that product's listed claims; you may rephrase and combine them naturally, but never invent a mechanism, benefit or outcome not listed. Plain text, no markdown or asterisks.
-- No medical claims, no disease/cure/treatment language, no guaranteed outcomes. Say "may support" or "supports", never "will cure", "will fix" or "guarantees". Never suggest a supplement can treat, manage or replace medical care for any condition.
-- Respond with a single JSON object only, no prose: {"choices":{"slotId":"productId", ...},"reasons":{"slotId":"reason", ...}}`
+The stack has fixed slots (each a job like Protein or Sleep). For each slot you are given a short list of eligible product options. Every option has already passed the brand's safety and eligibility checks, so any of them may be chosen.
+- For each slot, pick the single option that best fits this person's goals, training, diet and lifestyle. Choose by id, from that slot's options only. Never invent ids or move a product between slots.
+- Each slot's current pick is the one the brand's rules chose. Where options fit equally well, keep it.
+- Prices are shown for reference only. There is no budget to aim for or to fill, so choose on fit, not on price.
+- Do not write reasons, descriptions, sales copy or any other text.
+- Respond with a single JSON object only, no prose: {"choices":{"slotId":"productId", ...}}`
 
 export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]): string {
   const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'
-  const budget = BUDGET_LABELS[answers.budget ?? ''] ?? '£50–80/month'
   const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
   const lifestyle = answers.lifestyle.length ? answers.lifestyle.join(', ') : 'none noted'
 
@@ -115,7 +117,7 @@ export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]):
     return `  Slot "${s.slotId}" (${s.title} — ${s.description}); current: ${s.currentProductId}\n${opts.join('\n')}`
   })
 
-  return `Personalise this person's stack.
+  return `Choose this person's stack.
 
 PERSON
 - Age: ${age}
@@ -124,19 +126,18 @@ PERSON
 - Diet: ${answers.diet ?? 'balanced'}
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
-- Monthly budget: ${budget}
-${context.length ? `\nDEEPER CONTEXT (what they told us about why — use this to break ties between options and to make the reasons specific)\n${context.join('\n')}\n` : ''}
-BUDGET RULE
-- The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.
-
+${context.length ? `\nDEEPER CONTEXT (what they told us about why — use this to break ties between options)\n${context.join('\n')}\n` : ''}
 SLOTS (pick one product id per slot, from that slot's options only)
 ${slotBlocks.join('\n')}`
 }
 
 /**
  * Validates the model output against each slot's allowed option ids. Choices for
- * unknown slots or ids outside that slot's options are dropped; reasons are
- * sanitised. Returns null when nothing usable came back.
+ * unknown slots or ids outside that slot's options are dropped. Anything else in
+ * the reply is ignored, including the `reasons` object the old prompt asked for:
+ * a model that still writes one gets its choices read and its prose discarded,
+ * so no model-written sentence leaves this function. Returns null when no usable
+ * choice came back.
  */
 export function parseBlueprintResult(
   raw: unknown,
@@ -154,14 +155,6 @@ export function parseBlueprintResult(
     }
   }
 
-  const reasons: Record<string, string> = {}
-  const rawReasons = obj.reasons && typeof obj.reasons === 'object' ? (obj.reasons as Record<string, unknown>) : {}
-  for (const [slotId, reason] of Object.entries(rawReasons)) {
-    if (!optionIdsBySlot[slotId] || typeof reason !== 'string') continue
-    const clean = stripMd(reason).slice(0, 280)
-    if (clean) reasons[slotId] = clean
-  }
-
-  if (Object.keys(choices).length === 0 && Object.keys(reasons).length === 0) return null
-  return { choices, reasons }
+  if (Object.keys(choices).length === 0) return null
+  return { choices }
 }

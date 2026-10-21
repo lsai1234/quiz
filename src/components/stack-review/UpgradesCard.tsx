@@ -45,8 +45,10 @@ export function UpgradesCard({ boosters, onAdd }: Props) {
           <p className="text-sm font-bold mt-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
             You&rsquo;re all set
           </p>
-          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-            Your stack already covers your goals.
+          {/* Not "covers your goals": that says the stack does something for
+              them, which is a claim. */}
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-2)' }}>
+            Nothing else to add right now.
           </p>
         </div>
       ) : (

@@ -1,6 +1,10 @@
 export type { StackBlueprint, StackSlotEntry } from './types'
 export * from './helpers'
-export { buildStackBlueprint } from './factory'
+export { buildStackBlueprint, scoreProduct, scoreProductDetailed, getArchetype, checksForSlots } from './factory'
+export type { Archetype, SlotType } from './factory'
+export type {
+  Contribution, ContributionField, Exclusion, ExclusionReason, ScoreDetail, StackCheck, StackCheckKind, BundleRuleId,
+} from './explain-types'
 export { MOCK_BLUEPRINT } from './mock-blueprint'
 export { planTiers, tierPlanFor } from './tier-plan'
 export type { TierPlan } from './tier-plan'

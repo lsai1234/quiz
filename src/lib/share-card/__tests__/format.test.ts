@@ -54,7 +54,6 @@ describe('the lists', () => {
       for (const format of FORMAT_IDS) {
         const view = buildShareCardView(payload, format)
         expect(view.lineup.length).toBeLessThanOrEqual(FORMATS[format].lineupRows)
-        expect(view.builtFor.length).toBeLessThanOrEqual(FORMATS[format].lineupRows)
         expect(view.lineup.length).toBeGreaterThan(0)
       }
     }
@@ -73,17 +72,21 @@ describe('the lists', () => {
     expect(buildShareCardView(PERSONAS.complete, 'square').overflow).toBe(0)
   })
 
-  it('answers "why" with the focus areas when there is an identity', () => {
-    const view = buildShareCardView(PERSONAS.complete, 'story')
-    expect(view.builtFor).toEqual(['Performance Output', 'Faster Recovery', 'Daily Energy'])
-  })
-
-  it('falls back to the customer’s own goals when there is no identity', () => {
-    // Same question, answered from the other end. A card with an empty second
-    // column is a card with a hole in it.
-    const view = buildShareCardView(PERSONAS['no-identity'], 'story')
-    expect(view.builtFor.length).toBeGreaterThan(0)
-    expect(view.builtFor.every((l) => typeof l === 'string' && l.length > 0)).toBe(true)
+  it('says nothing about what the stack is for, even from a stored card', () => {
+    // The second column used to list the AI's focus areas, or the customer's
+    // goals, as what the stack is "built for": a goal printed beside a stack is
+    // a health claim. A card stored with focus areas must not bring it back.
+    const stored = {
+      ...PERSONAS.complete,
+      focusAreas: [{ label: 'Faster Recovery', glyph: 'refresh' }],
+      coverage: [{ label: 'Sleep', score: 80, targeted: true }],
+    }
+    for (const format of FORMAT_IDS) {
+      const view = buildShareCardView(stored, format)
+      expect(view).not.toHaveProperty('builtFor')
+      const text = JSON.stringify({ ...view, spec: undefined })
+      expect(text).not.toMatch(/Faster Recovery|Sleep/)
+    }
   })
 })
 
@@ -138,7 +141,7 @@ describe('the entry card', () => {
       hook: 'Alexandria built their stack.',
       invite: 'Build yours and you’re entered.',
       owner: 'ALEXANDRIA’S STACK',
-      title: 'The Methodical Powerbuilder',
+      title: PERSONAS['long-everything'].stackName,
     })
   })
 
@@ -148,9 +151,11 @@ describe('the entry card', () => {
     expect(view.entry?.owner).toBe('MY STACK')
   })
 
-  it('titles the panel with the stack name when there is no archetype', () => {
-    const view = buildShareCardView(PERSONAS['no-identity'], 'entry', BAND)
-    expect(view.entry?.title).toBe(PERSONAS['no-identity'].stackName)
+  it('titles the panel with the stack’s name, never an archetype', () => {
+    // Cards stored while the AI identity existed still hold its archetype.
+    const stored = { ...PERSONAS['no-identity'], archetype: 'The Strength Builder' }
+    const view = buildShareCardView(stored, 'entry', BAND)
+    expect(view.entry?.title).toBe(stored.stackName)
   })
 
   it('lists at most five products, by name only', () => {
@@ -253,28 +258,18 @@ describe('saying what this is', () => {
 })
 
 describe('the stat pairs', () => {
-  it('pair a number with a word', () => {
-    // Two words side by side reads as a caption; two numbers reads as a table.
-    const [number, word] = buildShareCardView(PERSONAS.complete, 'story').stats
-    expect(number).toEqual({ label: 'Routine fit', value: String(PERSONAS.complete.fitScore) })
-    expect(word.value).toMatch(/^[A-Z]/)
-    expect(Number.isNaN(Number(word.value))).toBe(true)
+  it('are the product count, and nothing invented or goal-shaped', () => {
+    // "Routine fit" was a number the AI made up without seeing the products,
+    // and "Built mainly for" put a goal beside the stack. A stored card that
+    // still holds a fit score must not print it.
+    const stored = { ...PERSONAS.complete, fitScore: 88 }
+    const view = buildShareCardView(stored, 'story')
+    expect(view.stats).toEqual([{ label: 'Products', value: String(stored.lineup.length) }])
+    expect(Number(view.stats[0].value)).toBeGreaterThanOrEqual(view.lineup.length)
   })
 
   it('are dropped where the format has no room', () => {
     expect(buildShareCardView(PERSONAS.complete, 'og').stats).toEqual([])
-  })
-
-  it('falls back to the product count when there is no fit score', () => {
-    // No AI identity means no routine fit, and a stat row with one pair in it
-    // reads as a card that lost something.
-    const view = buildShareCardView(PERSONAS['no-identity'], 'story')
-    expect(view.stats).toHaveLength(2)
-    expect(view.stats[0]).toEqual({
-      label: 'Products',
-      value: String(PERSONAS['no-identity'].lineup.length),
-    })
-    expect(Number(view.stats[0].value)).toBeGreaterThanOrEqual(view.lineup.length)
   })
 })
 
@@ -289,16 +284,41 @@ describe('the eyebrow', () => {
     // has two subjects and no hook.
     const view = buildShareCardView(PERSONAS['long-everything'], 'story')
     expect(view.eyebrow).toMatch(/^ALEXANDRIA’S CHRGD STACK/)
-    expect(view.stackName).toBe('Uncompromising Foundations')
+    expect(view.stackName).toBe(PERSONAS['long-everything'].stackName)
   })
 })
 
 describe('the rest of the view', () => {
-  it('drops the identity furniture rather than drawing empty holders', () => {
-    const view = buildShareCardView(PERSONAS['no-identity'], 'story')
-    expect(view.archetype).toBeNull()
-    expect(view.fit).toBeNull()
-    expect(view.lineup.length).toBeGreaterThan(0)
+  it('prints none of a stored card’s AI identity', () => {
+    // Cards shared while the AI identity existed carry its archetype, focus
+    // areas and fit score. They still render, and none of the three is drawn.
+    const stored = {
+      ...PERSONAS.complete,
+      archetype: 'The Strength Builder',
+      focusAreas: [{ label: 'Faster Recovery', glyph: 'refresh' }],
+      fitScore: 88,
+    }
+    for (const format of FORMAT_IDS) {
+      const view = buildShareCardView(stored, format, format === 'entry' ? BAND : null)
+      expect(view).not.toHaveProperty('archetype')
+      expect(view).not.toHaveProperty('fit')
+      const text = JSON.stringify({ ...view, spec: undefined })
+      expect(text).not.toMatch(/Strength Builder|STRENGTH BUILDER|Faster Recovery|Routine fit|"88"/)
+      expect(view.lineup.length).toBeGreaterThan(0)
+    }
+    expect(buildShareCardView(stored, 'story').kicker).toBe('YOUR STACK')
+  })
+
+  it('prints no reason, even from a stored card that holds one', () => {
+    const stored = {
+      ...PERSONAS.complete,
+      lineup: PERSONAS.complete.lineup.map((row) => ({ ...row, reason: 'Supports restful sleep' })),
+    }
+    for (const format of FORMAT_IDS) {
+      const view = buildShareCardView(stored, format, format === 'entry' ? BAND : null)
+      const printed = JSON.stringify({ ...view, spec: undefined })
+      expect(printed).not.toContain('restful sleep')
+    }
   })
 
   it('gives an influencer’s code the band, not a footer chip', () => {

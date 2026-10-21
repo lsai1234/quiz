@@ -1,9 +1,7 @@
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import { stackLevelOf } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { StackIdentity } from '@/lib/types'
 import { selectStatAxes, stackStatScore, MAX_STAT } from '@/lib/stack-stats'
-import { focusAreaGlyph } from '@/lib/identity-visuals'
 import { shortNameOf } from '@/lib/catalogue/short-name'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { pickArtKey } from './art'
@@ -16,6 +14,12 @@ import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } f
  * no new content authored for the card and no second AI call. That is
  * deliberate: a card saying something the results screen does not would be a
  * second source of truth about someone's stack, and the two would drift.
+ *
+ * Nothing AI-written goes on the card. The name is the engine's rule-based
+ * `stackName`, the same one the results page shows; there is no archetype,
+ * focus areas or fit score (they came from the AI identity, which is no longer
+ * called); and no slot reason, because a reason is either engine copy saying
+ * what a product does or AI text, and both are claims we have not reviewed.
  *
  * The coverage bars are the clearest case. They use `selectStatAxes` and
  * `stackStatScore` — the same axes the product deck already compares cards on —
@@ -123,6 +127,10 @@ function capitalise(text: string): string {
 /**
  * A slot reason, cut to something that fits a card row.
  *
+ * No longer used by `buildSharePayload`: new cards carry no reason (see the
+ * header). Kept, with its tests, because it is part of the module's public
+ * exports (`index.ts`).
+ *
  * The engine writes a reason as an address plus a clause, or a claim plus a
  * personalising clause:
  *
@@ -172,13 +180,12 @@ export function shortReason(reason: string, maxWords = MAX_REASON_WORDS, name: s
 
 export interface BuildSharePayloadOptions {
   /**
-   * The customer's name — passed so it can be kept OFF the card, not put on it.
+   * The customer's name. Only its first word is ever used, and only when
+   * `showFirstName` says so.
    *
-   * The engine writes reasons addressed to the customer ("For Sam: Magnesium
-   * glycinate to help you wind down…"), so a name reaches the card through a
-   * field that looks like product copy whether or not anyone opted in. Giving
-   * the builder the name is what lets it strip that; `showFirstName` is the
-   * separate, explicit decision to display one.
+   * It used to be passed so it could be stripped from slot reasons, which the
+   * engine addresses to the customer ("For Sam: ..."). Cards no longer carry a
+   * reason, so nothing else here reads it.
    *
    * The name is passed in rather than read from `QuizAnswers` because this
    * builder never opens the answers object at all — that object is where the
@@ -200,21 +207,33 @@ export interface BuildSharePayloadOptions {
 }
 
 /**
- * Build the snapshot.
+ * Build the snapshot: `buildSharePayload(blueprint, products, options)`.
  *
- * `identity` is nullable on purpose. It comes from an AI call that can fail, be
- * unconfigured (no `OPENAI_API_KEY`), or simply not have run yet — and a share
- * button that only works when OpenAI is reachable is a share button that is
- * broken for some fraction of every day. Without an identity the card loses its
- * archetype, focus chips and fit meter and keeps its name, lineup and coverage,
- * which is still the card.
+ * The older form, with an AI identity between the blueprint and the products,
+ * still compiles so existing callers keep working, but the identity is not
+ * read: the card's name is always the blueprint's.
  */
 export function buildSharePayload(
   blueprint: StackBlueprint,
-  identity: StackIdentity | null,
   products: CatalogueProduct[],
-  options: BuildSharePayloadOptions = {},
+  options?: BuildSharePayloadOptions,
+): ShareCardPayload
+/** @deprecated The identity is ignored. Use `buildSharePayload(blueprint, products, options)`. */
+export function buildSharePayload(
+  blueprint: StackBlueprint,
+  identity: unknown,
+  products: CatalogueProduct[],
+  options?: BuildSharePayloadOptions,
+): ShareCardPayload
+export function buildSharePayload(
+  blueprint: StackBlueprint,
+  second: CatalogueProduct[] | unknown,
+  third?: CatalogueProduct[] | BuildSharePayloadOptions,
+  fourth?: BuildSharePayloadOptions,
 ): ShareCardPayload {
+  const legacy = !Array.isArray(second)
+  const products = (legacy ? third : second) as CatalogueProduct[]
+  const options = ((legacy ? fourth : third) ?? {}) as BuildSharePayloadOptions
   const {
     customerName = null,
     showFirstName = false,
@@ -232,7 +251,7 @@ export function buildSharePayload(
     // rendered as a blank row: the card is a boast, and a boast with a hole in
     // it is worse than a shorter one.
     .filter((e): e is { slot: (typeof e)['slot']; product: CatalogueProduct } => !!e.product)
-    .map(({ slot, product }) => ({
+    .map(({ product }) => ({
       // The product type ("Vitamin C"), not the slot title ("Immune Support"):
       // a goal printed beside a product is a health claim, and this one is on
       // a public card. Same field name, so the payload shape is unchanged.
@@ -245,14 +264,9 @@ export function buildSharePayload(
       // derivation of the title where there is not, so the card never has to
       // wait for the catalogue to be curated.
       product: shortNameOf(product),
-      // The engine's reason, unless removing the address leaves nothing behind
-      // — "Chosen for Sam" with no clause after it reduces to "Chosen for",
-      // which renders as a row with a broken sentence under it. The catalogue's
-      // own copy is the fallback: deterministic, already claim-reviewed, and
-      // always about this product.
-      reason:
-        shortReason(slot.reason, MAX_REASON_WORDS, customerName) ||
-        shortReason(product.shortReason || product.description, MAX_REASON_WORDS, customerName),
+      // Always empty. The field stays because stored cards and the decoder
+      // carry it; no format prints it.
+      reason: '',
       ...(servingLine(product) ? { dose: servingLine(product) } : {}),
     }))
 
@@ -271,15 +285,13 @@ export function buildSharePayload(
 
   return {
     v: SHARE_PAYLOAD_VERSION,
-    // The AI identity's name ("Iron Foundations") over the engine's
-    // ("Everyday Wellbeing Stack"). The engine's name is a category and the
-    // identity's is a title, and the headline is the whole job of this card —
-    // it is the line that gets screenshotted. Falls back to the engine's when
-    // no identity was generated, which is the only name there is then.
-    stackName: identity?.name?.trim() || blueprint.stackName,
-    archetype: identity?.archetype ?? '',
-    focusAreas: (identity?.focusAreas ?? []).map((label) => ({ label, glyph: focusAreaGlyph(label) })),
-    fitScore: identity ? clampScore(identity.routineFitScore) : null,
+    // The engine's name, the one the results page shows. One name for one stack.
+    stackName: blueprint.stackName,
+    // The three identity fields stay in the shape for stored cards and the
+    // decoder, and are always empty on a card built now.
+    archetype: '',
+    focusAreas: [],
+    fitScore: null,
     lineup,
     coverage,
     level: stackLevelOf(blueprint),
@@ -289,11 +301,4 @@ export function buildSharePayload(
     ...(code ? { code: code.trim().toUpperCase() } : {}),
     createdAt: now().toISOString(),
   }
-}
-
-/** 0–100, because a fit meter drawn from an out-of-range number is a bar that
- *  overflows its track and nothing else tells you it happened. */
-function clampScore(score: number): number {
-  if (!Number.isFinite(score)) return 0
-  return Math.max(0, Math.min(100, Math.round(score)))
 }

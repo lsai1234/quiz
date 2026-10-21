@@ -70,54 +70,42 @@ export function buildSlotOptions(
 }
 
 /**
- * Applies validated AI choices + reasons onto a blueprint. Choices are only
- * applied when they differ from the current pick and don't duplicate a product
- * already used in another slot. Returns a new blueprint marked personalised.
+ * Applies validated AI choices onto a blueprint, with no price cap. Choices are
+ * only applied when they differ from the current pick and don't duplicate a
+ * product already used in another slot. Returns a new blueprint marked
+ * personalised.
  *
- * A reason is only kept when the slot ends up holding the product that reason
- * was written about — see `reasonAppliesTo`.
+ * The same as `applyBlueprintAIResultWithinBudget` with no cap, which is what it
+ * calls. Pass the catalogue so a swapped slot's reason can be about the product
+ * it now holds; see `withProduct`.
  */
 export function applyBlueprintAIResult(
   blueprint: StackBlueprint,
   result: BlueprintAIResult,
+  catalogue: CatalogueProduct[] = [],
 ): StackBlueprint {
-  const used = new Set(blueprint.slots.map(s => s.selectedProductId))
-
-  const slots = blueprint.slots.map(slot => {
-    const choice = result.choices[slot.slotId]
-    const reason = result.reasons[slot.slotId]
-    let next = slot
-
-    if (choice && choice !== slot.selectedProductId && !used.has(choice)) {
-      used.delete(slot.selectedProductId)
-      used.add(choice)
-      next = { ...next, selectedProductId: choice, selectedVariantId: null }
-    }
-    if (reason && reasonAppliesTo(choice, next.selectedProductId)) next = { ...next, reason }
-    return next
-  })
-
-  return { ...blueprint, slots, personalised: true }
+  return applyBlueprintAIResultWithinBudget(blueprint, result, catalogue, null)
 }
 
 /**
- * Whether the AI's reason for a slot describes the product the slot actually
- * ended up with.
+ * A slot after the AI's swap was taken.
  *
- * The AI answers per slot with a product *and* the sentence explaining why that
- * product suits this person. The two are one answer, not two: "a budget-friendly
- * choice that supports Lewis's immune resilience" is only true of the product it
- * was written for. When we reject the AI's pick — because it duplicates another
- * slot, or because it would break the budget cap — its sentence has to go with
- * it, or the sheet shows one product's name above another product's
- * justification. The slot keeps the engine's own reason, which is always about
- * the product that's actually there.
- *
- * No choice for the slot means the AI was writing about the current pick, so the
- * reason stands.
+ * The AI writes no reason, so the slot's reason has to come from somewhere
+ * else, and it cannot stay as the engine's: that sentence was written about
+ * the product the AI replaced, and a reason under the wrong product is how a
+ * sheet headed "Plant Protein" ends up explaining Vitamin C. The new product's
+ * own catalogue line is used instead, the same text the engine falls back to
+ * for a product it has no template for. A slot the AI left alone keeps the
+ * engine's reason untouched.
  */
-function reasonAppliesTo(choice: string | undefined, selectedProductId: string): boolean {
-  return !choice || choice === selectedProductId
+function withProduct(
+  slot: StackBlueprint['slots'][number],
+  productId: string,
+  catalogue: CatalogueProduct[],
+): StackBlueprint['slots'][number] {
+  const product = catalogue.find(p => p.id === productId)
+  const reason = product ? (product.shortReason || product.description || slot.reason) : slot.reason
+  return { ...slot, selectedProductId: productId, selectedVariantId: null, reason }
 }
 
 /** The discounted one-off (price, cost) lines for a blueprint — mirrors how
@@ -140,13 +128,14 @@ function oneOffLinesForBlueprint(
 }
 
 /**
- * Applies AI choices + reasons like `applyBlueprintAIResult`, but GATES every
- * product swap against the bundle's hard price cap: a swap is only kept if the
- * stack's discounted one-off total stays within the cap. Over-budget swaps are
- * dropped (the engine's affordable pick is retained), and the AI's reason for
- * that slot is dropped with it — it describes the product we didn't take. The
- * engine blueprint is already within budget, so the result always is too. With
- * no cap (top tier) this behaves exactly like the ungated apply.
+ * Applies AI choices, GATING every product swap against the bundle's hard price
+ * cap: a swap is only kept if the stack's discounted one-off total stays within
+ * the cap. Over-budget swaps are dropped (the engine's affordable pick is
+ * retained). The engine blueprint is already within budget, so the result
+ * always is too. With no cap (top tier) every valid swap is applied.
+ *
+ * Nothing the model wrote is applied: a result carries product ids only, and a
+ * swapped slot's reason is the new product's catalogue line (`withProduct`).
  */
 export function applyBlueprintAIResultWithinBudget(
   blueprint: StackBlueprint,
@@ -171,12 +160,8 @@ export function applyBlueprintAIResultWithinBudget(
       if (cap == null || total <= cap + 0.001) {
         used.delete(slot.selectedProductId)
         used.add(choice)
-        working[i] = { ...slot, selectedProductId: choice, selectedVariantId: null }
+        working[i] = withProduct(slot, choice, catalogue)
       }
-    }
-    const reason = result.reasons[slot.slotId]
-    if (reason && reasonAppliesTo(choice, working[i].selectedProductId)) {
-      working[i] = { ...working[i], reason }
     }
   }
 
@@ -184,10 +169,11 @@ export function applyBlueprintAIResultWithinBudget(
 }
 
 /**
- * Asks the AI to personalise the blueprint's product choices and reasons via
+ * Asks the AI to choose between each slot's eligible products via
  * /api/personalise-stack, falling back to the unchanged blueprint on any error
- * so the flow can never get stuck. AI swaps are gated to the bundle's hard price
- * cap so personalisation can never push the stack over budget.
+ * so the flow can never get stuck. Only the product ids in the reply are read.
+ * AI swaps are gated to the bundle's hard price cap so personalisation can never
+ * push the stack over budget.
  */
 export async function personaliseBlueprint(
   answers: QuizAnswers,
@@ -207,11 +193,13 @@ export async function personaliseBlueprint(
       body: JSON.stringify({ answers, slots }),
     })
     if (!res.ok) throw new Error(`personalise-stack ${res.status}`)
-    const data = (await res.json()) as BlueprintAIResult & { personalised: boolean }
+    const data = (await res.json()) as Partial<BlueprintAIResult> & { personalised?: boolean }
     if (!data.personalised) return blueprint
+    // Only `choices` is read, so a server still sending `reasons` (a deploy
+    // mid-rollout) cannot put them on the page.
     return applyBlueprintAIResultWithinBudget(
       blueprint,
-      { choices: data.choices ?? {}, reasons: data.reasons ?? {} },
+      { choices: data.choices ?? {} },
       catalogue,
       cap,
       config,

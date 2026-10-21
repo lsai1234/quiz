@@ -1,15 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
-import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import type { SlotType } from '@/lib/stack-blueprint/factory'
+import { formatGBP, PRICING_CONFIG, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { QuizAnswers } from '@/lib/types'
 import type { PlanType } from '@/lib/store'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
-import { productFacts, productDietary } from '@/lib/product-facts'
+import { productDietary, stackProductFacts } from '@/lib/product-facts'
 import { interchangeableVariants } from '@/lib/shop/per-serving'
+import { explainProduct } from '@/lib/results'
+import { cardClaim, cardFacts, usageFor } from '@/lib/results/card-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { IconButton } from '@/components/ui/IconButton'
 import { ProductTile } from './ProductTile'
@@ -20,6 +24,10 @@ interface Props {
   planType: PlanType
   /** The monthly product this slot resolves to on subscription (may be the product itself). */
   subscriptionProduct?: CatalogueProduct
+  /** Their quiz answers. Without them there is no "Why it's in your stack". */
+  answers?: QuizAnswers | null
+  /** Usage chosen in the plan journey, by product id. Standard when absent. */
+  usage?: Record<string, UsageLevel>
   onChangeVariant?: (slotId: string, variantId: string) => void
   /** Fired when the user taps "Swap product" — the card closes the sheet then opens the swap modal. */
   onSwap?: () => void
@@ -38,30 +46,61 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 function Fact({ glyph, label, value, hue }: { glyph: string; label: string; value: string; hue: string }) {
   return (
     <div
-      className="flex-1 min-w-0 rounded-xl p-3"
+      className="min-w-0 rounded-xl px-3 py-2.5 flex items-start gap-2.5"
       style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
     >
-      <span style={{ color: hue }}>
-        <QuizIcon name={glyph} size={18} />
+      <span className="flex-shrink-0 mt-0.5" style={{ color: hue }}>
+        <QuizIcon name={glyph} size={16} />
       </span>
-      <p className="text-[9px] font-bold tracking-widest uppercase mt-2" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-        {label}
-      </p>
-      <p className="text-xs font-semibold mt-0.5 leading-snug" style={{ color: 'var(--color-text)' }}>
-        {value}
-      </p>
+      <div className="min-w-0">
+        <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+          {label}
+        </p>
+        <p className="text-[13px] font-semibold mt-0.5 leading-snug" style={{ color: 'var(--color-text)' }}>
+          {value}
+        </p>
+      </div>
     </div>
   )
 }
 
+/** A register claim, verbatim, under the product it is about. */
+function ClaimQuote({ title, wording, hue }: { title?: string; wording: string; hue: string }) {
+  return (
+    <figure
+      className="pl-3.5 py-0.5"
+      style={{ borderLeft: `2px solid color-mix(in srgb, ${hue} 55%, transparent)` }}
+    >
+      {title && (
+        <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          {title}
+        </p>
+      )}
+      <blockquote
+        data-testid="sheet-claim"
+        className={`text-[13px] leading-relaxed ${title ? 'mt-1' : ''}`}
+        style={{ color: 'var(--color-text-2)' }}
+      >
+        &ldquo;{wording}&rdquo;
+      </blockquote>
+    </figure>
+  )
+}
+
+const SECTION_LABEL = 'text-[10px] font-bold tracking-widest uppercase'
+
 /**
- * The full-detail bottom sheet for a stack product. This is where everything
- * that no longer clutters the slim card lives — the personalised reason, the
- * key facts, dietary info, the flavour/size picker and the swap/remove actions
- * — laid out with room to breathe, on demand rather than inline.
+ * The full-detail bottom sheet for a stack product: why it is in their stack,
+ * what it does in the register's words, what a pack holds, costs and lasts,
+ * dietary info, the flavour/size picker and the swap/remove actions.
+ *
+ * "Why it's in your stack" is `explainProduct` (lib/results): something they
+ * told us, then the product and its claim, verbatim. When nothing qualifies
+ * the section is left out. It is never `slot.reason`, which is engine or AI
+ * copy no claim check has seen.
  */
 export function ProductDetailSheet({
-  slot, product, planType, subscriptionProduct, onChangeVariant, onSwap, onRemove, onClose,
+  slot, product, planType, subscriptionProduct, answers, usage, onChangeVariant, onSwap, onRemove, onClose,
 }: Props) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -89,10 +128,28 @@ export function ProductDetailSheet({
     ? (subProduct.variants.find((v) => v.available)?.price ?? subProduct.basePrice) * (1 - PRICING_CONFIG.subscriptionDiscount)
     : 0
   const inSubView = planType === 'subscription'
-  const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
-    ?? product?.variants.find((v) => v.available)
-    ?? product?.variants[0]
-  const price = selectedVariant?.price ?? product?.basePrice ?? 0
+
+  const numbers = useMemo(
+    () => product
+      ? cardFacts({
+          product,
+          selectedVariantId: slot.selectedVariantId,
+          answers,
+          usage: usageFor(usage, product, subscriptionProduct),
+        })
+      : null,
+    [product, slot.selectedVariantId, answers, usage, subscriptionProduct],
+  )
+  const explanation = useMemo(
+    () => (product && answers ? explainProduct({ product, slotType: slot.slotType as SlotType, answers }) : null),
+    [product, slot.slotType, answers],
+  )
+  // The card's claim. When the why-line carries it, it is said there, once.
+  const claim = product ? cardClaim(product, explanation, answers) : null
+  const whatItDoes = claim && !explanation?.claim ? claim : null
+
+  const selectedVariant = numbers?.variant
+  const price = numbers?.price ?? 0
   /*
     Only the variants that are a straight swap for the chosen one — same
     product, same serving count. A plan has already sized the month and priced
@@ -105,9 +162,10 @@ export function ProductDetailSheet({
   const showVariantPicker = product && swappable.length > 1
 
   const dietary = product ? productDietary(product) : []
-  // No "You'll feel it" fact and no onset sentence here: a felt-effect window
-  // is an implied claim (Phase 1). The shop sheet keeps the default.
-  const facts = product ? productFacts(product, undefined, { onset: false }) : []
+  // Format, servings, cost per serving and how long it lasts, for the variant
+  // on screen. No "You'll feel it" fact: a felt-effect window is an implied
+  // claim (Phase 1). The shop sheet keeps `productFacts`.
+  const facts = product && numbers ? stackProductFacts(product, numbers, { atYourUsage: !!answers }) : []
 
   if (!mounted) return null
 
@@ -151,29 +209,15 @@ export function ProductDetailSheet({
                 £{price.toFixed(2)}
               </span>
               {selectedVariant && (
-                <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
+                <span className="text-xs truncate" style={{ color: 'var(--color-text-2)' }}>
                   {variantLabel(selectedVariant)}
                 </span>
               )}
             </div>
-          </div>
-          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} />
-        </div>
-
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
-          {/* Why it's in your stack */}
-          <section>
-            <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: hue, fontFamily: 'var(--font-display)' }}>
-              Why it&apos;s in your stack
-            </p>
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-              {slot.reason}
-            </p>
-            <div className="flex flex-wrap gap-1.5 mt-3">
+            <div className="flex flex-wrap gap-1.5 mt-2">
               <span
                 className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
+                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)' }}
               >
                 {slot.required ? 'Core to your stack' : 'Optional add-on'}
               </span>
@@ -186,7 +230,7 @@ export function ProductDetailSheet({
                     {flipsToRefill ? 'Monthly refill' : 'In monthly plan'}
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)' }}>
                     One-off only
                   </span>
                 )
@@ -201,15 +245,51 @@ export function ProductDetailSheet({
                 )
               )}
             </div>
-          </section>
+          </div>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} />
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
+          {/* Why it's in your stack: something they told us, then the product
+              and its claim. Left out when nothing may honestly be said. */}
+          {explanation && (
+            <section data-testid="why-in-stack">
+              <p className={`${SECTION_LABEL} mb-2`} style={{ color: hue, fontFamily: 'var(--font-display)' }}>
+                Why it&apos;s in your stack
+              </p>
+              <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>
+                {explanation.sentence}
+              </p>
+              {explanation.claim ? (
+                <ClaimQuote title={product?.title} wording={explanation.claim.wording} hue={hue} />
+              ) : (
+                <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                  {product?.title}
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* What it does: the register's words, when the why-line has not
+              already said them. A kind with no authorised claim gets nothing. */}
+          {whatItDoes && (
+            <section data-testid="what-it-does">
+              <p className={`${SECTION_LABEL} mb-2`} style={{ color: explanation ? 'var(--color-text-2)' : hue, fontFamily: 'var(--font-display)' }}>
+                What it does
+              </p>
+              <ClaimQuote wording={whatItDoes.wording} hue={hue} />
+            </section>
+          )}
 
           {/* The facts */}
           {facts.length > 0 && (
             <section>
-              <p className="text-[10px] font-bold tracking-widest uppercase mb-2.5" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+              <p className={`${SECTION_LABEL} mb-2.5`} style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
                 The facts
               </p>
-              <div className="flex gap-2.5">
+              {/* Two a row; an odd last fact takes the full width. */}
+              <div className="grid grid-cols-2 gap-2.5 [&>*:last-child:nth-child(odd)]:col-span-2">
                 {facts.map((f) => (
                   <Fact key={f.key} glyph={f.glyph} label={f.label} value={f.value} hue={hue} />
                 ))}
@@ -245,7 +325,7 @@ export function ProductDetailSheet({
           {/* Flavour & size picker */}
           {showVariantPicker && (
             <section>
-              <p className="text-[10px] font-bold tracking-widest uppercase mb-2.5" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+              <p className={`${SECTION_LABEL} mb-2.5`} style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
                 Flavour &amp; size
               </p>
               <div className="flex flex-col gap-1.5">

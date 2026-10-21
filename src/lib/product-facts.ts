@@ -1,7 +1,7 @@
 import type { CatalogueProduct, CatalogueVariant, DietaryTag } from '@/lib/catalogue/types'
 import { effectOnsetForProduct, onsetWindowLabel } from '@/lib/feedback'
 import { isAccessory, servingsLabel } from '@/lib/catalogue/accessory'
-import { servingsForVariant } from '@/lib/shop/per-serving'
+import { formatPerServing, servingsForVariant } from '@/lib/shop/per-serving'
 
 /**
  * Presentation helpers for a product's key facts — the icon-led grid shown in
@@ -91,4 +91,83 @@ export function productFacts(
 /** Dietary chips (labelled) for a product. */
 export function productDietary(product: CatalogueProduct): string[] {
   return product.dietaryTags.filter((t) => t in DIETARY_LABEL).map((t) => DIETARY_LABEL[t])
+}
+
+// ─── Stack cards: what a pack holds, costs and lasts ─────────────────────────
+
+/** A pack length rounded the way the last-chance card rounds it. */
+function packLength(months: number): { n: number; unit: 'week' | 'month'; word: string } {
+  if (months < 0.8) {
+    const n = Math.max(1, Math.round(months * 4.3))
+    return { n, unit: 'week', word: String(n) }
+  }
+  if (months < 1.25) return { n: 1, unit: 'month', word: 'a' }
+  if (months < 1.75) return { n: 6, unit: 'week', word: 'six' }
+  const n = Math.round(months)
+  return { n, unit: 'month', word: ['', '', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n) }
+}
+
+/**
+ * How long one pack lasts, in words: "about a month", "about six weeks",
+ * "about two months", "about 3 weeks". The wording and rounding of the
+ * last-chance card's "What you get", so the two never disagree.
+ */
+export function packLengthLabel(months: number): string {
+  const { n, unit, word } = packLength(months)
+  return `about ${word} ${unit}${n === 1 ? '' : 's'}`
+}
+
+/** The same length in figures, for a narrow stat cell: "2 months", "6 weeks", "1 month". */
+export function packLengthShort(months: number): string {
+  const { n, unit } = packLength(months)
+  return `${n} ${unit}${n === 1 ? '' : 's'}`
+}
+
+/** "Lasts about two months". */
+export function lastsLabel(months: number): string {
+  return `Lasts ${packLengthLabel(months)}`
+}
+
+/** "13p a serving" / "£1.17 a serving", in the shop's per-serving format. */
+export function perServingLabel(perServing: number): string {
+  return `${formatPerServing(perServing)} a serving`
+}
+
+/** The numbers behind a stack card, as `cardFacts` (lib/results/card-facts.ts) works them out. */
+export interface PackNumbers {
+  servings: number | null
+  perServing: number | null
+  packMonths: number | null
+}
+
+/**
+ * The facts grid on the quiz results' detail sheet: format, servings in the
+ * pack, cost per serving and how long it lasts. No onset fact (Phase 1).
+ *
+ * Unlike `productFacts`, the numbers are passed in, and a number that is not
+ * known is left out rather than estimated. The shop sheet keeps `productFacts`.
+ * `atYourUsage` adds "at your usage" to the pack length, for when it was
+ * worked out from their answers.
+ */
+export function stackProductFacts(
+  product: CatalogueProduct,
+  numbers: PackNumbers,
+  { atYourUsage = false }: { atYourUsage?: boolean } = {},
+): ProductFact[] {
+  const format = formatFact(product.formats)
+  const facts: ProductFact[] = [{ key: 'format', glyph: format.glyph, label: 'Format', value: format.label }]
+  if (isAccessory(product)) return facts
+  const { servings, perServing, packMonths } = numbers
+  if (servings != null && servings > 0) {
+    facts.push({ key: 'servings', glyph: 'bar', label: 'Per unit', value: servingsLabel(servings) })
+  }
+  if (perServing != null && perServing > 0) {
+    facts.push({ key: 'per-serving', glyph: 'credit-card', label: 'Cost per serving', value: formatPerServing(perServing) })
+  }
+  if (packMonths != null && packMonths > 0) {
+    const length = packLengthLabel(packMonths)
+    const value = `${length[0].toUpperCase()}${length.slice(1)}${atYourUsage ? ' at your usage' : ''}`
+    facts.push({ key: 'lasts', glyph: 'calendar', label: 'Lasts', value })
+  }
+  return facts
 }

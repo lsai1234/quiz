@@ -137,10 +137,11 @@ describe('applyBlueprintAIResultWithinBudget gates swaps to the cap', () => {
     const out = applyBlueprintAIResultWithinBudget(blueprint, result, MOCK_CATALOGUE, 80, config)
     const total = calculatePricing(out, MOCK_CATALOGUE).oneOffTotal
     expect(total).toBeLessThanOrEqual(80 + 0.01)
-    // The reason belongs to the product the AI picked, so it only lands if that
-    // pick survived the cap.
+    // The AI's reason never lands. A swap that survived the cap takes the new
+    // product's catalogue line; a refused one keeps the engine's reason.
+    expect(out.slots[0].reason).not.toBe('AI reason')
     if (out.slots[0].selectedProductId === alt.id) {
-      expect(out.slots[0].reason).toBe('AI reason')
+      expect(out.slots[0].reason).toBe(alt.shortReason || alt.description)
     } else {
       expect(out.slots[0].reason).toBe(slot.reason)
     }
@@ -161,13 +162,14 @@ describe('applyBlueprintAIResultWithinBudget gates swaps to the cap', () => {
     const total = calculatePricing(out, MOCK_CATALOGUE).oneOffTotal
     expect(total).toBeLessThanOrEqual(30 + 0.01)
     // If the dearest product would have busted the cap, the original is kept —
-    // and so is the engine's own reason for it. Keeping "Premium pick" here
-    // would caption the affordable product with the case for the dear one.
+    // and so is the engine's own reason for it. The AI's "Premium pick" never
+    // lands either way.
+    expect(out.slots[0].reason).not.toBe('Premium pick')
     if (dearest.basePrice > 30) {
       expect(out.slots[0].selectedProductId).toBe(before)
       expect(out.slots[0].reason).toBe(slot.reason)
     } else {
-      expect(out.slots[0].reason).toBe('Premium pick')
+      expect(out.slots[0].reason).toBe(dearest.shortReason || dearest.description)
     }
   })
 

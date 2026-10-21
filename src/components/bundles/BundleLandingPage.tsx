@@ -244,7 +244,7 @@ export function BundleLandingPage({ bundle }: Props) {
           className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1"
           style={{ fontFamily: 'var(--font-display)' }}
         >
-          What&apos;s inside — {sortedSlots.length} products · swipe to compare
+          What&apos;s inside — {sortedSlots.length} products · swipe to see all {sortedSlots.length}
         </p>
         <p className="px-5 max-w-lg mx-auto text-xs leading-relaxed mb-4" style={{ color: 'var(--color-text-2)' }}>
           Tap a card for the detail and to pick your flavours — everything arrives together in one order.

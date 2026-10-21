@@ -6,16 +6,22 @@ import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
+import type {
+  Contribution, ContributionField, Exclusion, ExclusionReason, ScoreDetail, StackCheck,
+} from './explain-types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, sizeConsumption, unitCostOf, getPricingConfig } from './pricing'
 import {
   SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY,
-  SCORING, FOUNDATIONAL_SWAP_GROUPS, applyBundleRules, type SlotType,
+  SCORING, FOUNDATIONAL_SWAP_GROUPS, applyBundleRulesReport, type SlotType,
   DRIVER_AFFINITY, DRIVER_STIM_PENALTY,
 } from '@/lib/quiz-core'
 import type { DriverId } from '@/lib/quiz-v2/drivers'
 
 export type { SlotType } from '@/lib/quiz-core'
+export type {
+  Contribution, ContributionField, Exclusion, ExclusionReason, ScoreDetail, StackCheck, StackCheckKind, BundleRuleId,
+} from './explain-types'
 
 // Friendly slot titles for budget-driven "extra" wellbeing picks, derived from
 // the product's swap group so each added product reads clearly in the stack.
@@ -179,24 +185,67 @@ function preferMonthlySibling(
   return best
 }
 
+/**
+ * Already-taking items that remove a product, in the order the gate checks
+ * them: by swap group first, then by the slot being filled.
+ */
+const TAKING_BY_SWAP_GROUP = ['multivitamin', 'vitamin-d', 'omega-3', 'magnesium', 'vitamin-c', 'collagen'] as const
+const TAKING_BY_SLOT: ReadonlyArray<readonly [item: string, slot: SlotType]> = [
+  ['protein', 'protein'],
+  ['creatine', 'performance'],
+  ['pre-workout', 'energy'],
+]
+
 export function scoreProduct(
   product: CatalogueProduct,
   slotType: SlotType,
   answers: QuizAnswers,
   archetype: Archetype,
 ): number {
+  return scoreProductDetailed(product, slotType, answers, archetype).score
+}
+
+/**
+ * `scoreProduct` with its working: every term that moved the score, the answer
+ * (or product property) it came from, and the gate that excluded the product
+ * if one did.
+ *
+ * The score is accumulated term by term in the original order, with the
+ * original addends, so `scoreProduct` returns the same number to the bit. The
+ * one place a contribution and an addend differ is goal overlap: the score adds
+ * `matches × goalOverlap` in one step, as it always has, and the breakdown lists
+ * one contribution per matched goal.
+ */
+export function scoreProductDetailed(
+  product: CatalogueProduct,
+  slotType: SlotType,
+  answers: QuizAnswers,
+  archetype: Archetype,
+): ScoreDetail {
+  const contributions: Contribution[] = []
+  const add = (field: ContributionField, value: string | number | null, points: number, rule: string) => {
+    if (points !== 0) contributions.push({ field, value, points, rule })
+  }
+  const excluded = (reason: ExclusionReason, field: Exclusion['field'], value: string | number | null): ScoreDetail =>
+    ({ score: -Infinity, contributions: [], excludedBy: { reason, field, value } })
+
   let score = product.recommendationPriority * SCORING.priorityBase
+  add('product.recommendationPriority', product.recommendationPriority, score, 'priorityBase')
 
   // The founders' Top 25 roster: a preference between products that could both
   // serve this user, ranked so the #1 pick edges out the #25. Nothing off the
   // roster is penalised, so an empty roster leaves scoring exactly as it was.
   if (product.topRank != null && product.topRank > 0) {
-    score += Math.max(0, SCORING.topProductBase - (product.topRank - 1) * SCORING.topProductStep)
+    const points = Math.max(0, SCORING.topProductBase - (product.topRank - 1) * SCORING.topProductStep)
+    score += points
+    add('product.topRank', product.topRank, points, 'topProduct')
   }
 
   // Goal overlap
-  const goalOverlap = answers.goals.filter(g => product.goals.includes(g)).length
+  const matchedGoals = answers.goals.filter(g => product.goals.includes(g))
+  const goalOverlap = matchedGoals.length
   score += goalOverlap * SCORING.goalOverlap
+  for (const goal of matchedGoals) add('goals', goal, SCORING.goalOverlap, 'goalOverlap')
 
   // ── Hard eligibility gates ─────────────────────────────────────────────────
   // These products have a specific, narrow use case. Recommending them without
@@ -208,23 +257,25 @@ export function scoreProduct(
   // sleep or immune-support user is actively wrong.
   // Safety screen: a product contraindicated against anything the user flagged
   // (pregnancy / medication) is removed entirely — safety comes before fit.
+  // Which flag matched is deliberately not recorded.
   const safetyFlags = answers.safetyFlags ?? []
   if (safetyFlags.length > 0 && (product.contraindications ?? []).some((c) => safetyFlags.includes(c))) {
-    return -Infinity
+    return excluded('safety', 'safetyFlags', null)
   }
-  if (product.swapGroup === 'fat-burner' && !answers.goals.includes('cutting')) return -Infinity
+  const goalGate = () => excluded('goal-gate', 'product.swapGroup', product.swapGroup)
+  if (product.swapGroup === 'fat-burner' && !answers.goals.includes('cutting')) return goalGate()
   // Mass gainers: a 600kcal shake is counterproductive outside a bulk phase
-  if (product.swapGroup === 'protein-mass' && !answers.goals.includes('bulking')) return -Infinity
+  if (product.swapGroup === 'protein-mass' && !answers.goals.includes('bulking')) return goalGate()
   // Menopause blends: hormone-support botanicals are only relevant for menopause
-  if (product.swapGroup === 'menopause' && !answers.goals.includes('menopause')) return -Infinity
+  if (product.swapGroup === 'menopause' && !answers.goals.includes('menopause')) return goalGate()
   // Probiotics and greens: gut-health products should only appear when the user
   // has asked for gut or immune support — not as generic "health" fill
   if ((product.swapGroup === 'probiotic' || product.swapGroup === 'greens' || product.swapGroup === 'fibre') &&
-      !answers.goals.some(g => ['gut-health', 'immune', 'health'].includes(g))) return -Infinity
+      !answers.goals.some(g => ['gut-health', 'immune', 'health'].includes(g))) return goalGate()
   // Adaptogen/stress blends: ashwagandha should only appear when stress or sleep
   // is a stated goal — not as a generic health add-on
   if (product.swapGroup === 'adaptogen' &&
-      !answers.goals.some(g => ['less-stress', 'sleep-better', 'menopause'].includes(g))) return -Infinity
+      !answers.goals.some(g => ['less-stress', 'sleep-better', 'menopause'].includes(g))) return goalGate()
 
   // ── Goal relevance floor ───────────────────────────────────────────────────
   // If a product has NO goal overlap with the user AND it isn't a foundational
@@ -232,22 +283,27 @@ export function scoreProduct(
   // active people), it needs a meaningful score penalty to prevent priority
   // number alone from pushing irrelevant products into the stack.
   const isFoundational = (FOUNDATIONAL_SWAP_GROUPS as readonly string[]).includes(product.swapGroup)
-  if (goalOverlap === 0 && !isFoundational) score += SCORING.noGoalFloor
+  if (goalOverlap === 0 && !isFoundational) {
+    score += SCORING.noGoalFloor
+    add('product.swapGroup', product.swapGroup, SCORING.noGoalFloor, 'noGoalFloor')
+  }
 
   // Stimulant skip
   if (product.hasStimulants && (answers.stimPreference === 'no' || answers.caffeineLevel === 'none')) {
-    return -Infinity
+    return answers.stimPreference === 'no'
+      ? excluded('stimulant', 'stimPreference', 'no')
+      : excluded('stimulant', 'caffeineLevel', 'none')
   }
 
   // Vegan filter
   if (answers.lifestyle.includes('vegan') && !product.dietaryTags.includes('vegan')) {
-    return -Infinity
+    return excluded('vegan', 'lifestyle', 'vegan')
   }
 
   // Gluten-free filter (answers.dietary is an optional extension not in the base QuizAnswers type)
   const dietary = (answers as unknown as { dietary?: string[] }).dietary
   if (dietary?.includes('gluten-free') && !product.dietaryTags.includes('gluten-free')) {
-    return -Infinity
+    return excluded('gluten-free', 'dietary', 'gluten-free')
   }
 
   // Already-taking: hard exclude, not just a penalty.
@@ -260,53 +316,90 @@ export function scoreProduct(
   const taking = new Set(
     [...answers.currentSupplements, ...answers.currentVitamins].filter((x) => !tryOurs.has(x)),
   )
-  if (taking.has('multivitamin') && product.swapGroup === 'multivitamin') return -Infinity
-  if (taking.has('vitamin-d')    && product.swapGroup === 'vitamin-d')    return -Infinity
-  if (taking.has('omega-3')      && product.swapGroup === 'omega-3')      return -Infinity
-  if (taking.has('magnesium')    && product.swapGroup === 'magnesium')    return -Infinity
-  if (taking.has('vitamin-c')    && product.swapGroup === 'vitamin-c')    return -Infinity
-  if (taking.has('collagen')     && product.swapGroup === 'collagen')     return -Infinity
-  if (taking.has('protein')      && slotType === 'protein')               return -Infinity
-  if (taking.has('creatine')     && slotType === 'performance')           return -Infinity
-  if (taking.has('pre-workout')  && slotType === 'energy')                return -Infinity
+  const alreadyTaking = (item: string) =>
+    excluded('already-taking', answers.currentSupplements.includes(item) ? 'currentSupplements' : 'currentVitamins', item)
+  for (const item of TAKING_BY_SWAP_GROUP) {
+    if (taking.has(item) && product.swapGroup === item) return alreadyTaking(item)
+  }
+  for (const [item, slot] of TAKING_BY_SLOT) {
+    if (taking.has(item) && slotType === slot) return alreadyTaking(item)
+  }
 
   // Archetype boosts
-  if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += SCORING.archetype.muscleProteinOrPerformance
-  if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += SCORING.archetype.fatLossEnergyOrHealth
-  if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += SCORING.archetype.healthTriad
-  if (archetype === 'wellbeing' && (slotType === 'sleep' || slotType === 'health')) score += SCORING.archetype.wellbeingSleepOrHealth
+  if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) {
+    score += SCORING.archetype.muscleProteinOrPerformance
+    add('archetype', archetype, SCORING.archetype.muscleProteinOrPerformance, 'archetype.muscleProteinOrPerformance')
+  }
+  if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) {
+    score += SCORING.archetype.fatLossEnergyOrHealth
+    add('archetype', archetype, SCORING.archetype.fatLossEnergyOrHealth, 'archetype.fatLossEnergyOrHealth')
+  }
+  if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) {
+    score += SCORING.archetype.healthTriad
+    add('archetype', archetype, SCORING.archetype.healthTriad, 'archetype.healthTriad')
+  }
+  if (archetype === 'wellbeing' && (slotType === 'sleep' || slotType === 'health')) {
+    score += SCORING.archetype.wellbeingSleepOrHealth
+    add('archetype', archetype, SCORING.archetype.wellbeingSleepOrHealth, 'archetype.wellbeingSleepOrHealth')
+  }
 
   // Wellbeing follow-up refinements
   const wb = answers.wellbeingAnswers ?? {}
   if (slotType === 'sleep') {
     // "Hard to switch off" / "wired in the evening" → the theanine/ashwagandha blend
     if (wb.sleepQuality === 'switch-off' || wb.stressPattern === 'evening-wired') {
-      if (product.swapGroup === 'sleep-support') score += SCORING.wellbeing.switchOffSleepSupport
+      if (product.swapGroup === 'sleep-support') {
+        score += SCORING.wellbeing.switchOffSleepSupport
+        if (wb.sleepQuality === 'switch-off') add('wellbeingAnswers.sleepQuality', 'switch-off', SCORING.wellbeing.switchOffSleepSupport, 'wellbeing.switchOffSleepSupport')
+        else add('wellbeingAnswers.stressPattern', 'evening-wired', SCORING.wellbeing.switchOffSleepSupport, 'wellbeing.switchOffSleepSupport')
+      }
     }
     // "Wake during the night" / "wake tired" → magnesium glycinate
     if (wb.sleepQuality === 'wake-night' || wb.sleepQuality === 'wake-tired') {
-      if (product.swapGroup === 'magnesium') score += SCORING.wellbeing.wakeMagnesium
+      if (product.swapGroup === 'magnesium') {
+        score += SCORING.wellbeing.wakeMagnesium
+        add('wellbeingAnswers.sleepQuality', wb.sleepQuality, SCORING.wellbeing.wakeMagnesium, 'wellbeing.wakeMagnesium')
+      }
     }
     // Sleep is fine → deprioritise the whole slot
-    if (wb.sleepQuality === 'fine' && !answers.goals.includes('sleep-better')) score += SCORING.wellbeing.sleepFinePenalty
+    if (wb.sleepQuality === 'fine' && !answers.goals.includes('sleep-better')) {
+      score += SCORING.wellbeing.sleepFinePenalty
+      add('wellbeingAnswers.sleepQuality', 'fine', SCORING.wellbeing.sleepFinePenalty, 'wellbeing.sleepFinePenalty')
+    }
   }
   // Vegetarian/vegan answer on the collagen follow-up excludes bovine collagen
-  if (wb.collagenOk === 'veggie' && product.swapGroup === 'collagen') return -Infinity
+  if (wb.collagenOk === 'veggie' && product.swapGroup === 'collagen') {
+    return excluded('collagen-veggie', 'wellbeingAnswers.collagenOk', 'veggie')
+  }
 
   // Wellbeing lifestyle context
-  if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) score += SCORING.lifestyle.runDownImmune
-  if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += SCORING.lifestyle.deskVitaminD
-  if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += SCORING.lifestyle.shiftSleep
+  if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) {
+    score += SCORING.lifestyle.runDownImmune
+    add('lifestyle', 'run-down', SCORING.lifestyle.runDownImmune, 'lifestyle.runDownImmune')
+  }
+  if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') {
+    score += SCORING.lifestyle.deskVitaminD
+    add('lifestyle', 'desk-job', SCORING.lifestyle.deskVitaminD, 'lifestyle.deskVitaminD')
+  }
+  if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) {
+    score += SCORING.lifestyle.shiftSleep
+    add('lifestyle', 'shift-work', SCORING.lifestyle.shiftSleep, 'lifestyle.shiftSleep')
+  }
 
   // Goal-specific product affinity boosts (data-driven — see GOAL_AFFINITY). Sums
   // across the user's goals so a product serving two of them earns both. Ensures
   // the most clinically targeted product wins when several cover the same goal.
   for (const goal of answers.goals) {
-    score += GOAL_AFFINITY[goal]?.[product.swapGroup] ?? 0
+    const points = GOAL_AFFINITY[goal]?.[product.swapGroup] ?? 0
+    score += points
+    add('goals', goal, points, 'goalAffinity')
   }
   // sleep-better → magnesium is primary, but only when no sleep follow-up steered
   // us elsewhere (kept in code as it's conditional on the follow-up answer).
-  if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) score += SCORING.sleepBetterMagnesium
+  if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) {
+    score += SCORING.sleepBetterMagnesium
+    add('goals', 'sleep-better', SCORING.sleepBetterMagnesium, 'sleepBetterMagnesium')
+  }
 
   // Root-cause affinity, from the v2 adaptive interview (see DRIVER_AFFINITY).
   // Read exactly like GOAL_AFFINITY above, and scaled by how confident the
@@ -317,30 +410,54 @@ export function scoreProduct(
   // output is unchanged. That invariant is asserted in driver-map.test.ts.
   for (const [driver, confidence] of Object.entries(answers.drivers ?? {})) {
     const affinity = DRIVER_AFFINITY[driver as DriverId]?.[product.swapGroup]
-    if (affinity) score += affinity * confidence
+    if (affinity) {
+      const points = affinity * confidence
+      score += points
+      add('drivers', driver, points, 'driverAffinity')
+    }
     // A stimulant is the wrong answer for someone whose energy problem IS
     // caffeine, or who is already wired at bedtime. The goal label could never
     // have told us that.
     if (product.hasStimulants) {
       const penalty = DRIVER_STIM_PENALTY[driver as DriverId]
-      if (penalty) score += penalty * confidence
+      if (penalty) {
+        const points = penalty * confidence
+        score += points
+        add('drivers', driver, points, 'driverStimPenalty')
+      }
     }
   }
 
   // Deprioritise performance (creatine) and protein slots when the user's
-  // goals don't call for them — prevents creatine appearing for energy/health users
+  // goals don't call for them — prevents creatine appearing for energy/health users.
+  // These fire on a goal the user did NOT pick, so the value is null.
   const muscleGoals: Goal[] = ['muscle', 'bulking', 'performance']
-  if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) score += SCORING.deprioritise.performanceNonMuscle
-  if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) score += SCORING.deprioritise.proteinNonMuscle
+  if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) {
+    score += SCORING.deprioritise.performanceNonMuscle
+    add('goals', null, SCORING.deprioritise.performanceNonMuscle, 'deprioritise.performanceNonMuscle')
+  }
+  if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) {
+    score += SCORING.deprioritise.proteinNonMuscle
+    add('goals', null, SCORING.deprioritise.proteinNonMuscle, 'deprioritise.proteinNonMuscle')
+  }
 
   // Mass gainer is the primary pick for bulking — it provides calories AND protein.
   // Regular whey is inadequate for someone trying to gain mass who struggles to eat.
-  if (answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += SCORING.mass.bulkingBonus
+  if (answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') {
+    score += SCORING.mass.bulkingBonus
+    add('goals', 'bulking', SCORING.mass.bulkingBonus, 'mass.bulkingBonus')
+  }
   // Conversely, regular whey is the better default for muscle/recovery without bulking
-  if (!answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += SCORING.mass.nonBulkingPenalty
+  if (!answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') {
+    score += SCORING.mass.nonBulkingPenalty
+    add('goals', null, SCORING.mass.nonBulkingPenalty, 'mass.nonBulkingPenalty')
+  }
 
   // Budget sensitivity
-  if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > SCORING.budgetThresholdPrice) score += SCORING.budgetOverThreshold
+  if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > SCORING.budgetThresholdPrice) {
+    score += SCORING.budgetOverThreshold
+    add('budget', answers.budget, SCORING.budgetOverThreshold, 'budgetOverThreshold')
+  }
 
 
   /*
@@ -364,49 +481,73 @@ export function scoreProduct(
     answers.proteinIntakeG > answers.proteinTargetHighG
   ) {
     score += SCORING.protein.overTarget
+    add('proteinIntakeG', answers.proteinIntakeG, SCORING.protein.overTarget, 'protein.overTarget')
   }
 
   // ── Diet quality → protein and micronutrient necessity ────────────────────
   // A clean, high-protein diet already covers protein needs — the powder adds
   // less marginal value. A poor diet means a multivitamin is more critical.
-  if (answers.diet === 'clean' && slotType === 'protein') score += SCORING.diet.cleanProtein
-  if (answers.diet === 'poor' && product.swapGroup === 'multivitamin') score += SCORING.diet.poorMultivitamin
-  if (answers.diet === 'poor' && product.swapGroup === 'omega-3') score += SCORING.diet.poorOmega
-  if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') score += SCORING.diet.inconsistentMultivitamin
+  if (answers.diet === 'clean' && slotType === 'protein') {
+    score += SCORING.diet.cleanProtein
+    add('diet', 'clean', SCORING.diet.cleanProtein, 'diet.cleanProtein')
+  }
+  if (answers.diet === 'poor' && product.swapGroup === 'multivitamin') {
+    score += SCORING.diet.poorMultivitamin
+    add('diet', 'poor', SCORING.diet.poorMultivitamin, 'diet.poorMultivitamin')
+  }
+  if (answers.diet === 'poor' && product.swapGroup === 'omega-3') {
+    score += SCORING.diet.poorOmega
+    add('diet', 'poor', SCORING.diet.poorOmega, 'diet.poorOmega')
+  }
+  if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') {
+    score += SCORING.diet.inconsistentMultivitamin
+    add('diet', 'inconsistent', SCORING.diet.inconsistentMultivitamin, 'diet.inconsistentMultivitamin')
+  }
 
   // ── Training focus (strength sub-question) → creatine + protein priority ─
+  const focus = (points: number, rule: string) => {
+    score += points
+    add('trainingFocus', answers.trainingFocus, points, rule)
+  }
   if (answers.trainingFocus === 'hypertrophy') {
-    if (slotType === 'performance') score += SCORING.focus.hypertrophyPerformance  // creatine is most evidence-based for hypertrophy
-    if (slotType === 'protein') score += SCORING.focus.hypertrophyProtein
+    if (slotType === 'performance') focus(SCORING.focus.hypertrophyPerformance, 'focus.hypertrophyPerformance')  // creatine is most evidence-based for hypertrophy
+    if (slotType === 'protein') focus(SCORING.focus.hypertrophyProtein, 'focus.hypertrophyProtein')
   }
   if (answers.trainingFocus === 'powerlifting') {
-    if (slotType === 'performance') score += SCORING.focus.powerliftingPerformance  // creatine even more critical for max-strength
-    if (product.swapGroup === 'collagen') score += SCORING.focus.powerliftingCollagen  // joint/tendon load is extreme in powerlifting
+    if (slotType === 'performance') focus(SCORING.focus.powerliftingPerformance, 'focus.powerliftingPerformance')  // creatine even more critical for max-strength
+    if (product.swapGroup === 'collagen') focus(SCORING.focus.powerliftingCollagen, 'focus.powerliftingCollagen')  // joint/tendon load is extreme in powerlifting
   }
   if (answers.trainingFocus === 'general') {
-    if (slotType === 'performance') score += SCORING.focus.generalPerformance  // creatine is nice-to-have, not essential
+    if (slotType === 'performance') focus(SCORING.focus.generalPerformance, 'focus.generalPerformance')  // creatine is nice-to-have, not essential
   }
 
   // ── Sport type → endurance vs power profile ───────────────────────────────
   if (answers.trainingFocus === 'football' || answers.trainingFocus === 'rugby' || answers.trainingFocus === 'basketball') {
-    if (slotType === 'energy') score += SCORING.focus.sportEnergy     // sport athletes benefit from pre-workout
-    if (slotType === 'hydration') score += SCORING.focus.sportHydration  // high sweat-rate sports need electrolytes
+    if (slotType === 'energy') focus(SCORING.focus.sportEnergy, 'focus.sportEnergy')     // sport athletes benefit from pre-workout
+    if (slotType === 'hydration') focus(SCORING.focus.sportHydration, 'focus.sportHydration')  // high sweat-rate sports need electrolytes
   }
 
   // ── Gender + age → supplement priorities ─────────────────────────────────
   // Female users have higher iron/B-vitamin needs; both genders 45+ need more
   // vitamin D and bone-support nutrients.
   if (answers.gender === 'female') {
-    if (product.swapGroup === 'multivitamin') score += SCORING.gender.femaleMultivitamin  // women's multis cover iron/B9/B12
+    if (product.swapGroup === 'multivitamin') {  // women's multis cover iron/B9/B12
+      score += SCORING.gender.femaleMultivitamin
+      add('gender', 'female', SCORING.gender.femaleMultivitamin, 'gender.femaleMultivitamin')
+    }
+  }
+  const age = (points: number, rule: string) => {
+    score += points
+    add('ageBracket', answers.ageBracket, points, rule)
   }
   if (answers.ageBracket === '45+') {
-    if (product.swapGroup === 'vitamin-d') score += SCORING.age.over45VitaminD   // absorption declines with age
-    if (product.swapGroup === 'collagen') score += SCORING.age.over45Collagen   // bone + joint health post-45
-    if (product.swapGroup === 'omega-3') score += SCORING.age.over45Omega     // cardiovascular + joint
+    if (product.swapGroup === 'vitamin-d') age(SCORING.age.over45VitaminD, 'age.over45VitaminD')   // absorption declines with age
+    if (product.swapGroup === 'collagen') age(SCORING.age.over45Collagen, 'age.over45Collagen')   // bone + joint health post-45
+    if (product.swapGroup === 'omega-3') age(SCORING.age.over45Omega, 'age.over45Omega')     // cardiovascular + joint
   }
   if (answers.ageBracket === '35-44') {
-    if (product.swapGroup === 'vitamin-d') score += SCORING.age.midVitaminD
-    if (product.swapGroup === 'omega-3') score += SCORING.age.midOmega
+    if (product.swapGroup === 'vitamin-d') age(SCORING.age.midVitaminD, 'age.midVitaminD')
+    if (product.swapGroup === 'omega-3') age(SCORING.age.midOmega, 'age.midOmega')
   }
 
   // ── Training time → stimulant timing ─────────────────────────────────────
@@ -418,15 +559,27 @@ export function scoreProduct(
   if (product.hasStimulants) {
     const eveningTrainer = answers.trainingTime === 'evening'
     const wantsSleep = answers.goals.includes('sleep-better') || answers.goals.includes('less-stress')
-    if (eveningTrainer && wantsSleep) score += SCORING.trainingTime.eveningWantsSleep
-    if (eveningTrainer && answers.caffeineLevel === 'low') score += SCORING.trainingTime.eveningLowCaffeine
+    if (eveningTrainer && wantsSleep) {
+      score += SCORING.trainingTime.eveningWantsSleep
+      add('trainingTime', 'evening', SCORING.trainingTime.eveningWantsSleep, 'trainingTime.eveningWantsSleep')
+    }
+    if (eveningTrainer && answers.caffeineLevel === 'low') {
+      score += SCORING.trainingTime.eveningLowCaffeine
+      add('trainingTime', 'evening', SCORING.trainingTime.eveningLowCaffeine, 'trainingTime.eveningLowCaffeine')
+    }
   }
 
   // ── Caffeine level nuance (4-level, not binary) ───────────────────────────
   // Currently only 'none'/'high' are scored. Add nuance for 'low'/'medium'.
   if (product.hasStimulants) {
-    if (answers.caffeineLevel === 'low') score += SCORING.caffeine.low   // one occasional coffee — avoid stimulants
-    if (answers.caffeineLevel === 'medium') score += SCORING.caffeine.medium // daily coffee — mild penalty
+    if (answers.caffeineLevel === 'low') {   // one occasional coffee — avoid stimulants
+      score += SCORING.caffeine.low
+      add('caffeineLevel', 'low', SCORING.caffeine.low, 'caffeine.low')
+    }
+    if (answers.caffeineLevel === 'medium') { // daily coffee — mild penalty
+      score += SCORING.caffeine.medium
+      add('caffeineLevel', 'medium', SCORING.caffeine.medium, 'caffeine.medium')
+    }
     // 'high' is neutral; 'none' is already -Infinity from the stimulant gate.
   }
 
@@ -434,27 +587,35 @@ export function scoreProduct(
   // When the user flags joint issues (captured in lifestyle step), these two
   // products move to the top — they have direct mechanistic support.
   if (answers.lifestyle.includes('joint-issues')) {
-    if (product.swapGroup === 'joint-support') score += SCORING.lifestyle.jointSupport
-    if (product.swapGroup === 'collagen') score += SCORING.lifestyle.jointCollagen
-    if (product.swapGroup === 'omega-3') score += SCORING.lifestyle.jointOmega
+    const joint = (points: number, rule: string) => {
+      score += points
+      add('lifestyle', 'joint-issues', points, rule)
+    }
+    if (product.swapGroup === 'joint-support') joint(SCORING.lifestyle.jointSupport, 'lifestyle.jointSupport')
+    if (product.swapGroup === 'collagen') joint(SCORING.lifestyle.jointCollagen, 'lifestyle.jointCollagen')
+    if (product.swapGroup === 'omega-3') joint(SCORING.lifestyle.jointOmega, 'lifestyle.jointOmega')
   }
 
   // ── Training experience → stack complexity ────────────────────────────────
+  const experience = (points: number, rule: string) => {
+    score += points
+    add('trainingExperience', answers.trainingExperience, points, rule)
+  }
   if (answers.trainingExperience === 'new') {
     // New athletes benefit most from protein and creatine — the basics
-    if (slotType === 'protein') score += SCORING.experience.newProtein
-    if (slotType === 'performance') score += SCORING.experience.newPerformance
+    if (slotType === 'protein') experience(SCORING.experience.newProtein, 'experience.newProtein')
+    if (slotType === 'performance') experience(SCORING.experience.newPerformance, 'experience.newPerformance')
     // New athletes don't yet need complex multi-supplement stacks
-    if (slotType === 'energy' && answers.trainingFrequency !== '5-6x' && answers.trainingFrequency !== 'daily') score += SCORING.experience.newEnergyPenalty
+    if (slotType === 'energy' && answers.trainingFrequency !== '5-6x' && answers.trainingFrequency !== 'daily') experience(SCORING.experience.newEnergyPenalty, 'experience.newEnergyPenalty')
   }
   if (answers.trainingExperience === 'experienced') {
     // Experienced athletes need marginal gains — creatine, recovery, hydration
-    if (slotType === 'performance') score += SCORING.experience.expPerformance
-    if (slotType === 'recovery') score += SCORING.experience.expRecovery
-    if (slotType === 'hydration') score += SCORING.experience.expHydration
+    if (slotType === 'performance') experience(SCORING.experience.expPerformance, 'experience.expPerformance')
+    if (slotType === 'recovery') experience(SCORING.experience.expRecovery, 'experience.expRecovery')
+    if (slotType === 'hydration') experience(SCORING.experience.expHydration, 'experience.expHydration')
   }
 
-  return score
+  return { score, contributions, excludedBy: null }
 }
 
 function buildPersonalisedReason(
@@ -650,11 +811,32 @@ export function buildStackBlueprint(
     return total <= budgetCap + 0.001
   }
 
+  /*
+   * What the hard gates removed for this person, gathered while scoring rather
+   * than by scoring again: one entry per reason and answer, products in the
+   * order first met. Only products that were real candidates somewhere in this
+   * build are seen here. Safety exclusions are not recorded (see StackCheck).
+   */
+  const exclusions = new Map<string, StackCheck>()
+
+  /** `scoreProduct`, noting any hard-gate exclusion on the way. */
+  function scoreFor(product: CatalogueProduct, slotType: SlotType): number {
+    const detail = scoreProductDetailed(product, slotType, answers, archetype)
+    const ex = detail.excludedBy
+    if (ex && ex.reason !== 'safety') {
+      const key = `${ex.reason}|${ex.field}|${ex.value}`
+      const check = exclusions.get(key)
+      if (!check) exclusions.set(key, { kind: ex.reason, productIds: [product.id], field: ex.field, value: ex.value })
+      else if (!check.productIds.includes(product.id)) check.productIds.push(product.id)
+    }
+    return detail.score
+  }
+
   /** Highest-scoring candidate (score ≥ 0). Ignores the budget cap. */
   function pickBest(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
     const scored = candidates.map((product) => ({
       product,
-      score: scoreProduct(product, slotType, answers, archetype),
+      score: scoreFor(product, slotType),
     }))
     let best: { product: CatalogueProduct; score: number } | null = null
     for (const c of scored) {
@@ -671,7 +853,7 @@ export function buildStackBlueprint(
    */
   function pickBestAffordable(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
     const scored = candidates
-      .map(product => ({ product, score: scoreProduct(product, slotType, answers, archetype) }))
+      .map(product => ({ product, score: scoreFor(product, slotType) }))
       .filter(x => x.score >= 0)
       .sort((a, b) => b.score - a.score)
     for (const c of scored) {
@@ -788,7 +970,7 @@ export function buildStackBlueprint(
         })
         .map(p => {
           const slotType = (p.stackSlots[0] ?? 'health') as SlotType
-          return { product: p, slotType, score: scoreProduct(p, slotType, answers, archetype) }
+          return { product: p, slotType, score: scoreFor(p, slotType) }
         })
         .filter(x => x.score > 0)
         .sort((a, b) => b.score - a.score)
@@ -853,7 +1035,7 @@ export function buildStackBlueprint(
     let fallbackSlot: SlotType = 'health'
     for (const product of effectiveCatalogue) {
       const slotType = (product.stackSlots[0] ?? 'health') as SlotType
-      const score = scoreProduct(product, slotType, answers, archetype)
+      const score = scoreFor(product, slotType)
       if (score > fallbackScore) { fallbackScore = score; fallbackProduct = product; fallbackSlot = slotType }
     }
     if (fallbackProduct) {
@@ -874,8 +1056,25 @@ export function buildStackBlueprint(
   // Post-selection pass: drop low-relevance filler, remove active-ingredient
   // duplicates (no double-magnesium / double-ashwagandha), and enforce total
   // dose caps. Required slots are never dropped. Re-sequence display order after.
-  const finalSlots = applyBundleRules(slots, effectiveCatalogue)
+  const { kept: finalSlots, dropped } = applyBundleRulesReport(slots, effectiveCatalogue)
   finalSlots.forEach((s, i) => { s.displayOrder = i })
+
+  // The per-person record of what was left out and why. A product excluded in
+  // one slot but chosen for another is in the stack, so it is not "left out".
+  const finalIds = new Set(finalSlots.map((s) => s.selectedProductId))
+  const checks: StackCheck[] = []
+  for (const check of exclusions.values()) {
+    const productIds = check.productIds.filter((id) => !finalIds.has(id))
+    if (productIds.length > 0) checks.push({ ...check, productIds })
+  }
+  for (const d of dropped) {
+    checks.push({
+      kind: d.rule,
+      productIds: [d.productId],
+      ...(d.active != null ? { active: d.active } : {}),
+      ...(d.capMg != null ? { capMg: d.capMg } : {}),
+    })
+  }
 
   const userProfileSummary = [
     answers.ageBracket,
@@ -901,6 +1100,7 @@ export function buildStackBlueprint(
     userProfileSummary,
     slots: finalSlots,
     unmetGoals,
+    checks,
     estimatedOneOffPrice: 0,
     estimatedSubscriptionPrice: 0,
     savingsSummary: '',
@@ -921,4 +1121,36 @@ export function buildStackBlueprint(
     estimatedSubscriptionPrice: subscriptionPrice,
     savingsSummary,
   }
+}
+
+/**
+ * The blueprint's checks that are still true of these slots.
+ *
+ * The checks describe the engine's build. Once the AI pass or the member swaps
+ * a product, some may no longer hold: a "left out" product can be back in the
+ * stack, or a swap can bring a second source of an active. This keeps only what
+ * is still true: products now in the stack leave their check, a dedup-active
+ * check goes once two current products share that active, and a dose-cap check
+ * goes once the current total for that active is over the cap.
+ */
+export function checksForSlots(
+  checks: readonly StackCheck[] | undefined,
+  slots: readonly StackSlotEntry[],
+  catalogue: readonly CatalogueProduct[],
+): StackCheck[] {
+  if (!checks || checks.length === 0) return []
+  const inStack = new Set(slots.map((s) => s.selectedProductId))
+  const actives = slots.flatMap((s) => catalogue.find((p) => p.id === s.selectedProductId)?.actives ?? [])
+  const sources = (name: string) => actives.filter((a) => a.name === name).length
+  const totalMg = (name: string) => actives.reduce((t, a) => (a.name === name && a.mg != null ? t + a.mg : t), 0)
+
+  const out: StackCheck[] = []
+  for (const check of checks) {
+    const productIds = check.productIds.filter((id) => !inStack.has(id))
+    if (productIds.length === 0) continue
+    if (check.kind === 'dedup-active' && check.active != null && sources(check.active) > 1) continue
+    if (check.kind === 'dose-cap' && check.active != null && check.capMg != null && totalMg(check.active) > check.capMg) continue
+    out.push({ ...check, productIds })
+  }
+  return out
 }

@@ -177,7 +177,14 @@ describe('with uploaded art', () => {
    * near-white ink still clears 5:1; both story frames measure under 80.
    */
   it.each(['story'] as ShareFormat[])('keeps type on a dark ground — %s', async (format) => {
-    const view = buildShareCardView(persona.payload, format)
+    /*
+      A fixed engine name rather than the persona's. `worstTypeGround` takes a
+      row's median as its ground, and "PERFORMANCE", one word set the full width
+      of the headline, covers most of the row it sits on, so the median there is
+      the type itself (see `worstMaskedGround`). The scrim under it is the same
+      for every name; this checks the scrim.
+    */
+    const view = buildShareCardView({ ...persona.payload, stackName: 'Strength Engine Stack' }, format)
     const res = new ImageResponse(
       <ShareCard view={view} art={solidPngDataUri(108, 121, BRIGHT)} />,
       { width: 1080, height: 1920, fonts: await loadShareCardFonts() },

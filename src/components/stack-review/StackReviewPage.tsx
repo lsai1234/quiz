@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
@@ -22,6 +22,9 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackDeck } from './StackDeck'
+import { YouScene, type YouSceneItem } from './YouScene'
+import { explainProduct, whatWeChecked } from '@/lib/results'
+import type { SlotType } from '@/lib/stack-blueprint/factory'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
@@ -212,11 +215,49 @@ function StackTierSelector({
   )
 }
 
-export function StackReviewPage() {
+/**
+ * The deck's heading. "Swipe to see all 5" says how many there are and that the
+ * rest are off to the side; with one or two products there is less to say.
+ */
+export function deckHeading(count: number): string {
+  if (count >= 3) return `Your personalised stack · swipe to see all ${count}`
+  if (count === 2) return 'Your personalised stack · swipe to see both'
+  return 'Your personalised stack'
+}
+
+/**
+ * The dark panel the Stack and Plan scenes sit on. It lifts over the light You
+ * scene as a deliberate scene cut: a rounded lip, a drawn shadow and a grab
+ * handle.
+ */
+function StackPanel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      id="scene-stack"
+      className="mt-8 rounded-t-[2rem] scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]"
+      style={{ background: 'var(--color-bg)', boxShadow: '0 -18px 44px -22px rgba(10,10,10,0.55)' }}
+    >
+      <div className="flex justify-center pt-3.5 pb-0.5">
+        <div className="w-10 h-1 rounded-full" style={{ background: 'var(--color-border-2)' }} />
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * The whole results page below the bar: the You scene (#scene-you), then the
+ * Stack (#scene-stack) and Plan (#scene-plan) scenes on the dark panel.
+ *
+ * The You scene is rendered here rather than by Act4Reveal because it lists
+ * the stack on screen, and the depth on offer (`tierPlans` → `activeSlots`)
+ * depends on state that lives in this component (a partner's code, a claim).
+ */
+export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } = {}) {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
-    revealedIntroDiscount, setRevealedIntroDiscount, identity, consultExclusions,
+    revealedIntroDiscount, setRevealedIntroDiscount, consultExclusions,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -546,22 +587,50 @@ export function StackReviewPage() {
    *
    * Built here rather than inside the sheet so it is taken from the stack as it
    * stands on screen — after tier changes and product swaps — which is the stack
-   * the customer is actually looking at when they press Share.
+   * the customer is actually looking at when they press Share. Its headline is
+   * the stack's own name, the same one the You scene shows.
    *
-   * `answers.name` is passed to be *stripped*: the engine writes reasons
-   * addressed to the customer ("Chosen for Sam — …"), so the name reaches the
-   * card through what looks like product copy unless the builder is told to
-   * remove it. Showing it is the separate `showFirstName` flag, and it stays off
-   * until there is a control for it.
+   * `answers.name` is passed so the builder can keep it off the card. Showing
+   * it is the separate `showFirstName` flag, and it stays off until there is a
+   * control for it.
    */
   const sharePayload = useMemo(
     () =>
-      buildSharePayload(activeBlueprint, identity, products, {
+      buildSharePayload(activeBlueprint, null, products, {
         customerName: answers.name,
         code: partnerCode?.code ?? null,
       }),
-    [activeBlueprint, identity, products, answers.name, partnerCode],
+    [activeBlueprint, products, answers.name, partnerCode],
   )
+
+  /*
+    The You scene: every product on screen (the depth chosen, swaps and add-ons
+    included), each with its "Built from your answers" line, and the "What we
+    checked" lines still true of those products. Both come from
+    `@/lib/results`, which decides what may be said; this only lays it out.
+  */
+  const youItems = useMemo<YouSceneItem[]>(
+    () =>
+      activeSlots.flatMap((slot) => {
+        const product = products.find((p) => p.id === slot.selectedProductId)
+        if (!product) return []
+        let explanation: YouSceneItem['explanation'] = null
+        try {
+          explanation = explainProduct({ product, slotType: slot.slotType as SlotType, answers })
+        } catch {
+          // No line rather than no page: the line is an extra, the stack is not.
+        }
+        return [{ key: slot.slotId, product, slotType: slot.slotType, explanation }]
+      }),
+    [activeSlots, products, answers],
+  )
+  const checkLines = useMemo(() => {
+    try {
+      return whatWeChecked({ blueprint: activeBlueprint, products, slots: activeSlots })
+    } catch {
+      return []
+    }
+  }, [activeBlueprint, products, activeSlots])
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.
@@ -810,25 +879,48 @@ export function StackReviewPage() {
       ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx)
     : []
 
+  /*
+    The You scene's heading. While the catalogue is still loading it shows the
+    greeting and the stack's name only: the lists need the products. A mock
+    stack is never named while the shop might turn out to be the real one.
+  */
+  const youScene = (withProducts: boolean) => (
+    <YouScene
+      name={answers.name}
+      stackName={stackBlueprint || (!catalogueLoading && !isLive) ? activeBlueprint.stackName : null}
+      items={withProducts ? youItems : []}
+      checks={withProducts ? checkLines : []}
+      reducedMotion={reducedMotion}
+    />
+  )
+
   if (!blueprint || catalogueLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-[var(--color-muted)] text-sm">Building your stack…</p>
-      </div>
+      <>
+        {youScene(false)}
+        <StackPanel>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <p className="text-[var(--color-muted)] text-sm">Building your stack…</p>
+          </div>
+        </StackPanel>
+      </>
     )
   }
 
   // No catalogue at all — say so, rather than rendering a page of empty cards.
+  // No You scene: there is no stack to introduce.
   if (products.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
-        <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-          We couldn’t load the shop
-        </p>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          {catalogueError ?? 'The catalogue came back empty, so there’s nothing to build your stack from yet.'}
-        </p>
-      </div>
+      <StackPanel>
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
+          <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            We couldn’t load the shop
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {catalogueError ?? 'The catalogue came back empty, so there’s nothing to build your stack from yet.'}
+          </p>
+        </div>
+      </StackPanel>
     )
   }
 
@@ -836,14 +928,16 @@ export function StackReviewPage() {
   // don't exist there. Ask for the quiz rather than render unresolvable cards.
   if (!stackBlueprint && isLive) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
-        <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-          Your stack isn’t here yet
-        </p>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Take the quiz and we’ll build one from the products we actually stock.
-        </p>
-      </div>
+      <StackPanel>
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
+          <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            Your stack isn’t here yet
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            Take the quiz and we’ll build one from the products we actually stock.
+          </p>
+        </div>
+      </StackPanel>
     )
   }
 
@@ -852,298 +946,308 @@ export function StackReviewPage() {
   // the session — rendering success here during the redirect is DEF-001.
   if (checkoutState.status === 'mock-complete') {
     return (
-      <CheckoutSuccess
-        plan={checkoutState.plan}
-        mock
-        subscription={checkoutState.subscription}
-        changePolicy={changePolicy.default}
-        oneOff={{
-          items: receiptItemsFromSlots(activeSlots, products),
-          subtotal: pricing.oneOffSubtotal,
-          total: pricing.oneOffTotal,
-        }}
-        onBack={resetCheckout}
-      />
+      <>
+        {youScene(true)}
+        <StackPanel>
+          <CheckoutSuccess
+            plan={checkoutState.plan}
+            mock
+            subscription={checkoutState.subscription}
+            changePolicy={changePolicy.default}
+            oneOff={{
+              items: receiptItemsFromSlots(activeSlots, products),
+              subtotal: pricing.oneOffSubtotal,
+              total: pricing.oneOffTotal,
+            }}
+            onBack={resetCheckout}
+          />
+        </StackPanel>
+      </>
     )
   }
 
   return (
     <>
-      <div className="pb-28">
-        <StackHero
-          blueprint={activeBlueprint}
-          productCount={activeSlots.length}
-          totalPrice={pricing.oneOffTotal}
-          monthlyPrice={pricing.subscriptionTotal}
-          canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
-        />
-
-        <div className="h-px bg-[var(--color-border)] mx-5" />
-
-        {/* Honest "no strong match" note — a chosen goal whose only products were
-            removed by a hard gate (safety / dietary). Surfaced, never silently dropped. */}
-        {(activeBlueprint.unmetGoals?.length ?? 0) > 0 && (
-          <div
-            className="mx-5 max-w-lg lg:mx-auto mt-5 rounded-2xl border px-4 py-3"
-            style={{ borderColor: 'var(--color-border-2)', background: 'var(--color-surface)' }}
-          >
-            <p className="text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-              One thing we couldn’t match
-            </p>
-            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-              We didn’t find a suitable product for{' '}
-              {(activeBlueprint.unmetGoals ?? []).map((g) => GOAL_LABEL[g] ?? g).join(', ')}{' '}
-              given your answers, so we’ve left it out rather than suggest something that isn’t right for you. It’s worth a chat with your GP or pharmacist.
-            </p>
-          </div>
-        )}
-
-        {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
-
-        {/* Value-first depth selector — choose Essentials / Balanced / Complete,
-            each filled to its own monthly price band, so value comes first. */}
-        {showTiers && (
-          <div className="pt-6">
-            <StackTierSelector
-              tiers={tierPlans}
-              current={activeLevel}
-              minMonthly={getPricingConfig().minSubscriptionMonthly}
-              oneOffOnly={claiming || founderKind != null}
-              onChange={setStackLevel}
-            />
-          </div>
-        )}
-
-        {/* Core + added booster product cards — a swipeable top-trumps deck */}
-        <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
-          <p
-            className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {`Your personalised stack — ${activeSlots.length} products · swipe to compare`}
-          </p>
-          <StackDeck
-            slots={activeSlots}
-            products={products}
-            planType={planType}
-            onChangeProduct={handleOpenSwap}
-            onChangeVariant={handleChangeVariant}
-            onRemove={handleRemove}
-            /*
-             * Only when there is something to add.
-             *
-             * `UpgradesCard` has an empty state — a tick and "You're all set" —
-             * which is the right thing for a panel somebody opened on purpose
-             * and the wrong thing for the last card of a swipe deck. It read as
-             * a full card of dead space at the end of the stack, and the swipe
-             * that reached it was wasted.
-             */
-            trailing={
-              boosters.length > 0
-                ? <UpgradesCard boosters={boosters} onAdd={handleAddBooster} />
-                : undefined
-            }
+      {youScene(true)}
+      <StackPanel>
+        <div className="pb-28">
+          <StackHero
+            blueprint={activeBlueprint}
+            productCount={activeSlots.length}
+            totalPrice={pricing.oneOffTotal}
+            monthlyPrice={pricing.subscriptionTotal}
+            canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
           />
-        </div>
 
-        {/* Divider before pricing */}
-        <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
+          <div className="h-px bg-[var(--color-border)] mx-5" />
 
-        {/* Price summary + checkout */}
-        <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
-          {checkoutState.status === 'error' && (
-            <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
-              {checkoutState.messages.map((msg, i) => (
-                <p key={i} className="text-xs text-[var(--color-red)] leading-relaxed">{msg}</p>
-              ))}
-              <button
-                onClick={resetCheckout}
-                className="text-[10px] font-semibold text-[var(--color-red)]/70 underline mt-1"
-              >
-                Dismiss
-              </button>
+          {/* Honest "no strong match" note — a chosen goal whose only products were
+              removed by a hard gate (safety / dietary). Surfaced, never silently dropped. */}
+          {(activeBlueprint.unmetGoals?.length ?? 0) > 0 && (
+            <div
+              className="mx-5 max-w-lg lg:mx-auto mt-5 rounded-2xl border px-4 py-3"
+              style={{ borderColor: 'var(--color-border-2)', background: 'var(--color-surface)' }}
+            >
+              <p className="text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                One thing we couldn’t match
+              </p>
+              <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+                We didn’t find a suitable product for{' '}
+                {(activeBlueprint.unmetGoals ?? []).map((g) => GOAL_LABEL[g] ?? g).join(', ')}{' '}
+                given your answers, so we’ve left it out rather than suggest something that isn’t right for you. It’s worth a chat with your GP or pharmacist.
+              </p>
             </div>
           )}
-          {planType === 'subscription' && scratchRevealAvailable() && subscriptionPlan.length > 0 && (
-            <ScratchToReveal
-              monthlyTotal={pricing.subscriptionTotal}
-              revealed={revealedIntroDiscount}
-              onReveal={setRevealedIntroDiscount}
-            />
-          )}
 
-          {/* Above the receipt, so the totals below already include it. */}
-          {showPromo && promo && promoPrices && (
-            <CheckoutPromo
-              key={promo.code}
-              promo={promo}
-              before={promoPrices.before}
-              after={promoPrices.after}
-              scope={promoPrices.scope}
-              applied={promoApplied}
-              onApply={applyPromo}
-              onRemove={removePromo}
-              onEnded={promoEnded}
-            />
-          )}
-          {/* The advertised code carries its own applied state and Remove, so the
-              box steps aside while the card is showing it rather than saying it
-              twice. Only then: during a claim there is no card, and the box is
-              the one place a typed code can be seen and taken off. */}
-          {!(showPromo && promoApplied) && (
-            <div className="mb-3 flex flex-col">
-              <PartnerCodeBox
-                subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
-                applied={partnerCode}
-                onChange={setPartnerCode}
-                prompt={showPromo ? 'Got a different code?' : undefined}
+          {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
+
+          {/* Value-first depth selector — choose Essentials / Balanced / Complete,
+              each filled to its own monthly price band, so value comes first. */}
+          {showTiers && (
+            <div className="pt-6">
+              <StackTierSelector
+                tiers={tierPlans}
+                current={activeLevel}
+                minMonthly={getPricingConfig().minSubscriptionMonthly}
+                oneOffOnly={claiming || founderKind != null}
+                onChange={setStackLevel}
               />
             </div>
           )}
 
-          {/* The high-level receipt — what you're buying, discounts, total */}
-          <PlanReceipt
-            slots={activeSlots}
-            products={products}
-            subscriptionPlan={subscriptionPlan}
-            pricing={pricing}
-            planType={planType}
-            onPlanChange={setPlanType}
-            onCheckout={handleCheckout}
-          partnerCode={partnerCode?.code ?? null}
-            codeKind={partnerCode?.kind ?? null}
-            starterStack={starterStack}
-            oneOffOnly={founderKind ? 'Your code is for a one-off order, so subscribing isn’t available with it.' : null}
-            onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            isLoading={checkoutState.status === 'loading'}
-            onCtaRef={setCtaEl}
-          />
-
-          {/* The one form in the journey: a claim, or a free founder code. */}
-          {(claiming || freeCode) && addressOpen && (
-            <StarterDeliveryForm
-              busy={checkoutState.status === 'loading'}
-              error={checkoutState.status === 'error' ? checkoutState.messages[0] : null}
-              onCancel={() => {
-                setAddressOpen(false)
-                resetCheckout()
-              }}
-              onSubmit={(address) => void placeOrder(address)}
+          {/* Core + added booster product cards — a swipeable top-trumps deck */}
+          <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
+            <p
+              className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              {deckHeading(activeSlots.length)}
+            </p>
+            <StackDeck
+              slots={activeSlots}
+              products={products}
+              planType={planType}
+              answers={answers}
+              usage={subscriptionUsage}
+              onChangeProduct={handleOpenSwap}
+              onChangeVariant={handleChangeVariant}
+              onRemove={handleRemove}
+              /*
+               * Only when there is something to add.
+               *
+               * `UpgradesCard` has an empty state — a tick and "You're all set" —
+               * which is the right thing for a panel somebody opened on purpose
+               * and the wrong thing for the last card of a swipe deck. It read as
+               * a full card of dead space at the end of the stack, and the swipe
+               * that reached it was wasted.
+               */
+              trailing={
+                boosters.length > 0
+                  ? <UpgradesCard boosters={boosters} onAdd={handleAddBooster} />
+                  : undefined
+              }
             />
-          )}
+          </div>
 
-          {/*
-            Delivery detail and quantities.
+          {/* Divider before pricing */}
+          <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
-            ── Why these two are one block, and a quiet one ──────────────────
-            They used to be two more cards below the receipt: a bordered
-            disclosure on its own surface, then an accent-tinted button. Stacked
-            under a card that already contained five boxes, that made four
-            near-equal actions after the primary one — and nothing on the page
-            said which of them mattered.
+          {/* Price summary + checkout */}
+          <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
+            {checkoutState.status === 'error' && (
+              <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
+                {checkoutState.messages.map((msg, i) => (
+                  <p key={i} className="text-xs text-[var(--color-red)] leading-relaxed">{msg}</p>
+                ))}
+                <button
+                  onClick={resetCheckout}
+                  className="text-[10px] font-semibold text-[var(--color-red)]/70 underline mt-1"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+            {planType === 'subscription' && scratchRevealAvailable() && subscriptionPlan.length > 0 && (
+              <ScratchToReveal
+                monthlyTotal={pricing.subscriptionTotal}
+                revealed={revealedIntroDiscount}
+                onReveal={setRevealedIntroDiscount}
+              />
+            )}
 
-            They are both about the SAME thing (what arrives, and how much of
-            it), and both are secondary to buying. So they are one group,
-            attached to the receipt by a hairline rather than floating as peers,
-            with no border, no second surface and no accent. The accent is spent
-            once on this screen, on "Start subscription".
-          */}
-          {planType === 'subscription' && subscriptionPlan.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-              <details className="group">
-                <summary
-                  className="flex items-center justify-between py-2 cursor-pointer list-none text-xs font-semibold"
+            {/* Above the receipt, so the totals below already include it. */}
+            {showPromo && promo && promoPrices && (
+              <CheckoutPromo
+                key={promo.code}
+                promo={promo}
+                before={promoPrices.before}
+                after={promoPrices.after}
+                scope={promoPrices.scope}
+                applied={promoApplied}
+                onApply={applyPromo}
+                onRemove={removePromo}
+                onEnded={promoEnded}
+              />
+            )}
+            {/* The advertised code carries its own applied state and Remove, so the
+                box steps aside while the card is showing it rather than saying it
+                twice. Only then: during a claim there is no card, and the box is
+                the one place a typed code can be seen and taken off. */}
+            {!(showPromo && promoApplied) && (
+              <div className="mb-3 flex flex-col">
+                <PartnerCodeBox
+                  subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
+                  applied={partnerCode}
+                  onChange={setPartnerCode}
+                  prompt={showPromo ? 'Got a different code?' : undefined}
+                />
+              </div>
+            )}
+
+            {/* The high-level receipt — what you're buying, discounts, total */}
+            <PlanReceipt
+              slots={activeSlots}
+              products={products}
+              subscriptionPlan={subscriptionPlan}
+              pricing={pricing}
+              planType={planType}
+              onPlanChange={setPlanType}
+              onCheckout={handleCheckout}
+            partnerCode={partnerCode?.code ?? null}
+              codeKind={partnerCode?.kind ?? null}
+              starterStack={starterStack}
+              oneOffOnly={founderKind ? 'Your code is for a one-off order, so subscribing isn’t available with it.' : null}
+              onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              isLoading={checkoutState.status === 'loading'}
+              onCtaRef={setCtaEl}
+            />
+
+            {/* The one form in the journey: a claim, or a free founder code. */}
+            {(claiming || freeCode) && addressOpen && (
+              <StarterDeliveryForm
+                busy={checkoutState.status === 'loading'}
+                error={checkoutState.status === 'error' ? checkoutState.messages[0] : null}
+                onCancel={() => {
+                  setAddressOpen(false)
+                  resetCheckout()
+                }}
+                onSubmit={(address) => void placeOrder(address)}
+              />
+            )}
+
+            {/*
+              Delivery detail and quantities.
+
+              ── Why these two are one block, and a quiet one ──────────────────
+              They used to be two more cards below the receipt: a bordered
+              disclosure on its own surface, then an accent-tinted button. Stacked
+              under a card that already contained five boxes, that made four
+              near-equal actions after the primary one — and nothing on the page
+              said which of them mattered.
+
+              They are both about the SAME thing (what arrives, and how much of
+              it), and both are secondary to buying. So they are one group,
+              attached to the receipt by a hairline rather than floating as peers,
+              with no border, no second surface and no accent. The accent is spent
+              once on this screen, on "Start subscription".
+            */}
+            {planType === 'subscription' && subscriptionPlan.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                <details className="group">
+                  <summary
+                    className="flex items-center justify-between py-2 cursor-pointer list-none text-xs font-semibold"
+                    style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
+                  >
+                    What lands each month
+                    <Icon name="chevron-down" size={15} className="text-[var(--color-muted)] transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="pt-1 pb-2">
+                    <SubscriptionProtocol
+                      plan={subscriptionPlan}
+                      answers={answers}
+                      slotTitleById={slotTitleById}
+                      minMonths={pricing.subscriptionMinMonths}
+                      monthlyTotal={pricing.subscriptionTotal}
+                      firstMonth={pricing.subscriptionFirstMonth}
+                      introPct={pricing.subscriptionIntroDiscountPct}
+                    />
+                  </div>
+                </details>
+
+                {/* The other half of the same question, so it reads as a sibling
+                    of the disclosure rather than as another call to action. */}
+                <button
+                  onClick={() => setJourneyOpen(true)}
+                  className="flex items-center justify-between w-full py-2 text-xs font-semibold text-left transition-colors"
                   style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
                 >
-                  What lands each month
-                  <Icon name="chevron-down" size={15} className="text-[var(--color-muted)] transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="pt-1 pb-2">
-                  <SubscriptionProtocol
-                    plan={subscriptionPlan}
-                    answers={answers}
-                    slotTitleById={slotTitleById}
-                    minMonths={pricing.subscriptionMinMonths}
-                    monthlyTotal={pricing.subscriptionTotal}
-                    firstMonth={pricing.subscriptionFirstMonth}
-                    introPct={pricing.subscriptionIntroDiscountPct}
-                  />
-                </div>
-              </details>
+                  Change quantities
+                  <Icon name="chevron-right" size={15} className="text-[var(--color-muted)]" />
+                </button>
+              </div>
+            )}
 
-              {/* The other half of the same question, so it reads as a sibling
-                  of the disclosure rather than as another call to action. */}
-              <button
-                onClick={() => setJourneyOpen(true)}
-                className="flex items-center justify-between w-full py-2 text-xs font-semibold text-left transition-colors"
-                style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
-              >
-                Change quantities
-                <Icon name="chevron-right" size={15} className="text-[var(--color-muted)]" />
-              </button>
+            {/* Safety fine print. One size, matching every other piece of small
+                print on the page — it was the fourth in this stretch alone. */}
+            <p className="text-[11px] leading-relaxed mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
+              Food supplements are not a substitute for a varied diet or medical care.
+              Consult your GP before use if you are pregnant, breastfeeding, or taking
+              prescribed medication (including HRT).
+            </p>
+
+            {/*
+              The share prompt, after the plan rather than before the stack.
+              ─────────────────────────────────────────────────────────────────
+              It used to sit between the hero and the product deck — the highest
+              intent position on the page — where it competed with the buying
+              decision it interrupts. A poster of a stack is a lovely thing to
+              offer somebody and a strange thing to offer them mid-purchase.
+
+              Here it reads as the thing to do once the deciding is done, and the
+              sticky bar keeps the checkout permanently reachable, so nothing is
+              buried by the move.
+            */}
+            {/* `[&>div]:mt-0` cancels the button's own `-mt-2`, which it carries
+                for the position it used to sit in. Without it the gap below the
+                fine print is zero while the gap above is 20px, and the paragraph
+                reads as belonging to the share card rather than to the plan. */}
+            <div className="mt-5 -mx-5 [&>div]:mt-0">
+              <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} giveawayElsewhere />
             </div>
-          )}
 
-          {/* Safety fine print. One size, matching every other piece of small
-              print on the page — it was the fourth in this stretch alone. */}
-          <p className="text-[11px] leading-relaxed mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
-            Food supplements are not a substitute for a varied diet or medical care.
-            Consult your GP before use if you are pregnant, breastfeeding, or taking
-            prescribed medication (including HRT).
-          </p>
+            {/* The giveaway: an email at the end of the quiz is the entry, and
+                sharing the card above is the bonus. Renders nothing unless a
+                competition is open. */}
+            <GiveawayEntry payload={sharePayload} onShare={() => setShareOpen(true)} />
 
-          {/*
-            The share prompt, after the plan rather than before the stack.
-            ─────────────────────────────────────────────────────────────────
-            It used to sit between the hero and the product deck — the highest
-            intent position on the page — where it competed with the buying
-            decision it interrupts. A poster of a stack is a lovely thing to
-            offer somebody and a strange thing to offer them mid-purchase.
-
-            Here it reads as the thing to do once the deciding is done, and the
-            sticky bar keeps the checkout permanently reachable, so nothing is
-            buried by the move.
-          */}
-          {/* `[&>div]:mt-0` cancels the button's own `-mt-2`, which it carries
-              for the position it used to sit in. Without it the gap below the
-              fine print is zero while the gap above is 20px, and the paragraph
-              reads as belonging to the share card rather than to the plan. */}
-          <div className="mt-5 -mx-5 [&>div]:mt-0">
-            <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} giveawayElsewhere />
+            {/*
+              The last word: for somebody who scrolled past the whole stack without
+              buying it, the one product that will do the most for them, at a
+              price the order can afford (`lib/last-chance`). Not during a claim,
+              and not once a code is applied — a founder's, a partner's referral or
+              the day's: that is already the deal this visit is about, and the offer
+              takes no codes, so showing it would only set two prices side by side.
+            */}
+            {!claiming && !partnerCode && (
+              <div className="pb-10">
+                <LastChance
+                  slots={activeSlots}
+                  products={products}
+                  answers={answers}
+                  primaryGoal={activeBlueprint.primaryGoal}
+                  usage={subscriptionUsage}
+                  blocked={checkoutState.status === 'loading' || leavingForStripe}
+                  onBackToStack={() => {
+                    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                    document.getElementById('scene-plan')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+                  }}
+                  onCtaRef={setOfferCtaEl}
+                />
+              </div>
+            )}
           </div>
-
-          {/* The giveaway: an email at the end of the quiz is the entry, and
-              sharing the card above is the bonus. Renders nothing unless a
-              competition is open. */}
-          <GiveawayEntry payload={sharePayload} onShare={() => setShareOpen(true)} />
-
-          {/*
-            The last word: for somebody who scrolled past the whole stack without
-            buying it, the one product that will do the most for them, at a
-            price the order can afford (`lib/last-chance`). Not during a claim,
-            and not once a code is applied — a founder's, a partner's referral or
-            the day's: that is already the deal this visit is about, and the offer
-            takes no codes, so showing it would only set two prices side by side.
-          */}
-          {!claiming && !partnerCode && (
-            <div className="pb-10">
-              <LastChance
-                slots={activeSlots}
-                products={products}
-                answers={answers}
-                primaryGoal={activeBlueprint.primaryGoal}
-                usage={subscriptionUsage}
-                blocked={checkoutState.status === 'loading' || leavingForStripe}
-                onBackToStack={() => {
-                  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-                  document.getElementById('scene-plan')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
-                }}
-                onCtaRef={setOfferCtaEl}
-              />
-            </div>
-          )}
         </div>
-      </div>
+      </StackPanel>
 
       {mounted && showStickyBar && createPortal(
         <div

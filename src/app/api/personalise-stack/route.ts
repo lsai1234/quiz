@@ -15,13 +15,17 @@ function getClient(): OpenAI | null {
   return apiKey ? new OpenAI({ apiKey }) : null
 }
 
+/**
+ * Product ids per slot, and nothing else. The model writes no customer text,
+ * and the parser drops any it sends, so there is nothing written here for a
+ * client to show.
+ */
 interface PersonaliseResponse {
   choices: Record<string, string>
-  reasons: Record<string, string>
   personalised: boolean
 }
 
-const EMPTY: PersonaliseResponse = { choices: {}, reasons: {}, personalised: false }
+const EMPTY: PersonaliseResponse = { choices: {}, personalised: false }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest) {
     const parsed = parseBlueprintResult(JSON.parse(rawContent), optionIdsBySlot)
     if (!parsed) return NextResponse.json(EMPTY)
 
-    const response: PersonaliseResponse = { ...parsed, personalised: true }
+    const response: PersonaliseResponse = { choices: parsed.choices, personalised: true }
     return NextResponse.json(response)
   } catch (err) {
     console.error('[personalise-stack]', err)

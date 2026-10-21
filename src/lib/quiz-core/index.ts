@@ -11,5 +11,6 @@ export { SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY } 
 export type { SlotType } from './goal-map'
 export { SCORING, FOUNDATIONAL_SWAP_GROUPS } from './scoring'
 export { TIER_ORDER, TIER_PRICE_BANDS, TIER_SIZE_BANDS, TIER_MIN_STEP, TIER_META } from './tiers'
-export { applyBundleRules, DOSE_CAPS, BUNDLE_RULES } from './bundle-rules'
+export { applyBundleRules, applyBundleRulesReport, DOSE_CAPS, BUNDLE_RULES } from './bundle-rules'
+export type { BundleRuleDrop, BundleRulesReport } from './bundle-rules'
 export { DRIVER_AFFINITY, DRIVER_STIM_PENALTY, DRIVER_CHANGED } from './driver-map'

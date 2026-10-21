@@ -24,7 +24,7 @@ import { questionById } from '@/lib/quiz-v2/bank'
 import { DRIVERS, rankedDrivers } from '@/lib/quiz-v2/drivers'
 import { useSteer } from '@/lib/quiz-v2/steer'
 import { useQuizArmState } from '@/lib/experiments/client'
-import type { StackIdentity, Goal, AgeBracket, Gender, WeightBand } from '@/lib/types'
+import type { Goal, AgeBracket, Gender, WeightBand } from '@/lib/types'
 
 /**
  * The adaptive interview — v2's Act 2.
@@ -46,15 +46,6 @@ import type { StackIdentity, Goal, AgeBracket, Gender, WeightBand } from '@/lib/
 const DRIVER_HEARD: Record<string, string> = Object.fromEntries(
   Object.entries(DRIVERS).map(([id, meta]) => [id, meta.heard]),
 )
-
-const FALLBACK_IDENTITY: StackIdentity = {
-  name: 'Peak Protocol',
-  archetype: 'The Performance Athlete',
-  description:
-    'Your stack is built around output and recovery. These selections may suit your goals and are commonly used by people with similar profiles.',
-  focusAreas: ['Performance Output', 'Faster Recovery', 'Daily Energy'],
-  routineFitScore: 84,
-}
 
 /**
  * The safety options that are special category data, derived rather than listed
@@ -197,7 +188,7 @@ interface Props {
 }
 
 export function QuizV2({ onComplete, reducedMotion }: Props) {
-  const { interview, setInterview, setAnswers, setIdentity, setStackLevel, setStackReady } = useQuizStore()
+  const { interview, setInterview, setAnswers, setStackLevel, setStackReady } = useQuizStore()
   const { budget: budgetConfig, aiSteer } = useQuizArmState()
 
   // The interview lives in the store so a refresh resumes it. Seeded on first
@@ -522,23 +513,17 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       // v1; see the note there.
       const { products: catalogueProducts } = await loadCatalogue()
       const base = buildStackBlueprint(answers, catalogueProducts)
-      const [identity, blueprint] = await Promise.all([
-        fetch('/api/generate-identity', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(answers),
-        }).then((r) => r.json()).catch(() => FALLBACK_IDENTITY),
-        personaliseBlueprint(answers, base, catalogueProducts),
-      ])
-      setIdentity(identity ?? FALLBACK_IDENTITY)
+      // No AI identity call any more: the reveal opens on the stack's own,
+      // rule-based name. Same as v1.
+      const blueprint = await personaliseBlueprint(answers, base, catalogueProducts)
       setStackLevel(levelForStackPreference(answers.stackPreference))
       useQuizStore.getState().setStackBlueprint(blueprint)
     } catch {
-      if (!useQuizStore.getState().identity) setIdentity(FALLBACK_IDENTITY)
+      // With no stack the reveal says so itself; Act 3 still finishes below.
     } finally {
       useQuizStore.getState().setStackReady(true)
     }
-  }, [setIdentity, setStackLevel])
+  }, [setStackLevel])
 
   const finish = () => {
     completedRef.current = true

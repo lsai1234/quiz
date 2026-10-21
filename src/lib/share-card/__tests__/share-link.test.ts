@@ -53,7 +53,9 @@ describe('cardShareUrl', () => {
 
 describe('cardFileName', () => {
   it('says what it is, in the camera roll', () => {
-    expect(cardFileName(complete.payload, 'story')).toBe('chrgd-iron-foundations-story.png')
+    // The stack's own name, as the card and the results page show it.
+    expect(cardFileName({ ...complete.payload, stackName: 'Strength Engine Stack' }, 'story'))
+      .toBe('chrgd-strength-engine-stack-story.png')
   })
 
   it('survives a name with nothing sluggable in it', () => {
@@ -67,7 +69,7 @@ describe('cardShareText', () => {
     // The card is the most public surface we own; the text beside it is held to
     // the same line. See §6.1 — no verbs about what a supplement does.
     const text = cardShareText(complete.payload)
-    expect(text).toBe('My CHRGD stack: Iron Foundations.')
+    expect(text).toBe(`My CHRGD stack: ${complete.payload.stackName}.`)
     expect(text).not.toMatch(/boost|improve|increase|cure|treat|burn/i)
   })
 })

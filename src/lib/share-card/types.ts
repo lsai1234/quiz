@@ -35,13 +35,21 @@ import type { StackLevel } from '@/lib/types'
  */
 export const SHARE_PAYLOAD_VERSION = 1
 
-/** One product on the card: what it is, and — the part that matters — why. */
+/** One product on the card: what it is, and how much of it. */
 export interface ShareLineupEntry {
-  /** The slot's title: "Protein", "Recovery". The category, not the product. */
+  /**
+   * The product type: "Whey Protein", "Vitamin C". Cards stored before
+   * Phase 1 hold the slot's title here ("Immune Support"); see `category()` in
+   * format.ts for how those print.
+   */
   slot: string
   /** The product as the customer chose it. */
   product: string
-  /** Why it is in the stack, cut to a card-sized clause. See `shortReason`. */
+  /**
+   * Retired. Always '' on a card built now; older stored cards hold a slot
+   * reason. No format prints it: a reason says what a product does, which is a
+   * claim. Kept because stored cards and the decoder carry the field.
+   */
   reason: string
   /**
    * The serving line — "30 G / DAY", "1 SCOOP".
@@ -84,13 +92,20 @@ export interface ShareFocusArea {
 
 export interface ShareCardPayload {
   v: typeof SHARE_PAYLOAD_VERSION
-  /** The stack's name — the card's headline and the reason it gets screenshotted. */
+  /**
+   * The stack's name — the card's headline and the reason it gets
+   * screenshotted. The engine's `stackName` on a card built now; older stored
+   * cards may hold the AI identity's name, and keep it.
+   */
   stackName: string
-  /** "The Strength Builder". Empty when no identity was generated. */
+  /**
+   * Retired, with `focusAreas` and `fitScore`: all three came from the AI
+   * identity, which is no longer generated. A card built now holds '', [] and
+   * null; older stored cards may hold values, and no format prints them. Kept
+   * because stored cards and the decoder carry the fields.
+   */
   archetype: string
   focusAreas: ShareFocusArea[]
-  /** Routine fit, 0–100. Null when no identity was generated — the renderer
-   *  drops the meter rather than inventing a number. */
   fitScore: number | null
   /**
    * Every product in the stack, in display order. The payload carries the whole

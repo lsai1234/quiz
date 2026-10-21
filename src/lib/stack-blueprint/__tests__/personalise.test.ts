@@ -1,8 +1,10 @@
 import { buildStackBlueprint } from '../factory'
-import { buildSlotOptions, applyBlueprintAIResult } from '../personalise'
+import { buildSlotOptions, applyBlueprintAIResult, applyBlueprintAIResultWithinBudget, personaliseBlueprint } from '../personalise'
 import { parseBlueprintResult } from '@/lib/ai-stack'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { StackBlueprint } from '../types'
+import type { BlueprintAIResult } from '@/lib/ai-stack'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
 
 function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
@@ -88,58 +90,128 @@ describe('applyBlueprintAIResult', () => {
     ],
   }
 
-  it('applies a valid choice + reason and resets the variant', () => {
-    const out = applyBlueprintAIResult(blueprint, {
-      choices: { 'slot-protein': 'b' },
-      reasons: { 'slot-protein': 'Chosen for your goals' },
-    })
+  it('applies a valid choice and resets the variant', () => {
+    const out = applyBlueprintAIResult(blueprint, { choices: { 'slot-protein': 'b' } })
     const slot = out.slots.find(s => s.slotId === 'slot-protein')!
     expect(slot.selectedProductId).toBe('b')
     expect(slot.selectedVariantId).toBeNull()
-    expect(slot.reason).toBe('Chosen for your goals')
     expect(out.personalised).toBe(true)
-  })
-
-  it('overrides only the reason when no product choice is given', () => {
-    const out = applyBlueprintAIResult(blueprint, {
-      choices: {},
-      reasons: { 'slot-performance': 'Creatine for strength' },
-    })
-    const slot = out.slots.find(s => s.slotId === 'slot-performance')!
-    expect(slot.selectedProductId).toBe('c')
-    expect(slot.reason).toBe('Creatine for strength')
   })
 
   it('skips a choice that would duplicate another slot product', () => {
     const out = applyBlueprintAIResult(blueprint, {
       choices: { 'slot-protein': 'c' }, // 'c' already used by slot-performance
-      reasons: {},
     })
     expect(out.slots.find(s => s.slotId === 'slot-protein')!.selectedProductId).toBe('a')
   })
 
-  it('drops the reason for a choice it rejected, rather than captioning the wrong product', () => {
-    // The AI wanted 'c' here and wrote its sentence about 'c'. 'c' is already in
-    // the performance slot, so the pick is refused — and the sentence has to go
-    // with it. Keeping it is how the detail sheet ends up headed "Plant Protein"
-    // over a paragraph explaining why you need Vitamin C + Zinc.
-    const out = applyBlueprintAIResult(blueprint, {
-      choices: { 'slot-protein': 'c' },
-      reasons: { 'slot-protein': 'Creatine saturates your muscles for strength' },
-    })
-    const slot = out.slots.find(s => s.slotId === 'slot-protein')!
-    expect(slot.selectedProductId).toBe('a')
-    expect(slot.reason).toBe('old')
+  it('leaves a slot the AI did not change exactly as the engine wrote it', () => {
+    const out = applyBlueprintAIResult(blueprint, { choices: { 'slot-performance': 'c' } })
+    expect(out.slots).toEqual(blueprint.slots)
   })
 
-  it('keeps the reason when the choice it describes was applied', () => {
-    const out = applyBlueprintAIResult(blueprint, {
-      choices: { 'slot-protein': 'b' },
-      reasons: { 'slot-protein': 'Whey hits your protein target on training days' },
+  /*
+   * The model no longer writes customer text, but an old-shaped reply (or a
+   * server mid-deploy) can still carry a `reasons` object. Whatever reaches
+   * these functions, nothing in it may land on a slot.
+   */
+  const withReasons = (choices: Record<string, string>, reasons: Record<string, string>) =>
+    ({ choices, reasons }) as BlueprintAIResult
+
+  it('never writes an AI reason onto a slot, swapped or not', () => {
+    const out = applyBlueprintAIResult(
+      blueprint,
+      withReasons(
+        { 'slot-protein': 'b' },
+        { 'slot-protein': 'Whey hits your protein target', 'slot-performance': 'Creatine for strength' },
+      ),
+    )
+    for (const slot of out.slots) {
+      expect(slot.reason).not.toMatch(/Whey hits|Creatine for strength/)
+    }
+    expect(out.slots.find(s => s.slotId === 'slot-performance')!.reason).toBe('old2')
+  })
+
+  it('gives a swapped slot the new product\'s catalogue line, not the replaced product\'s reason', () => {
+    // The engine's reason was written about 'a'. Once the slot holds 'b', the
+    // reason has to be about 'b', and the AI is not allowed to supply it.
+    const catalogue = [
+      { id: 'b', shortReason: 'Catalogue line for b', description: 'Longer description of b' },
+    ] as unknown as CatalogueProduct[]
+    const out = applyBlueprintAIResult(
+      blueprint,
+      withReasons({ 'slot-protein': 'b' }, { 'slot-protein': 'AI sales copy' }),
+      catalogue,
+    )
+    expect(out.slots.find(s => s.slotId === 'slot-protein')!.reason).toBe('Catalogue line for b')
+  })
+
+  it('falls back to the catalogue description when a product has no short line', () => {
+    const catalogue = [{ id: 'b', shortReason: '', description: 'Description of b' }] as unknown as CatalogueProduct[]
+    const out = applyBlueprintAIResult(blueprint, { choices: { 'slot-protein': 'b' } }, catalogue)
+    expect(out.slots.find(s => s.slotId === 'slot-protein')!.reason).toBe('Description of b')
+  })
+
+  it('does the same through the budget-gated apply', () => {
+    const catalogue = [
+      { id: 'b', shortReason: 'Catalogue line for b', description: '' },
+    ] as unknown as CatalogueProduct[]
+    const out = applyBlueprintAIResultWithinBudget(
+      blueprint,
+      withReasons({ 'slot-protein': 'b' }, { 'slot-protein': 'AI sales copy', 'slot-performance': 'More AI copy' }),
+      catalogue,
+      null,
+    )
+    expect(out.slots.map(s => s.reason)).toEqual(['Catalogue line for b', 'old2'])
+  })
+})
+
+describe('personaliseBlueprint', () => {
+  const realFetch = global.fetch
+  afterEach(() => { global.fetch = realFetch })
+
+  const reply = (body: unknown) =>
+    jest.fn().mockResolvedValue({ ok: true, json: async () => body }) as unknown as typeof fetch
+
+  it('reads only the product ids from the reply, never written reasons', async () => {
+    const answers = makeAnswers()
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    // The first slot the AI has a real alternative for.
+    const offered = buildSlotOptions(blueprint, answers, MOCK_CATALOGUE)
+    const at = offered.findIndex(so => so.options.some(o => o.id !== so.currentProductId))
+    expect(at).toBeGreaterThanOrEqual(0)
+    const slot = blueprint.slots[at]
+    const alt = offered[at].options.find(o => o.id !== slot.selectedProductId)!
+
+    global.fetch = reply({
+      personalised: true,
+      choices: { [slot.slotId]: alt.id },
+      reasons: Object.fromEntries(blueprint.slots.map(s => [s.slotId, 'AI-written copy'])),
     })
-    const slot = out.slots.find(s => s.slotId === 'slot-protein')!
-    expect(slot.selectedProductId).toBe('b')
-    expect(slot.reason).toBe('Whey hits your protein target on training days')
+    const out = await personaliseBlueprint(answers, blueprint, MOCK_CATALOGUE)
+
+    for (const s of out.slots) expect(s.reason).not.toBe('AI-written copy')
+    // The top budget tier has no cap, so the swap is taken.
+    expect(out.slots[at].selectedProductId).toBe(alt.id)
+    const product = MOCK_CATALOGUE.find(p => p.id === alt.id)!
+    expect(out.slots[at].reason).toBe(product.shortReason || product.description)
+    // Slots the AI did not swap keep the engine's reason.
+    const others = (bp: StackBlueprint) => bp.slots.filter((_, i) => i !== at).map(s => s.reason)
+    expect(others(out)).toEqual(others(blueprint))
+  })
+
+  it('returns the engine blueprint untouched when the server personalised nothing', async () => {
+    const answers = makeAnswers()
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    global.fetch = reply({ personalised: false, choices: {} })
+    expect(await personaliseBlueprint(answers, blueprint, MOCK_CATALOGUE)).toBe(blueprint)
+  })
+
+  it('returns the engine blueprint untouched when the call fails', async () => {
+    const answers = makeAnswers()
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as unknown as typeof fetch
+    expect(await personaliseBlueprint(answers, blueprint, MOCK_CATALOGUE)).toBe(blueprint)
   })
 })
 
@@ -148,16 +220,27 @@ describe('parseBlueprintResult', () => {
 
   it('keeps only choices within each slot allowed options', () => {
     const result = parseBlueprintResult(
-      { choices: { 'slot-protein': 'b', 'slot-perf': 'zzz', 'ghost': 'a' }, reasons: { 'slot-protein': '**hi**' } },
+      { choices: { 'slot-protein': 'b', 'slot-perf': 'zzz', 'ghost': 'a' } },
       allowed,
     )
-    expect(result).not.toBeNull()
-    expect(result!.choices).toEqual({ 'slot-protein': 'b' })
-    expect(result!.reasons).toEqual({ 'slot-protein': 'hi' })
+    expect(result).toEqual({ choices: { 'slot-protein': 'b' } })
+  })
+
+  it('reads the choices from an old-style reply and drops its reasons', () => {
+    const result = parseBlueprintResult(
+      { choices: { 'slot-protein': 'b' }, reasons: { 'slot-protein': '**Perfect for you**' } },
+      allowed,
+    )
+    expect(result).toEqual({ choices: { 'slot-protein': 'b' } })
+    expect(result).not.toHaveProperty('reasons')
   })
 
   it('returns null when nothing usable came back', () => {
     expect(parseBlueprintResult({ choices: { x: 'y' } }, allowed)).toBeNull()
     expect(parseBlueprintResult(null, allowed)).toBeNull()
+  })
+
+  it('returns null for a reply that is only reasons — there is nothing to apply', () => {
+    expect(parseBlueprintResult({ reasons: { 'slot-protein': 'Great choice' } }, allowed)).toBeNull()
   })
 })

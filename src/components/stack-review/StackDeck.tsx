@@ -6,7 +6,8 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
-import { getSubscriptionProduct } from '@/lib/stack-blueprint/pricing'
+import type { QuizAnswers } from '@/lib/types'
+import { getSubscriptionProduct, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import { StatCard } from './StatCard'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -17,6 +18,15 @@ interface Props {
   slots: StackSlotEntry[]
   products: CatalogueProduct[]
   planType: PlanType
+  /**
+   * Their quiz answers. Each card uses them to pick its claim and to size how
+   * long a pack lasts; the detail sheet, for "Why it's in your stack". Without
+   * them (a bundle page) the cards show the kind's first claim, a standard-use
+   * pack length and no why-line.
+   */
+  answers?: QuizAnswers | null
+  /** Usage chosen in the plan journey, by product id. Standard when absent. */
+  usage?: Record<string, UsageLevel>
   onChangeProduct?: (slotId: string) => void
   onChangeVariant?: (slotId: string, variantId: string) => void
   onRemove?: (slotId: string) => void
@@ -29,7 +39,9 @@ interface Props {
  * with an optional trailing card for upgrades. This is what keeps the stack
  * section short: N products cost one viewport of height, not N.
  */
-export function StackDeck({ slots, products, planType, onChangeProduct, onChangeVariant, onRemove, trailing }: Props) {
+export function StackDeck({
+  slots, products, planType, answers, usage, onChangeProduct, onChangeVariant, onRemove, trailing,
+}: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [active, setActive] = useState(0)
 
@@ -85,24 +97,28 @@ export function StackDeck({ slots, products, planType, onChangeProduct, onChange
 
   return (
     <div>
-      {/* `items-start`: each card is as tall as its own content. Stretched, the
-          product cards took the add-ons card's height and, without the stat
-          bars that used to fill them, were mostly empty space. */}
+      {/* Stretched: every card is as tall as the tallest, so the deck reads as
+          one set. Each card pins its facts and price to the bottom, and the
+          claim and facts now fill what the stat bars used to, so a stretched
+          card ends on the same lines as its neighbours instead of trailing off
+          into empty space. */}
       <div
         ref={scrollRef}
-        className="flex items-start gap-3 overflow-x-auto px-5 pb-2 max-w-lg mx-auto snap-x snap-mandatory"
+        className="flex items-stretch gap-3 overflow-x-auto px-5 pb-2 max-w-lg mx-auto snap-x snap-mandatory"
         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
       >
         {slots.map((slot) => {
           const product = products.find((p) => p.id === slot.selectedProductId)
           const subscriptionProduct = product ? getSubscriptionProduct(product, products) : undefined
           return (
-            <div key={slot.slotId} data-card className="snap-center flex-shrink-0 w-[80vw] max-w-[300px]">
+            <div key={slot.slotId} data-card className="snap-center flex-shrink-0 flex flex-col w-[80vw] max-w-[300px]">
               <StatCard
                 slot={slot}
                 product={product}
                 planType={planType}
                 subscriptionProduct={subscriptionProduct}
+                answers={answers}
+                usage={usage}
                 onChangeProduct={onChangeProduct}
                 onChangeVariant={onChangeVariant}
                 onRemove={onRemove}
@@ -111,7 +127,7 @@ export function StackDeck({ slots, products, planType, onChangeProduct, onChange
           )
         })}
         {trailing && (
-          <div data-card className="snap-center flex-shrink-0 w-[80vw] max-w-[300px]">
+          <div data-card className="snap-center flex-shrink-0 flex flex-col w-[80vw] max-w-[300px] [&>*]:flex-1">
             {trailing}
           </div>
         )}

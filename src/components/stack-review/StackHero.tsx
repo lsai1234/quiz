@@ -14,14 +14,14 @@ interface Props {
   canSubscribe?: boolean
 }
 
-function prettifyGoal(goal: string) {
-  return goal.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 /**
  * The stack headline. The product lineup itself now lives in the swipeable deck
- * below, so this is deliberately compact — name, one supporting line, and the
- * key stats as chips.
+ * below, so this is deliberately compact: the name and the key facts as chips.
+ *
+ * Facts only. There used to be a summary sentence ("Designed to support fat
+ * loss while preserving lean muscle") and a chip with the primary goal, and
+ * both said what the stack is for, which is a health claim. Why each product
+ * is here is said in the You scene, through the goal-to-claim map.
  */
 export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, canSubscribe }: Props) {
   const showMonthly = !!canSubscribe && monthlyPrice != null && monthlyPrice > 0
@@ -41,9 +41,6 @@ export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, c
       >
         {blueprint.stackName}
       </h2>
-      <p className="text-sm mt-2.5 leading-relaxed line-clamp-2" style={{ color: 'var(--color-text-2)' }}>
-        {blueprint.summary}
-      </p>
 
       {/* Stats row */}
       <div className="flex items-center gap-2 mt-4 flex-wrap">
@@ -51,11 +48,13 @@ export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, c
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
           style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', color: 'var(--color-text)' }}
         >
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M6 3.5v2.5l1.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          {/* Layers: a stack of products. */}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden>
+            <path d="M12 2.5 2.5 7.5 12 12.5l9.5-5z" />
+            <path d="M2.5 12 12 17l9.5-5" />
+            <path d="M2.5 16.5 12 21.5l9.5-5" />
           </svg>
-          {productCount} products
+          {productCount} product{productCount === 1 ? '' : 's'}
         </div>
 
         <div
@@ -69,13 +68,6 @@ export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, c
           {showMonthly
             ? <>{formatGBP(monthlyPrice!)}<span className="font-semibold">/mo</span></>
             : <>{formatGBP(totalPrice)}<span className="font-semibold"> one-off</span></>}
-        </div>
-
-        <div
-          className="px-3 py-1.5 rounded-full text-xs font-semibold"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)' }}
-        >
-          {prettifyGoal(blueprint.primaryGoal)}
         </div>
       </div>
     </div>

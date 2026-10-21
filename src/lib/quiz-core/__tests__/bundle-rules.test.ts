@@ -5,7 +5,7 @@
  * defects are gone: no active-ingredient appears twice, no dose cap is exceeded,
  * and no conf-below-floor filler survives — across representative personas.
  */
-import { applyBundleRules, BUNDLE_RULES, DOSE_CAPS } from '../bundle-rules'
+import { applyBundleRules, applyBundleRulesReport, BUNDLE_RULES, DOSE_CAPS } from '../bundle-rules'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
@@ -112,5 +112,89 @@ describe('audit sweep: defects removed', () => {
 
     // No conf-below-floor filler survived (required slots exempt).
     for (const s of bp.slots) if (!s.required) expect(s.confidenceScore).toBeGreaterThanOrEqual(10)
+  })
+})
+
+// ── The report: what was dropped, and by which rule ─────────────────────────
+describe('applyBundleRulesReport', () => {
+  it('names the relevance floor', () => {
+    const slots = [
+      slot({ slotId: 'a', selectedProductId: 'chrgd-omega-3', confidenceScore: 40, displayOrder: 0 }),
+      slot({ slotId: 'b', selectedProductId: 'chrgd-collagen', confidenceScore: 3, displayOrder: 1 }),
+    ]
+    const r = applyBundleRulesReport(slots, MOCK_CATALOGUE)
+    expect(r.kept.map((s) => s.slotId)).toEqual(['a'])
+    expect(r.dropped).toEqual([{ slotId: 'b', productId: 'chrgd-collagen', rule: 'relevance-floor' }])
+  })
+
+  it('names the shared active for a de-duplication', () => {
+    const slots = [
+      slot({ slotId: 'mag', selectedProductId: 'chrgd-magnesium', displayOrder: 0 }),
+      slot({ slotId: 'blend', selectedProductId: 'chrgd-sleep-support', displayOrder: 1 }),
+    ]
+    expect(applyBundleRulesReport(slots, MOCK_CATALOGUE).dropped).toEqual([
+      { slotId: 'blend', productId: 'chrgd-sleep-support', rule: 'dedup-active', active: 'magnesium' },
+    ])
+  })
+
+  it('names the active and its cap for a dose cap', () => {
+    const slots = [
+      slot({ slotId: 'vitc', selectedProductId: 'chrgd-vitamin-c-zinc', displayOrder: 0 }),
+      slot({ slotId: 'fizz', selectedProductId: 'chrgd-immunity-fizz', displayOrder: 1 }),
+    ]
+    const noDedup = { ...BUNDLE_RULES, dedupActives: false }
+    expect(applyBundleRulesReport(slots, MOCK_CATALOGUE, noDedup).dropped).toEqual([
+      { slotId: 'fizz', productId: 'chrgd-immunity-fizz', rule: 'dose-cap', active: 'vitamin-c', capMg: DOSE_CAPS['vitamin-c'] },
+    ])
+  })
+
+  it('reports the first rule that fired, and never a required slot', () => {
+    const slots = [
+      slot({ slotId: 'mag', selectedProductId: 'chrgd-magnesium', displayOrder: 0 }),
+      // Below the floor AND a duplicate: the floor is checked first.
+      slot({ slotId: 'blend', selectedProductId: 'chrgd-sleep-support', confidenceScore: 2, displayOrder: 1 }),
+      // A required duplicate stays.
+      slot({ slotId: 'ash', selectedProductId: 'chrgd-ashwagandha', required: true, displayOrder: 2 }),
+    ]
+    const r = applyBundleRulesReport(slots, MOCK_CATALOGUE)
+    expect(r.kept.map((s) => s.slotId)).toEqual(['mag', 'ash'])
+    expect(r.dropped).toEqual([{ slotId: 'blend', productId: 'chrgd-sleep-support', rule: 'relevance-floor' }])
+  })
+
+  it('the degenerate keep-best case keeps the same slot and does not report it dropped', () => {
+    const slots = [
+      slot({ slotId: 'a', selectedProductId: 'chrgd-omega-3', confidenceScore: 4, displayOrder: 0 }),
+      slot({ slotId: 'b', selectedProductId: 'chrgd-collagen', confidenceScore: 7, displayOrder: 1 }),
+    ]
+    const r = applyBundleRulesReport(slots, MOCK_CATALOGUE)
+    expect(r.kept).toEqual(applyBundleRules(slots, MOCK_CATALOGUE))
+    expect(r.kept.map((s) => s.slotId)).toEqual(['b'])
+    expect(r.dropped).toEqual([{ slotId: 'a', productId: 'chrgd-omega-3', rule: 'relevance-floor' }])
+  })
+
+  it('keeps exactly what applyBundleRules keeps, the same slot objects, across configs', () => {
+    const slots = [
+      slot({ slotId: 'mag', selectedProductId: 'chrgd-magnesium', displayOrder: 3 }),
+      slot({ slotId: 'blend', selectedProductId: 'chrgd-sleep-support', displayOrder: 1 }),
+      slot({ slotId: 'ash', selectedProductId: 'chrgd-ashwagandha', displayOrder: 2 }),
+      slot({ slotId: 'vitc', selectedProductId: 'chrgd-vitamin-c-zinc', confidenceScore: 9, displayOrder: 0 }),
+      slot({ slotId: 'fizz', selectedProductId: 'chrgd-immunity-fizz', displayOrder: 4 }),
+      slot({ slotId: 'pre', selectedProductId: 'chrgd-pre-workout', required: true, displayOrder: 5 }),
+    ]
+    const configs = [
+      BUNDLE_RULES,
+      { ...BUNDLE_RULES, dedupActives: false },
+      { ...BUNDLE_RULES, relevanceFloor: false },
+      { ...BUNDLE_RULES, doseCaps: false },
+      { relevanceFloor: false, dedupActives: false, doseCaps: false, confidenceFloor: 10 },
+    ]
+    for (const cfg of configs) {
+      const r = applyBundleRulesReport(slots, MOCK_CATALOGUE, cfg)
+      const kept = applyBundleRules(slots, MOCK_CATALOGUE, cfg)
+      expect(r.kept).toHaveLength(kept.length)
+      r.kept.forEach((s, i) => expect(s).toBe(kept[i]))
+      // Every slot is either kept or reported, never both.
+      expect(r.kept.length + r.dropped.length).toBe(slots.length)
+    }
   })
 })

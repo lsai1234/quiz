@@ -156,6 +156,9 @@ export async function answerAllQuestions(page: Page): Promise<void> {
   throw new Error('quiz never reached the review step after 25 questions')
 }
 
+/** The You scene's heading: "Alex, here’s your stack" or "Here’s your stack". */
+export const REVEAL_HEADING = /here[’']s your stack/i
+
 /**
  * The full journey: track → questions → build → the finished stack.
  *
@@ -166,9 +169,9 @@ export async function completeQuiz(page: Page, track: Track = 'performance'): Pr
   await startQuiz(page, track)
   await answerAllQuestions(page)
   await page.getByRole('button', { name: 'Build my stack' }).click()
-  /* The reveal's eyebrow is personalised once a name was given ("Alex's
-     supplement identity"), so match the part that does not move. */
-  await expect(page.getByText(/supplement identity/i)).toBeVisible({ timeout: 45_000 })
+  /* The reveal opens on "Alex, here’s your stack" once a name was given, or
+     "Here’s your stack" without one, so match the part that does not move. */
+  await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible({ timeout: 45_000 })
 }
 
 /* ─── The finished stack: choosing a plan and buying it ────────────────────── */

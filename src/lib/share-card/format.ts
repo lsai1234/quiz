@@ -27,8 +27,6 @@ export interface FormatSpec {
   lineupRows: number
   /** The big number-over-caption pairs. */
   showStats: boolean
-  /** The routine-fit numeral over the image panel. */
-  showFitMeter: boolean
   /** The tier, appended to the eyebrow. */
   showTier: boolean
   /**
@@ -57,7 +55,6 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     imageRatio: 0.46,
     lineupRows: 5,
     showStats: true,
-    showFitMeter: true,
     showTier: true,
     showCallout: true,
     showOverflow: true,
@@ -75,7 +72,6 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     imageRatio: 0.34,
     lineupRows: 3,
     showStats: true,
-    showFitMeter: true,
     showTier: true,
     showCallout: true,
     showOverflow: false,
@@ -115,7 +111,6 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     // three entry steps comes out of the type scale instead — see `geometry`.
     lineupRows: 5,
     showStats: false,
-    showFitMeter: true,
     showTier: false,
     showCallout: true,
     showOverflow: false,
@@ -127,7 +122,6 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     imageRatio: 1,
     lineupRows: 3,
     showStats: false,
-    showFitMeter: true,
     showTier: false,
     // A link preview needs no code: the URL sitting beside it carries one.
     showCallout: false,
@@ -194,9 +188,15 @@ export interface ShareCardView {
    */
   imageRatio: number
   eyebrow: string
+  /**
+   * The headline. A stored card keeps the name it was shared with; a card built
+   * now carries the engine's `stackName`.
+   *
+   * There is no archetype, focus-area list or fit numeral any more: all three
+   * were AI-written (the fit score was invented by the model without seeing the
+   * products), and a stored card that still holds them does not print them.
+   */
   stackName: string
-  archetype: string | null
-  fit: { score: number } | null
   lineup: ShareLineupEntry[]
   /**
    * The spec table — the poster's version of the lineup.
@@ -237,16 +237,6 @@ export interface ShareCardView {
    * larger of the two — it is the only part they have to remember.
    */
   cta: { label: string; domain: string }
-  /**
-   * The second column: what the stack is for.
-   *
-   * The focus areas when an identity was generated, and the coverage axes — the
-   * customer's own goals — when one was not. Both answer the same question, and
-   * this is where the card now says *why*. The first version spent a whole row
-   * per product on a sentence, which is how four products came to fill a frame
-   * that now carries ten data points.
-   */
-  builtFor: string[]
   /** Products the format had no room for. 0 when the whole lineup fits. */
   overflow: number
   stats: ShareStat[]
@@ -273,7 +263,7 @@ export interface ShareCardView {
  * Everything the giveaway card prints, resolved.
  *
  * The card is a fixed template with four inputs — the first name, the
- * archetype, the products, and the closing date — and every line of it is
+ * stack's name, the products, and the closing date — and every line of it is
  * decided here, so the renderer sets type and asks no questions.
  */
 export interface ShareEntry {
@@ -289,7 +279,7 @@ export interface ShareEntry {
   invite: string
   /** The panel's label: "SAM’S STACK", or "MY STACK". */
   owner: string
-  /** The panel's title: the archetype, or the stack's name without one. */
+  /** The panel's title: the stack's name. */
   title: string
   /**
    * Up to five products: the name, and its product type ("WHEY PROTEIN") for
@@ -359,7 +349,7 @@ function buildEntry(payload: ShareCardPayload, competition: CompetitionBand, sta
     hook: name ? `${name} built their stack.` : 'I built my stack.',
     invite: 'Build yours and you’re entered.',
     owner: name ? `${name.toUpperCase()}’S STACK` : 'MY STACK',
-    title: payload.archetype.trim() || payload.stackName,
+    title: payload.stackName,
     products: payload.lineup
       .slice(0, ENTRY_PRODUCTS)
       .map((row) => ({ name: row.product, category: category(row.slot) })),
@@ -424,27 +414,12 @@ export function buildShareCardView(
 
   const artKey = (payload.artKey && payload.artKey in ART_SET ? payload.artKey : 'wellbeing') as ArtKey
 
-  const builtFor = (
-    payload.focusAreas.length > 0
-      ? payload.focusAreas.map((f) => f.label)
-      : payload.coverage.filter((c) => c.targeted).map((c) => c.label)
-  ).slice(0, rows)
-
-  // A number and a word, which is the pairing that makes the reference's stat
-  // row read — two words side by side is a caption, two numbers is a table.
-  //
-  // Routine fit is the number rather than the product count, because it is the
-  // figure that is purely this customer's and the one worth comparing with a
-  // friend. It was drawn over the picture in the first pass and rendered
-  // invisible there; a stat pair is where a number that size actually belongs.
-  const topGoal = payload.coverage.find((c) => c.targeted)?.label ?? payload.coverage[0]?.label
+  // The product count. There used to be two more: the AI's "Routine fit",
+  // which the model invented without seeing the products, and "Built mainly
+  // for" a goal, which says what the stack is for. Both are gone, and neither
+  // is printed from a stored card that still holds the data.
   const stats: ShareStat[] = spec.showStats
-    ? [
-        ...(payload.fitScore !== null
-          ? [{ label: 'Routine fit', value: String(payload.fitScore) }]
-          : [{ label: 'Products', value: String(payload.lineup.length) }]),
-        ...(topGoal ? [{ label: 'Built mainly for', value: topGoal }] : []),
-      ]
+    ? [{ label: 'Products', value: String(payload.lineup.length) }]
     : []
 
   const artIndex = ART_KEYS.indexOf(artKey) + 1
@@ -455,7 +430,9 @@ export function buildShareCardView(
     spec,
     specRows: shown.map((row) => ({ name: row.product, qty: row.dose ?? '' })),
     stamp,
-    kicker: (payload.archetype.trim() || 'Your Stack').toUpperCase(),
+    // Fixed. It was the AI archetype ("THE STRENGTH BUILDER") when there was
+    // one, and stored cards still carry it, so it is not read.
+    kicker: 'YOUR STACK',
     standfirst: 'MY SUPPLEMENT STACK, BUILT BY THE CHRGD QUIZ',
     // The footer is the only place that says how to get one, and "build yours"
     // assumed the reader already knew what "yours" would be. Naming the quiz is
@@ -473,10 +450,9 @@ export function buildShareCardView(
     imageRatio,
     eyebrow,
     stackName: payload.stackName,
-    archetype: payload.archetype.trim() || null,
-    fit: spec.showFitMeter && payload.fitScore !== null ? { score: payload.fitScore } : null,
-    lineup: shown,
-    builtFor,
+    // Without the reason, so a stored card's slot reason ("Supports restful
+    // sleep") cannot reach any renderer: it says what a product does.
+    lineup: shown.map((row) => ({ ...row, reason: '' })),
     overflow: spec.showOverflow ? Math.max(0, payload.lineup.length - shown.length) : 0,
     stats,
     artKey,

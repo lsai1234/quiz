@@ -12,6 +12,7 @@
 import type { StackBlueprint, StackSlotEntry } from './types'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import {
   buildSubscriptionPlan,
   calculatePricing,
@@ -32,9 +33,14 @@ export interface CheckoutLineItem {
   attributes: { key: string; value: string }[]
 }
 
+/*
+  `slotTitle` is the engine's label for the slot ("Immune Support"), kept for
+  ops. The customer is shown `productType` ("Vitamin C"): a benefit label in an
+  error message is still a health claim.
+*/
 export type ValidationError =
-  | { type: 'no-variant'; slotId: string; slotTitle: string }
-  | { type: 'unavailable'; slotId: string; slotTitle: string; variantTitle: string }
+  | { type: 'no-variant'; slotId: string; slotTitle: string; productType: string }
+  | { type: 'unavailable'; slotId: string; slotTitle: string; productType: string; variantTitle: string }
   /**
    * The basket is too small to pay for its own parcel.
    *
@@ -123,7 +129,7 @@ export function validateCheckout(
     const variant = resolveVariant(slot, product)
 
     if (!variant) {
-      errors.push({ type: 'no-variant', slotId: slot.slotId, slotTitle: slot.title })
+      errors.push({ type: 'no-variant', slotId: slot.slotId, slotTitle: slot.title, productType: productTypeLabel(product) })
       continue
     }
 
@@ -132,6 +138,7 @@ export function validateCheckout(
         type: 'unavailable',
         slotId: slot.slotId,
         slotTitle: slot.title,
+        productType: productTypeLabel(product),
         variantTitle: variant.title,
       })
       continue
@@ -232,13 +239,18 @@ export function buildSubscriptionCheckout(
   }
 }
 
+/** A type label mid-sentence: "vitamin C", but "ZMA" and "B-complex" as written. */
+function inSentence(label: string): string {
+  return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+}
+
 /** Human-readable message for a ValidationError. */
 export function validationErrorMessage(err: ValidationError): string {
   switch (err.type) {
     case 'no-variant':
-      return `Please choose a flavour or size for your ${err.slotTitle} before checking out.`
+      return `Please choose a flavour or size for your ${inSentence(err.productType)} before checking out.`
     case 'unavailable':
-      return `${err.slotTitle} — ${err.variantTitle} is currently out of stock. Please swap to a different option.`
+      return `${err.productType} — ${err.variantTitle} is currently out of stock. Please swap to a different option.`
     case 'below-minimum':
       return `Orders start at ${formatGBP(err.minimum)} — add ${formatGBP(err.shortfall)} more to check out.`
   }

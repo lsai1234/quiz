@@ -2,7 +2,6 @@ import type { ShareCardView } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P } from '@/lib/share-card/palette'
 import { FONT_DISPLAY } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
-import { numeralPath, DIGIT_UPEM } from '@/lib/share-card/digits'
 import { typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
 import { Bolt, CropMarks, Grain, Picture, display, mono, widthEm, withAlpha } from './card-kit'
 import { GiveawayCard } from './GiveawayCard'
@@ -14,8 +13,11 @@ import { GiveawayCard } from './GiveawayCard'
  * A poster, not a UI component. The previous version was a rounded card with
  * glass panels and a filled accent pill — it read as an app screen photographed,
  * which is exactly what it was. This is built to `docs/SHARE_CARD_BRIEF`: full
- * bleed photography, a hard type hierarchy, hairlines rather than containers,
- * and the score bleeding off the left edge as the signature.
+ * bleed photography, a hard type hierarchy, hairlines rather than containers.
+ *
+ * The brief's signature was the routine-fit score, outlined and bleeding off
+ * the left edge. That number was invented by the AI without seeing the
+ * products, so it is no longer drawn, on new cards or stored ones.
  *
  * ── Instagram's chrome is a hard constraint ────────────────────────────────
  * Text lives strictly between y=250 and y=1620. Above that is the profile
@@ -62,12 +64,6 @@ interface Geometry {
   artH: number
   headlineMax: number
   headlineMin: number
-  /**
-   * The outlined numeral, with "CHARGE INDEX" stacked upright beside it.
-   *
-   * Null where the canvas is too small to carry a numeral at all.
-   */
-  score: { size: number; left: number; top: number } | null
   cropMarks: boolean
   specName: number
   rowPad: number
@@ -96,21 +92,18 @@ function geometry(format: string): Geometry {
       return {
         w: 1080, h: 1080, margin: 76, safeTop: 76, safeBottom: 1004, artH: 640,
         headlineMax: 124, headlineMin: 68,
-        score: { size: 240, left: -22, top: 150 },
         cropMarks: true, specName: 40, rowPad: 12, mono: 24,
         headlineRoom: 1080 - 76 * 2,
       }
 
     /**
      * The link unfurl. Usually painted under 400px wide in a chat client, so
-     * the score comes off — at that size an outlined numeral is grey noise —
-     * and the picture becomes a ground rather than a band.
+     * the picture becomes a ground rather than a band.
      */
     case 'og':
       return {
         w: 1200, h: 630, margin: 56, safeTop: 56, safeBottom: 574, artH: 630,
         headlineMax: 86, headlineMin: 48,
-        score: null,
         cropMarks: false, specName: 30, rowPad: 8, mono: 20,
         headlineRoom: 760,
       }
@@ -126,7 +119,6 @@ function geometry(format: string): Geometry {
       return {
         w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
         headlineMax: 172, headlineMin: 92,
-        score: { size: 430, left: -38, top: 300 },
         cropMarks: true, specName: 50, rowPad: 15, mono: 27,
         headlineRoom: 1080 - 84 * 2,
       }
@@ -168,80 +160,6 @@ function fitHeadline(name: string, g: Geometry): { line1: string; line2: string;
   const room = g.headlineRoom + 8 // the -8 optical hang buys eight pixels back
   const size = Math.max(g.headlineMin, Math.min(g.headlineMax, Math.floor(room / best.widest)))
   return { line1: best.line1, line2: best.line2, size }
-}
-
-const SPINE = 'CHARGE INDEX'
-
-/**
- * The score, outlined, bleeding off the left edge.
- *
- * Drawn from glyph outlines rather than set as type: Satori renders
- * `-webkit-text-stroke` as a fill with no stroke, and rejects SVG `<text>`
- * outright. Both were tested. Paths were the alternative to putting a headless
- * browser in the render path for one piece of type — see `digits.ts`.
- */
-function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['score']> }) {
-  const { glyphs, width } = numeralPath(String(score))
-  const scale = at.size / DIGIT_UPEM
-  // Big Shoulders' cap height sits around 0.72em; the glyphs are y-up in font
-  // units, so they are flipped and dropped onto a baseline here.
-  const boxW = Math.round(width * scale)
-  const boxH = Math.round(at.size * 1.02)
-  const spineSize = Math.max(13, Math.round(at.size * 0.044))
-  const spineStep = Math.round(spineSize * 1.05)
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        position: 'absolute',
-        left: at.left,
-        top: at.top,
-        alignItems: 'flex-start',
-      }}
-    >
-      <svg width={boxW} height={boxH} viewBox={`0 0 ${width} ${DIGIT_UPEM * 1.02}`}>
-        <g transform={`translate(0, ${DIGIT_UPEM * 0.98}) scale(1, -1)`}>
-          {glyphs.map((g, i) => (
-            <g key={i} transform={`translate(${g.x}, 0)`}>
-              <path
-                d={g.d}
-                fill="none"
-                stroke={withAlpha(P.ink1, 0.34)}
-                strokeWidth={2 / scale}
-              />
-            </g>
-          ))}
-        </g>
-      </svg>
-      <div
-          style={{
-            display: 'flex',
-            ...mono(spineSize, 600, P.accent, 0.34),
-            // Set upright and read top-to-bottom, the way a spine label is.
-            // Satori has no `writing-mode`, so the characters are stacked
-            // instead — which reads the same at this size and needs no
-            // transform.
-            flexDirection: 'column',
-            marginTop: 22,
-            marginLeft: 18,
-            // Both the column and each cell carry an explicit height: left to
-            // compute its own, Satori sized the column to about half the string
-            // and cut "CHARGE INDEX" off after the E.
-            height: SPINE.length * spineStep,
-          }}
-        >
-          {SPINE.split('').map((c, i) => (
-            <div
-              key={i}
-              style={{ display: 'flex', height: spineStep, lineHeight: `${spineStep}px` }}
-            >
-              {c === '\u00a0' ? '\u00a0' : c}
-            </div>
-          ))}
-        </div>
-    </div>
-  )
 }
 
 /**
@@ -372,8 +290,6 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
         </div>
         <div style={mono(railSize, 600, MUTED, 0.3)}>{view.stamp}</div>
       </div>
-
-      {view.fit && g.score ? <ScoreMark score={view.fit.score} at={g.score} /> : null}
 
       {/* ── Body: anchored to the bottom so the headline breaks the seam ──── */}
       <div

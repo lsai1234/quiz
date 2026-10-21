@@ -36,7 +36,8 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { Goal, QuizAnswers } from '@/lib/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
-import { CLAIMS, claimsFor } from '@/lib/consult/claims'
+import { productClaim } from '@/lib/results/goal-claims'
+import { explainProduct, type ProductExplanation } from '@/lib/results/explain'
 import { getArchetype, scoreProduct, type SlotType } from '@/lib/stack-blueprint/factory'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { isAccessory } from '@/lib/catalogue/accessory'
@@ -78,38 +79,33 @@ export interface PickContext {
   usage?: Record<string, UsageLevel>
 }
 
-/** The register claim that speaks to their goal, where one does; else the kind's first. */
-const CLAIM_FOR_GOAL: Partial<Record<Goal, string[]>> = {
-  muscle: ['protein-muscle-growth', 'creatine-performance', 'vitd-muscle', 'magnesium-muscle'],
-  bulking: ['protein-muscle-growth', 'creatine-performance'],
-  cutting: ['protein-muscle-maintenance'],
-  performance: ['creatine-performance', 'cho-electrolyte-endurance'],
-  hydration: ['cho-electrolyte-water', 'cho-electrolyte-endurance'],
-  recovery: ['protein-muscle-maintenance', 'magnesium-muscle'],
-  energy: ['b12-tiredness', 'magnesium-tiredness', 'vitc-tiredness', 'b6-tiredness'],
-  immune: ['vitd-immune', 'zinc-immune', 'vitc-immune'],
-  focus: ['dha-brain', 'zinc-cognitive'],
-  health: ['epa-dha-heart', 'vitd-immune'],
-}
-
-function claimFor(product: CatalogueProduct, goals: Goal[]): HeroOffer['claim'] {
-  const ids = claimsFor(product.swapGroup)
-  if (ids.length === 0) return null
-  for (const goal of goals) {
-    const preferred = (CLAIM_FOR_GOAL[goal] ?? []).find((id) => ids.includes(id))
-    if (preferred && CLAIMS[preferred]) return { id: preferred, wording: CLAIMS[preferred].wording }
-  }
-  const first = CLAIMS[ids[0]]
-  return first ? { id: first.id, wording: first.wording } : null
-}
-
 /**
- * The same line for every pick, until Phase 2. Saying a product was picked for
- * their goal, or is the core of their stack, links a health goal to a product,
- * which is a claim. The goal still counts in the ranking; it is just not said.
+ * The claim and the "why you" line, from the same source as the stack's cards
+ * and the You scene (`@/lib/results`): the product's "Built from your answers"
+ * line and the claim beside it when it has one, else the claim the
+ * goal-to-claim map picks for their goals, else the kind's first. So the offer
+ * can never quote a different claim, or link a goal the map does not back.
  */
-function goalLineFor(stackSize: number): string {
-  return `One of the ${stackSize} products we picked for you.`
+function claimAndLine(
+  product: CatalogueProduct,
+  slot: StackSlotEntry,
+  answers: QuizAnswers | null,
+  goals: Goal[],
+  stackSize: number,
+): { claim: HeroOffer['claim']; goalLine: string } {
+  let explanation: ProductExplanation | null = null
+  if (answers) {
+    try {
+      explanation = explainProduct({ product, slotType: slot.slotType as SlotType, answers })
+    } catch {
+      /* No line is the safe answer; the card still has the neutral one. */
+    }
+  }
+  const claim = explanation?.claim ?? productClaim(product, goals)
+  return {
+    claim: claim ? { id: claim.id, wording: claim.wording } : null,
+    goalLine: explanation?.sentence ?? `One of the ${stackSize} products we picked for you.`,
+  }
 }
 
 function variantFor(product: CatalogueProduct, slot: StackSlotEntry): CatalogueVariant | null {
@@ -185,7 +181,7 @@ export function pickHeroOffer(
     if (fit === -Infinity) continue
     const quote = quoteOffer(offerProductFor(product, variant), config)
     if (!quote.viable) continue
-    const claim = claimFor(product, ordered)
+    const { claim, goalLine } = claimAndLine(product, slot, answers, ordered, slots.length)
     const score =
       fit +
       (slot.required ? 15 : 0) +
@@ -197,7 +193,7 @@ export function pickHeroOffer(
       product,
       variant,
       quote,
-      goalLine: goalLineFor(slots.length),
+      goalLine,
       claim,
       servings: knownServings(product, variant),
       packMonths: packMonthsFor(product, variant, answers, ctx.usage?.[product.id]),

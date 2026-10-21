@@ -21,8 +21,6 @@ jest.mock('@/components/stack-review/StackReviewPage', () => ({
  * jump just below it.
  */
 
-const ANCHOR_MARGIN = 'scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]'
-
 function rem(value: string): number {
   const m = value.match(/^([\d.]+)rem$/)
   if (!m) throw new Error(`not a rem value: ${value}`)
@@ -152,8 +150,32 @@ describe('SceneRail', () => {
 })
 
 describe('Act4Reveal and the bar', () => {
-  beforeEach(() => {
-    useQuizStore.setState({
+  /*
+   * Act4Reveal is the shell now: the bar and the page the scenes sit on. The
+   * scenes, the You scene included, are StackReviewPage's, and their anchors
+   * are checked against the real page in `you-scene.test.tsx`.
+   */
+  afterEach(() => act(() => useQuizStore.setState({ identity: null })))
+
+  it('reserves the bar at the top and the checkout bar at the bottom', () => {
+    render(<Act4Reveal reducedMotion />)
+    const root = document.querySelector('[data-reveal-shell]')!
+    expect(root.getAttribute('style')).toContain('safe-area-inset-top')
+    expect(root.getAttribute('style')).toContain(SCENE_RAIL_HEIGHT)
+    expect(root).toHaveClass('pb-[calc(2.5rem+env(safe-area-inset-bottom))]')
+  })
+
+  it('renders without an AI identity', () => {
+    // It used to render nothing until /api/generate-identity had answered.
+    act(() => useQuizStore.setState({ identity: null }))
+    render(<Act4Reveal reducedMotion />)
+    expect(document.querySelector('[data-reveal-shell]')).not.toBeNull()
+    expect(screen.getByText('plan')).toBeInTheDocument()
+  })
+
+  it('shows nothing from an identity that is still in the store', () => {
+    // A consult still sets one. The reveal does not read it.
+    act(() => useQuizStore.setState({
       identity: {
         name: 'Test Identity',
         archetype: 'Test archetype',
@@ -161,25 +183,10 @@ describe('Act4Reveal and the bar', () => {
         focusAreas: ['Sleep'],
         routineFitScore: 80,
       },
-    })
-  })
-
-  afterEach(() => act(() => useQuizStore.setState({ identity: null })))
-
-  it('lands the You and Stack anchors below the bar, not under it', () => {
+    }))
     render(<Act4Reveal reducedMotion />)
-    for (const id of ['scene-you', 'scene-stack']) {
-      const el = document.getElementById(id)!
-      expect(el).toHaveClass(ANCHOR_MARGIN)
-      expect(el).not.toHaveClass('scroll-mt-20')
+    for (const text of ['Test Identity', 'Test archetype', 'Test description.', 'Routine fit', 'Fully charged']) {
+      expect(screen.queryByText(text)).not.toBeInTheDocument()
     }
-  })
-
-  it('reserves the bar at the top and the checkout bar at the bottom', () => {
-    render(<Act4Reveal reducedMotion />)
-    const root = document.getElementById('scene-you')!.parentElement!
-    expect(root.getAttribute('style')).toContain('safe-area-inset-top')
-    expect(root.getAttribute('style')).toContain(SCENE_RAIL_HEIGHT)
-    expect(root).toHaveClass('pb-[calc(2.5rem+env(safe-area-inset-bottom))]')
   })
 })

@@ -123,6 +123,18 @@ describe('validateCheckout', () => {
     expect(result.errors[0].type).toBe('unavailable')
   })
 
+  it("carries the product's type for the message, beside the slot title for ops", () => {
+    const product = makeProduct({ swapGroup: 'vitamin-c', variants: [makeVariant({ available: false })] })
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1', title: 'Immune Support' }])
+    const result = validateCheckout(blueprint, [product])
+    if (result.ok) throw new Error('expected an error')
+    const err = result.errors[0]
+    if (err.type !== 'unavailable') throw new Error(`expected unavailable, got ${err.type}`)
+    expect(err.productType).toBe('Vitamin C')
+    expect(err.slotTitle).toBe('Immune Support')
+    expect(validationErrorMessage(err)).not.toMatch(/Immune Support/)
+  })
+
   it('uses the catalogue variant id on the line', () => {
     const product = makeProduct({
       variants: [makeVariant({ })],
@@ -162,14 +174,25 @@ describe('validateCheckout', () => {
 
 describe('validationErrorMessage', () => {
   it('returns user-friendly message for no-variant', () => {
-    const msg = validationErrorMessage({ type: 'no-variant', slotId: 's1', slotTitle: 'Protein' })
-    expect(msg).toMatch(/flavour or size/)
-    expect(msg).toMatch(/Protein/)
+    const msg = validationErrorMessage({ type: 'no-variant', slotId: 's1', slotTitle: 'Protein', productType: 'Whey protein' })
+    expect(msg).toBe('Please choose a flavour or size for your whey protein before checking out.')
   })
   it('returns user-friendly message for unavailable', () => {
-    const msg = validationErrorMessage({ type: 'unavailable', slotId: 's1', slotTitle: 'Protein', variantTitle: 'Chocolate' })
+    const msg = validationErrorMessage({ type: 'unavailable', slotId: 's1', slotTitle: 'Protein', productType: 'Whey protein', variantTitle: 'Chocolate' })
     expect(msg).toMatch(/out of stock/)
     expect(msg).toMatch(/Chocolate/)
+    expect(msg).toMatch(/^Whey protein — /)
+  })
+  it('names the product type, never the slot title, which is a benefit label', () => {
+    const noVariant = validationErrorMessage({ type: 'no-variant', slotId: 's1', slotTitle: 'Immune Support', productType: 'Vitamin C' })
+    const soldOut = validationErrorMessage({ type: 'unavailable', slotId: 's1', slotTitle: 'Immune Support', productType: 'Vitamin C', variantTitle: '90 tabs' })
+    expect(noVariant).toContain('your vitamin C')
+    expect(soldOut).toContain('Vitamin C — 90 tabs')
+    for (const msg of [noVariant, soldOut]) expect(msg).not.toMatch(/immune support/i)
+  })
+  it('keeps an acronym or a letter-led type as written mid-sentence', () => {
+    expect(validationErrorMessage({ type: 'no-variant', slotId: 's1', slotTitle: 'Sleep', productType: 'ZMA' })).toContain('your ZMA')
+    expect(validationErrorMessage({ type: 'no-variant', slotId: 's1', slotTitle: 'Energy', productType: 'B-complex' })).toContain('your B-complex')
   })
 })
 

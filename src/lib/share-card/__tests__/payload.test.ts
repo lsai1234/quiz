@@ -1,6 +1,7 @@
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { ALL_GOALS, type QuizAnswers, type StackIdentity } from '@/lib/types'
+import type { BuildSharePayloadOptions } from '../payload'
 import { PRODUCT_TYPE_LABELS, productTypeLabel } from '@/lib/catalogue/product-type'
 import { buildSharePayload, shortReason } from '../payload'
 import { SHARE_PAYLOAD_VERSION } from '../types'
@@ -63,10 +64,9 @@ const PERSONAS = {
   }),
 } as const
 
-const build = (answers: QuizAnswers, identity: StackIdentity | null = IDENTITY, opts = {}) =>
+const build = (answers: QuizAnswers, opts: BuildSharePayloadOptions = {}) =>
   buildSharePayload(
     buildStackBlueprint(answers, MOCK_CATALOGUE),
-    identity,
     MOCK_CATALOGUE,
     {
       customerName: answers.name,
@@ -86,15 +86,25 @@ describe('buildSharePayload', () => {
       expect(payload.coverage).toHaveLength(4)
     })
 
-    it('names a product and a reason on every row', () => {
+    it('names a product on every row, and carries no reason', () => {
+      // A slot reason is engine copy saying what a product does, or AI text.
+      // Either is a claim nobody reviewed, so the card carries none.
+      const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+      const serialised = JSON.stringify(payload)
       for (const row of payload.lineup) {
         expect(row.slot.length).toBeGreaterThan(0)
         expect(row.product.length).toBeGreaterThan(0)
-        expect(row.reason.length).toBeGreaterThan(0)
-        // Nine words is the row's budget; the cut happens in the builder so the
-        // renderer never has to decide what to drop mid-layout.
-        expect(row.reason.split(/\s+/).length).toBeLessThanOrEqual(9)
+        expect(row.reason).toBe('')
       }
+      for (const slot of blueprint.slots) {
+        if (slot.reason.trim().length > 12) expect(serialised).not.toContain(slot.reason.trim())
+      }
+    })
+
+    it('carries no AI identity', () => {
+      expect(payload.archetype).toBe('')
+      expect(payload.focusAreas).toEqual([])
+      expect(payload.fitScore).toBeNull()
     })
 
     it('scores every coverage axis 0–100', () => {
@@ -142,7 +152,6 @@ describe('buildSharePayload', () => {
 
     const uncovered = buildSharePayload(
       { ...blueprint, primaryGoal: orphan, secondaryGoals: [], unmetGoals: [orphan] },
-      IDENTITY,
       MOCK_CATALOGUE,
       { customerName: 'Sam' },
     )
@@ -160,78 +169,53 @@ describe('buildSharePayload', () => {
     expect(payload.coverage.some((c) => c.targeted)).toBe(true)
   })
 
-  it('leads with the identity name, not the engine one', () => {
-    // "Iron Foundations" is a title; "Everyday Wellbeing Stack" is a category.
-    // The headline is the line that gets screenshotted.
+  it('leads with the engine’s stack name, the one the results page shows', () => {
+    // One stack, one name: the You scene, the Stack scene and the card agree.
     const blueprint = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
-    expect(blueprint.stackName).not.toBe(IDENTITY.name)
-    expect(build(PERSONAS.wellbeing).stackName).toBe('Iron Foundations')
+    expect(build(PERSONAS.wellbeing).stackName).toBe(blueprint.stackName)
   })
 
-  it('falls back to the engine name when there is no identity', () => {
-    const blueprint = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
-    expect(build(PERSONAS.wellbeing, null).stackName).toBe(blueprint.stackName)
-    // …and when the identity came back with an empty one.
-    expect(build(PERSONAS.wellbeing, { ...IDENTITY, name: '  ' }).stackName)
-      .toBe(blueprint.stackName)
-  })
-
-  it('drops the identity fields rather than inventing them when there is no identity', () => {
-    const payload = build(PERSONAS.essentials, null)
+  it('ignores an AI identity passed the old way', () => {
+    // The four-argument form still compiles for older callers. The identity in
+    // it is not read: not its name, archetype, focus areas or fit score.
+    const blueprint = buildStackBlueprint(PERSONAS.complete, MOCK_CATALOGUE)
+    const payload = buildSharePayload(blueprint, IDENTITY, MOCK_CATALOGUE, {
+      customerName: 'Sam Whitlock',
+      showFirstName: true,
+      code: 'sarah20',
+    })
+    expect(payload.stackName).toBe(blueprint.stackName)
     expect(payload.archetype).toBe('')
     expect(payload.focusAreas).toEqual([])
     expect(payload.fitScore).toBeNull()
-    // The card still has its headline, its lineup and its coverage.
-    expect(payload.stackName.length).toBeGreaterThan(0)
-    expect(payload.lineup.length).toBeGreaterThan(0)
-  })
-
-  it('maps focus areas to glyphs', () => {
-    const payload = build(PERSONAS.complete)
-    expect(payload.focusAreas).toEqual([
-      { label: 'Performance Output', glyph: 'peak' },
-      { label: 'Faster Recovery', glyph: 'refresh' },
-      { label: 'Daily Energy', glyph: 'bolt' },
-    ])
-  })
-
-  it('clamps a fit score that arrives out of range', () => {
-    // routineFitScore comes from a model that is asked for 72–96 and is not
-    // bound to answer in range. A meter drawn from 140 overflows its track and
-    // nothing else reports that it happened.
-    expect(build(PERSONAS.essentials, { ...IDENTITY, routineFitScore: 140 }).fitScore).toBe(100)
-    expect(build(PERSONAS.essentials, { ...IDENTITY, routineFitScore: -3 }).fitScore).toBe(0)
-    expect(build(PERSONAS.essentials, { ...IDENTITY, routineFitScore: NaN }).fitScore).toBe(0)
+    expect(payload.firstName).toBe('Sam')
+    expect(payload.code).toBe('SARAH20')
+    expect(payload.lineup.length).toBe(build(PERSONAS.complete).lineup.length)
+    expect(JSON.stringify(payload)).not.toMatch(/Iron Foundations|Strength Builder|Faster Recovery/)
   })
 
   describe('the opt-in first name', () => {
     it('is absent even though the builder knows the name', () => {
-      // The name is passed on every call — it has to be, so the reason text can
-      // be stripped of it. Showing it is a separate decision that defaults off.
+      // Showing it is a separate decision that defaults off.
       expect(build(PERSONAS.essentials).firstName).toBeUndefined()
     })
 
     it('is the first name only, never the full one', () => {
-      expect(build(PERSONAS.essentials, IDENTITY, { showFirstName: true }).firstName).toBe('Sam')
+      expect(build(PERSONAS.essentials, { showFirstName: true }).firstName).toBe('Sam')
     })
 
     it('stays absent when there is no name to show', () => {
-      expect(build(PERSONAS.essentials, IDENTITY, { showFirstName: true, customerName: '   ' }).firstName)
+      expect(build(PERSONAS.essentials, { showFirstName: true, customerName: '   ' }).firstName)
         .toBeUndefined()
     })
   })
 
-  it('strips the name the engine writes into its reasons', () => {
-    // `factory.ts` addresses personalised reasons "For Sam: …". On the results
-    // screen that is a nice touch; on a public card it is a name nobody opted
-    // into publishing, arriving through a field that looks like product copy.
+  it('never carries the name the engine writes into its reasons', () => {
+    // `factory.ts` addresses personalised reasons "For Sam: …". The card has no
+    // reasons any more, so the name cannot arrive that way.
     const raw = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
     expect(raw.slots.some((s) => /^For Sam:/.test(s.reason))).toBe(true)
-
-    for (const row of build(PERSONAS.wellbeing).lineup) {
-      expect(row.reason).not.toMatch(/\bSam\b/)
-      expect(row.reason).not.toMatch(/^For\b/i)
-    }
+    expect(JSON.stringify(build(PERSONAS.wellbeing))).not.toMatch(/\bSam\b/)
   })
 
   it('strips the name even when the reason was not written by the engine', () => {
@@ -244,7 +228,7 @@ describe('buildSharePayload', () => {
   })
 
   it('normalises the code to the form printed on the card', () => {
-    expect(build(PERSONAS.essentials, IDENTITY, { code: ' sarah20 ' }).code).toBe('SARAH20')
+    expect(build(PERSONAS.essentials, { code: ' sarah20 ' }).code).toBe('SARAH20')
     expect(build(PERSONAS.essentials).code).toBeUndefined()
   })
 

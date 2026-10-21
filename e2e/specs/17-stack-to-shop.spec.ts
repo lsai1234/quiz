@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { completeQuiz } from '../support/quiz'
+import { completeQuiz, REVEAL_HEADING } from '../support/quiz'
 
 /**
  * Leaving a stack to buy its products one at a time.
@@ -53,7 +53,7 @@ test.describe('the door out of a stack', () => {
     await expect(bar).toBeVisible()
 
     await page.getByRole('link', { name: /back to it/i }).click()
-    await expect(page.getByText(/supplement identity/i)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible({ timeout: 20_000 })
   })
 
   test('carries the stack over — and only the stack', async ({ page }) => {
@@ -94,7 +94,7 @@ test.describe('the door out of a stack', () => {
     await page.getByRole('link', { name: /take me to the shop/i }).click()
 
     await page.getByRole('link', { name: /back to it/i }).click()
-    await expect(page.getByText(/supplement identity/i)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('heading', { name: REVEAL_HEADING })).toBeVisible({ timeout: 20_000 })
 
     // Back in the shop under their own steam: they are not mid-handoff any
     // more, so the shop should not still be offering to rescue them from one.
