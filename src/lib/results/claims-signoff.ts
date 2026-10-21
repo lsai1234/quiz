@@ -11,11 +11,13 @@
  *   authorised claim. Nothing about what they do is shown, and no goal line.
  */
 
+import { createHash } from 'crypto'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { CLAIMS, CLAIMS_BY_KIND } from '@/lib/consult/claims'
 import { GOAL_LABELS } from '@/lib/quiz-goals'
 import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import { goalsBackedBy } from './goal-claims'
+import { CLAIMS_SIGNOFF, type ClaimsSignoffRecord } from './claims-signoff-record'
 
 export const SIGNOFF_HEADER = [
   'swap_group', 'claim_id', 'claim_wording', 'condition_of_use', 'roster_products', 'goals_mapped',
@@ -74,5 +76,27 @@ export function buildClaimsSignoff(rosterCsv: string): { claims: string; noClaim
     claims: csv([[...SIGNOFF_HEADER], ...claimsSignoffRows(rows)]),
     noClaim: csv([[...NO_CLAIM_HEADER], ...noClaimRows(rows)]),
     warnings,
+  }
+}
+
+export function sha256(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+/**
+ * Whether these sheets are the ones signed off (claims-signoff-record.ts).
+ * `signed` is false as soon as either sheet differs by a byte.
+ */
+export function signoffStatus(
+  built: { claims: string; noClaim: string },
+  record: ClaimsSignoffRecord = CLAIMS_SIGNOFF,
+): { signed: boolean; claimsSha256: string; noClaimSha256: string; record: ClaimsSignoffRecord } {
+  const claimsSha256 = sha256(built.claims)
+  const noClaimSha256 = sha256(built.noClaim)
+  return {
+    signed: claimsSha256 === record.claimsSha256 && noClaimSha256 === record.noClaimSha256,
+    claimsSha256,
+    noClaimSha256,
+    record,
   }
 }

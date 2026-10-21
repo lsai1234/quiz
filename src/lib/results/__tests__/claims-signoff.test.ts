@@ -2,8 +2,9 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { CLAIMS, CLAIMS_BY_KIND } from '@/lib/consult/claims'
 import {
-  GENERAL_HEALTH_NOTE, NO_CLAIM_HEADER, SIGNOFF_HEADER, buildClaimsSignoff, csvField,
+  GENERAL_HEALTH_NOTE, NO_CLAIM_HEADER, SIGNOFF_HEADER, buildClaimsSignoff, csvField, sha256, signoffStatus,
 } from '../claims-signoff'
+import { CLAIMS_SIGNOFF } from '../claims-signoff-record'
 
 const ROOT = join(__dirname, '../../../..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
@@ -94,5 +95,31 @@ describe('claims-signoff-no-claim.csv', () => {
 
   it('is the committed file', () => {
     expect(read('docs/claims-signoff-no-claim.csv')).toBe(built.noClaim)
+  })
+})
+
+describe('the sign-off on record', () => {
+  /*
+   * Merging puts claims live. If this fails, a change to the claims register,
+   * the goal-to-claim map or the roster has changed what customers would be
+   * shown: get the regenerated sheets signed off, then record the new hashes
+   * (`npm run claims:signoff` prints them) in claims-signoff-record.ts.
+   */
+  it(`is these sheets, exactly as signed off on ${CLAIMS_SIGNOFF.date}`, () => {
+    const status = signoffStatus(buildClaimsSignoff(ROSTER))
+    expect({ claims: status.claimsSha256, noClaim: status.noClaimSha256 })
+      .toEqual({ claims: CLAIMS_SIGNOFF.claimsSha256, noClaim: CLAIMS_SIGNOFF.noClaimSha256 })
+    expect(status.signed).toBe(true)
+  })
+
+  it('records the committed files byte for byte', () => {
+    expect(sha256(read('docs/claims-signoff.csv'))).toBe(CLAIMS_SIGNOFF.claimsSha256)
+    expect(sha256(read('docs/claims-signoff-no-claim.csv'))).toBe(CLAIMS_SIGNOFF.noClaimSha256)
+  })
+
+  it('stops being signed off when a single claim line changes', () => {
+    const built = buildClaimsSignoff(ROSTER)
+    const changed = { ...built, claims: built.claims.replace('growth in muscle mass', 'growth in muscle') }
+    expect(signoffStatus(changed).signed).toBe(false)
   })
 })

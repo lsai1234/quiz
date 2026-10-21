@@ -58,7 +58,7 @@ describe('goalClaimFor', () => {
     ['muscle', 'protein-plant', 'protein-muscle-growth'],
     ['muscle', 'creatine', 'creatine-performance'],
     ['bulking', 'protein-mass', 'protein-muscle-growth'],
-    // Held back until sign-off: the electrolyte claims need a carbohydrate-
+    // Held back (not on the signed-off sheet): the electrolyte claims need a carbohydrate-
     // electrolyte solution, and the focus claims are about normal function only.
     ['performance', 'electrolytes', null],
     ['hydration', 'electrolytes', null],

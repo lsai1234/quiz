@@ -1,13 +1,15 @@
 /**
  * Which quiz goals an authorised claim can back.
  *
- * PENDING SIGN-OFF. This map is the only route by which the results page may
- * put a health goal next to a product. "You said you want more energy" beside
- * a product says the product is for energy, which is a health claim, so it is
- * only said where a claim on the GB register says it first, verbatim, right
- * beside it. Nothing here goes live until the person who signs off claims has
- * checked it; `npm run claims:signoff` writes the sheet they check
- * (docs/claims-signoff.csv).
+ * SIGNED OFF (claims-signoff-record.ts has the date). This map is the only
+ * route by which the results page may put a health goal next to a product.
+ * "You said you want more energy" beside a product says the product is for
+ * energy, which is a health claim, so it is only said where a claim on the GB
+ * register says it first, verbatim, right beside it.
+ *
+ * Changing the map changes the sheet the sign-off covers
+ * (docs/claims-signoff.csv, written by `npm run claims:signoff`), and the
+ * sign-off test fails until the new sheet is signed off and recorded.
  *
  * The rules this follows:
  * - Claim ids come from `CLAIMS_BY_KIND` (consult/claims.ts) only, and only
@@ -69,7 +71,8 @@ export const GOAL_CLAIMS: Readonly<Record<Goal, GoalClaimEntry>> = {
   // "Peak performance". Creatine's claim is about physical performance.
   // The carbohydrate-electrolyte endurance claim is left out: its condition of
   // use is a carbohydrate-electrolyte solution, and an electrolyte product made
-  // of salts alone does not meet it. It can come back per product after sign-off.
+  // of salts alone does not meet it. It can come back per product with a new
+  // sign-off.
   performance: [
     { kind: 'creatine', claimIds: ['creatine-performance'] },
   ],
@@ -91,7 +94,8 @@ export const GOAL_CLAIMS: Readonly<Record<Goal, GoalClaimEntry>> = {
 
   // No authorised claim speaks to these, so they map to nothing.
   //
-  // Two held back until the claims are signed off, though a claim exists:
+  // Two held back, though a claim exists; they were not on the signed-off
+  // sheet, so adding them needs a new sign-off:
   // - "Stay hydrated": the water-absorption claim needs a carbohydrate-
   //   electrolyte solution (see performance above).
   // - "Focus & brain fog": the brain and cognitive claims are about NORMAL
