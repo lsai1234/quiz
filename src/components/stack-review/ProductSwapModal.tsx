@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { IconButton } from '@/components/ui/IconButton'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { productTypeLabel } from '@/lib/catalogue/product-type'
+import { inSentence, productTypeLabel } from '@/lib/catalogue/product-type'
 import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
 import { productDietary } from '@/lib/product-facts'
 import { formatPerServing } from '@/lib/shop/per-serving'
@@ -20,15 +20,6 @@ interface Props {
 }
 
 const ACCENT = '#00D4FF'
-
-/**
- * A type label as it reads mid-sentence: "Change your vitamin C", not "your
- * Vitamin C" or "your vitamin c". Only a leading capital followed by a
- * lower-case letter drops, so "ZMA" and "B-complex" keep theirs.
- */
-function inSentence(label: string): string {
-  return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
-}
 
 /**
  * The difference one pack makes to the order: "£3.00 more", "£2.00 less".

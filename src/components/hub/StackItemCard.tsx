@@ -4,14 +4,11 @@ import { useState } from 'react'
 import { Badge, Button, ChargeScale } from '@/components/system'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dimensionForSlot } from '@/lib/feedback'
-import { productBars } from '@/lib/stack-stats'
 import { Icon } from '@/components/ui/Icon'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { StatBars } from '@/components/stack-review/StatBars'
 import { tint } from '@/lib/ui/tokens'
 import { StatusBadge, toneColor } from './StatusBadge'
 import { ProgressRing } from './ProgressRing'
-import type { StatAxis } from '@/lib/stack-stats'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { LineRecommendation, FeedbackDimension } from '@/lib/feedback'
@@ -25,19 +22,17 @@ import type { LineRecommendation, FeedbackDimension } from '@/lib/feedback'
  * showed each product as a photo with a set of bars saying what it supports; the
  * screen they live in afterwards showed a string.
  *
- * So it borrows both. `ProductTile` gives every line a visual anchor — the real
- * photo where the catalogue has one, a slot-hued glyph tile where it doesn't —
- * and `StatBars` scores it on the axes the whole stack is scored on, which is
- * what makes a column of cards comparable rather than merely listed.
+ * So it borrows the photo: `ProductTile` gives every line a visual anchor — the
+ * real photo where the catalogue has one, a tile of the product's form where it
+ * doesn't. Not the bars: "What it supports" scored each product against health
+ * goals, which says what it does, and the reveal dropped them for that reason.
  */
 
 interface Props {
   line: MemberSubscriptionLine
   recommendation: LineRecommendation
-  /** The catalogue entry, for the photo and the stat bars. Absent is survivable. */
+  /** The catalogue entry, for the photo. Absent is survivable. */
   product?: CatalogueProduct
-  /** Axes shared by every card in the stack, so the bars compare like for like. */
-  axes?: StatAxis[]
   onChange: (lineId: string) => void
   onManage: (lineId: string) => void
   onMicroFeedback: (dimension: FeedbackDimension, rating: number) => void
@@ -52,7 +47,6 @@ export function StackItemCard({
   line,
   recommendation: rec,
   product,
-  axes,
   onChange,
   onManage,
   onMicroFeedback,
@@ -61,8 +55,6 @@ export function StackItemCard({
   const dimension = dimensionForSlot(line.stackSlot)
   const canMicro = dimension != null && (rec.phase === 'working' || rec.phase === 'review' || rec.phase === 'check')
   const [tapped, setTapped] = useState<number | null>(null)
-
-  const bars = product && axes && axes.length > 0 ? productBars(product, axes) : null
 
   function micro(rating: number) {
     if (!dimension) return
@@ -170,18 +162,6 @@ export function StackItemCard({
         </div>
       </div>
 
-      {/* What it supports — the same bars, on the same axes, as the deck that
-          sold this stack in the first place. Sits below a rule so the card reads
-          as "the product, then the evidence". */}
-      {bars && (
-        <StatBars
-          bars={bars}
-          animate={false}
-          label="What it supports"
-          className="px-4 pt-3.5 pb-4"
-          style={{ borderTop: `1px solid var(--edge)` }}
-        />
-      )}
     </div>
   )
 }

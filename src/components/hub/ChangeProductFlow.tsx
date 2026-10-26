@@ -12,6 +12,9 @@ import { computeSwapImpact, projectedEconomics } from '@/lib/recharge/mock'
 import { BillingImpact } from './BillingImpact'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { inSentence, productTypeLabel } from '@/lib/catalogue/product-type'
+import { cardFacts } from '@/lib/results/card-facts'
+import { formatPerServing } from '@/lib/shop/per-serving'
 
 /** A glyph per reason, so the list can be scanned by shape as well as read. */
 const REASON_ICON: Record<ChangeReason, IconName> = {
@@ -33,6 +36,20 @@ interface Props {
   onClose: () => void
 }
 
+/**
+ * What can be said of a replacement without saying what it does: its type, the
+ * servings in a pack and what one costs. Not the catalogue description, which
+ * says what it is for.
+ */
+function factLine(p: CatalogueProduct): string {
+  const facts = cardFacts({ product: p })
+  return [
+    productTypeLabel(p),
+    facts.servings != null ? `${Math.max(1, Math.round(facts.servings))} servings` : null,
+    facts.perServing != null ? `${formatPerServing(facts.perServing)} per serving` : null,
+  ].filter(Boolean).join(' · ')
+}
+
 function deltaLabel(delta: number): string {
   if (Math.abs(delta) < 0.01) return 'Same price'
   return `${delta > 0 ? '+' : '−'}${formatGBP(Math.abs(delta))}/mo`
@@ -49,13 +66,15 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
   const effectiveDate = impact ? new Date(impact.effectiveFrom).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : ''
   const oneOff = impact && applyToNextBox ? impact.oneOffNow : 0
 
-  const heading = step === 'reason' ? `Change your ${line.slotTitle.toLowerCase()}`
+  // The product's type, not the slot title: "Immune Support" names a benefit.
+  const typeLabel = productTypeLabel(catalogue.find((p) => p.id === line.productId))
+  const heading = step === 'reason' ? `Change your ${inSentence(typeLabel)}`
     : step === 'pick' ? 'Recommended for you'
     : 'Confirm your change'
 
   return (
     <Modal onClose={onClose} presentation="sheet">
-      <ModalHeader eyebrow={`${line.slotTitle} · currently ${line.productTitle}`} title={heading}>
+      <ModalHeader eyebrow={`${typeLabel} · currently ${line.productTitle}`} title={heading}>
         {/* Where they are in the three steps, in the quiz's own rail — the flow
             gave no sense of length or progress at all. */}
         <div className="flex items-center gap-1.5 mt-3">
@@ -125,16 +144,18 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
                           </span>
                         </span>
                         <span
-                          className="block line-clamp-2"
+                          className="block"
                           style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)', marginTop: 'var(--space-1)' }}
                         >
-                          {alt.description}
+                          {factLine(alt)}
                         </span>
                       </span>
                     </span>
-                    <Badge tone="accent" className="mt-2.5 self-start">
-                      {reason ? replacementRationale(alt, reason) : ''}
-                    </Badge>
+                    {reason && replacementRationale(alt, reason) && (
+                      <Badge tone="accent" className="mt-2.5 self-start">
+                        {replacementRationale(alt, reason)}
+                      </Badge>
+                    )}
                   </Button>
                   </Card>
                 )

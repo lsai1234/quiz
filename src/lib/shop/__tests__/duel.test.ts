@@ -117,10 +117,16 @@ describe('buildDuel', () => {
   it('scores no winner on a preference', () => {
     const caps = makeProduct({ id: 'c', formats: ['capsule'], dietaryTags: ['vegan'] })
     const rows = buildDuel(WHEY, caps).rows
-    for (const key of ['format', 'dietary', 'onset', 'actives']) {
+    for (const key of ['format', 'dietary', 'actives']) {
       expect(row(rows, key).winner).toBeNull()
       expect(row(rows, key).note).toBeUndefined()
     }
+  })
+
+  it('has no "You\'ll feel it" row: a felt-effect window is an implied claim', () => {
+    const rows = buildDuel(WHEY, makeProduct({ id: 'c' })).rows
+    expect(rows.map((r) => r.key)).not.toContain('onset')
+    expect(rows.some((r) => /feel/i.test(r.label))).toBe(false)
   })
 
   it('scores no winner on a tie', () => {

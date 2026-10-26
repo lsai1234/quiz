@@ -8,7 +8,6 @@ import { Icon } from '@/components/ui/Icon'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { ordinalSuffix, tint } from '@/lib/ui/tokens'
-import { selectShopAxes } from '@/lib/stack-stats'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice, skipCredit } from '@/lib/recharge/schedule'
@@ -69,22 +68,11 @@ export function SubscriptionDashboard() {
   const rootRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion()
 
-  /** The catalogue entry behind each line, for photos and stat bars. */
+  /** The catalogue entry behind each line, for photos. */
   const productById = useMemo(
     () => Object.fromEntries(products.map((p) => [p.id, p])),
     [products],
   )
-  /**
-   * One set of stat axes for the whole stack, derived from the products in it.
-   * Shared axes are the point: four cards scored on the same four goals can be
-   * compared at a glance, which four cards each picking their own cannot.
-   */
-  const axes = useMemo(() => {
-    if (!sub) return []
-    const owned = sub.lines.map((l) => productById[l.productId]).filter(Boolean)
-    return owned.length > 0 ? selectShopAxes(owned, 4) : []
-  }, [sub, productById])
-
   /**
    * Opens the real Stripe billing portal. This was an `alert()` — a browser
    * dialog, in production, on a paying member's billing panel — even though the
@@ -398,7 +386,6 @@ export function SubscriptionDashboard() {
                 line={line}
                 recommendation={recById[line.id]}
                 product={productById[line.productId]}
-                axes={axes}
                 onChange={openChange}
                 onManage={(id) => { setChangeLineId(null); setManageLineId(id) }}
                 onMicroFeedback={submitDimension}

@@ -70,21 +70,9 @@ export interface ShareLineupEntry {
 export interface ShareCoverageEntry {
   /** Short axis label — "Muscle", "Sleep". */
   label: string
-  /** 0–100. Scaled from `stackStatScore` so the renderer draws a meter and does
-   *  no arithmetic of its own. */
+  /** 0–100. */
   score: number
-  /**
-   * Whether any product in the stack actually targets this goal.
-   *
-   * This is not `score > 0`, and the difference is the whole reason the field
-   * exists. `stackStatScore` gives every product a small non-zero baseline on
-   * every axis, so a goal that nothing in the stack addresses still scores
-   * around 31 — a bar a third full, captioned with a goal the customer asked for
-   * and did not get. On a public card that reads as a claim.
-   *
-   * So the renderer draws untargeted axes as faint context rather than as fill,
-   * which is the idiom the product deck already uses (`StatBar.targeted`).
-   */
+  /** Whether any product in the stack targeted this goal. */
   targeted: boolean
 }
 

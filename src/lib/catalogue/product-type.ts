@@ -90,6 +90,15 @@ export function productTypeLabel(
 }
 
 /**
+ * A type label as it reads mid-sentence: "Change your vitamin C", not "your
+ * Vitamin C". Only a leading capital followed by a lower-case letter drops, so
+ * "ZMA" and "B-complex" keep theirs.
+ */
+export function inSentence(label: string): string {
+  return label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+}
+
+/**
  * Whether a stored label is one `productTypeLabel` can give. The share card
  * prints a row's category only then: cards saved before Phase 1 hold the slot
  * title there ("Immune Support"), which names a benefit.

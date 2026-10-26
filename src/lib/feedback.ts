@@ -268,18 +268,23 @@ export function recommendReplacements(
 }
 
 /** One-line rationale for why an alternative suits the stated reason. */
+/**
+ * The badge on a replacement: a fact about it that answers why they asked, or
+ * '' for none. Never what it does ("Gentler") and never a verdict we have no
+ * figures for ("Popular choice") or that is ours ("Premium pick").
+ */
 export function replacementRationale(product: CatalogueProduct, reason: ChangeReason): string {
   switch (reason) {
     case 'vegan':
-      return 'Fully plant-based'
+      return product.dietaryTags.includes('vegan') ? 'Vegan' : ''
     case 'cheaper':
-      return 'Lower cost option'
+      return 'Lower price'
     case 'side-effects':
-      return product.hasStimulants ? 'Similar formula' : 'Gentler, stimulant-free'
+      return product.hasStimulants ? '' : 'Stimulant-free'
     case 'not-working':
-      return 'A different approach to try'
+      return 'A different product'
     default:
-      return product.recommendationPriority >= 9 ? 'Premium pick' : 'Popular choice'
+      return ''
   }
 }
 

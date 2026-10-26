@@ -1,6 +1,5 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { effectOnsetForProduct, onsetWindowLabel } from '@/lib/feedback'
 import { productDietary, formatFact } from '@/lib/product-facts'
 import { hasRating, formatRatingCount } from './ratings'
 import { defaultVariant } from './merchandising'
@@ -192,16 +191,6 @@ export function buildDuel(a: CatalogueProduct, b: CatalogueProduct): Duel {
     cells: [
       cell(productDietary(a).join(' · ') || null),
       cell(productDietary(b).join(' · ') || null),
-    ],
-    winner: null,
-  })
-
-  rows.push({
-    key: 'onset',
-    label: "You'll feel it",
-    cells: [
-      cell(onsetWindowLabel(effectOnsetForProduct(a))),
-      cell(onsetWindowLabel(effectOnsetForProduct(b))),
     ],
     winner: null,
   })

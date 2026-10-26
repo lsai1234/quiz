@@ -8,6 +8,7 @@ import {
   onsetForSlot,
   onsetWindowDays,
   buildCheckInQuestions,
+  replacementRationale,
   type FeedbackCheckIn,
 } from '../feedback'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -200,5 +201,19 @@ describe('recommendReplacements', () => {
   it('prefers a different mechanism for "not working"', () => {
     // both plant and mass are different swap groups; ranked by priority → plant (9) first
     expect(recommendReplacements(wheyLine, 'not-working', cat)[0].id).toBe('plant')
+  })
+})
+
+describe('replacementRationale', () => {
+  it('states a fact about the replacement, never what it does or a verdict we cannot back', () => {
+    expect(replacementRationale(makeProduct({ dietaryTags: ['vegan'] }), 'vegan')).toBe('Vegan')
+    expect(replacementRationale(makeProduct(), 'cheaper')).toBe('Lower price')
+    expect(replacementRationale(makeProduct({ hasStimulants: false }), 'side-effects')).toBe('Stimulant-free')
+    expect(replacementRationale(makeProduct({ hasStimulants: true }), 'side-effects')).toBe('')
+    for (const p of [makeProduct({ recommendationPriority: 10 }), makeProduct({ recommendationPriority: 1 })]) {
+      for (const reason of ['vegan', 'cheaper', 'side-effects', 'not-working', 'exploring'] as const) {
+        expect(replacementRationale(p, reason)).not.toMatch(/gentle|premium|popular|better|best/i)
+      }
+    }
   })
 })

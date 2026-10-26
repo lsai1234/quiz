@@ -2,10 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StackItemCard } from '../StackItemCard'
 import { line, product } from '@/lib/changes/__tests__/fixtures'
-import { goalAxis } from '@/lib/stack-stats'
 import type { LinePhase, LineRecommendation } from '@/lib/feedback'
-
-const AXES = [goalAxis('muscle'), goalAxis('energy'), goalAxis('recovery'), goalAxis('health')]
 
 function rec(over: Partial<LineRecommendation> = {}): LineRecommendation {
   return {
@@ -31,7 +28,6 @@ function renderCard(over: { recommendation?: Partial<LineRecommendation>; withPr
       line={line()}
       recommendation={rec(over.recommendation)}
       product={over.withProduct === false ? undefined : product({ id: 'whey-a', title: 'Whey A' })}
-      axes={AXES}
       {...handlers}
     />,
   )
@@ -60,25 +56,21 @@ describe('StackItemCard', () => {
   it('shows the product, which the hub never used to do', () => {
     // Every other screen anchors a product with a tile; this one printed a
     // string. The catalogue has no photos in test, so this is the designed
-    // slot-glyph fallback — the point is that something is drawn at all.
+    // form-glyph fallback — the point is that something is drawn at all.
     const { container } = renderCard()
     expect(container.querySelector('svg')).not.toBeNull()
   })
 
   it('survives a product the catalogue knows nothing about', () => {
-    // Lines outlive catalogue entries. A missing product must cost the bars,
+    // Lines outlive catalogue entries. A missing product must cost the photo,
     // not the card.
     renderCard({ withProduct: false })
     expect(screen.getByText('Whey A')).toBeInTheDocument()
-    expect(screen.queryByText('What it supports')).not.toBeInTheDocument()
   })
 
-  it('scores the product on the stack’s shared axes', () => {
+  it('has no "What it supports" bars: they scored the product against health goals', () => {
     renderCard()
-    expect(screen.getByText('What it supports')).toBeInTheDocument()
-    for (const axis of AXES) {
-      expect(screen.getByText(axis.label)).toBeInTheDocument()
-    }
+    expect(screen.queryByText('What it supports')).not.toBeInTheDocument()
   })
 
   it('offers a swap and a manage, and reports which was pressed', async () => {
@@ -109,8 +101,7 @@ describe('StackItemCard', () => {
         line={line({ stackSlot: 'energy', slotTitle: 'Energy' })}
         recommendation={rec({ phase: 'working', statusTone: 'good', statusIcon: 'bolt' })}
         product={product({ id: 'whey-a' })}
-        axes={AXES}
-        {...handlers}
+          {...handlers}
       />,
     )
 

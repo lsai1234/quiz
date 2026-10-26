@@ -4,30 +4,41 @@ import { useMemo } from 'react'
 import { Eyebrow } from './Eyebrow'
 import { Button, EmptyState, Modal, ModalBody, ModalHeader } from '@/components/system'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { StatBars } from '@/components/stack-review/StatBars'
-import { productBars, selectShopAxes, type StatAxis } from '@/lib/stack-stats'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
+import { cardFacts } from '@/lib/results/card-facts'
+import { formatPerServing } from '@/lib/shop/per-serving'
 import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
-import { SLOT_LABELS } from '@/lib/catalogue/types'
-import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { shortNameOf } from '@/lib/catalogue/short-name'
 
+/**
+ * What can be said of a product without saying what it does: its type, the
+ * servings in a pack and what one costs. Not its description or short reason,
+ * which say what it is for.
+ */
+function factLine(p: CatalogueProduct): string {
+  const facts = cardFacts({ product: p })
+  return [
+    productTypeLabel(p),
+    facts.servings != null ? `${Math.max(1, Math.round(facts.servings))} servings` : null,
+    facts.perServing != null ? `${formatPerServing(facts.perServing)} per serving` : null,
+  ].filter(Boolean).join(' · ')
+}
+
 /** One addable product, with what it does to the monthly. */
 function ProductCard({
-  product: p, subscription, catalogue, axes, onAdd,
+  product: p, subscription, catalogue, onAdd,
 }: {
   product: CatalogueProduct
   subscription: MemberSubscription
   catalogue: CatalogueProduct[]
-  /** Shared axes, so every card in the sheet compares on the same footing. */
-  axes: StatAxis[]
   onAdd: (product: CatalogueProduct) => void
 }) {
   const impact = computeAddImpact(subscription, p, catalogue)
   const econ = projectedEconomics(p)
-  const bars = axes.length > 0 ? productBars(p, axes) : null
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-1)', border: `1px solid var(--edge)` }}>
       <div className="p-4">
@@ -41,7 +52,7 @@ function ProductCard({
               <p className="text-sm font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{shortNameOf(p)}</p>
               <span className="text-xs font-black shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
             </div>
-            <p className="text-xs text-[var(--ink-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
+            <p className="text-xs text-[var(--ink-2)] mt-1 leading-relaxed">{factLine(p)}</p>
           </div>
         </div>
         <p className="text-[11px] text-[var(--ink-3)] mt-2.5">
@@ -52,15 +63,6 @@ function ProductCard({
           Add to every delivery
         </Button>
       </div>
-      {bars && (
-        <StatBars
-          bars={bars}
-          animate={false}
-          label="What it supports"
-          className="px-4 pt-3 pb-3.5"
-          style={{ borderTop: `1px solid var(--edge)` }}
-        />
-      )}
     </div>
   )
 }
@@ -83,16 +85,6 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
 
   const inStack = useMemo(() => new Set(subscription.lines.map((l) => l.productId)), [subscription.lines])
 
-  /**
-   * Axes drawn from the member's existing stack, not from what's on offer — so
-   * a candidate's bars answer "how does this compare to what I already have?"
-   * rather than to the other things being sold alongside it.
-   */
-  const axes = useMemo(() => {
-    const owned = subscription.lines.map((l) => catalogue.find((p) => p.id === l.productId)).filter((p): p is CatalogueProduct => !!p)
-    return owned.length > 0 ? selectShopAxes(owned, 4) : []
-  }, [subscription.lines, catalogue])
-
   // Products in the category the member came here for, if any.
   const focused = useMemo(
     () =>
@@ -105,17 +97,19 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
   )
   const focusedIds = useMemo(() => new Set(focused.map((p) => p.id)), [focused])
 
-  // Subscription-eligible products not already in the stack, grouped by slot.
+  // Subscription-eligible products not already in the stack, grouped by what
+  // they are. Not by slot: a slot heading ("Immune Support", "Sleep") above a
+  // product says what it is for.
   const grouped = useMemo(() => {
     const candidates = catalogue.filter(
       (p) => p.subscriptionEligible && !p.isSubscriptionOnly && !inStack.has(p.id) && !focusedIds.has(p.id),
     )
-    const map = new Map<StackSlot, CatalogueProduct[]>()
+    const map = new Map<string, CatalogueProduct[]>()
     for (const p of candidates) {
-      const slot = p.stackSlots[0]
-      const arr = map.get(slot) ?? []
+      const type = productTypeLabel(p)
+      const arr = map.get(type) ?? []
       arr.push(p)
-      map.set(slot, arr)
+      map.set(type, arr)
     }
     for (const arr of map.values()) arr.sort((a, b) => b.recommendationPriority - a.recommendationPriority)
     return [...map.entries()]
@@ -131,7 +125,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
             <Eyebrow color="var(--accent)" className="mb-2">In place of what you lost</Eyebrow>
             <div className="space-y-2">
               {focused.map((p) => (
-                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
+                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} onAdd={onAdd} />
               ))}
             </div>
           </div>
@@ -141,12 +135,12 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
             You already subscribe to everything we offer on subscription. New products land here as they launch.
           </EmptyState>
         )}
-        {grouped.map(([slot, products]) => (
-          <div key={slot}>
-            <Eyebrow className="mb-2">{SLOT_LABELS[slot]}</Eyebrow>
+        {grouped.map(([type, products]) => (
+          <div key={type}>
+            <Eyebrow className="mb-2">{type}</Eyebrow>
             <div className="space-y-2">
               {products.map((p) => (
-                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
+                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} onAdd={onAdd} />
               ))}
             </div>
           </div>

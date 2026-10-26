@@ -3,6 +3,9 @@
 import type { BundleAddOn } from '@/lib/bundles'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
+import { cardFacts } from '@/lib/results/card-facts'
+import { formatPerServing } from '@/lib/shop/per-serving'
 
 interface Props {
   addOn: BundleAddOn
@@ -12,9 +15,19 @@ interface Props {
   onRemove: (slotId: string) => void
 }
 
+/**
+ * An optional extra on a bundle page. It says what the product is and what a
+ * pack holds and costs. Not the add-on's title or reason: both are written per
+ * bundle and say what the product is for ("Sleep Support", "to help you wind
+ * down"), which beside a product is a health claim.
+ */
 export function BundleAddOnCard({ addOn, product, added, onAdd, onRemove }: Props) {
-  const variant = product.variants.find((v) => v.available) ?? product.variants[0]
-  const price = variant?.price ?? product.basePrice
+  const facts = cardFacts({ product })
+  const price = facts.price
+  const factLine = [
+    facts.servings != null ? `${Math.max(1, Math.round(facts.servings))} servings` : null,
+    facts.perServing != null ? `${formatPerServing(facts.perServing)} per serving` : null,
+  ].filter(Boolean).join(' · ')
 
   return (
     <div
@@ -33,7 +46,7 @@ export function BundleAddOnCard({ addOn, product, added, onAdd, onRemove }: Prop
             border: '1px solid var(--color-border-2)',
           }}
         >
-          Optional · {addOn.title}
+          Optional · {productTypeLabel(product)}
         </span>
         <span
           className="text-sm font-black"
@@ -46,9 +59,11 @@ export function BundleAddOnCard({ addOn, product, added, onAdd, onRemove }: Prop
       <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
         {product.title}
       </p>
-      <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-        {addOn.reason}
-      </p>
+      {factLine && (
+        <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
+          {factLine}
+        </p>
+      )}
 
       <button
         onClick={() => (added ? onRemove(addOn.slotId) : onAdd(addOn))}

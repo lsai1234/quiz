@@ -4,11 +4,8 @@ import {
 import type { CatalogueProduct } from '../catalogue/types'
 
 /**
- * The onset fact ("You'll feel it — within a few weeks") is optional.
- *
- * The quiz results sheet leaves it out: a felt-effect window is an implied
- * claim. The shop sheet still asks for the default, so its facts are pinned
- * here too — changing them there is a separate decision.
+ * No onset fact ("You'll feel it — within a few weeks") anywhere: a felt-effect
+ * window says the product does something, an implied health claim.
  */
 
 function product(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
@@ -24,22 +21,15 @@ function product(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
 }
 
 describe('productFacts', () => {
-  it('includes the onset fact by default, as the shop sheet shows it', () => {
+  it('gives the format and the servings, and never when you will feel it', () => {
     const facts = productFacts(product())
-    expect(facts.map((f) => f.key)).toEqual(['format', 'servings', 'onset'])
-    expect(facts.find((f) => f.key === 'onset')).toMatchObject({ label: "You'll feel it", value: 'within a few weeks' })
-  })
-
-  it('leaves the onset fact out when asked, as the results sheet does', () => {
-    const facts = productFacts(product(), undefined, { onset: false })
     expect(facts.map((f) => f.key)).toEqual(['format', 'servings'])
     expect(facts.some((f) => /feel/i.test(f.label) || /feel/i.test(f.value))).toBe(false)
   })
 
-  it('still gives an accessory its one fact either way', () => {
+  it('gives an accessory its one fact', () => {
     const shaker = product({ swapGroup: 'accessory', category: 'Accessories', formats: ['accessory'] })
     expect(productFacts(shaker).map((f) => f.key)).toEqual(['format'])
-    expect(productFacts(shaker, undefined, { onset: false }).map((f) => f.key)).toEqual(['format'])
   })
 })
 

@@ -1,8 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { selectShopAxes } from '@/lib/stack-stats'
 import { ShopProductCard } from './ShopProductCard'
 
 interface Props {
@@ -28,10 +26,6 @@ interface Props {
  * card sets the column count, not the other way round.
  */
 export function ShopResultsGrid({ products, query, fuzzy, onOpen }: Props) {
-  // Axes drawn from the result set itself, so the stat bars compare the things
-  // actually on screen — the same trick the category shelves use.
-  const axes = useMemo(() => selectShopAxes(products), [products])
-
   return (
     <section aria-label="Search results" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
       <div className="flex items-baseline justify-between gap-3 mb-3">

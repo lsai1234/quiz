@@ -3,7 +3,6 @@
 import { useMemo } from 'react'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import { DIETARY_LABEL } from '@/lib/product-facts'
-import { selectShopAxes } from '@/lib/stack-stats'
 import { searchProducts, suggestTerm, type SearchIndex } from '@/lib/shop/search'
 import { EMPTY_QUERY, type ShopQuery } from '@/lib/shop/shop-query'
 import { ShopProductCard } from './ShopProductCard'
@@ -52,8 +51,6 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
       .sort((a, b) => (a.topRank ?? Number.MAX_SAFE_INTEGER) - (b.topRank ?? Number.MAX_SAFE_INTEGER))
       .slice(0, FALLBACK_COUNT)
   }, [index, products, query.q])
-
-  const axes = useMemo(() => selectShopAxes(nearest), [nearest])
 
   const dropDietary = (tag: DietaryTag) =>
     onQueryChange({ ...query, dietary: query.dietary.filter((t) => t !== tag) })

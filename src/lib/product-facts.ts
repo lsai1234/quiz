@@ -1,5 +1,4 @@
 import type { CatalogueProduct, CatalogueVariant, DietaryTag } from '@/lib/catalogue/types'
-import { effectOnsetForProduct, onsetWindowLabel } from '@/lib/feedback'
 import { isAccessory, servingsLabel } from '@/lib/catalogue/accessory'
 import { formatPerServing, servingsForVariant } from '@/lib/shop/per-serving'
 
@@ -45,18 +44,10 @@ export function formatFact(formats: string[]): { glyph: string; label: string } 
   return { glyph: 'capsule', label }
 }
 
-export interface ProductFactsOptions {
-  /**
-   * Include the "You'll feel it" fact. Default true. The quiz results sheet
-   * passes false: a felt-effect window is an implied claim, and Phase 1
-   * removed it there. The shop sheet still shows it until that is decided.
-   */
-  onset?: boolean
-}
-
 /**
- * The headline facts: format, servings per unit, and (unless `onset: false`)
- * when you'll feel it.
+ * The headline facts: format and servings per unit. Never when you'll "feel
+ * it": a felt-effect window says the product does something, an implied claim,
+ * so it is gone from the shop as it is from the results page.
  *
  * `variant` is the one the shopper is looking at. It matters wherever a product
  * holds more than one size — the 454g glycine powder is 454 servings and the
@@ -67,11 +58,7 @@ export interface ProductFactsOptions {
  * is nothing to feel: "you'll feel it within a few weeks" under a shaker is a
  * claim about a plastic bottle. What is left is what it is.
  */
-export function productFacts(
-  product: CatalogueProduct,
-  variant?: CatalogueVariant,
-  { onset = true }: ProductFactsOptions = {},
-): ProductFact[] {
+export function productFacts(product: CatalogueProduct, variant?: CatalogueVariant): ProductFact[] {
   const format = formatFact(product.formats)
   const formatFactEntry = { key: 'format', glyph: format.glyph, label: 'Format', value: format.label }
   if (isAccessory(product)) return [formatFactEntry]
@@ -81,9 +68,6 @@ export function productFacts(
     formatFactEntry,
     ...(servings != null && servings > 0
       ? [{ key: 'servings', glyph: 'bar', label: 'Per unit', value: servingsLabel(servings) }]
-      : []),
-    ...(onset
-      ? [{ key: 'onset', glyph: 'clock', label: "You'll feel it", value: onsetWindowLabel(effectOnsetForProduct(product)) }]
       : []),
   ]
 }
