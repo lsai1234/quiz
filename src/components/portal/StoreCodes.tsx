@@ -17,9 +17,9 @@ import { addDays, describeDeadline, londonDate, shortDay } from '@/lib/store-cod
  * wins, they never add together.
  *
  * A code can be given a day it ends, and one code at a time can be advertised on
- * the results page with a countdown. The countdown runs to the end set here and
- * the checkout refuses the code after it, so the deadline the customer is shown
- * is the one that actually applies.
+ * the results page, which says the day it is valid until. The checkout refuses
+ * the code after that day, so the date the customer is shown is the one that
+ * applies. There is no countdown: the end can be moved here, so it is not final.
  */
 
 interface Row {
@@ -199,7 +199,7 @@ export function StoreCodes() {
             )}
             <p style={meta}>
               Off unless turned on here, and no new daily codes are made. While it is on, the results page
-              shows today’s code with a countdown to midnight, in place of a code chosen with “Show at
+              shows today’s code and the day it is valid until, in place of a code chosen with “Show at
               checkout” below — but only if that code was made before. Turning it off only hides the card:
               a daily code already made still works at checkout on its own day, until{' '}
               {shortDay(daily.lastDay)}, for anyone who types it.
@@ -367,11 +367,10 @@ export function StoreCodes() {
         </p>
         <p style={meta}>
           <strong>Show at checkout</strong> puts one code on the results page, revealed as people
-          scroll to the price, with an Apply button. If the code has an end, it gets a live
-          countdown to it — and the code stops working at that moment, so the countdown is true.
-          Set it to end tonight for a “today only” push. A countdown that restarts every night on a
-          code that carries on is a fake deadline, which UK consumer law bans outright, so there
-          isn’t one: no end date, no countdown.
+          scroll to the price, with an Apply button. If the code has an end, the card says the day
+          it is valid until, and the code stops working at the end of that day. There is no countdown
+          and no “limited time”: an end date can be moved here, so it is not a final deadline, and
+          a timer may only count to one that is.
         </p>
       </div>
     </div>

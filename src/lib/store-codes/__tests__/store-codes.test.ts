@@ -144,7 +144,7 @@ describe('ending a code, and advertising one at checkout', () => {
 
     expect(await liveCheckoutPromo(now)).toEqual({ code: 'LAUNCH25', percent: 25, endsAt: '2026-10-13T23:00:00.000Z', kind: 'store' })
     expect((await listStoreCodes()).find((c) => c.code === 'LAUNCH25')).toMatchObject({ atCheckout: true })
-    // The countdown and the code end together: after midnight there is no card.
+    // The day on the card and the code end together: after midnight there is no card.
     expect(await liveCheckoutPromo(new Date('2026-10-13T23:00:01Z'))).toBeNull()
     // And an ended code cannot be chosen until it has a new end.
     expect(await setCheckoutPromo('LAUNCH25', new Date('2026-10-14T09:00:00Z'))).toMatchObject({ ok: false })
@@ -226,7 +226,7 @@ describe('the daily 25% codes — off by default, and no longer made', () => {
     await setDailyCodesEnabled(false)
   })
 
-  it('switched on, advertises today’s code with a countdown to London midnight — if it was made before', async () => {
+  it('switched on, advertises today’s code, ending at London midnight — if it was made before', async () => {
     await madeBefore('SPARK25')
     await madeBefore('POWER25')
     expect(await liveCheckoutPromo(at('2026-10-14T10:00:00Z'))).toBeNull()

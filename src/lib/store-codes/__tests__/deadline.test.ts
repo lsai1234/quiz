@@ -1,13 +1,13 @@
 import {
-  addDays, clockFace, describeDeadline, isIsoDate, londonDate, londonEndOfDay, timeLeft, wordsLeft,
+  addDays, describeDeadline, isIsoDate, londonDate, londonEndOfDay, validUntil,
 } from '../deadline'
 
 /**
- * The deadline a store code ends at, and how the countdown says it.
+ * The deadline a store code ends at, and how the hub and the checkout card say it.
  *
  * The clock-change nights are the cases worth asserting: "tonight at midnight"
  * has to be London's midnight in October as well as in July, or a code ends an
- * hour before or after the countdown at checkout says it does.
+ * hour before or after the day the checkout card says it is valid until.
  */
 
 describe('the London day', () => {
@@ -66,24 +66,20 @@ describe('saying when', () => {
   })
 })
 
-describe('the countdown', () => {
-  const end = new Date('2026-10-13T23:00:00Z')
-
-  it('ticks in seconds inside a day', () => {
-    const t = timeLeft(end, new Date('2026-10-13T18:47:27Z'))
-    expect(clockFace(t)).toBe('04:12:33')
-    expect(wordsLeft(t)).toBe('4h 12m')
+describe('saying until when', () => {
+  it('names the day a midnight end closes, and never “tonight”', () => {
+    expect(validUntil(londonEndOfDay('2026-10-28'))).toBe('Wed 28 Oct')
+    // Today's end is a date too: nothing about how soon it is.
+    expect(validUntil(londonEndOfDay('2026-10-13'))).toBe('Tue 13 Oct')
   })
 
-  it('counts days beyond one, without the seconds', () => {
-    const t = timeLeft(end, new Date('2026-10-11T19:00:00Z'))
-    expect(clockFace(t)).toBe('2d 04h')
-    expect(wordsLeft(t)).toBe('2 days')
+  it('is the right day either side of the clocks going back', () => {
+    // Saturday ends at 23:00 UTC on BST, Sunday at 00:00 UTC on GMT.
+    expect(validUntil(londonEndOfDay('2026-10-24'))).toBe('Sat 24 Oct')
+    expect(validUntil(londonEndOfDay('2026-10-25'))).toBe('Sun 25 Oct')
   })
 
-  it('stops at zero rather than going negative', () => {
-    const t = timeLeft(end, new Date('2026-10-14T01:00:00Z'))
-    expect(t.ms).toBe(0)
-    expect(clockFace(t)).toBe('00:00:00')
+  it('gives the time for an end that is not a midnight', () => {
+    expect(validUntil('2026-10-13T17:00:00Z')).toBe('18:00 on Tue 13 Oct')
   })
 })

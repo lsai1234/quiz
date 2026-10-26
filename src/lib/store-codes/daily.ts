@@ -9,13 +9,12 @@
  * its ordinary list (`isDailyCode`).
  *
  * ── Why a new code each day rather than one code on a countdown ─────────────
- * The checkout card counts down to midnight. A countdown is only honest if
- * something really ends when it reaches zero, so each day's code is valid from
- * the London midnight that starts its day to the one that ends it, and the
- * checkout refuses it either side (`checkCode` reads the same `startsAt` and
- * `endsAt`). What the card says ends is the CODE — "this code expires at
- * midnight" — never the 25% off, because tomorrow there is another one, and
- * saying the discount ends tonight would be the false deadline this replaces.
+ * Each day's code is valid from the London midnight that starts its day to the
+ * one that ends it, and the checkout refuses it either side (`checkCode` reads
+ * the same `startsAt` and `endsAt`). What the card speaks of is the CODE —
+ * "this code is valid until Tue 13 Oct" — never the 25% off, because tomorrow
+ * there is another one. For the same reason the card no longer counts down to
+ * midnight: the offer carries on, so midnight is not a real, final end.
  *
  * ── How they were made ──────────────────────────────────────────────────────
  * They are ordinary store codes, so every checkout path already knows how to
@@ -57,7 +56,7 @@ export interface DailyCode {
   code: string
   /** The London midnight its day starts at. */
   startsAt: string
-  /** The London midnight its day ends at — the countdown's zero. */
+  /** The London midnight its day ends at, after which checkout refuses it. */
   endsAt: string
 }
 

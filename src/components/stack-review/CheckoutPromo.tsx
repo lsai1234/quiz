@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { clockFace, describeDeadline, timeLeft, wordsLeft } from '@/lib/store-codes/deadline'
+import { validUntil } from '@/lib/store-codes/deadline'
 
 /**
- * The advertised code, above the receipt — "LAUNCH25, 25% off, ends tonight".
+ * The advertised code, above the receipt — "LAUNCH25, 25% off your whole order".
  *
  * ── Revealed on arrival ──────────────────────────────────────────────────────
  * It sits sealed until it scrolls into view, then the foil wipes off and the
@@ -23,11 +23,14 @@ import { clockFace, describeDeadline, timeLeft, wordsLeft } from '@/lib/store-co
  * deal rather than stacking on it, and the margin floor still applies, so the
  * honest figure is rarely the headline percentage of the subtotal.
  *
- * ── The countdown is the code's ─────────────────────────────────────────────
- * It runs to the end the Founders Hub set, which is the moment checkout starts
- * refusing the code (`liveCheckoutPromo`). No end, no countdown. When it reaches
- * zero the card says so, and an applied code is taken off before the checkout
- * can refuse it.
+ * ── A date, never a countdown ───────────────────────────────────────────────
+ * A code with an end says the day it is valid until, and that is all: no clock,
+ * no time left, no "limited-time". A founder can move a store code's end in the
+ * hub, and today's code is followed by another 25% tomorrow, so neither end is
+ * real and final — and a timer is only honest counting to one that is. The end
+ * is still the moment checkout starts refusing the code (`liveCheckoutPromo`),
+ * so when it passes with the page open the card says so, and an applied code is
+ * taken off before the checkout can refuse it.
  */
 
 export interface Promo {
@@ -37,8 +40,8 @@ export interface Promo {
   endsAt: string | null
   /**
    * `daily`: today's code, replaced by a new one at midnight. What ends is the
-   * CODE, so that is all the card says ends — the 25% comes back tomorrow under
-   * another name, and "25% off ends tonight" would be a false deadline.
+   * CODE, so the card says when the code is valid until and never that the
+   * discount ends — the 25% comes back tomorrow under another name.
    */
   kind?: 'daily' | 'store'
 }
@@ -66,6 +69,8 @@ const GLYPHS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 /** When each letter settles: a short hold, then left to right. */
 const SETTLE_START = 220
 const SETTLE_STEP = 75
+/** The longest the card waits before looking at the clock again: a sleeping laptop's timers fall behind it. */
+const RECHECK_MS = 60_000
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false)
@@ -133,15 +138,25 @@ function useDecode(code: string, revealed: boolean, reduced: boolean): { text: s
   return frame
 }
 
-/** Now, every second while there is a deadline to count to. */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
+/**
+ * True once `endsAt` has passed. Nothing on the card counts down to it: this
+ * only notices the moment, so the card can stop offering the code.
+ */
+function useEnded(endsAt: string | null): boolean {
+  const end = endsAt ? new Date(endsAt).getTime() : NaN
+  const [ended, setEnded] = useState(() => Date.now() >= end)
   useEffect(() => {
-    if (!active) return
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [active])
-  return now
+    if (!Number.isFinite(end)) return
+    let id = 0
+    const check = () => {
+      const ms = end - Date.now()
+      if (ms <= 0) setEnded(true)
+      else id = window.setTimeout(check, Math.min(ms, RECHECK_MS))
+    }
+    check()
+    return () => window.clearTimeout(id)
+  }, [end])
+  return ended
 }
 
 export function CheckoutPromo({ promo, before, after, scope, applied, onApply, onRemove, onEnded }: Props) {
@@ -183,9 +198,7 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
     target?.focus()
   }, [applied, promo.code, scope, after])
 
-  const now = useNow(promo.endsAt !== null)
-  const left = promo.endsAt ? timeLeft(promo.endsAt, now) : null
-  const ended = left !== null && left.ms === 0
+  const ended = useEnded(promo.endsAt)
 
   // Told once, the moment it happens, so the page can take an applied code off.
   // Whether it was on is kept, because taking it off changes `applied`.
@@ -200,7 +213,6 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
   }, [ended, applied, onEnded, promo.code])
 
   const saving = Math.round((before - after) * 100) / 100
-  const deadline = promo.endsAt ? describeDeadline(promo.endsAt, now) : null
 
   const live = (
     <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
@@ -240,26 +252,11 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
 
   /** "Launch offer" for a launch code; otherwise only what is true of any code. */
   const daily = promo.kind === 'daily'
-  const eyebrow = daily
-    ? 'Today’s code'
-    : /launch/i.test(promo.code) ? 'Launch offer' : promo.endsAt ? 'Limited-time offer' : 'Offer'
-
-  const clock = left && (
-    <span
-      aria-hidden
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums"
-      style={{
-        color: ACCENT,
-        background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
-        fontFamily: MONO,
-        letterSpacing: '0.04em',
-      }}
-    >
-      <Icon name="clock" size={12} />
-      {clockFace(left)}
-    </span>
-  )
+  const eyebrow = daily ? 'Today’s code' : /launch/i.test(promo.code) ? 'Launch offer' : 'Offer'
+  /** The day it is valid until, said the same wherever the card shows it. */
+  const until = promo.endsAt
+    ? `${daily ? 'This code is valid' : 'Valid'} until ${validUntil(promo.endsAt)}.`
+    : null
 
   if (applied) {
     return (
@@ -274,25 +271,20 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
           border: '1px solid color-mix(in srgb, var(--tone-positive) 28%, transparent)',
         }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-              <span style={{ color: POSITIVE }}><Icon name="check" size={16} /></span>
-              {promo.code} applied
-            </p>
-            {/* The new total, not a saving. The receipt below already says "You
-                save" against the subtotal, and a second, different "saving" here —
-                against the bundle price — is two true numbers that read as one wrong one. */}
-            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-2)' }}>
-              {promo.percent}% off — {scope === 'first month' ? 'your first month is' : 'your total is'} now{' '}
-              <strong style={{ color: 'var(--color-text)' }}>{formatGBP(after)}</strong>.
-            </p>
-          </div>
-          {clock}
-        </div>
-        {deadline && left && (
+        <p className="flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          <span style={{ color: POSITIVE }}><Icon name="check" size={16} /></span>
+          {promo.code} applied
+        </p>
+        {/* The new total, not a saving. The receipt below already says "You
+            save" against the subtotal, and a second, different "saving" here —
+            against the bundle price — is two true numbers that read as one wrong one. */}
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+          {promo.percent}% off — {scope === 'first month' ? 'your first month is' : 'your total is'} now{' '}
+          <strong style={{ color: 'var(--color-text)' }}>{formatGBP(after)}</strong>.
+        </p>
+        {until && (
           <p className="text-[11px] leading-snug mt-2" style={{ color: 'var(--color-text-2)' }}>
-            {daily ? 'This code expires' : 'Ends'} {deadline} — check out before then to keep it.
+            {until}
           </p>
         )}
         <button
@@ -333,7 +325,7 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
         @keyframes promo-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
       `}</style>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center">
         <span
           className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest"
           style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
@@ -341,7 +333,6 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
           <Icon name="bolt" size={13} />
           {eyebrow}
         </span>
-        <span style={{ opacity: revealed ? 1 : 0 }}>{clock}</span>
       </div>
 
       {/* Wraps, so a long code (they can be 24 characters) pushes the headline
@@ -418,10 +409,9 @@ export function CheckoutPromo({ promo, before, after, scope, applied, onApply, o
           <p role="alert" className="mt-2 text-[11px]" style={{ color: 'var(--color-red)' }}>{error}</p>
         )}
 
-        {deadline && left && (
+        {until && (
           <p className="promo-rise mt-2.5 text-center text-[11px] leading-snug" style={{ color: 'var(--color-text-2)', ['--d' as string]: '760ms' }}>
-            {daily ? 'This code expires' : 'Ends'} {deadline} —{' '}
-            <strong style={{ color: 'var(--color-text)' }}>{wordsLeft(left)} left</strong>{daily ? '.' : ' to use it.'}
+            {until}
           </p>
         )}
       </div>

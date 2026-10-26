@@ -6,8 +6,8 @@
  * codes are not — until it is deleted or its end date passes. The shop
  * exception lives in `redeemPartnerCode`.
  *
- * One code at a time can be advertised on the results page, with a countdown to
- * its end (`liveCheckoutPromo`).
+ * One code at a time can be advertised on the results page, with the day it is
+ * valid until (`liveCheckoutPromo`).
  *
  * ── Why these are partner codes underneath ─────────────────────────────────
  * A partner code already does everything a store code needs to, on every
@@ -50,7 +50,7 @@ export interface StoreCode {
   endsAt: string | null
   /** Past its end: still listed, so the founders can see it ran, but refused at checkout. */
   ended: boolean
-  /** The code advertised on the results page, with its countdown. At most one. */
+  /** The code advertised on the results page. At most one. */
   atCheckout: boolean
 }
 
@@ -151,8 +151,8 @@ async function storeCode(input: string): Promise<PartnerCode | null> {
  * `date` (`YYYY-MM-DD`), or never (`null`).
  *
  * ── Why a day and not a time ───────────────────────────────────────────────
- * Because "ends tonight" is the promise the countdown at checkout makes, and a
- * promise has to be kept by the thing that actually refuses the code — which is
+ * Because "valid until Wed 28 Oct" is what the card at checkout says, and that
+ * has to be kept by the thing that actually refuses the code — which is
  * `checkCode`, reading this same `endsAt`. Ending a code earlier than the
  * founders meant is the safe direction to be wrong in; this cannot do that,
  * since a day ends when it ends.
@@ -181,8 +181,8 @@ async function promotedCode(): Promise<string | null> {
 /**
  * Choose the code the results page advertises, or `null` to advertise none.
  *
- * One at a time: the card is a single offer with a single deadline, and two
- * would be two countdowns arguing with each other above one basket.
+ * One at a time: the card is a single offer, and two would be two offers
+ * arguing with each other above one basket.
  */
 export async function setCheckoutPromo(input: string | null, now = new Date()): Promise<StoreCodeResult | { ok: true; code: null }> {
   if (input === null) {
@@ -200,7 +200,7 @@ export interface CheckoutPromo {
   code: string
   /** Whole percent, e.g. 25. */
   percent: number
-  /** The real end the countdown runs to, or null — in which case there is no countdown. */
+  /** When checkout stops accepting it, or null for no end. The card gives the day, never a countdown. */
   endsAt: string | null
   /** `daily`: today's code, a new one tomorrow. `store`: a code chosen in the hub. */
   kind: 'daily' | 'store'
@@ -211,10 +211,9 @@ export interface CheckoutPromo {
  *
  * Null unless the chosen code would actually be accepted this minute — not yet
  * started, ended, used up or deleted all hide the card. That is what keeps the
- * countdown honest: it runs to the same `endsAt` that `checkCode` refuses the
- * code after, so when the clock reaches zero the code really has stopped
- * working. A timer that restarts every evening on a code that does not end is
- * a false "limited time" claim, which UK consumer law bans outright.
+ * card true: the day it says the code is valid until is read from the same
+ * `endsAt` that `checkCode` refuses the code after. It never counts down to it:
+ * a founder can move the end, so it is not a final deadline.
  */
 export async function liveCheckoutPromo(now = new Date()): Promise<CheckoutPromo | null> {
   // Today's code first, only while the schedule runs and a founder has
