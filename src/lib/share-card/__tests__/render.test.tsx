@@ -219,7 +219,7 @@ describe('the giveaway card', () => {
       // category, which would leave the name-beside-category path untested.
       ['Applied Nutrition Critical Whey Protein Isolate', 'Whey protein'],
       ['Creatine Monohydrate Micronised Unflavoured', 'Creatine'],
-      ['Magnesium Bisglycinate Chelate Night Formula', 'Night-time blend'],
+      ['Magnesium Bisglycinate Chelate Night Formula', 'Blend'],
       ['Omega-3 Triple Strength', 'Omega-3'],
       ['Stim-Free Pre-Workout Pump Matrix', 'Stim-free pre-workout'],
       ['Never shown — the sixth product', 'Supplement'],

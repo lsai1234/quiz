@@ -1,6 +1,6 @@
 import type { ShareCardPayload, ShareLineupEntry } from './types'
 import { ART_SET, ART_KEYS, isPlaceholder, type ArtKey } from './art'
-import { PRODUCT_TYPE_LABELS } from '@/lib/catalogue/product-type'
+import { isProductTypeLabel } from '@/lib/catalogue/product-type'
 
 /**
  * The card's formats, and what each one has room to say.
@@ -322,9 +322,6 @@ export function splitPrize(prize: string): { hero: string; rest: string } {
   return { hero: `Win ${match[0].replace(/\s+/g, '')}`, rest: rest || PRIZE_REST }
 }
 
-/** Every product type label, lower-cased, for matching a stored row. */
-const TYPE_LABELS = new Set(Object.values(PRODUCT_TYPE_LABELS).map((l) => l.toLowerCase()))
-
 /**
  * A row's category: its product type, upper-cased.
  *
@@ -336,7 +333,7 @@ const TYPE_LABELS = new Set(Object.values(PRODUCT_TYPE_LABELS).map((l) => l.toLo
  */
 function category(slot: string): string {
   const label = slot.trim()
-  return TYPE_LABELS.has(label.toLowerCase()) ? label.toUpperCase() : ''
+  return isProductTypeLabel(label) ? label.toUpperCase() : ''
 }
 
 function buildEntry(payload: ShareCardPayload, competition: CompetitionBand, stamp: string): ShareEntry {

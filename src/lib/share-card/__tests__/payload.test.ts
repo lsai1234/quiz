@@ -2,7 +2,7 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { ALL_GOALS, type QuizAnswers, type StackIdentity } from '@/lib/types'
 import type { BuildSharePayloadOptions } from '../payload'
-import { PRODUCT_TYPE_LABELS, productTypeLabel } from '@/lib/catalogue/product-type'
+import { isProductTypeLabel, productTypeLabel } from '@/lib/catalogue/product-type'
 import { buildSharePayload, shortReason } from '../payload'
 import { SHARE_PAYLOAD_VERSION } from '../types'
 
@@ -244,12 +244,11 @@ describe('buildSharePayload', () => {
   it.each(Object.entries(PERSONAS))('labels every %s row with a product type, never a slot title', (_name, answers) => {
     // A slot title names a benefit ("Immune Support", "Sleep"); printed beside
     // a product on a public card, that is a health claim.
-    const types = new Set(Object.values(PRODUCT_TYPE_LABELS))
     const benefitTitles = buildStackBlueprint(answers, MOCK_CATALOGUE).slots
       .map((s) => s.title)
-      .filter((t) => !types.has(t))
+      .filter((t) => !isProductTypeLabel(t))
     for (const row of build(answers).lineup) {
-      expect(types).toContain(row.slot)
+      expect(isProductTypeLabel(row.slot)).toBe(true)
       expect(benefitTitles).not.toContain(row.slot)
     }
   })
