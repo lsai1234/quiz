@@ -27,8 +27,8 @@ export function ConsultNote({ exclusions }: { exclusions: ConsultExclusions }) {
             Check with a pharmacist first
           </p>
           <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-            You told us you take prescription medicine, so we’ve kept out anything known to interact with it — here and
-            in the extras below. Please check this stack with your pharmacist before you start.
+            You told us you take prescription medicine, so we’ve left out the products our checks flag for people taking
+            it — here and in the extras below. Please check this stack with your pharmacist before you start.
           </p>
         </div>
       )}

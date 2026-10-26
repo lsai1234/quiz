@@ -258,6 +258,17 @@ describe('the results page', () => {
     expect(you.getByText(CHECK_LINES.alreadyTaking.creatine)).toBeInTheDocument()
   })
 
+  it('never names a goal the stack does not serve: that would say it serves the rest', async () => {
+    const bp = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    act(() => useQuizStore.setState({ stackBlueprint: { ...bp, unmetGoals: ['sleep-better'] } }))
+    render(<StackReviewPage reducedMotion />)
+    await screen.findAllByText(GOAL_LINES.muscle!)
+    expect(screen.queryByText(/couldn’t match/i)).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/suitable product for/i)
+    // The GP disclaimer stays.
+    expect(document.body.textContent).toMatch(/Consult your GP/)
+  })
+
   it('keeps all three scene anchors below the bar, in order', async () => {
     render(<StackReviewPage reducedMotion />)
     await screen.findAllByText(GOAL_LINES.muscle!)
