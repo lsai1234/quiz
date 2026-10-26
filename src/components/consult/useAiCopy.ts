@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { COPY_BUDGET_MS, NEVER_AI, summariseForCopy, validateSceneCopy, type AiSceneCopy } from '@/lib/consult/ai/copy'
+import { COPY_BUDGET_MS, NEVER_AI, copyAnswersFor, summariseForCopy, validateSceneCopy, type AiSceneCopy } from '@/lib/consult/ai/copy'
 import { isAnswered, resolveSceneDef, sceneAfter, visibleScenes, type FlowState, type SceneDef } from '@/lib/consult/flow'
 import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
 
@@ -39,7 +39,7 @@ export async function fetchSceneCopy(scene: SceneDef, answers: ConsultAnswers, p
     const res = await fetch('/api/consult/copy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sceneId: scene.id, answers, previous: previous ?? null }),
+      body: JSON.stringify({ sceneId: scene.id, answers: copyAnswersFor(answers), previous: previous ?? null }),
       // `AbortSignal.timeout` is recent; without it there's no client-side cap,
       // and the server's own budget still ends the request.
       signal: signal ?? (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(COPY_BUDGET_MS) : undefined),

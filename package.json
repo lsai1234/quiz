@@ -25,7 +25,8 @@
     "build:favicon": "node scripts/build-favicon.mjs",
     "backfill:product-ids": "tsx scripts/backfill-product-ids.ts",
     "clean:descriptions": "tsx scripts/clean-descriptions.ts",
-    "claims:signoff": "tsx scripts/claims-signoff.ts"
+    "claims:signoff": "tsx scripts/claims-signoff.ts",
+    "review-pack:consult": "tsx scripts/consult-review-pack.ts"
   },
   "dependencies": {
     "@rive-app/canvas-lite": "^2.43.1",

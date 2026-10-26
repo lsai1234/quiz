@@ -9,8 +9,9 @@
  *
  * And how the founder chooses it, from the hub, without a deploy:
  *
- *   off     everyone: quiz-only
- *   option  everyone: both — the consult as a third option (the default)
+ *   off     everyone: quiz-only (the default: the consult is founders-only,
+ *           at /quizv2, until a founder changes this in the hub)
+ *   option  everyone: both — the consult as a third option
  *   split   `split`% of visitors: consult-only; the rest: quiz-only. A clean
  *           A/B: each visitor sees one front door, and both doors lead to the
  *           same results page, so conversion compares like with like.

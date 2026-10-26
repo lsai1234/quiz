@@ -55,6 +55,14 @@ export function hunchEvidence(lead: Lead): string[] {
   return [...core.slice(0, 3 - keepSaid.length), ...keepSaid]
 }
 
+/**
+ * The hunch's evidence as it may be sent to AI: the same lines, less anything
+ * read from the body map, which stays on the device.
+ */
+export function aiEvidence(lead: Lead): string[] {
+  return hunchEvidence({ ...lead, support: lead.support.filter((e) => !e.bodyMap) })
+}
+
 /** Why something was ruled out, in one line. */
 export function ruledOutBecause(lead: Lead): string {
   if (lead.state === 'no') return 'You said it isn’t you.'

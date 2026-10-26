@@ -35,7 +35,21 @@ const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
   { id: 'performance', icon: 'dumbbell', label: 'Performance + wellness',  sub: 'Training goals plus the everyday stuff — the full picture' },
 ]
 
-const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
+/**
+ * How long each door takes, in the words each door uses about itself: the quiz
+ * says "about a minute" on its first step, and the consult's three routes run
+ * from about a minute (Speed run) to about 6 (Pinpoint). The trust row used to
+ * say "~90 seconds" whichever door it sat under. Check both against the
+ * median quiz time in the hub's analytics report once there is real traffic.
+ */
+const QUIZ_TIME = 'About a minute'
+const CONSULT_TIME = '1 to 6 minutes'
+
+function trustRow(showQuiz: boolean, showConsult: boolean): string[] {
+  // Both doors: each says its own time, the quiz here and the consult on its card.
+  const time = showQuiz && showConsult ? `Quiz: ${QUIZ_TIME.toLowerCase()}` : showConsult ? CONSULT_TIME : QUIZ_TIME
+  return [time, 'No sign-up', 'Built around you']
+}
 
 function CHRGDIcon({ size = 26 }: { size?: number }) {
   return (
@@ -141,7 +155,9 @@ export function Act1Hero({ onEnterQuiz, onEnterConsult, offer = 'quiz-only', red
                   The Amp Consult
                   <span className="text-[10px] font-bold tracking-[0.18em] uppercase px-1.5 py-0.5 rounded bg-[#00D4FF] text-[#0A0A0A]">New</span>
                 </div>
-                <div className="text-[13px] mt-1 text-white/40 leading-snug">Tap, drag and spin through a charge-up with Amp</div>
+                <div className="text-[13px] mt-1 text-white/40 leading-snug">
+                  Tap, drag and spin through a charge-up with Amp{showQuiz ? ` · ${CONSULT_TIME}` : ''}
+                </div>
               </div>
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/25 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
                 <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -152,7 +168,7 @@ export function Act1Hero({ onEnterQuiz, onEnterConsult, offer = 'quiz-only', red
 
         {/* Trust row (honest cues; real social proof can slot in here later) */}
         <div className="flex items-center justify-center gap-2.5 mt-9 flex-wrap">
-          {TRUST.map((t, i) => (
+          {trustRow(showQuiz, showConsult).map((t, i) => (
             <span key={t} className="inline-flex items-center gap-2.5 text-[11px] text-white/40">
               {i > 0 && <span className="w-1 h-1 rounded-full bg-white/20" />}
               {t}

@@ -145,7 +145,7 @@ export const PATTERNS: Pattern[] = [
       { when: (a) => sessions(a) >= 5, towards: 'clearly', why: (a) => `Trains ${sessions(a)} times a week` },
       { when: (a) => a.intensity === 'hard', towards: 'clearly', why: 'Most sessions flat out' },
       { when: (a) => (hours(a) ?? 8) < 7, towards: 'a little', why: (a) => `About ${hours(a)} hours a night` },
-      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'a little', why: 'Sore spots' },
+      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'a little', why: 'Sore spots', bodyMap: true },
     ],
     effects: [
       { need: 'recovery', weight: 4 },
@@ -232,7 +232,7 @@ export const PATTERNS: Pattern[] = [
     nudges: [
       { when: (a) => by(a).sport >= 1, towards: 'clearly', why: 'Plays sport' },
       { when: (a) => sessions(a) <= 3, towards: 'a little', why: (a) => `${sessions(a)} sessions a week` },
-      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'a little', why: 'Sore spots' },
+      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'a little', why: 'Sore spots', bodyMap: true },
     ],
     effects: [
       { need: 'recovery', weight: 3 },
@@ -248,9 +248,9 @@ export const PATTERNS: Pattern[] = [
     journeys: ['ager'],
     prior: -0.5,
     nudges: [
-      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'clearly', why: 'Joints that need looking after' },
+      { when: (a) => (a.body?.length ?? 0) > 0, towards: 'clearly', why: 'Joints that need looking after', bodyMap: true },
       { when: (a) => Boolean(a.changes?.includes('getting-about')), towards: 'strongly', why: 'Getting about is harder' },
-      { when: (a) => a.body !== null && a.body.length === 0, towards: 'away a little', why: 'Nothing sore' },
+      { when: (a) => a.body !== null && a.body.length === 0, towards: 'away a little', why: 'Nothing sore', bodyMap: true },
     ],
     effects: [
       { need: 'joints', weight: 4 },
@@ -915,3 +915,8 @@ export const PROBES: Probe[] = [
 
 export const PATTERN_BY_ID = Object.fromEntries(PATTERNS.map((p) => [p.id, p])) as Record<PatternId, Pattern>
 export const PROBE_BY_ID: Record<string, Probe> = Object.fromEntries(PROBES.map((p) => [p.id, p]))
+
+/** The wording of every body-map nudge, which the Pinpoint AI route refuses as evidence. */
+export const BODY_MAP_EVIDENCE: ReadonlySet<string> = new Set(
+  PATTERNS.flatMap((p) => p.nudges.filter((n) => n.bodyMap && typeof n.why === 'string').map((n) => n.why as string)),
+)

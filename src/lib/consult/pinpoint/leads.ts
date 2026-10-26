@@ -27,6 +27,8 @@ export interface Evidence {
   from: 'core' | 'answer'
   /** An answer to a question that's mainly about this pattern (its strongest pull), not a side effect of another's. */
   direct?: boolean
+  /** From the body map: never sent to AI (see `Nudge.bodyMap`). */
+  bodyMap?: true
 }
 
 export interface Lead {
@@ -85,7 +87,7 @@ export function leads(a: Answers): Lead[] {
       const size = nudgeSize(n.towards)
       score += size
       const text = typeof n.why === 'function' ? n.why(a) : n.why
-      if (size > 0) support.push({ text, from: 'core' })
+      if (size > 0) support.push({ text, from: 'core', ...(n.bodyMap ? { bodyMap: true as const } : {}) })
       else if (!against || size < against.size) against = { text, size }
     }
     // What the notes point to (plan v5 §7): a small nudge, and the note as

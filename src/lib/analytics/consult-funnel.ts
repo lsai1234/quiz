@@ -132,7 +132,9 @@ export function buildConsultFunnel(events: StoredEvent[]): ConsultFunnel {
   const stopSessions = new Map<string, Set<string>>()
   for (const e of events) {
     if (e.event !== 'consult_stop' || !e.sessionId) continue
-    const reason = typeof e.props.reason === 'string' ? e.props.reason : 'unknown'
+    const raw = typeof e.props.reason === 'string' ? e.props.reason : 'unknown'
+    // Rows written before stops were recorded by gate still name the answer.
+    const reason = raw === 'pregnancy' || raw === 'kidney-liver' ? 'circuit' : raw
     stopSessions.set(reason, (stopSessions.get(reason) ?? new Set()).add(e.sessionId))
   }
   for (const [reason, s] of stopSessions) stopped[reason] = s.size

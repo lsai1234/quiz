@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { track } from '@/lib/analytics/events'
 import { LAST_CHANCE_SOURCE } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
+import { useQuizStore } from '@/lib/store'
+import { orderSafetyFor } from '@/lib/consult/exclusions'
 
 /**
  * Buying the last-chance offer: one product, straight to payment.
@@ -78,6 +80,8 @@ export function useOfferCheckout() {
             expectedPrice: offer.quote.offerPrice,
             expectedDelivery: offer.quote.deliveryCharge,
           },
+          // A consult stack's exclusions travel with the order (`orderSafetyFor`).
+          safety: orderSafetyFor(useQuizStore.getState().answers),
         }),
       })
       const data: {

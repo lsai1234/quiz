@@ -3,6 +3,7 @@ import { AmpConsult } from '../AmpConsult'
 import { chooseRoute, pickFirstOptionAndNext, pressNext } from './drive'
 import * as events from '@/lib/analytics/events'
 import { CONSULT_EVENTS } from '@/lib/analytics/events'
+import { resetQuizArm, setQuizArm } from '@/lib/experiments/client'
 
 jest.mock('@/lib/analytics/events', () => {
   const actual = jest.requireActual('@/lib/analytics/events')
@@ -22,7 +23,7 @@ describe('H12 consult instrumentation', () => {
   it('reports the start, each scene viewed and completed, with time and touches', () => {
     render(<AmpConsult />)
     chooseRoute()
-    expect(named('consult_start')).toEqual([{ route: 'deep' }])
+    expect(named('consult_start')).toEqual([{ route: 'deep', consultArm: 'quiz' }])
     expect(named('consult_scene_view')[0]).toMatchObject({ sceneId: 'goals', index: 1, total: 12 })
     fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Focus/ }))
@@ -38,10 +39,10 @@ describe('H12 consult instrumentation', () => {
     chooseRoute()
     pickFirstOptionAndNext()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(named('consult_scene_back')).toEqual([{ from: 'about', to: 'goals', via: 'back' }])
+    expect(named('consult_scene_back')).toEqual([{ from: 'about', to: 'goals', via: 'back', consultArm: 'quiz' }])
   })
 
-  it('reports a circuit check stop by kind only', () => {
+  it('reports a circuit check stop as a circuit stop, never which answer', () => {
     render(<AmpConsult />)
     chooseRoute()
     for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
@@ -49,7 +50,8 @@ describe('H12 consult instrumentation', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Yes, some do' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Kidney or liver condition' }))
     pressNext()
-    expect(named('consult_stop')).toEqual([{ reason: 'kidney-liver' }])
+    expect(named('consult_stop')).toEqual([{ reason: 'circuit', consultArm: 'quiz' }])
+    expect(JSON.stringify(track.mock.calls)).not.toMatch(/kidney|liver|pregnan/)
   })
 
   it('never sends an answer', () => {
@@ -65,7 +67,18 @@ describe('H12 consult instrumentation', () => {
     chooseRoute()
     pickFirstOptionAndNext()
     window.dispatchEvent(new Event('pagehide'))
-    expect(named('consult_abandon')).toEqual([{ lastSceneId: 'about' }])
+    expect(named('consult_abandon')).toEqual([{ lastSceneId: 'about', consultArm: 'quiz' }])
+  })
+
+  it('stamps every consult event with the visitor’s consult arm', () => {
+    setQuizArm({ arm: 'v1', heroOffer: 'consult-only', resolved: true })
+    render(<AmpConsult />)
+    chooseRoute()
+    pickFirstOptionAndNext()
+    const consult = track.mock.calls.filter(([e]) => String(e).startsWith('consult_'))
+    expect(consult.length).toBeGreaterThan(0)
+    for (const [, props] of consult) expect(props.consultArm).toBe('consult')
+    resetQuizArm()
   })
 
   it('uses only event names the analytics sink accepts', () => {

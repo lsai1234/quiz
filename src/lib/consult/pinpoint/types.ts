@@ -48,6 +48,12 @@ export interface Nudge {
   towards: Strength
   /** The evidence, in the member's terms: "4 coffees a day". */
   why: string | ((a: Answers) => string)
+  /**
+   * Read from the body map. Shown back to the person like any other evidence,
+   * but never sent to AI (plan rule: the body map never goes to OpenAI), so
+   * `aiEvidence` leaves it out and the server refuses its wording.
+   */
+  bodyMap?: true
 }
 
 export interface Pattern {

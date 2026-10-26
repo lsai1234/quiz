@@ -7,6 +7,7 @@ jest.mock('@/lib/portal/guard', () => ({ isPortalAuthed: async () => authed.valu
 import { POST } from '../route'
 import { getEngine } from '@/lib/db/engine'
 import { listSessions } from '@/lib/analytics/sessions'
+import { listEventsSince } from '@/lib/analytics/repo'
 import { SHARE_EVENTS } from '@/lib/analytics/events'
 
 /**
@@ -41,6 +42,32 @@ beforeEach(async () => {
 })
 
 afterEach(() => jest.restoreAllMocks())
+
+describe('POST /api/analytics: no health data in the table or the logs', () => {
+  it('records a circuit stop by its gate, whatever an older client sends', async () => {
+    const log = jest.spyOn(console, 'log')
+    for (const reason of ['pregnancy', 'kidney-liver', 'circuit', 'declined', 'not-a-gate']) {
+      await beacon({ event: 'consult_stop', props: { reason } })
+    }
+    const db = await getEngine()
+    const rows = await db.all<{ props: string }>("SELECT props FROM analytics_events WHERE event = 'consult_stop'")
+    const reasons = rows.map((r) => JSON.parse(r.props).reason).sort()
+    expect(reasons).toEqual(['circuit', 'circuit', 'circuit', 'declined', 'unknown'])
+    expect(JSON.stringify(rows)).not.toMatch(/pregnan|kidney|liver/)
+    // And nothing about any event reaches the console.
+    expect(log).not.toHaveBeenCalled()
+  })
+
+  it('lets the hub’s funnels leave a founder’s own runs out', async () => {
+    authed.value = true
+    await beacon({ event: 'consult_start', session: 'founder', props: { route: 'deep' } })
+    authed.value = false
+    await beacon({ event: 'consult_start', session: 'customer', props: { route: 'deep' } })
+    const since = new Date(Date.now() - 60_000).toISOString()
+    expect((await listEventsSince(since)).map((e) => e.sessionId).sort()).toEqual(['customer', 'founder'])
+    expect((await listEventsSince(since, undefined, { excludeInternal: true })).map((e) => e.sessionId)).toEqual(['customer'])
+  })
+})
 
 describe('POST /api/analytics', () => {
   it('keeps the share funnel, which it used to drop on the floor', async () => {

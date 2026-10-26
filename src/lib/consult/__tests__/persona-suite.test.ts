@@ -5,9 +5,24 @@ import { buildHandoff, validateHandoff } from '../handoff'
 import { ingredientsOf } from '../knowledge'
 import { chargeProfile } from '../profile'
 import { APPROVED_FINGERPRINT, PERSONAS, type Expectation, type Persona } from '../personas'
-import { COPY_MODEL, COPY_SYSTEM_PROMPT } from '../ai/copy'
-import { UNDERSTAND_SYSTEM_PROMPT } from '../ai/understand'
-import { EXPLAIN_SYSTEM_PROMPT } from '../ai/explain'
+import { COPY_MODEL, COPY_SYSTEM_PROMPT, buildCopyPrompt } from '../ai/copy'
+import { UNDERSTAND_SYSTEM_PROMPT, buildUnderstandPrompt } from '../ai/understand'
+import { EXPLAIN_SYSTEM_PROMPT, buildExplainPrompt } from '../ai/explain'
+import {
+  NOTES_SYSTEM_PROMPT,
+  PINPOINT_SYSTEM_PROMPT,
+  TELL_SYSTEM_PROMPT,
+  buildFoundPrompt,
+  buildHunchPrompt,
+  buildNotesPrompt,
+  buildTellPrompt,
+} from '../ai/pinpoint'
+import { SHELF_PROMPT, TRACKER_APPS, trackerPrompt, type TrackerApp } from '../ai/scan'
+import { VOICE_FALLBACK_MODEL, VOICE_MODEL, VOICE_PROMPT } from '../ai/voice'
+import { MODERATION_MODEL } from '../ai/guard'
+import { sceneDef } from '../flow'
+import { GLOSSARY, glossaryEntry, type GlossaryKey } from '../glossary'
+import { PROBES } from '../pinpoint/library'
 
 /**
  * The persona suite (build V9). See `personas.ts`. `npm run test:personas`.
@@ -15,10 +30,45 @@ import { EXPLAIN_SYSTEM_PROMPT } from '../ai/explain'
 
 const byId = new Map(MOCK_CATALOGUE.map((p) => [p.id, p]))
 
-/** FNV-1a over every prompt and the model id. */
+/**
+ * Everything the consult sends to a model, apart from the person's own input:
+ * every model id, every system prompt, and every user-prompt template, built
+ * from fixed inputs so a change to a template's wording changes the result
+ * (scene wording, Tell Amp, What's this?, Pinpoint's hunch, found, tell and
+ * notes, the uploads and voice).
+ */
+export function promptInputs(): string[] {
+  const persona = PERSONAS.find((p) => p.id === 'p19')!.answers
+  const glossaryKey = Object.keys(GLOSSARY)[0] as GlossaryKey
+  const probe = PROBES[0]
+  return [
+    COPY_MODEL,
+    MODERATION_MODEL,
+    VOICE_MODEL,
+    VOICE_FALLBACK_MODEL,
+    COPY_SYSTEM_PROMPT,
+    buildCopyPrompt(sceneDef('energy'), persona, 'training'),
+    UNDERSTAND_SYSTEM_PROMPT,
+    buildUnderstandPrompt(sceneDef('sleep'), '<typed>'),
+    EXPLAIN_SYSTEM_PROMPT,
+    buildExplainPrompt(glossaryEntry(glossaryKey), '<question>'),
+    PINPOINT_SYSTEM_PROMPT,
+    buildHunchPrompt('wired', ['<evidence>'], '<context>'),
+    buildFoundPrompt(['wired'], ['crash'], '<context>'),
+    TELL_SYSTEM_PROMPT,
+    buildTellPrompt([probe.id], '<typed>', (p) => `<${p.id}>`),
+    NOTES_SYSTEM_PROMPT,
+    buildNotesPrompt(['<note>'], ['wired', 'crash']),
+    SHELF_PROMPT,
+    ...(Object.keys(TRACKER_APPS) as TrackerApp[]).map(trackerPrompt),
+    VOICE_PROMPT,
+  ]
+}
+
+/** FNV-1a over `promptInputs`. */
 export function promptFingerprint(): string {
   let h = 0x811c9dc5
-  for (const ch of [COPY_MODEL, COPY_SYSTEM_PROMPT, UNDERSTAND_SYSTEM_PROMPT, EXPLAIN_SYSTEM_PROMPT].join('\u0000')) {
+  for (const ch of promptInputs().join('\u0000')) {
     h ^= ch.charCodeAt(0)
     h = Math.imul(h, 0x01000193) >>> 0
   }

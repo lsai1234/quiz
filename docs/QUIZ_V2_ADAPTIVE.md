@@ -6,8 +6,8 @@ Founders Hub; off means everyone sees today's quiz, unchanged.
 
 Status: **built**, and off by default. Every phase below is implemented; the
 switch in the Founders Hub is set to `off`, so customers see today's quiz until
-a founder says otherwise. Review it at **`/quizv2`**, or add `?quizArm=v2` to
-any page.
+a founder says otherwise. Review it by adding **`?quizArm=v2`** to any page.
+(`/quizv2` used to serve this quiz; it now serves the Amp Consult, founders only.)
 
 Where the build differed from the proposal, the section says so.
 

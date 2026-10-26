@@ -93,4 +93,23 @@ describe('V2 AI-worded scenes in the consult', () => {
     expect(asked).not.toContain('circuit')
     expect(asked).not.toContain('review')
   })
+
+  it('sends only the answers the wording prompt reads', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    mockCopy(() => ({ fallback: true }))
+    render(<AmpConsult />)
+    chooseRoute()
+    for (let i = 0; i < 10; i++) {
+      pickFirstOptionAndNext()
+      await settle()
+    }
+    const sent = (global.fetch as jest.Mock).mock.calls
+      .filter(([u]) => String(u) === '/api/consult/copy')
+      .map(([, init]) => JSON.parse(init.body).answers)
+    expect(sent.length).toBeGreaterThan(0)
+    for (const answers of sent) {
+      expect(Object.keys(answers).sort()).toEqual(['age', 'caffeine', 'comfort', 'daylight', 'energy', 'goals', 'route', 'sleep', 'training'])
+      if (answers.sleep) expect(Object.keys(answers.sleep).sort()).toEqual(['bed', 'wake'])
+    }
+  })
 })

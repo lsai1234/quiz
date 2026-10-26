@@ -125,3 +125,19 @@ export async function kvListPrefix<T>(prefix: string, limit = 500): Promise<{ ke
   }
   return out
 }
+
+/**
+ * Delete every row under `prefix` last written before `before` (ISO). Returns
+ * how many went. For retention sweeps, where "hidden after thirty days" has to
+ * become "gone after thirty days".
+ */
+export async function kvDeletePrefixOlderThan(prefix: string, before: string): Promise<number> {
+  const db = await getEngine()
+  const pattern = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+  const doomed = await db.all<{ key: string }>(
+    "SELECT key FROM kv WHERE key LIKE ? ESCAPE '\\' AND updated_at < ?",
+    [pattern, before],
+  )
+  for (const { key } of doomed) await db.run('DELETE FROM kv WHERE key = ?', [key])
+  return doomed.length
+}

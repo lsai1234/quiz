@@ -3,7 +3,8 @@
 > There are two quizzes now. This describes v1, the questionnaire that ships to
 > customers today. The adaptive interview (v2) that runs against it as a split
 > test is `docs/QUIZ_V2_ADAPTIVE.md`; it is built, off by default, and reviewable
-> at `/quizv2`.
+> by adding `?quizArm=v2` to any page. (`/quizv2` now serves the Amp Consult,
+> founders only: see `docs/amp-consult-report.md`.)
 
 The acquisition funnel: `ScrollExperience` → `Act1Hero` → **`Act2Quiz`** →
 `Act3Analysis` → `Act4Reveal` (`StackReviewPage`) → `Act5Bundle`. Quiz state lives

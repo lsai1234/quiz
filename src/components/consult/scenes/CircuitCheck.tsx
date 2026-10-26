@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { HEALTH_DATA_VERSION, TAILOR_CONSENT_VERSION } from '@/lib/legal/versions'
 import { CIRCUIT_LABEL, SYMPTOM_LABEL } from '@/lib/consult/summary'
+import { CIRCUIT_COPY, CIRCUIT_GROUPS, CIRCUIT_SHORT } from '@/lib/consult/circuit-copy'
 import type { CircuitAnswer, CircuitFlag, WeightSymptom } from '@/lib/consult/types'
 import { stateTransition } from '@/lib/consult/motion'
 import { Glyph } from '../Glyph'
@@ -111,17 +112,17 @@ function WeightMedsDetail({
           {tailored && <Glyph name="check" size={16} />}
         </span>
         <span style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink)' }}>
-          Use this to tailor my recommendations. <span style={{ color: 'var(--amp-ink-2)' }}>Optional. Without it, it only keeps unsuitable products out.</span>
+          {CIRCUIT_COPY.tailor} <span style={{ color: 'var(--amp-ink-2)' }}>{CIRCUIT_COPY.tailorDetail}</span>
         </span>
       </button>
       {tailored && (
         <div className="amp-anim-rise flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
-          <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink)' }}>Anything you’ve noticed since starting it?</p>
+          <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink)' }}>{CIRCUIT_COPY.symptomsQuestion}</p>
           <div role="group" aria-label="Since starting weight-loss medication" className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
             {SYMPTOMS.map((s) => (
               <Chip key={s} label={SYMPTOM_LABEL[s]} selected={Boolean(symptoms?.includes(s))} onToggle={() => onSymptoms(toggleSymptom(symptoms, s))} />
             ))}
-            <Chip label="None of these" selected={symptoms !== null && symptoms.length === 0} onToggle={() => onSymptoms(toggleSymptom(symptoms, 'none'))} />
+            <Chip label={CIRCUIT_COPY.symptomsNone} selected={symptoms !== null && symptoms.length === 0} onToggle={() => onSymptoms(toggleSymptom(symptoms, 'none'))} />
           </div>
         </div>
       )}
@@ -130,23 +131,9 @@ function WeightMedsDetail({
 }
 
 /** The list, grouped so it reads at a glance rather than as seven switches. */
-const GROUPS: { label: string; flags: CircuitFlag[] }[] = [
-  { label: 'Pregnancy', flags: ['pregnancy'] },
-  { label: 'Medicines', flags: ['blood-thinners', 'weight-meds', 'other-prescription'] },
-  { label: 'Conditions', flags: ['heart', 'kidney-liver'] },
-  { label: 'Allergy', flags: ['shellfish'] },
-]
+const GROUPS = CIRCUIT_GROUPS
 
-/** Shorter words for the at-a-glance list; the ticked answer keeps its full label. */
-const SHORT: Record<CircuitFlag, string> = {
-  pregnancy: 'Pregnant, breastfeeding or trying',
-  'blood-thinners': 'Blood thinners',
-  'weight-meds': 'Weight-loss medication',
-  'other-prescription': 'Other prescriptions',
-  heart: 'Heart or blood pressure',
-  'kidney-liver': 'Kidney or liver',
-  shellfish: 'Shellfish',
-}
+const SHORT = CIRCUIT_SHORT
 
 const mono = {
   fontFamily: 'var(--amp-font-label)',
@@ -260,7 +247,7 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
       >
         <div className="flex items-start justify-between" style={{ gap: 'var(--amp-space-2)', marginBottom: 'var(--amp-space-3)' }}>
           <p id="circuit-q" style={{ fontWeight: 'var(--amp-weight-bold)' }}>
-            {some ? 'Tick the ones that apply' : 'Does any of this apply to you?'}
+            {some ? CIRCUIT_COPY.questionTicking : CIRCUIT_COPY.question}
           </p>
           {/* What the check is for — approved words only, never a question box. */}
           <WhatsThis term="circuit-check" />
@@ -298,7 +285,7 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
                         <span className="flex min-w-0 flex-col">
                           <span>{CIRCUIT_LABEL[flag]}</span>
                           {flag === 'weight-meds' && on && answers.goals.includes('weight') && (
-                            <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>You mentioned this on the first screen.</span>
+                            <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>{CIRCUIT_COPY.mentionedEarlier}</span>
                           )}
                         </span>
                       </button>
@@ -344,12 +331,12 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
 
       <div role="radiogroup" aria-labelledby="circuit-q" className="grid grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
         <Answer
-          label="None of these"
+          label={CIRCUIT_COPY.none}
           on={Boolean(circuit?.none) || pending === 'none'}
           onClick={() => choose('none')}
         />
         <Answer
-          label="Yes, some do"
+          label={CIRCUIT_COPY.some}
           on={some || pending === 'yes'}
           onClick={() => choose('yes')}
         />
@@ -389,10 +376,8 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
         >
           <Box on={consented} />
           <span style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink)' }}>
-            Use my answers here to keep unsuitable products out.{' '}
-            <span style={{ color: 'var(--amp-ink-2)' }}>
-              It&apos;s health information, so only with my say-so: never shared, never used for marketing, never sent to AI.
-            </span>
+            {CIRCUIT_COPY.consent}{' '}
+            <span style={{ color: 'var(--amp-ink-2)' }}>{CIRCUIT_COPY.consentDetail}</span>
           </span>
         </button>
         <p style={{ marginTop: 'var(--amp-space-1)', paddingLeft: 'calc(var(--amp-space-6) + var(--amp-space-3))', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
@@ -407,7 +392,7 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
         <div aria-live="polite">
           {asking && !consented && (
             <p style={{ marginTop: 'var(--amp-space-1)', paddingLeft: 'calc(var(--amp-space-6) + var(--amp-space-3))', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-accent)' }}>
-              Tick this, so I can use your answer.
+              {CIRCUIT_COPY.consentNeeded}
             </p>
           )}
         </div>
@@ -420,7 +405,7 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
           className="self-center underline"
           style={{ minHeight: 'var(--amp-target)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', textUnderlineOffset: 'var(--amp-space-1)' }}
         >
-          I’d rather not answer these
+          {CIRCUIT_COPY.decline}
         </button>
       )}
     </div>

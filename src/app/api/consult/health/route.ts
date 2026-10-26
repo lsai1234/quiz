@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { MODERATION_MODEL } from '@/lib/consult/ai/guard'
 import OpenAI from 'openai'
 import { COPY_MODEL, COPY_SYSTEM_PROMPT, COPY_TARGET_MS, buildCopyPrompt, copySchema, validateSceneCopy } from '@/lib/consult/ai/copy'
 import { recordAi } from '@/lib/consult/ai/audit'
@@ -49,6 +50,8 @@ export async function POST() {
     const completion = await client.chat.completions.create(
       {
         model: COPY_MODEL,
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: COPY_SYSTEM_PROMPT },
           { role: 'user', content: buildCopyPrompt(scene, answers, 'about') },
@@ -66,7 +69,7 @@ export async function POST() {
   })
 
   const moderation = await timed(async () => {
-    await client.moderations.create({ model: 'omni-moderation-latest', input: 'I work nights three times a week' }, { timeout: 10_000, maxRetries: 0 })
+    await client.moderations.create({ model: MODERATION_MODEL, input: 'I work nights three times a week' }, { timeout: 10_000, maxRetries: 0 })
     return 'Moderation answered'
   })
 

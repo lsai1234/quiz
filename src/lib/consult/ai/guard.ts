@@ -22,6 +22,9 @@
 
 export const MAX_TEXT = 280
 
+/** OpenAI's moderation model, run on typed text before any other model sees it. */
+export const MODERATION_MODEL = 'omni-moderation-latest'
+
 /** Health terms that keep text on the device. Matched on word starts, case-insensitive. */
 const MEDICAL = [
   /\bpregnan/i, /\bbreast ?feed/i, /\btrying for a baby/i, /\bivf\b/i,

@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
     const completion = await client.chat.completions.create({
       // The same small, fast, JSON-reliable model the quiz personalisation uses.
       model: 'gpt-4.1-mini',
+      // Not stored by OpenAI as a retrievable completion.
+      store: false,
       messages: [
         { role: 'system', content: SHOP_INTENT_SYSTEM_PROMPT },
         { role: 'user', content: buildIntentPrompt(query, products) },

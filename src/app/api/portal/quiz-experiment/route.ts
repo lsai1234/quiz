@@ -26,7 +26,8 @@ const WINDOW_DAYS = 60
 
 async function payload() {
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
-  const events = await listEventsSince(since)
+  // Founders checking the quiz are not customers (`analytics_sessions.internal`).
+  const events = await listEventsSince(since, undefined, { excludeInternal: true })
   return {
     config: await getQuizExperiment(),
     windowDays: WINDOW_DAYS,

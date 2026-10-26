@@ -1,5 +1,6 @@
 import type { AsNeededTrigger, SafetyFlag } from '@/lib/catalogue/types'
 import type { DriverWeights } from '@/lib/quiz-v2/drivers'
+import type { Ingredient } from '@/lib/consult/circuit'
 export type { SafetyFlag } from '@/lib/catalogue/types'
 
 /**
@@ -132,6 +133,18 @@ export interface QuizAnswers {
    * trusting the client to have done it.
    */
   healthDataConsent?: HealthDataConsent | null
+  /**
+   * What the Amp Consult kept out of this stack, as ingredient families
+   * (`consult/circuit.ts`). Consult stacks only; absent for the quiz.
+   *
+   * Derived from the circuit check, so it is health data in the same way
+   * `safetyFlags` is, and under the same gate: it travels only with a current
+   * `healthDataConsent` (the circuit check's own consent), and
+   * `sanitiseHealthData` drops it on the server otherwise. It is what puts the
+   * consult's exclusions on the subscription's safety snapshot, so a product
+   * swapped in months later still clears them.
+   */
+  consultExcluded?: Ingredient[]
   /** Bodyweight band for weight-sensitive dosing (protein). Optional. */
   weightBand?: WeightBand | null
   /**

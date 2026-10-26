@@ -61,8 +61,13 @@ describe('H12 consult funnel', () => {
     expect(buildConsultFunnel([ev('q9', 'quiz_start'), ev('q9', 'purchase')]).purchased).toBe(0)
   })
 
-  it('tallies circuit check stops by kind, without any answers', () => {
-    const f = buildConsultFunnel([...events, ev('b', 'consult_stop', { reason: 'pregnancy' })])
-    expect(f.stopped).toEqual({ pregnancy: 1 })
+  it('tallies stops by gate, without any answers', () => {
+    const f = buildConsultFunnel([...events, ev('b', 'consult_stop', { reason: 'circuit' }), ev('c', 'consult_stop', { reason: 'declined' })])
+    expect(f.stopped).toEqual({ circuit: 1, declined: 1 })
+  })
+
+  it('counts a row from before stops were recorded by gate as a circuit stop', () => {
+    const f = buildConsultFunnel([...events, ev('b', 'consult_stop', { reason: 'pregnancy' }), ev('c', 'consult_stop', { reason: 'kidney-liver' })])
+    expect(f.stopped).toEqual({ circuit: 2 })
   })
 })

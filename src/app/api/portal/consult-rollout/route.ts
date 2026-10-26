@@ -13,7 +13,8 @@ async function payload() {
   return {
     rollout: await getConsultRollout(),
     windowDays: WINDOW_DAYS,
-    funnel: compareDoors(await listEventsSince(since)),
+    // Founder runs (at /quizv2, or on the home page while signed in) are left out.
+    funnel: compareDoors(await listEventsSince(since, undefined, { excludeInternal: true })),
   }
 }
 

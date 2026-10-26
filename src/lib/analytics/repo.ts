@@ -96,11 +96,16 @@ export async function recordEvent(input: {
  * @param options.events Only these event names — far fewer rows when the caller
  *                       needs one funnel's events and not the shop's.
  * @param options.until  Exclusive upper bound, ISO. Defaults to now.
+ * @param options.excludeInternal Leave out visits from a browser signed in to
+ *                       the Founders Hub (`analytics_sessions.internal`), so a
+ *                       founder running the quiz or the consult to check it is
+ *                       not counted as a customer. Events with no session, or
+ *                       whose session has no row yet, are kept.
  */
 export async function listEventsSince(
   sinceIso: string,
   limit = 20_000,
-  options: { events?: readonly string[]; until?: string } = {},
+  options: { events?: readonly string[]; until?: string; excludeInternal?: boolean } = {},
 ): Promise<StoredEvent[]> {
   try {
     const db = await getEngine()
@@ -114,6 +119,9 @@ export async function listEventsSince(
     if (names.length > 0) {
       where += ` AND event IN (${names.map(() => '?').join(', ')})`
       params.push(...names)
+    }
+    if (options.excludeInternal) {
+      where += ' AND (session_id IS NULL OR session_id NOT IN (SELECT session_id FROM analytics_sessions WHERE internal = 1))'
     }
     const rows = await db.all<Row>(
       `SELECT id, session_id, event, props, path, created_at

@@ -6,7 +6,7 @@ import { validateHints, pinpointContext, safeLine, PINPOINT_LIMITS, validateProb
 import { screenText } from '@/lib/consult/ai/guard'
 import { nextStep } from '@/lib/consult/pinpoint/choose'
 import { pinpointed } from '@/lib/consult/pinpoint/effects'
-import { hunchEvidence } from '@/lib/consult/pinpoint/playback'
+import { aiEvidence } from '@/lib/consult/pinpoint/playback'
 import { PATTERN_BY_ID, PROBE_BY_ID } from '@/lib/consult/pinpoint/library'
 import { eligiblePatterns, isIn, leads, type Lead } from '@/lib/consult/pinpoint/leads'
 import { pinpointView, withStep } from '@/lib/consult/pinpoint/screen'
@@ -62,7 +62,8 @@ const hunchKey = (pattern: PatternId, evidence: string[], a: ConsultAnswers) => 
 const foundKey = (ids: PatternId[], partly: PatternId[], a: ConsultAnswers) => `found|${ids.join(',')}|${partly.join(',')}|${pinpointContext(a)}`
 
 function fetchHunch(lead: Lead, a: ConsultAnswers): void {
-  const evidence = hunchEvidence(lead)
+  // Never the body map: it stays on the device.
+  const evidence = aiEvidence(lead)
   const k = hunchKey(lead.pattern.id, evidence, a)
   if (off || !evidence.length || lines.has(k) || pending.has(k)) return
   pending.add(k)
@@ -92,7 +93,7 @@ function fetchFound(a: ConsultAnswers): void {
 
 /** The hunch's line, if it's in hand. */
 export function hunchLine(lead: Lead, a: ConsultAnswers): string | null {
-  return lines.get(hunchKey(lead.pattern.id, hunchEvidence(lead), a)) ?? null
+  return lines.get(hunchKey(lead.pattern.id, aiEvidence(lead), a)) ?? null
 }
 
 /** "What I found", if it's in hand. */

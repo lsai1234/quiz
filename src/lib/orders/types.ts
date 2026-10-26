@@ -9,6 +9,8 @@
  * as terminal side-exits.
  */
 import type { SupplierAddress } from '@/lib/supplier/types'
+import type { SafetyConstraints } from '@/lib/recharge/types'
+import type { HealthDataConsent } from '@/lib/types'
 
 export type OrderChannel = 'shop' | 'quiz' | 'subscription'
 
@@ -322,6 +324,21 @@ export interface Order {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** The last-chance deal this order was sold on — see `LastChanceSnapshot`. */
   lastChance?: LastChanceSnapshot | null
+  /**
+   * The customer's hard exclusions at the point of sale, for a one-off order
+   * that came from the Amp Consult. The same snapshot a subscription keeps
+   * (`MemberSubscription.safetyConstraints`), so a line swapped on this order
+   * because PowerBody ran out clears what the consult kept out — never a
+   * D3 + K2 for someone on blood thinners.
+   *
+   * Health-derived, so it is only written with the circuit check's consent,
+   * which is kept alongside it (`healthDataConsent`). Absent on every quiz and
+   * shop order, where the original product is the statement of what suits them
+   * (`line-changes.ts` `safetyWarnings`).
+   */
+  safetyConstraints?: SafetyConstraints
+  /** The health-data consent `safetyConstraints` was given under: version and when. */
+  healthDataConsent?: HealthDataConsent | null
   // ── Audit ──
   events: OrderEvent[]
   createdAt: string
@@ -377,6 +394,9 @@ export interface CreateOrderInput {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** See `Order.lastChance`. */
   lastChance?: LastChanceSnapshot | null
+  /** See `Order.safetyConstraints`. Only with `healthDataConsent`. */
+  safetyConstraints?: SafetyConstraints
+  healthDataConsent?: HealthDataConsent | null
 }
 
 /**

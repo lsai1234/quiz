@@ -32,6 +32,8 @@ import { inStockOnly } from '@/lib/catalogue/filters'
 import { claimsFor } from './claims'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { circuitOutcome, type Ingredient } from './circuit'
+import { pharmacistNoteFor } from './exclusions'
+import { PHARMACIST_HANDOFF_NOTE } from './pharmacist-note'
 import {
   GOAL_NEEDS,
   GOAL_WEIGHT,
@@ -478,7 +480,8 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     notes.push(reason.startsWith('you already take') ? `Skipped: ${names}, because ${reason}` : `Kept out: ${names}, because ${reason}`)
   }
   if (outcome.pharmacistNote) {
-    notes.push('Pharmacist note travels with the stack: check before starting, as you take prescription medicine.')
+    // Worded for the medicine they told us about (`pharmacist-note.ts`).
+    notes.push(PHARMACIST_HANDOFF_NOTE[pharmacistNoteFor(outcome.exclude)])
   }
   if (a.circuit?.flags.includes('weight-meds')) {
     // Plan v4, A4: both need pharmacist sign-off before launch.

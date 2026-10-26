@@ -38,7 +38,7 @@ import { PATTERN_BY_ID } from './pinpoint/library'
 import type { PatternId } from './pinpoint/types'
 import type { EngineResult, PinpointOutcome } from './engine'
 import { ENGINE_VERSION } from './engine'
-import type { Ingredient } from './circuit'
+import { INGREDIENTS, type Ingredient } from './circuit'
 import { PROFILE_AREAS, type ChargeProfile } from './profile'
 import type { ConsultGoal, Route } from './types'
 
@@ -72,9 +72,6 @@ export interface HandoffPayload {
 }
 
 const GOALS: ConsultGoal[] = ['performance', 'energy', 'sleep', 'focus', 'ageing', 'allround', 'weight']
-const INGREDIENTS: Ingredient[] = [
-  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish', 'fat-burner', 'rx-interaction',
-]
 
 export function buildHandoff(opts: {
   consultId: string

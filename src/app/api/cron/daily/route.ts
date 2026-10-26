@@ -3,6 +3,7 @@ import { isCronAuthorised, runDailyJob } from '@/lib/changes/daily'
 import { recordCronHeartbeat } from '@/lib/monitoring/health'
 import { pruneOldEvents } from '@/lib/monitoring/repo'
 import { reportError } from '@/lib/monitoring/report'
+import { sweepConsultData } from '@/lib/consult/retention'
 
 export const dynamic = 'force-dynamic'
 /** Detection walks every active subscription; give it room on a slow supplier. */
@@ -35,8 +36,15 @@ async function handle(req: Request) {
     // by hand, and letting it satisfy the check would mask a dead schedule.
     if (!dryRun) {
       const pruned = await pruneOldEvents()
+      // Saved consults past their thirty days, deleted. Never allowed to fail the run.
+      let consultSweep = { consultsDeleted: 0, stopReasonsScrubbed: 0 }
+      try {
+        consultSweep = await sweepConsultData()
+      } catch (err) {
+        console.error('[cron/daily] consult retention sweep failed:', err)
+      }
       await recordCronHeartbeat({ at: new Date().toISOString(), ok: true, ms: Date.now() - startedAt })
-      return NextResponse.json({ ok: true, ms: Date.now() - startedAt, prunedErrorEvents: pruned, ...result })
+      return NextResponse.json({ ok: true, ms: Date.now() - startedAt, prunedErrorEvents: pruned, ...consultSweep, ...result })
     }
 
     return NextResponse.json({ ok: true, ms: Date.now() - startedAt, ...result })

@@ -304,6 +304,8 @@ export async function aiShortName(
     const completion = await new OpenAI({ apiKey }).chat.completions.create(
       {
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: SYSTEM },
           { role: 'user', content: `Product name: ${product.title}\nCategory: ${product.category ?? ''}` },

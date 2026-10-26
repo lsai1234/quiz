@@ -25,6 +25,7 @@ import { ampReactionTo, reactionTo } from '@/lib/consult/reactions'
 import { STOP_COPY, stopReason } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
 import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
+import { markResultsOpen } from '@/lib/consult/results-tab'
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
@@ -345,6 +346,8 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           onDone={(bundle) => {
             dispatch({ type: 'phase', phase: 'done' })
             rememberFinished(state)
+            // A reload on the results page rebuilds them from the saved handoff.
+            markResultsOpen(bundle.payload.consult_id)
             consultFunnel.handoff({ route: state.answers.route ?? 'deep', stackSize: bundle.payload.tiers.complete.length })
             onHandoff?.(bundle)
           }}

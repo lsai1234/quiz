@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
         // gpt-4.1-mini: strong instruction-following + JSON adherence, fast and
         // non-reasoning (keeps the reveal snappy), ~$0.001/quiz at this size.
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: BLUEPRINT_SYSTEM_PROMPT },
           { role: 'user', content: prompt },

@@ -55,6 +55,8 @@ export async function POST(req: Request) {
         // job is to rank ten short strings, which is not work that wants a
         // bigger model — and this call lives inside a 2.5s budget.
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: STEER_SYSTEM_PROMPT },
           { role: 'user', content: buildSteerPrompt(body) },

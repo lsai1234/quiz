@@ -3,9 +3,17 @@
  * The consult's first-scene budget (build U7): "loads fast on 4G".
  *
  *   npm run build && npx next start --port 3200 &
- *   node scripts/consult-budget.mjs [--url http://localhost:3200]
+ *   FOUNDER_1_EMAIL=… FOUNDER_1_PASSWORD=… node scripts/consult-budget.mjs [--url http://localhost:3200]
  *
- * Loads /consult in Chromium on a throttled mobile connection (Lighthouse's
+ * The consult is founders-only at /quizv2 until the hub's rollout changes, and
+ * the old /consult address only redirects there — signed out, both are the
+ * founder sign-in, which measured nothing. So the script signs in as a founder
+ * first (the same `/api/portal/login` the hub uses, with the credentials from
+ * the environment, before the network is throttled and before anything is
+ * counted), then loads /quizv2. That page also carries the founder strip,
+ * which customers never get, so the figures are slightly pessimistic.
+ *
+ * Loads /quizv2 in Chromium on a throttled mobile connection (Lighthouse's
  * "Slow 4G": 1.6Mbps down, 750Kbps up, 150ms round trip — the pessimistic end
  * of 4G) with a cold cache, and measures:
  *
@@ -42,6 +50,16 @@ const executablePath = [process.env.CHROME_PATH, '/opt/pw-browsers/chromium-1194
 
 const browser = await chromium.launch(executablePath ? { executablePath } : {})
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true })
+const founder = { email: process.env.FOUNDER_1_EMAIL, password: process.env.FOUNDER_1_PASSWORD }
+if (!founder.email || !founder.password) {
+  console.error('Set FOUNDER_1_EMAIL and FOUNDER_1_PASSWORD: the consult is founders-only at /quizv2.')
+  process.exit(2)
+}
+const login = await context.request.post(`${base}/api/portal/login`, { data: founder })
+if (!login.ok()) {
+  console.error(`Founder sign-in failed (${login.status()}).`)
+  process.exit(2)
+}
 const page = await context.newPage()
 const cdp = await context.newCDPSession(page)
 await cdp.send('Network.enable')
@@ -61,7 +79,7 @@ cdp.on('Network.responseReceived', (e) => types.set(e.requestId, { type: e.type,
 cdp.on('Network.loadingFinished', (e) => sizes.set(e.requestId, e.encodedDataLength))
 
 const t0 = Date.now()
-await page.goto(`${base}/consult`, { waitUntil: 'commit' })
+await page.goto(`${base}/quizv2`, { waitUntil: 'commit' })
 const choice = page.getByRole('radio', { name: /^Speed run/ })
 await choice.waitFor({ state: 'visible', timeout: 60_000 })
 // Usable means hydrated: a tap has to do something.

@@ -20,7 +20,7 @@
 import { journeyOf } from '../journey'
 import { AGE_LABEL, GOAL_LABEL } from '../summary'
 import type { ConsultAnswers } from '../types'
-import { PATTERN_BY_ID, PROBE_BY_ID } from '../pinpoint/library'
+import { BODY_MAP_EVIDENCE, PATTERN_BY_ID, PROBE_BY_ID } from '../pinpoint/library'
 import type { PatternId, Probe } from '../pinpoint/types'
 import { isClean } from './copy'
 import { cleanText, looksMedical, namesCondition } from './guard'
@@ -102,7 +102,8 @@ export function cleanEvidence(raw: unknown): string[] {
   return raw
     .filter((e): e is string => typeof e === 'string')
     .map((e) => cleanText(e))
-    .filter((e) => e.length > 0 && e.length <= PINPOINT_LIMITS.evidence && isClean(e) && !looksMedical(e))
+    // The body map never reaches a model, whatever a client sends.
+    .filter((e) => e.length > 0 && e.length <= PINPOINT_LIMITS.evidence && isClean(e) && !looksMedical(e) && !BODY_MAP_EVIDENCE.has(e))
     .slice(0, 4)
 }
 

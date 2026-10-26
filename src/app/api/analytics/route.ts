@@ -4,6 +4,7 @@ import { recordEvent } from '@/lib/analytics/repo'
 import { patchFromEvent, recordSessionEvent } from '@/lib/analytics/sessions'
 import { parseUserAgent, sanitiseVisitContext } from '@/lib/analytics/visit'
 import { isPortalAuthed } from '@/lib/portal/guard'
+import { scrubHealthProps } from '@/lib/analytics/health-props'
 
 /**
  * POST /api/analytics
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
   const event = body.event as AnalyticsEvent
   let props = (body.props && typeof body.props === 'object' && !Array.isArray(body.props) ? body.props : {}) as EventProps
   if (JSON.stringify(props).length > MAX_PROPS_CHARS) props = {}
+  props = scrubHealthProps(event, props)
   const session = typeof body.session === 'string' && body.session.length <= 64 ? body.session : null
   const path = typeof body.path === 'string' ? body.path.slice(0, 200) : null
   const nowMs = Date.now()
@@ -70,8 +72,9 @@ export async function POST(req: Request) {
     /* no cookie jar to read — a visitor, then */
   }
 
-  // Structured log line — point this at your analytics provider when you have one.
-  console.log('[analytics]', JSON.stringify({ event, props, session, path, ts }))
+  // No log line. Event props went to the console here once, which put every
+  // event — consult stop reasons included — into the host's logs as well as our
+  // own table, with a retention we don't control. The table is the record.
 
   // And keep it, so the hub can compute the funnel from our own data.
   await Promise.all([

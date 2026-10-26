@@ -1,5 +1,5 @@
 /**
- * The persona suite (build V9): 25 scripted people and what their handoff
+ * The persona suite (build V9): 35 scripted people (p01–p35) and what their handoff
  * must look like.
  *
  * Each persona is a complete set of answers and a list of expectations. Some
@@ -247,4 +247,8 @@ export const PERSONAS: Persona[] = [
  */
 // 2026-09-26: re-run after adding the Weight loss goal (plan v4), which adds it
 // to the goal list in the prompts. All 31 personas pass.
-export const APPROVED_FINGERPRINT = '1fd6b3a2'
+// 2026-10-26: no prompt changed; the fingerprint now covers every model and
+// prompt the consult uses (Pinpoint's hunch, found, tell and notes, the
+// user-prompt templates, uploads, voice and moderation), not just three system
+// prompts. Re-run: all 35 personas pass.
+export const APPROVED_FINGERPRINT = '9bd96e4d'

@@ -58,7 +58,7 @@ export async function quizFunnel(days: number, options: { fresh?: boolean } = {}
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
   const computed: CachedFunnel = {
     asOf: new Date().toISOString(),
-    funnel: buildQuizFunnel(await listEventsSince(since, 50_000, { events: QUIZ_FUNNEL_EVENTS })),
+    funnel: buildQuizFunnel(await listEventsSince(since, 50_000, { events: QUIZ_FUNNEL_EVENTS, excludeInternal: true })),
   }
 
   try {

@@ -123,6 +123,32 @@ export function validateSceneCopy(raw: unknown, scene: SceneDef): AiSceneCopy | 
  * circuit check, no body map detail, no free text. Enough to pitch the
  * wording, not enough to identify anyone or infer a condition.
  */
+/**
+ * The answers `/api/consult/copy` is sent: only what the summary below and the
+ * scene variants read (goals, age and route pick the variant; the rest is the
+ * summary). Never the circuit check, the body map, food, the shelf, notes,
+ * Pinpoint answers or sex — those were sent once, as the whole answers object,
+ * and dropped by the server; now they never leave the browser for this route.
+ * Sleep goes as its times only, since the summary reads hours, not quality.
+ */
+export type CopyAnswers = Pick<ConsultAnswers, 'goals' | 'age' | 'route' | 'training' | 'energy' | 'daylight' | 'caffeine' | 'comfort'> & {
+  sleep: Pick<NonNullable<ConsultAnswers['sleep']>, 'bed' | 'wake'> | null
+}
+
+export function copyAnswersFor(a: ConsultAnswers): CopyAnswers {
+  return {
+    goals: [...a.goals],
+    age: a.age,
+    route: a.route,
+    training: a.training,
+    energy: a.energy,
+    sleep: a.sleep ? { bed: a.sleep.bed, wake: a.sleep.wake } : null,
+    daylight: a.daylight,
+    caffeine: a.caffeine,
+    comfort: a.comfort,
+  }
+}
+
 export function summariseForCopy(a: ConsultAnswers): string {
   const lines: string[] = []
   if (a.goals.length) lines.push(`Goals, in order: ${a.goals.map((g) => GOAL_LABEL[g]).join(', ')}`)

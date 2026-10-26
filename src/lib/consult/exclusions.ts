@@ -8,6 +8,7 @@
  */
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { HealthDataConsent, QuizAnswers } from '@/lib/types'
 import type { Ingredient } from './circuit'
 import { ingredientsOf } from './knowledge'
 
@@ -29,4 +30,35 @@ export function withoutExcluded<T extends Pick<CatalogueProduct, 'swapGroup' | '
 ): T[] {
   if (!exclusions || exclusions.excluded.length === 0) return products
   return products.filter((p) => !isExcluded(p, exclusions.excluded))
+}
+
+/**
+ * What a one-off order from a consult stack sends to `/api/cart` so the order
+ * keeps the consult's exclusions (see `Order.safetyConstraints`). Undefined for
+ * a quiz stack, or without the circuit check's consent; the server checks the
+ * consent again and drops the list without a current one.
+ */
+export function orderSafetyFor(
+  answers: Pick<QuizAnswers, 'consultExcluded' | 'healthDataConsent'> | null | undefined,
+): { excluded: Ingredient[]; healthDataConsent: HealthDataConsent } | undefined {
+  if (!answers?.consultExcluded?.length || !answers.healthDataConsent?.accepted) return undefined
+  return { excluded: [...answers.consultExcluded], healthDataConsent: answers.healthDataConsent }
+}
+
+/**
+ * Which medicine the pharmacist note is about, worked out from what was kept
+ * out rather than from the circuit answers, which never leave the consult.
+ *
+ * Both prescription rules (blood thinners, other prescriptions) keep out
+ * `rx-interaction`; only weight-loss medication keeps out fat burners as a
+ * kind (`circuit.ts` FILTERS). So the exclusions already say which note to
+ * show, and the payload needs no new health field to say it.
+ */
+export type PharmacistNoteKind = 'prescription' | 'weight-meds' | 'both'
+
+export function pharmacistNoteFor(excluded: readonly Ingredient[]): PharmacistNoteKind {
+  const rx = excluded.includes('rx-interaction')
+  const weight = excluded.includes('fat-burner')
+  if (rx && weight) return 'both'
+  return weight ? 'weight-meds' : 'prescription'
 }

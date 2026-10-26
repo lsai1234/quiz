@@ -40,6 +40,11 @@ import type { LastChanceSnapshot, OrderChannel, OrderLine } from '@/lib/orders/t
 import { supplierIdFor } from '@/lib/catalogue/master'
 import { isAccessory } from '@/lib/catalogue/accessory'
 import { claimsFor } from '@/lib/consult/claims'
+import { INGREDIENTS, type Ingredient } from '@/lib/consult/circuit'
+import { healthConsentIsCurrent, healthDataDocument } from '@/lib/legal/health-data'
+import { recordConsent, requestMetadata } from '@/lib/legal/consent'
+import type { SafetyConstraints } from '@/lib/recharge/types'
+import type { HealthDataConsent } from '@/lib/types'
 
 /**
  * POST /api/cart
@@ -142,6 +147,27 @@ function soldOutMessage(lines: UnavailableLine[], channel: OrderChannel): string
   return `Sorry — some of this has just sold out: ${names}. ${channel === 'quiz' ? 'Swap them in your stack' : 'Take them out of your basket'} and try again — you have not been charged.`
 }
 
+/**
+ * The Amp Consult's exclusions for a one-off order, as the browser sent them —
+ * kept only with a current health-data consent (the circuit check's), and only
+ * as known ingredient families. Anything else is dropped rather than refused:
+ * an order without the snapshot is a quiz or shop order, which the order page
+ * already handles by keeping whatever the original product promised.
+ */
+function orderSafetyFrom(raw: unknown): { safetyConstraints?: SafetyConstraints; healthDataConsent?: HealthDataConsent } {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as { excluded?: unknown; healthDataConsent?: unknown }
+  const consent = value.healthDataConsent as HealthDataConsent | null | undefined
+  if (!healthConsentIsCurrent(consent)) return {}
+  const excluded = Array.isArray(value.excluded)
+    ? [...new Set(value.excluded.filter((i): i is Ingredient => INGREDIENTS.includes(i as Ingredient)))].sort()
+    : []
+  if (excluded.length === 0) return {}
+  return {
+    safetyConstraints: { dietaryTags: [], noStimulants: false, safetyFlags: [], excludedIngredients: excluded },
+    healthDataConsent: { accepted: true, version: consent!.version, at: typeof consent!.at === 'string' ? consent!.at : new Date().toISOString() },
+  }
+}
+
 export async function POST(req: Request) {
   let body: {
     lines?: unknown
@@ -149,6 +175,7 @@ export async function POST(req: Request) {
     claimStarter?: unknown
     shippingAddress?: unknown
     lastChance?: unknown
+    safety?: unknown
   }
   try {
     body = await req.json()
@@ -224,6 +251,24 @@ export async function POST(req: Request) {
   }
 
   const user = await getHubUser().catch(() => null)
+  const safety = orderSafetyFrom(body.safety)
+  // A signed-in buyer's circuit-check consent gets its own record, the same
+  // `health-data` row a subscription writes (finalize.ts). A guest has no
+  // account to hang one on; their order keeps the consent next to the
+  // exclusions it covers (`Order.healthDataConsent`).
+  if (user && safety.healthDataConsent) {
+    try {
+      await recordConsent({
+        userId: user.id,
+        context: 'health-data',
+        documents: [healthDataDocument()],
+        acceptedAt: safety.healthDataConsent.at,
+        ...requestMetadata(req),
+      })
+    } catch (err) {
+      console.error('[/api/cart] health-data consent record failed:', err)
+    }
+  }
 
   /**
    * Re-validate the partner code HERE, against the undiscounted subtotal.
@@ -690,6 +735,7 @@ export async function POST(req: Request) {
         shipping: 0,
         ...founderFields,
         ...starterFields,
+        ...safety,
       })
     } catch (err) {
       console.error('[/api/cart] could not raise the free order:', err)
@@ -739,6 +785,7 @@ export async function POST(req: Request) {
         lastChance: lastChance?.snapshot ?? null,
         deliveryDue,
         ...founderFields,
+        ...safety,
       })
     } catch (err) {
       console.error('[/api/cart] could not raise the pending order:', err)
@@ -805,6 +852,7 @@ export async function POST(req: Request) {
       lastChance: lastChance?.snapshot ?? null,
       deliveryDue,
       ...founderFields,
+      ...safety,
     })
   } catch (err) {
     console.error('[/api/cart] could not raise the order:', err)

@@ -22,6 +22,7 @@
 import type { CatalogueProduct, DietaryTag, SafetyFlag } from '@/lib/catalogue/types'
 import type { MemberSubscription, SafetyConstraints } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
+import { isExcluded } from '@/lib/consult/exclusions'
 
 /** No exclusions — anything in the category is eligible. */
 export const NO_CONSTRAINTS: SafetyConstraints = {
@@ -40,6 +41,8 @@ export const NO_CONSTRAINTS: SafetyConstraints = {
  *   • `stimPreference: 'no'` or `caffeineLevel: 'none'` → no stimulants
  *   • `safetyFlags: ['pregnancy', …]`                 → no product listing that
  *     flag in `contraindications` (factory.ts scoreProduct, the -Infinity gate)
+ *   • `consultExcluded: ['vitamin-k', …]` (consult only) → no product containing
+ *     those ingredient families (consult/engine.ts, the same `ingredientsOf`)
  *
  * Keep this in step with the factory: a rule that exists there but not here is a
  * product we'd recommend against but might still auto-swap in.
@@ -57,10 +60,12 @@ export function safetyConstraintsFrom(answers?: QuizAnswers | null): SafetyConst
     if (DIETARY_TAGS.includes(d as DietaryTag)) tags.add(d as DietaryTag)
   }
 
+  const excluded = answers.consultExcluded ?? []
   return {
     dietaryTags: [...tags],
     noStimulants: answers.stimPreference === 'no' || answers.caffeineLevel === 'none',
     safetyFlags: [...(answers.safetyFlags ?? [])],
+    ...(excluded.length > 0 ? { excludedIngredients: [...excluded] } : {}),
   }
 }
 
@@ -107,6 +112,7 @@ function clearsSafetyFlags(product: CatalogueProduct, constraints: SafetyConstra
 export function meetsSafetyConstraints(product: CatalogueProduct, constraints: SafetyConstraints): boolean {
   if (constraints.noStimulants && product.hasStimulants) return false
   if (!clearsSafetyFlags(product, constraints)) return false
+  if (isExcluded(product, constraints.excludedIngredients ?? [])) return false
   return constraints.dietaryTags.every((t) => satisfiesTag(product, t))
 }
 
@@ -115,7 +121,8 @@ export function hasConstraints(constraints: SafetyConstraints): boolean {
   return (
     constraints.noStimulants ||
     constraints.dietaryTags.length > 0 ||
-    (constraints.safetyFlags ?? []).length > 0
+    (constraints.safetyFlags ?? []).length > 0 ||
+    (constraints.excludedIngredients ?? []).length > 0
   )
 }
 
@@ -170,7 +177,7 @@ export function describeConstraints(constraints: SafetyConstraints): string | nu
 export function failedConstraints(product: CatalogueProduct, constraints: SafetyConstraints): string[] {
   const failures: string[] = []
   if (constraints.noStimulants && product.hasStimulants) failures.push('contains stimulants')
-  if (!clearsSafetyFlags(product, constraints)) {
+  if (!clearsSafetyFlags(product, constraints) || isExcluded(product, constraints.excludedIngredients ?? [])) {
     failures.push('not suitable for this member on safety grounds')
   }
   for (const t of constraints.dietaryTags) {

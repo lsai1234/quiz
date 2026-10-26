@@ -103,6 +103,8 @@ export async function aiClassifyProduct(p: CatalogueProduct): Promise<{ patch: P
     const completion = await client.chat.completions.create(
       {
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: SYSTEM },
           { role: 'user', content: `Title: ${p.title}\nDescription: ${p.description}\nCategory: ${p.category}\nPrice: £${p.basePrice}` },

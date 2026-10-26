@@ -38,6 +38,11 @@ export type Ingredient =
   /** Anything the catalogue flags as interaction-prone with prescription medicine. */
   | 'rx-interaction'
 
+/** Every ingredient family, for validating a list that arrived from a browser. */
+export const INGREDIENTS: readonly Ingredient[] = [
+  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish', 'fat-burner', 'rx-interaction',
+]
+
 export type StopReason = 'pregnancy' | 'kidney-liver' | 'declined' | 'under-18'
 
 export type CircuitOutcome =

@@ -5,7 +5,12 @@ A proposal for a third route through the consult (`/quizv2`) that works like
 hunches with everyday scenarios, checks what it thinks with you, and ends with
 a profile of what's really going on, with the stack built around it.
 
-**Status: proposal only. Nothing in this document is built yet.** The visual
+**Status: built.** Pinpoint is implemented as described here: the library, the
+model, the question chooser, the round's screens, its AI jobs and their tests
+(`src/lib/consult/pinpoint/*`, `src/components/consult/pinpoint/*`,
+`/api/consult/pinpoint`). It is founders-only at `/quizv2` with the rest of the
+consult. Where the build differs, `docs/amp-consult-report.md` §2.4 describes
+what the code does. The visual
 version, with a playable model of the question loop and phone mockups of every
 new screen, is at https://claude.ai/artifact/SBPAiHk5TXdAG6sYG5Wmtg.
 

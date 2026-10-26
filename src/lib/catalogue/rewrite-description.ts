@@ -91,6 +91,8 @@ export async function rewriteDescription(input: RewriteInput): Promise<RewriteRe
     const completion = await client.chat.completions.create(
       {
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: SYSTEM },
           {

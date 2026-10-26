@@ -3,7 +3,7 @@ import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import OpenAI from 'openai'
 import { SCENES, resolveSceneDef } from '@/lib/consult/flow'
 import { COPY_MODEL, NEVER_AI } from '@/lib/consult/ai/copy'
-import { MAX_TEXT, cleanText, looksMedical, rateLimiter } from '@/lib/consult/ai/guard'
+import { MAX_TEXT, cleanText, looksMedical, rateLimiter, MODERATION_MODEL } from '@/lib/consult/ai/guard'
 import { UNDERSTAND_SCHEMA, UNDERSTAND_SYSTEM_PROMPT, buildUnderstandPrompt, validatePicks } from '@/lib/consult/ai/understand'
 import { EMPTY_ANSWERS, type SceneId } from '@/lib/consult/types'
 
@@ -52,13 +52,15 @@ async function handle(req: Request) {
   if (!client) return NextResponse.json({ unavailable: true })
 
   try {
-    const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: text }, { timeout: 4000, maxRetries: 0 })
+    const mod = await client.moderations.create({ model: MODERATION_MODEL, input: text }, { timeout: 4000, maxRetries: 0 })
     if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ held: 'moderated' })
 
     const scene = resolveSceneDef(sceneId as SceneId, EMPTY_ANSWERS)
     const completion = await client.chat.completions.create(
       {
         model: COPY_MODEL,
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: UNDERSTAND_SYSTEM_PROMPT },
           { role: 'user', content: buildUnderstandPrompt(scene, text) },

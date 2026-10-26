@@ -37,6 +37,7 @@ import { newOrderId, newOrderReference, orderReference } from './service'
 import { neverPaid } from './unpaid'
 import type { Order, OrderLine } from './types'
 import { supplierIdFor } from '@/lib/catalogue/master'
+import { meetsSafetyConstraints } from '@/lib/changes/safety'
 
 const round = (n: number) => Math.round(n * 100) / 100
 const lineValue = (line: Pick<OrderLine, 'unitPrice' | 'quantity'>) => round(line.unitPrice * line.quantity)
@@ -246,6 +247,19 @@ export function safetyWarnings(original: CatalogueProduct, candidate: CatalogueP
   return warnings
 }
 
+/**
+ * Whether `candidate` clears the customer's own exclusions, when the order kept
+ * them — a one-off order from the Amp Consult carries what the circuit check
+ * ruled out. Unlike `safetyWarnings`, this is not a promise a founder can
+ * confirm past: nothing the consult kept out is ever sent in its place.
+ */
+export function clearsOrderConstraints(order: Pick<Order, 'safetyConstraints'>, candidate: CatalogueProduct): boolean {
+  return !order.safetyConstraints || meetsSafetyConstraints(candidate, order.safetyConstraints)
+}
+
+/** Said in place of the reason, which is the customer's health data. */
+export const ORDER_CONSTRAINT_WARNING = 'Not suitable for this customer on safety grounds — their consult kept it out'
+
 /** The variant to offer: in stock, coded, and priced nearest what they paid. */
 function bestVariant(product: CatalogueProduct, paidUnit: number): CatalogueVariant | null {
   const sellable = product.variants.filter((v) => v.available && v.sku)
@@ -266,7 +280,14 @@ export function replacementCandidates(
     original.swapGroup ? p.swapGroup === original.swapGroup : p.category === original.category
 
   return catalogue
-    .filter((p) => p.id !== original.id && !onOrder.has(p.id) && sameKind(p) && isSafeReplacement(original, p))
+    .filter(
+      (p) =>
+        p.id !== original.id &&
+        !onOrder.has(p.id) &&
+        sameKind(p) &&
+        isSafeReplacement(original, p) &&
+        clearsOrderConstraints(order, p),
+    )
     .map((p) => ({ product: p, variant: bestVariant(p, line.unitPrice) }))
     .filter((c): c is { product: CatalogueProduct; variant: CatalogueVariant } => c.variant !== null)
     .sort((a, b) => Math.abs(a.variant.price - line.unitPrice) - Math.abs(b.variant.price - line.unitPrice))
@@ -348,7 +369,10 @@ export async function searchReplacements(
           difference: round(v.price - line.unitPrice),
           stock: v.inventory ?? null,
         })),
-      warnings: original ? safetyWarnings(original, product) : [],
+      warnings: [
+        ...(original ? safetyWarnings(original, product) : []),
+        ...(clearsOrderConstraints(order, product) ? [] : [ORDER_CONSTRAINT_WARNING]),
+      ],
     }))
     .filter((p) => p.variants.length > 0)
     // Exact title matches first, then the nearest price to what they paid.
@@ -415,6 +439,9 @@ export async function swapLine(
   const variant = product?.variants.find((v) => v.id === replacement.variantId)
   if (!product || !variant || !variant.sku) throw new Error('That replacement is not in the catalogue any more.')
   if (!variant.available) throw new Error(`${product.title} is out of stock too — pick another.`)
+  if (!clearsOrderConstraints(order, product)) {
+    throw new Error(`${product.title} can’t be sent on this order: the customer’s consult kept it out on safety grounds. Pick another, or remove the item and refund it.`)
+  }
   const original = catalogue.find((p) => p.id === line.productId)
   const warnings = original ? safetyWarnings(original, product) : []
   if (warnings.length > 0 && !options.acceptWarnings) {

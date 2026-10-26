@@ -153,7 +153,12 @@ describe('H8 results page adapter', () => {
     expect(q.trainingFrequency).toBe('5-6x')
     expect(q.ageBracket).toBe('35-44')
     expect(q.safetyFlags).toEqual([])
-    expect(q.healthDataConsent).toBeNull()
+    // The circuit check's consent, and only what it rules out, so checkout can
+    // record the one and keep the other on the order (plan Phase 1, items 1–2).
+    expect(q.healthDataConsent).toEqual(answers.healthConsent)
+    expect(q.consultExcluded).toEqual([])
+    expect(toQuizAnswers(answers, ['vitamin-k']).consultExcluded).toEqual(['vitamin-k'])
+    expect(toQuizAnswers({ ...answers, healthConsent: null }, ['vitamin-k'])).not.toHaveProperty('consultExcluded')
   })
 
   it('drops an id the catalogue doesn’t know rather than faking a product', () => {

@@ -96,6 +96,8 @@ async function handle(req: Request) {
     const completion = await client.chat.completions.create(
       {
         model: COPY_MODEL,
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: COPY_SYSTEM_PROMPT },
           { role: 'user', content: buildCopyPrompt(scene, answers, previous) },

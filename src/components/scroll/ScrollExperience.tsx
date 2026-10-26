@@ -12,6 +12,7 @@ import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
 import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
+import { CHANGE_ANSWERS_HASH, clearResultsOpen, resultsOpenFor } from '@/lib/consult/results-tab'
 
 /**
  * Loaded only when someone actually opens it, so the home page carries none of
@@ -46,6 +47,8 @@ export function ScrollExperience() {
   // and the prompt is dismissed once the user chooses either way.
   const [hydrated, setHydrated] = useState(false)
   const [resumeDismissed, setResumeDismissed] = useState(false)
+  /** Rebuilding a consult's results page after a reload: show nothing rather than flash the hero. */
+  const [restoring, setRestoring] = useState(false)
   /**
    * Which quiz this visitor gets.
    *
@@ -86,12 +89,46 @@ export function ScrollExperience() {
       offering to pick the quiz up, which is the right failure: a reveal drawn
       from an empty blueprint would be a page of nothing.
     */
-    if (window.location.hash === STACK_RETURN_HASH) {
+    const returning = window.location.hash === STACK_RETURN_HASH
+    if (returning) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       if (useQuizStore.getState().stackBlueprint) {
         setAct(4)
         setAnimKey((k) => k + 1)
+        return
       }
+    }
+
+    /*
+      A hard reload on a consult's results page.
+
+      The blueprint didn't survive it, but a consult stack can't be rebuilt from
+      answers the way a quiz stack can, and its exclusions and pharmacist note
+      must not quietly disappear. The consult saved its handoff on the device;
+      if this tab handed one off, the results page is rebuilt from that (only
+      the tiny marker module is loaded until we know there is one).
+    */
+    if (!useQuizStore.getState().stackBlueprint && resultsOpenFor()) {
+      setRestoring(true)
+      void (async () => {
+        try {
+          const [{ handoffToRestore, restoreResultsPage }, { loadCatalogue }] = await Promise.all([
+            import('@/lib/consult/results'),
+            import('@/lib/catalogue/load'),
+          ])
+          const payload = handoffToRestore()
+          if (!payload) return clearResultsOpen()
+          const { products } = await loadCatalogue()
+          if (!products.length) return
+          restoreResultsPage(payload, products)
+          setAct(4)
+          setAnimKey((k) => k + 1)
+        } catch (err) {
+          console.error('[results] could not rebuild the consult’s results page:', err)
+        } finally {
+          setRestoring(false)
+        }
+      })()
     }
   }, [])
 
@@ -113,13 +150,36 @@ export function ScrollExperience() {
     }
   }, [resolved, heroOffer, act])
 
+  /*
+    "Change my answers" on a consult's results page (`ConsultNote`): reopen the
+    consult on its review. Only where the home page offers the consult at all —
+    while the rollout is off, typing the hash must not open a founder-only
+    consult for anyone, and founders are sent to /quizv2 instead.
+  */
+  const [reopenConsult, setReopenConsult] = useState(false)
+  useEffect(() => {
+    if (!resolved || heroOffer === 'quiz-only') return
+    const open = () => {
+      if (window.location.hash !== CHANGE_ANSWERS_HASH) return
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      setReopenConsult(true)
+      setConsult(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+      window.scrollTo(0, 0)
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
+  }, [resolved, heroOffer])
+
   function goTo(next: Act) {
     setAct(next)
     setAnimKey((k) => k + 1)
     window.scrollTo(0, 0)
   }
 
-  const canResume = hydrated && !resumeDismissed && act === 1 && hasQuizProgress()
+  const canResume = hydrated && !restoring && !resumeDismissed && act === 1 && hasQuizProgress()
 
   return (
     /* The measured window height, not `min-h-screen` (`100vh`, the LARGE
@@ -136,13 +196,13 @@ export function ScrollExperience() {
               Pick up where you left off?
             </p>
             <button
-              onClick={() => { setResumeDismissed(true); setConsult(false); goTo(2) }}
+              onClick={() => { setResumeDismissed(true); setConsult(false); clearResultsOpen(); goTo(2) }}
               className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#0A0A0A] bg-[#00D4FF] active:scale-95"
             >
               Resume
             </button>
             <button
-              onClick={() => { useQuizStore.getState().reset(); setResumeDismissed(true) }}
+              onClick={() => { useQuizStore.getState().reset(); clearResultsOpen(); setResumeDismissed(true) }}
               className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white/60 hover:text-white/90"
             >
               Start fresh
@@ -150,12 +210,14 @@ export function ScrollExperience() {
           </div>
         </div>
       )}
-      <div key={animKey} className={TRANSITIONS[act]}>
+      {!restoring && <div key={animKey} className={TRANSITIONS[act]}>
         {act === 1 && (
           <Act1Hero
             onEnterQuiz={() => {
-              // A quiz stack carries no consult exclusions from an earlier run.
+              // A quiz stack carries no consult exclusions from an earlier run,
+              // and a reload must not bring that run's results back.
               useQuizStore.getState().setConsultExclusions(null)
+              clearResultsOpen()
               setConsult(false)
               goTo(2)
             }}
@@ -166,10 +228,11 @@ export function ScrollExperience() {
         )}
         {act === 2 && consult && (
           <AmpConsult
-            onExit={() => { setConsult(false); goTo(1) }}
+            reopen={reopenConsult}
+            onExit={() => { setConsult(false); setReopenConsult(false); goTo(1) }}
             // The consult has already loaded the results page's data into the
             // store (and run its own analysis), so it goes straight to the reveal.
-            onHandoff={() => goTo(4)}
+            onHandoff={() => { setReopenConsult(false); goTo(4) }}
           />
         )}
         {act === 2 && !consult && (useV2
@@ -178,7 +241,7 @@ export function ScrollExperience() {
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
         {act === 4 && <Act4Reveal reducedMotion={reducedMotion} />}
         {act === 5 && <Act5Bundle reducedMotion={reducedMotion} />}
-      </div>
+      </div>}
     </div>
   )
 }

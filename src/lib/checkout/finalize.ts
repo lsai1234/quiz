@@ -288,8 +288,15 @@ export async function finalizeCheckout(
       // Snapshot the hard dietary/stimulant exclusions now, so a substitution
       // months from now is judged against what they told us at the point of sale
       // rather than whatever their answers happen to say later.
-      safetyConstraints:
-        payload.subscription.safetyConstraints ?? safetyConstraintsFrom(quizAnswers),
+      //
+      // Re-derived here from the SANITISED answers whenever they came with the
+      // order, rather than taking the browser's snapshot: the snapshot is built
+      // from the same answers by the same function, so for an honest client the
+      // two agree, and for anything else the health parts (safety flags, the
+      // consult's exclusions) only survive with a current consent.
+      safetyConstraints: quizAnswers
+        ? safetyConstraintsFrom(quizAnswers)
+        : payload.subscription.safetyConstraints ?? safetyConstraintsFrom(quizAnswers),
     },
     getPricingConfig(),
     redemption?.ok ? redemption.discountPct : 0,

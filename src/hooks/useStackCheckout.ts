@@ -15,6 +15,7 @@ import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 import { buildMemberSubscription } from '@/lib/recharge/mock'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
+import { orderSafetyFor } from '@/lib/consult/exclusions'
 import type { ChangePolicy } from '@/lib/recharge/types'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 import type { ConsentSubmission, ConsentVersions } from '@/lib/legal/consent'
@@ -270,6 +271,10 @@ export function useStackCheckout() {
             // Collected in the page, because a free order never reaches the
             // Stripe form that normally asks for it.
             shippingAddress: subOpts.deliveryAddress ?? null,
+            // What a consult stack kept out, so a line swapped on this order
+            // later still clears it. Only with the circuit check's consent; the
+            // server drops it without a current one.
+            safety: orderSafetyFor(answers),
           }),
         })
         const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string } | null =

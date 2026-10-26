@@ -41,9 +41,13 @@ export function healthConsentIsCurrent(
  */
 export function sanitiseHealthData<T extends Partial<QuizAnswers>>(answers: T): T {
   const hasFlags = (answers.safetyFlags ?? []).length > 0
+  // The consult's exclusions are derived from its circuit check, so they sit
+  // behind the same consent as the quiz's safety flags.
+  const hasExcluded = answers.consultExcluded !== undefined
   const consented = healthConsentIsCurrent(answers.healthDataConsent)
-  if (consented || !hasFlags) return answers
-  return { ...answers, safetyFlags: [] }
+  if (consented || (!hasFlags && !hasExcluded)) return answers
+  const { consultExcluded: _dropped, ...rest } = answers
+  return { ...rest, safetyFlags: [] } as unknown as T
 }
 
 /** The health-data notice as it stands now, for the consent record. */
@@ -80,7 +84,7 @@ export async function withdrawHealthConsent(
   if (quiz?.answers) {
     await saveQuiz(userId, {
       ...quiz,
-      answers: { ...quiz.answers, safetyFlags: [], healthDataConsent: null },
+      answers: { ...quiz.answers, safetyFlags: [], consultExcluded: undefined, healthDataConsent: null },
     })
   }
 
@@ -95,7 +99,7 @@ export async function withdrawHealthConsent(
       defaultChangePolicy: 'remove',
       lines: (subscription.lines ?? []).map((line) => ({ ...line, changePolicy: 'remove' as const })),
       safetyConstraints: subscription.safetyConstraints
-        ? { ...subscription.safetyConstraints, safetyFlags: [] }
+        ? { ...subscription.safetyConstraints, safetyFlags: [], excludedIngredients: undefined }
         : subscription.safetyConstraints,
     })
   }

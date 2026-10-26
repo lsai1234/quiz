@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import { COPY_BUDGET_MS, COPY_MODEL } from '@/lib/consult/ai/copy'
-import { MAX_TEXT, cleanText, looksMedical, rateLimiter } from '@/lib/consult/ai/guard'
+import { MAX_TEXT, cleanText, looksMedical, rateLimiter, MODERATION_MODEL } from '@/lib/consult/ai/guard'
 import {
   FOUND_SCHEMA,
   HUNCH_SCHEMA,
@@ -84,6 +84,8 @@ async function ask(client: OpenAI, name: string, schema: Record<string, unknown>
   const completion = await client.chat.completions.create(
     {
       model: COPY_MODEL,
+      // Not stored by OpenAI as a retrievable completion.
+      store: false,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -152,7 +154,7 @@ async function handle(req: Request) {
       case 'tell': {
         const ids = tellableIds(body.candidates)
         if (!ids.length) return NextResponse.json({ picks: [] })
-        const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: text }, { timeout: 4000, maxRetries: 0 })
+        const mod = await client.moderations.create({ model: MODERATION_MODEL, input: text }, { timeout: 4000, maxRetries: 0 })
         if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ held: 'moderated' })
         const raw = await ask(client, 'amp_pinpoint_tell', tellSchema(ids), TELL_SYSTEM_PROMPT, buildTellPrompt(ids, text, (p) => probeText(p, person)), TELL_BUDGET_MS, 0.2)
         return NextResponse.json({ picks: validateProbePicks(raw, ids) })
@@ -162,7 +164,7 @@ async function handle(req: Request) {
         const notes = cleanNotes(body.notes)
         const ids = patternIds(body.candidates)
         if (!notes.length || !ids.length) return NextResponse.json({ hints: [] })
-        const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: notes.join('\n') }, { timeout: 4000, maxRetries: 0 })
+        const mod = await client.moderations.create({ model: MODERATION_MODEL, input: notes.join('\n') }, { timeout: 4000, maxRetries: 0 })
         if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ hints: [] })
         const raw = await ask(client, 'amp_pinpoint_notes', notesSchema(ids), NOTES_SYSTEM_PROMPT, buildNotesPrompt(notes, ids), TELL_BUDGET_MS, 0.2)
         return NextResponse.json({ hints: validateHints(raw, ids, notes) })

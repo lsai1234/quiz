@@ -71,6 +71,8 @@ export async function POST(req: Request) {
         // Four classifications against a fixed menu. A bigger model would be
         // slower and no better at deciding whether a bap is a sandwich.
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: PROTEIN_DAY_SYSTEM_PROMPT },
           { role: 'user', content: buildProteinDayPrompt({ text, options }) },

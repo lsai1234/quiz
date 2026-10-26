@@ -24,6 +24,12 @@ interface Data {
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 const secs = (n: number | null) => (n == null ? '—' : `${n.toFixed(1)}s`)
 
+const STOP_LABEL: Record<string, string> = {
+  circuit: 'at the circuit check',
+  declined: 'declined the circuit check',
+  'under-18': 'under 18',
+}
+
 const SCENE_NAMES: Record<string, string> = {
   goals: 'Goals',
   about: 'About you',
@@ -187,9 +193,9 @@ export function ConsultRolloutSettings() {
         )}
         {Object.keys(funnel.consult.stopped).length > 0 && (
           <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-            Stopped at the circuit check:{' '}
+            Stopped:{' '}
             {Object.entries(funnel.consult.stopped)
-              .map(([reason, n]) => `${n} ${reason === 'kidney-liver' ? 'kidney or liver' : reason}`)
+              .map(([reason, n]) => `${n} ${STOP_LABEL[reason] ?? reason}`)
               .join(' · ')}
           </p>
         )}

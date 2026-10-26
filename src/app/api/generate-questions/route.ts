@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
         // this call is prefetched mid-quiz and must be ready within a step or
         // two. Strict structured outputs guarantee the question shape parses.
         model: 'gpt-4.1-mini',
+        // Not stored by OpenAI as a retrievable completion.
+        store: false,
         messages: [
           { role: 'system', content: QUESTIONS_SYSTEM_PROMPT },
           { role: 'user', content: prompt },

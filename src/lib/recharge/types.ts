@@ -1,6 +1,7 @@
 import type { SwapGroup, StackSlot, DietaryTag, SafetyFlag } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { SupplierAddress } from '@/lib/supplier/types'
+import type { Ingredient } from '@/lib/consult/circuit'
 
 /** Subscription as the customer manages it — shaped like a Recharge subscription contract. */
 
@@ -59,6 +60,22 @@ export interface SafetyConstraints {
    * carrying a contraindication at all.
    */
   safetyFlags?: SafetyFlag[]
+  /**
+   * Ingredient families the Amp Consult kept out of this member's stack — vitamin
+   * K and fish oil for someone on blood thinners, stimulants for a heart
+   * condition, and the lifestyle keep-outs (caffeine with a sleep goal, and so
+   * on). A product containing any of them can never be swapped in for them,
+   * worked out by the same `ingredientsOf` check the consult's engine used.
+   *
+   * Health-derived, so it is only ever written alongside a current health-data
+   * consent (`sanitiseHealthData` drops it otherwise) and is cleared when that
+   * consent is withdrawn. Never named on screen: see `describeConstraints`.
+   *
+   * Absent or empty means no consult exclusions, which is true of every quiz
+   * stack: unlike `safetyFlags`, nothing written before this field existed came
+   * from the consult, so there is no "unknown" case to guard.
+   */
+  excludedIngredients?: Ingredient[]
 }
 
 /**

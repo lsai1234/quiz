@@ -12,7 +12,9 @@
  *     list, and the tiers are prefixes of it either way.
  *   - a `QuizAnswers` — the few fields the page and checkout read (name,
  *     training frequency, goals for the headline), projected from the
- *     consult's answers. Never the circuit check's answers.
+ *     consult's answers. Never the circuit check's answers: only what they
+ *     rule out (`consultExcluded`), with the circuit check's consent, so
+ *     checkout can put both on the order.
  *   - a `StackIdentity` — the card at the top of the reveal. Worked out by
  *     rules from the profile and goals; no AI call, so the ship point costs
  *     nothing to run.
@@ -32,6 +34,7 @@ import type {
   TrainingFrequency,
   TrainingType,
 } from '@/lib/types'
+import type { Ingredient } from './circuit'
 import type { HandoffPayload } from './handoff'
 import { PROFILE_AREAS, PROFILE_LABEL } from './profile'
 import { caffeineCount, sessionsPerWeek } from './reactions'
@@ -77,8 +80,14 @@ function dietLevel(plate: ConsultAnswers['plate']): DietLevel | null {
   return 'poor'
 }
 
-/** The consult's answers as the results page reads them. No health answers cross. */
-export function toQuizAnswers(a: ConsultAnswers): QuizAnswers {
+/**
+ * The consult's answers as the results page reads them. No health answers
+ * cross — only `excluded`, the ingredient families the engine kept out, and
+ * only together with the circuit check's consent, which is what makes holding
+ * them lawful (and what checkout records as the health-data consent).
+ */
+export function toQuizAnswers(a: ConsultAnswers, excluded: readonly Ingredient[] = []): QuizAnswers {
+  const consent = a.healthConsent?.accepted ? { ...a.healthConsent } : null
   const goals = [...new Set(a.goals.map((g) => GOAL_TO_QUIZ[g]))]
   const counts = countsByType(a.training)
   const types = new Set<TrainingType>()
@@ -99,9 +108,11 @@ export function toQuizAnswers(a: ConsultAnswers): QuizAnswers {
     diet: dietLevel(a.plate),
     currentSupplements: (a.shelf ?? []).map((s) => SHELF_LABEL[s]),
     // Deliberately empty: the circuit check's answers never leave the consult.
-    // What they rule out travels as the payload's `excluded` list (H9).
+    // What they rule out travels as `consultExcluded` (and the payload's
+    // `excluded` list, H9), so the order's safety snapshot honours it.
     safetyFlags: [],
-    healthDataConsent: null,
+    healthDataConsent: consent,
+    ...(consent ? { consultExcluded: [...excluded] } : {}),
   }
 }
 

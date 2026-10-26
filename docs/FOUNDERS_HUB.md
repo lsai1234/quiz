@@ -397,7 +397,10 @@ one group; the founders' own visits are left out unless ticked in.
 How it is kept:
 
 - **`page_view`** (`components/analytics/PageViews.tsx`, root layout) is the top
-  of every funnel. Hubs, `/quizv2` and `/styleguide` are not tracked.
+  of every funnel. It is not sent from the hubs, `/quizv2` or `/styleguide`.
+  Other events are: the consult's events from `/quizv2` are recorded like any
+  other, and the visit is flagged `internal` because it is a signed-in founder's.
+  The consult and quiz funnels in Settings → Quiz leave `internal` visits out.
 - **Visit context** (`lib/analytics/visit.ts`): the first page of a visit
   records the referring host, `utm_*`, a partner `?ref=` and which ad platform
   tagged the link, and every beacon carries it. The server adds device/OS/
