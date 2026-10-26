@@ -53,7 +53,8 @@ export interface LastChanceViewProps {
   /** e.g. "Pre-workout" — what kind of thing it is (`productTypeLabel`). */
   role: string
   imageUrl: string | null
-  slotType: string
+  /** The product's formats, for the tile drawn when there is no photo. */
+  formats: readonly string[]
   /** The line under its name — "One of the 4 products we picked for you." */
   goalLine: string
   /** One GB-register claim, verbatim — or null, and the row is not shown. */
@@ -358,7 +359,7 @@ export function LastChanceView(p: LastChanceViewProps) {
           <span className="lc-float absolute block" style={{ top: 44, width: 132, height: 132 }}>
             <ProductTile
               imageUrl={p.imageUrl}
-              slot={p.slotType}
+              formats={p.formats}
               title={p.title}
               size={264}
               fill

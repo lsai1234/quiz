@@ -196,7 +196,7 @@ function FallbackMasthead({ products }: { products: CatalogueProduct[] }) {
           <ProductTile
             key={p.id}
             imageUrl={p.imageUrl}
-            slot={p.stackSlots[0]}
+            formats={p.formats}
             title=""
             size={96}
             style={{ width: 56, height: 92 - i * 10, opacity: 0.95 }}

@@ -178,7 +178,7 @@ export function BasketDrawer({
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {resolved.map((l) => (
                 <div key={`${l.product.id}:${l.variant.id}`} className="flex gap-3">
-                  <ProductTile imageUrl={l.product.imageUrl} slot={l.product.stackSlots[0]} title={l.product.title} size={56} />
+                  <ProductTile imageUrl={l.product.imageUrl} formats={l.product.formats} title={l.product.title} size={56} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text)' }}>{l.product.title}</p>

@@ -87,6 +87,19 @@ describe('StatCard', () => {
     expect(screen.queryByText('Immune Support')).not.toBeInTheDocument()
   })
 
+  it('colours every card the same, whatever slot it fills', () => {
+    // A per-slot colour (purple for sleep, red for health) says what it is for.
+    const styles = (['sleep', 'health', 'energy'] as const).map((slotType) => {
+      const { unmount } = render(<StatCard slot={slotFor(MAGNESIUM, { slotType })} product={MAGNESIUM} planType="subscription" />)
+      const tag = screen.getByText('Magnesium')
+      const style = tag.getAttribute('style')
+      unmount()
+      return style
+    })
+    expect(new Set(styles).size).toBe(1)
+    expect(styles[0]).toContain('var(--color-accent)')
+  })
+
   it('has no "What it supports" bars', () => {
     render(<StatCard slot={slotFor(VITAMIN_C)} product={VITAMIN_C} planType="subscription" />)
     expect(screen.queryByText('What it supports')).not.toBeInTheDocument()

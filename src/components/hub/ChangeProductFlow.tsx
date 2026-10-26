@@ -111,7 +111,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
                       {/* A replacement is a purchase decision. Making it from
                           a title and a delta, with no picture of the thing,
                           is the same mistake the whole hub was making. */}
-                      <ProductTile imageUrl={alt.imageUrl} slot={alt.stackSlots[0]} title={alt.title} size={48} />
+                      <ProductTile imageUrl={alt.imageUrl} formats={alt.formats} title={alt.title} size={48} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start justify-between gap-2">
                           <span style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-1)' }}>
@@ -150,7 +150,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
 
             <Card padding="tight">
               <div className="flex items-center gap-3">
-                <ProductTile imageUrl={selected.imageUrl} slot={selected.stackSlots[0]} title={selected.title} size={48} />
+                <ProductTile imageUrl={selected.imageUrl} formats={selected.formats} title={selected.title} size={48} />
                 <div className="min-w-0">
                   <p className="text-xs text-[var(--ink-3)]">Switching to</p>
                   <p className="text-base font-black text-[var(--ink-1)] mt-0.5" style={{ fontFamily: 'var(--font-display)' }}>{selected.title}</p>

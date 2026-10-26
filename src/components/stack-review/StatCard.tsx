@@ -7,7 +7,6 @@ import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
 import type { PlanType } from '@/lib/store'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { formatFact, packLengthShort, productDietary } from '@/lib/product-facts'
 import { formatPerServing } from '@/lib/shop/per-serving'
@@ -68,7 +67,9 @@ export function StatCard({
   slot, product, planType, subscriptionProduct, answers, usage, onChangeProduct, onChangeVariant, onRemove,
 }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false)
-  const hue = slotVisual(slot.slotType).hue
+  // One hue for every product: a per-slot colour (purple for sleep, red for
+  // health) would say what the product is for.
+  const hue = 'var(--color-accent)'
 
   const facts = useMemo(
     () => product
@@ -127,7 +128,7 @@ export function StatCard({
           </span>
           <ProductTile
             imageUrl={facts?.variant?.imageUrl ?? product?.imageUrl}
-            slot={slot.slotType}
+            formats={product?.formats}
             title={product?.title}
             size={92}
             style={{ boxShadow: '0 14px 30px -16px color-mix(in srgb, var(--color-bg) 85%, transparent)' }}

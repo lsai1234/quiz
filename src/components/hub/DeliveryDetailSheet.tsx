@@ -67,7 +67,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
             <div className="space-y-2">
               {delivery.items.map((it, i) => (
                 <div key={`${it.productId}-${i}`} className="flex items-center justify-between gap-3 rounded-xl p-3" style={{ background: 'var(--surface-1)', border: `1px solid var(--edge)` }}>
-                  <ProductTile imageUrl={catalogue.find((p) => p.id === it.productId)?.imageUrl} slot={catalogue.find((p) => p.id === it.productId)?.stackSlots[0]} title={it.productTitle} size={40} />
+                  <ProductTile imageUrl={catalogue.find((p) => p.id === it.productId)?.imageUrl} formats={catalogue.find((p) => p.id === it.productId)?.formats} title={it.productTitle} size={40} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{it.productTitle}</p>
                     <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
@@ -116,7 +116,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                   return (
                     <div key={p.id} className="rounded-xl p-3" style={{ background: 'var(--surface-1)', border: `1px solid var(--edge)` }}>
                       <div className="flex items-center gap-2.5">
-                        <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={36} />
+                        <ProductTile imageUrl={p.imageUrl} formats={p.formats} title={p.title} size={36} />
                         <p className="text-sm font-medium text-[var(--ink-1)] truncate flex-1" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
                       </div>
                       {econ.discountPct > 0 && (

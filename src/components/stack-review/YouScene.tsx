@@ -187,7 +187,7 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
                 <li key={item.key} className={`relative ${i > 0 ? '-ml-2.5' : ''}`} style={{ zIndex: shown.length - i }}>
                   <ProductTile
                     imageUrl={item.product.imageUrl}
-                    slot={item.slotType}
+                    formats={item.product.formats}
                     title={item.product.title}
                     size={44}
                     style={{ boxShadow: `0 0 0 2.5px ${P.card}, 0 8px 16px -10px rgba(10,10,10,0.5)` }}
@@ -238,7 +238,7 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
             <ul className="mt-4 space-y-3">
               {quiet.map((item) => (
                 <li key={item.key} className="flex items-center gap-3.5" data-listed={item.product.id}>
-                  <ProductTile imageUrl={item.product.imageUrl} slot={item.slotType} title={item.product.title} size={40} />
+                  <ProductTile imageUrl={item.product.imageUrl} formats={item.product.formats} title={item.product.title} size={40} />
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] font-semibold leading-snug" style={{ color: P.ink }}>
                       {item.product.title}
@@ -313,7 +313,7 @@ function AnswerProduct({ item }: { item: ExplainedItem }) {
   const claim = explanation.claim
   return (
     <li className="flex gap-3.5" data-explained={product.id}>
-      <ProductTile imageUrl={product.imageUrl} slot={item.slotType} title={product.title} size={40} />
+      <ProductTile imageUrl={product.imageUrl} formats={item.product.formats} title={product.title} size={40} />
       <div className="min-w-0 flex-1">
         <p className="pt-0.5 text-[15px] font-semibold leading-snug" style={{ color: P.ink }}>
           {product.title}

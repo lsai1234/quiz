@@ -102,7 +102,7 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
                         <ProductTile
                           key={`${it.productId}-${i}`}
                           imageUrl={productFor(it.productId)?.imageUrl}
-                          slot={productFor(it.productId)?.stackSlots[0]}
+                          formats={productFor(it.productId)?.formats}
                           title={it.productTitle}
                           size={26}
                         />

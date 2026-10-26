@@ -48,7 +48,7 @@ export function ShopCompareBar({ products, onOpen, onClear }: Props) {
           <ProductTile
             key={product.id}
             imageUrl={product.imageUrl}
-            slot={product.stackSlots[0]}
+            formats={product.formats}
             title={product.title}
             size={56}
             style={{ width: 28, height: 28 }}

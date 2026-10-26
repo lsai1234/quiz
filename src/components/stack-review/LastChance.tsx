@@ -107,7 +107,7 @@ export function LastChance({ slots, products, answers, primaryGoal, usage, block
       title={hero.product.title}
       role={productTypeLabel(hero.product)}
       imageUrl={hero.product.imageUrl ?? null}
-      slotType={hero.slotType}
+      formats={hero.product.formats}
       goalLine={hero.goalLine}
       claim={hero.claim?.wording ?? null}
       servings={hero.servings}

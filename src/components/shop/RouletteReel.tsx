@@ -165,7 +165,7 @@ export function RouletteReel({ strip, landedIndex, spinKey, reduced, onSettled }
             >
               <ProductTile
                 imageUrl={e.product.imageUrl}
-                slot={e.product.stackSlots[0]}
+                formats={e.product.formats}
                 title={e.product.title}
                 size={56}
               />

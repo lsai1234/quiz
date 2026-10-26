@@ -5,7 +5,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SHELF_PREVIEW_COUNT, type ShopCategory } from '@/lib/shop/categories'
 import { Button } from '@/components/storefront'
 import { ShopProductCard } from './ShopProductCard'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
+import { formatFact } from '@/lib/product-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import Link from 'next/link'
 import { guideFor, guideHref } from '@/lib/shop/guides'
@@ -65,9 +65,9 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
       {/*
         The heading does some work now. It was a name and a count in grey; it is
         the only thing separating twenty shelves from each other, so it carries
-        the category's own glyph — the same one the fallback product tile and
-        the stack use — and a way to see the whole category rather than the
-        first six of it.
+        a glyph of its first product's form — the same one the fallback product
+        tile uses, never a goal's — and a way to see the whole category rather
+        than the first six of it.
       */}
       <div className="flex items-center justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
         <div className="flex items-center min-w-0" style={{ gap: 'var(--space-3)' }}>
@@ -76,7 +76,7 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
             className="flex items-center justify-center flex-shrink-0"
             style={{ width: 32, height: 32, borderRadius: 'var(--r-control)', background: 'var(--surface)', color: 'var(--text-dim)' }}
           >
-            <QuizIcon name={slotVisual(section.products[0]?.stackSlots[0]).glyph} size={17} />
+            <QuizIcon name={formatFact(section.products[0]?.formats ?? []).glyph} size={17} />
           </span>
           <h2 className="sf-title min-w-0 truncate" style={{ color: 'var(--text)' }}>{section.category}</h2>
         </div>

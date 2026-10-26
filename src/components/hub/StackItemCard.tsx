@@ -96,7 +96,7 @@ export function StackItemCard({
           <div className="relative shrink-0">
             <ProductTile
               imageUrl={product?.imageUrl}
-              slot={line.stackSlot}
+              formats={product?.formats}
               title={line.productTitle}
               size={56}
             />

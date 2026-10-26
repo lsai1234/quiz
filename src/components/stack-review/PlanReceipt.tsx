@@ -17,7 +17,7 @@ import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 
 interface LineItem {
   key: string
-  slotType: string
+  formats: readonly string[]
   imageUrl: string | null
   title: string
   price: number
@@ -273,7 +273,7 @@ export function PlanReceipt({
   const items: LineItem[] = isSub
     ? subscriptionPlan.map((line) => ({
         key: line.product.id,
-        slotType: line.product.stackSlots[0] ?? '',
+        formats: line.product.formats,
         imageUrl: line.product.imageUrl,
         title: line.product.title,
         price: line.monthlyPrice,
@@ -290,7 +290,7 @@ export function PlanReceipt({
         const role = line ? productTypeLabel(line.product) : undefined
         return {
           key: slot.slotId,
-          slotType: slot.slotType,
+          formats: line?.product.formats ?? [],
           imageUrl: line?.product.imageUrl ?? null,
           title,
           price: line?.variant.price ?? line?.product.basePrice ?? 0,
@@ -351,7 +351,7 @@ export function PlanReceipt({
             <div key={it.key} className="flex items-start gap-3">
               <ProductTile
                 imageUrl={it.imageUrl}
-                slot={it.slotType}
+                formats={it.formats}
                 title={it.title}
                 size={40}
                 style={{ borderRadius: 10, flexShrink: 0 }}

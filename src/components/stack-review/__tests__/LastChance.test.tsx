@@ -153,7 +153,7 @@ function viewDeal(price: number, pct: number, standardDelivery: number, delivery
 it('says reduced delivery in plain words: what it costs, instead of what it would', () => {
   render(
     <LastChanceView
-      title="CHRGD Creatine" role="Creatine" imageUrl={null} slotType="strength"
+      title="CHRGD Creatine" role="Creatine" imageUrl={null} formats={["powder"]}
       goalLine="One of the 4 products we picked for you." claim={null} servings={null} packMonths={null}
       deal={viewDeal(19.99, 0, 4.95, 1.49, 'reduced')} remoteSurcharge={2.95} status="idle"
       onBuy={() => {}} onBackToStack={() => {}}

@@ -8,7 +8,6 @@ import { formatGBP, PRICING_CONFIG, type UsageLevel } from '@/lib/stack-blueprin
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
 import type { PlanType } from '@/lib/store'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { productDietary, stackProductFacts } from '@/lib/product-facts'
 import { interchangeableVariants } from '@/lib/shop/per-serving'
@@ -119,7 +118,9 @@ export function ProductDetailSheet({
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const hue = slotVisual(slot.slotType).hue
+  // One hue for every product: a per-slot colour (purple for sleep, red for
+  // health) would say what the product is for.
+  const hue = 'var(--color-accent)'
 
   const subProduct = subscriptionProduct ?? product
   const canSubscribe = !!subProduct?.subscriptionEligible
@@ -188,7 +189,7 @@ export function ProductDetailSheet({
 
         {/* Header — product hero */}
         <div className="px-5 pt-2 pb-4 flex items-start gap-4 flex-shrink-0 border-b border-[var(--color-border)]">
-          <ProductTile imageUrl={selectedVariant?.imageUrl ?? product?.imageUrl} slot={slot.slotType} title={product?.title} size={92} />
+          <ProductTile imageUrl={selectedVariant?.imageUrl ?? product?.imageUrl} formats={product?.formats} title={product?.title} size={92} />
           <div className="flex-1 min-w-0 pt-0.5">
             <span
               className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase mb-1.5"

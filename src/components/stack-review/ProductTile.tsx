@@ -2,14 +2,17 @@
 
 import { useEffect, useState, type CSSProperties } from 'react'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
+import { formatFact } from '@/lib/product-facts'
 import { productImageSrc, productImageSrcSet, IMAGE_PLATE } from '@/lib/images/product-image'
 
+/** One hue for every fallback tile, so colour says nothing about a product's purpose. */
+const TILE_HUE = 'var(--color-accent)'
+
 interface Props {
-  /** Product photo. When null/absent, a designed slot-coloured tile is shown. */
+  /** Product photo. When null/absent, a designed tile is shown. */
   imageUrl?: string | null
-  /** Slot type — drives the fallback glyph + hue. */
-  slot?: string | null
+  /** The product's formats ("powder", "capsules"…): the fallback glyph is its form. */
+  formats?: readonly string[] | null
   /** Product title, for the image alt text. */
   title?: string
   /** Square edge length in px. */
@@ -43,14 +46,17 @@ interface Props {
  * dark gap round a product — which is the only thing that made the shelf look
  * unfinished.
  *
- * When the catalogue has no photo at all, a designed fallback: a soft slot-hued
- * gradient with the slot's monoline glyph, so an image-less catalogue looks
- * deliberate instead of empty.
+ * When the catalogue has no photo at all, a designed fallback: a soft wash of
+ * the brand cyan with a monoline glyph of the product's FORM (a tub, a capsule,
+ * a bar), so an image-less catalogue looks deliberate instead of empty. Never
+ * the slot's glyph or colour: a moon beside magnesium or a heart beside
+ * omega-3 says what the product is for, which is a health claim.
  */
 export function ProductTile({
-  imageUrl, slot, title, size = 96, fill = false, inset = false, style, className,
+  imageUrl, formats, title, size = 96, fill = false, inset = false, style, className,
 }: Props) {
-  const { glyph, hue } = slotVisual(slot)
+  const glyph = formatFact([...(formats ?? [])]).glyph
+  const hue = TILE_HUE
   const normalised = productImageSrc(imageUrl, size)
 
   /** 0 = the pipeline, 1 = the supplier's own URL, 2 = give up and draw the tile. */

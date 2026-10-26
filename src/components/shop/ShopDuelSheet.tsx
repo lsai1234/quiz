@@ -110,7 +110,7 @@ export function ShopDuelSheet({ products, onClose }: Props) {
             {duel.products.map((product, i) => (
               <div key={product.id} className="min-w-0 text-center">
                 <div className="flex justify-center mb-1.5">
-                  <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={40} />
+                  <ProductTile imageUrl={product.imageUrl} formats={product.formats} title={product.title} size={40} />
                 </div>
                 <p className="text-[11px] font-medium leading-tight" style={{ color: 'var(--text)' }}>
                   {product.title}

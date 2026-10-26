@@ -62,7 +62,7 @@ export function UpgradesCard({ boosters, onAdd }: Props) {
                 className="flex items-center gap-2.5 rounded-xl p-2"
                 style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
               >
-                <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={40} />
+                <ProductTile imageUrl={product.imageUrl} formats={product.formats} title={product.title} size={40} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold leading-snug truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                     {shortNameOf(product)}

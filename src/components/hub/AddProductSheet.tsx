@@ -35,7 +35,7 @@ function ProductCard({
           {/* This sheet is asking a member to buy something. Selling it as a
               line of text, on the one screen in the app where the reveal deck
               would have shown a product, was leaving the argument unmade. */}
-          <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={52} />
+          <ProductTile imageUrl={p.imageUrl} formats={p.formats} title={p.title} size={52} />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{shortNameOf(p)}</p>

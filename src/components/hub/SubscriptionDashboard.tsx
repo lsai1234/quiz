@@ -315,7 +315,7 @@ export function SubscriptionDashboard() {
                         <ProductTile
                           key={`${it.productId}-${i}`}
                           imageUrl={productById[it.productId]?.imageUrl}
-                          slot={productById[it.productId]?.stackSlots[0]}
+                          formats={productById[it.productId]?.formats}
                           title={it.productTitle}
                           size={40}
                         />

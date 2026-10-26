@@ -71,7 +71,7 @@ export function ShopBundleCard({ view, products }: Props) {
                 <ProductTile
                   key={slot.slotId}
                   imageUrl={product?.imageUrl ?? null}
-                  slot={slot.slotType}
+                  formats={product?.formats}
                   title=""
                   size={96}
                   style={{ width: 42, height: 92 - Math.abs(1 - i) * 12, position: 'relative' }}

@@ -139,7 +139,7 @@ export function ShopProductCard({
           // every flavour is a separate product at their end, so the pictures
           // are per-flavour and the card used to show one of them for all.
           imageUrl={variant?.imageUrl ?? product.imageUrl}
-          slot={product.stackSlots[0]}
+          formats={product.formats}
           title={product.title}
           size={320}
           fill

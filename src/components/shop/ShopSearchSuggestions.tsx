@@ -119,7 +119,7 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
     const { price, onDeal } = dealInfo(product)
     return (
       <>
-        <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={32} />
+        <ProductTile imageUrl={product.imageUrl} formats={product.formats} title={product.title} size={32} />
         <span className="flex-1 min-w-0">
           <span className="block text-xs font-medium leading-snug truncate" style={{ color: 'var(--text)' }}>
             {product.title}

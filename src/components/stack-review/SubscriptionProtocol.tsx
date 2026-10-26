@@ -82,7 +82,7 @@ export function SubscriptionProtocol({ plan, answers, minMonths = 1, monthlyTota
                       <ProductTile
                         key={line.product.id}
                         imageUrl={line.product.imageUrl}
-                        slot={line.product.stackSlots[0]}
+                        formats={line.product.formats}
                         title={line.product.title}
                         size={34}
                       />

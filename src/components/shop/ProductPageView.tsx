@@ -93,7 +93,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           // and not the picture is the shape of a page showing one photograph
           // for six different tubs.
           imageUrl={variant?.imageUrl ?? product.imageUrl}
-          slot={product.stackSlots[0]}
+          formats={product.formats}
           title={product.title}
           size={640}
           fill
