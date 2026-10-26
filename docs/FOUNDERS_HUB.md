@@ -124,7 +124,7 @@ registered none of it comes back — so their 20% is a cost and every supplier
 price is grossed up by it. Off, costs are their prices as quoted. Registering
 is `vat.registered`, not this. `supplierVatIsCost` (charged *and* unregistered) is the one
 place that is decided; `costFromSupplierPrice` and `priceForMargin` both read it,
-so margins, cut-offs, the last-chance offer and cost-price codes move together.
+so margins, cut-offs, the hero offer (formerly the last-chance offer) and cost-price codes move together.
 Turned off while their invoices still carry VAT, all of those are about a fifth
 of cost too generous.
 
@@ -645,3 +645,35 @@ roster spreadsheet import is separate and refuses PowerBody's file.
 - **Subscriptions follow renames and moves.** A renamed, split or merged SKU
   records where it was (`variant.formerly`); renewals match by SKU, every label
   spelling, then that note (`catalogue/line-variant.ts`).
+
+## 8. The offer — hero products and the free bonus
+
+Settings → Offer (`components/portal/OfferSettings.tsx`, `lib/offer/*`), from the
+Amp Consult and offer plan (`docs/amp-consult-offer-plan.md`, Phase 2). Both
+switches are **off by default**, and until the selection is built (Phase 3)
+nothing on either quiz reads them.
+
+- **Hero products.** The core offer: one less obvious product per person. A
+  product is put forward from its own page (Products → the product → **Hero**),
+  and only takes effect once every check is recorded: legal to sell in GB, novel
+  food status (not novel, or authorised), safety and contraindications reviewed,
+  the wording it may carry (a register claim for its kind, verbatim, or none),
+  who checked it and the date. Any one missing and it has no effect
+  (`missingHeroChecks`). The Offer screen lists every product put forward and
+  what it still lacks. Off, the core offer is today's top pick.
+- **Free bonus.** The pool (founders add and remove products), the minimum stack
+  subtotal, the margin floor (£ and %), first order only, which stacks qualify,
+  and how it combines with a code. Each pool product shows its list price, what
+  PowerBody charge us (VAT included when we pay it) and what three example
+  stacks keep with and without it (`lib/offer/bonus-economics.ts`, the same
+  `unitEconomics` waterfall as everything else). A proposed minimum and floor
+  are worked out from those numbers: the bonus may cost at most half of what the
+  smallest stack keeps.
+- **Hero offer** (Pricing) is the old "Last-chance offer" section, renamed: it
+  prices the single-product offer. The settings key is still `lastChance`.
+- **Where it is kept.** One kv document, `portal:offer`, written through
+  `mutateJson`. No schema change. Who saved a hero's checks and when are stamped
+  from the signed-in founder.
+- **Review pack.** The bonus terms are rows in `docs/consult-review-pack.csv`.
+  Heroes are live data, so the Offer screen's **Download review rows** gives them,
+  with the bonus terms as currently set, in the pack's own columns.

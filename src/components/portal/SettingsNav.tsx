@@ -57,6 +57,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         icon: 'credit-card',
       },
       {
+        slug: 'offer',
+        title: 'Offer',
+        blurb:
+          'The hero product and the free bonus: which products may be offered, the numbers behind the bonus, and the two switches. Both off by default.',
+        icon: 'star',
+      },
+      {
         slug: 'discount-codes',
         title: 'Discount codes',
         blurb:

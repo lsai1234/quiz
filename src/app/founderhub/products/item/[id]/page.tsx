@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { productPayload } from '@/lib/portal/product-edit'
 import { ProductWorkspace } from '@/components/portal/product/ProductWorkspace'
+import { getOfferSettings } from '@/lib/offer/store'
+import { heroView } from '@/lib/offer/view'
 
 /**
  * One product's page — on sale, waiting for review, or removed.
@@ -48,9 +50,12 @@ export default async function ProductItemPage({ params }: { params: Promise<{ id
   }
   const payload = await productPayload(decoded, { fresh: true })
   if (!payload) notFound()
+  // The hero checks live in their own document (`portal:offer`), read here
+  // with the product so the page asks nothing more once it is drawn.
+  const hero = payload.state === 'pending' ? null : heroView(await getOfferSettings(), payload.product.id, payload.product)
   return (
     <Suspense>
-      <ProductWorkspace initial={payload} />
+      <ProductWorkspace initial={payload} hero={hero} />
     </Suspense>
   )
 }

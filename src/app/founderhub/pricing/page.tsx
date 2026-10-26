@@ -270,7 +270,7 @@ export default function PricingPage() {
               onRemove={(i) => set({ bundleTiers: draft.bundleTiers.filter((_, idx) => idx !== i) })} />
           </Section>
 
-          <Section title="Last-chance offer" desc="One product from the stack at the foot of the results page, on a deal worked out for it: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with a code — and measured against what the product costs alone at the ordinary checkout.">
+          <Section title="Hero offer" desc="How the single-product offer is priced: today the top pick at the foot of the results page, and the hero product once the hero offer is built. A deal worked out for that product: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with a code — and measured against what the product costs alone at the ordinary checkout.">
             <Num label="Keep at least (£ per order)" value={draft.lastChance.minContribution} suffix="£" step={0.5} onChange={(n) => setNested('lastChance', { minContribution: n })}
               help="After every cost — the goods, both sides of delivery, card fees and returns. No deal is offered that keeps less." />
             <Num label="And at least (% of what we keep)" value={pct(draft.lastChance.minMarginPct)} suffix="%" onChange={(n) => setNested('lastChance', { minMarginPct: n / 100 })}
@@ -405,7 +405,7 @@ export default function PricingPage() {
                   ? 'Registered, any VAT on their invoices is reclaimed, so this no longer changes a cost — only what the figures below count as reclaimed.'
                   : draft.vat.supplierChargesVat
                     ? `Their ${Math.round(draft.vat.standardRate * 1000) / 10}% VAT on goods and delivery counts as a cost, because we can't reclaim it while unregistered. The supplier prices we store are ex VAT.`
-                    : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Only right if their invoices to us carry no VAT. While they do, turn this on — otherwise every margin here, the last-chance offer and cost-price codes are about a fifth of cost too generous."
+                    : "Costs are PowerBody's prices as quoted, ex VAT, on goods and delivery. Only right if their invoices to us carry no VAT. While they do, turn this on — otherwise every margin here, the hero offer and cost-price codes are about a fifth of cost too generous."
               } />
             <Num label="Standard rate" value={pct(draft.vat.standardRate)} suffix="%" onChange={(n) => setNested('vat', { standardRate: n / 100 })} />
             <Num label="Registration threshold" value={draft.vat.registrationThreshold} suffix="£" onChange={(n) => setNested('vat', { registrationThreshold: n })} help="HMRC's figure — £90,000 since April 2024." />

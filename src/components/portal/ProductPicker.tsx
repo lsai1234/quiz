@@ -11,11 +11,11 @@ import { Button, Input, Modal, ModalBody } from '@/components/system'
  * it belongs to whoever is building a stack, and that is now the pre-built
  * bundle editor rather than the package that sells one.
  */
-export function ProductPicker({ products, disabledIds, onPick, onClose }: { products: CatalogueProduct[]; disabledIds: Set<string>; onPick: (p: CatalogueProduct) => void; onClose: () => void }) {
+export function ProductPicker({ products, disabledIds, onPick, onClose, label = 'Add a product to this bundle' }: { products: CatalogueProduct[]; disabledIds: Set<string>; onPick: (p: CatalogueProduct) => void; onClose: () => void; label?: string }) {
   const [q, setQ] = useState('')
   const filtered = products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase()))
   return (
-    <Modal onClose={onClose} size="md" label="Add a product to this bundle">
+    <Modal onClose={onClose} size="md" label={label}>
       <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--edge)' }}>
         <Input
           label="Search products"

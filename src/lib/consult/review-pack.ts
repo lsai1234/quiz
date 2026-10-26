@@ -26,10 +26,13 @@ import { CIRCUIT_LABEL, SYMPTOM_LABEL } from './summary'
 import type { CircuitFlag, WeightSymptom } from './types'
 import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import type { SwapGroup } from '@/lib/catalogue/types'
+import { DEFAULT_BONUS } from '@/lib/offer/settings'
+import { bonusTermRows } from '@/lib/offer/review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
-type Row = [section: string, where: string, wording: string, context?: string]
+export type ReviewRow = [section: string, where: string, wording: string, context?: string]
+type Row = ReviewRow
 
 const FLAGS = Object.keys(CIRCUIT_LABEL) as CircuitFlag[]
 
@@ -238,16 +241,24 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...patternRows(),
     ...glossaryRows(),
     ...claimRows(roster),
+    // The free bonus's terms (plan Phase 2, 5). The wording is drafted in
+    // Phase 4; these rows list the conditions it has to carry, as set by default.
+    ...bonusTermRows(DEFAULT_BONUS),
   ]
 }
 
 const field = (v: string) => (/[",\r\n]/.test(v) || v !== v.trim() ? `"${v.replace(/"/g, '""')}"` : v)
 
-/** The sheet as CSV, with a BOM so Excel reads the curly quotes. */
-export function buildReviewPack(input: { engineSource: string; rosterCsv: string }): string {
+/** Rows as the sheet's CSV, with a BOM so Excel reads the curly quotes. */
+export function reviewPackCsv(rows: readonly ReviewRow[]): string {
   const lines = [REVIEW_PACK_HEADER.map(field).join(',')]
-  for (const [section, where, wording, context] of reviewPackRows(input)) {
+  for (const [section, where, wording, context] of rows) {
     lines.push([section, where, wording, context ?? '', '', '', ''].map(field).join(','))
   }
-  return '﻿' + lines.join('\n') + '\n'
+  return '\uFEFF' + lines.join('\n') + '\n'
+}
+
+/** The whole sheet. */
+export function buildReviewPack(input: { engineSource: string; rosterCsv: string }): string {
+  return reviewPackCsv(reviewPackRows(input))
 }

@@ -12,7 +12,7 @@ export const FIXUPS_HREF = '/founderhub/products/fix-ups'
 export const SUPPLIER_SETTINGS_HREF = '/founderhub/settings/supplier'
 
 /** The sections of a product page, in page order. Also the `#hash` anchors. */
-export type ProductSection = 'checks' | 'preview' | 'listing' | 'variants' | 'quiz' | 'supplier'
+export type ProductSection = 'checks' | 'preview' | 'listing' | 'variants' | 'quiz' | 'supplier' | 'hero'
 
 /** A product's own page, optionally at one of its sections. */
 export function productHref(id: string, section?: ProductSection, opts: { queue?: boolean } = {}): string {

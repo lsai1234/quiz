@@ -10,6 +10,8 @@ import { ListingSection } from './ListingSection'
 import { VariantsSection } from './VariantsSection'
 import { QuizSection } from './QuizSection'
 import { SupplierSection } from './SupplierSection'
+import { HeroSection } from './HeroSection'
+import type { HeroView } from '@/lib/offer/view'
 import { EYEBROW, META, REVIEW_SECTION, errorText, postProduct, type Payload } from './shared'
 import { productHref, productsHref, REVIEW_HREF, type ProductSection } from '@/lib/portal/product-links'
 import { REVIEW_FIELDS } from '@/lib/catalogue/review'
@@ -32,7 +34,7 @@ import { REVIEW_FIELDS } from '@/lib/catalogue/review'
  * The page keeps ONE copy of the product. Every save answers with the product
  * as it now stands and that replaces the copy — see `shared.tsx`.
  */
-export function ProductWorkspace({ initial }: { initial: Payload }) {
+export function ProductWorkspace({ initial, hero = null }: { initial: Payload; hero?: HeroView | null }) {
   const router = useRouter()
   const search = useSearchParams()
   const queueMode = search.get('queue') === 'review'
@@ -106,6 +108,7 @@ export function ProductWorkspace({ initial }: { initial: Payload }) {
       <VariantsSection {...sectionProps} confirmLeave={() => dirty.size === 0 || window.confirm(leaveQuestion(dirty))} />
       <QuizSection {...sectionProps} />
       <SupplierSection {...sectionProps} />
+      {hero && payload.state !== 'pending' && <HeroSection initial={hero} onDirty={markDirty} />}
 
       {dirty.size > 0 && (
         <Note tone="attention">
@@ -434,6 +437,7 @@ const SECTION_NAME: Record<ProductSection, string> = {
   variants: 'Flavours, sizes & prices',
   quiz: 'Quiz & subscription',
   supplier: 'Supplier',
+  hero: 'Hero',
 }
 
 /**
