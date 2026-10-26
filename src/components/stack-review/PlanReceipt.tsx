@@ -421,10 +421,10 @@ export function PlanReceipt({
                   {formatGBP(subscriptionTotal)}<span className="text-xs font-semibold">/mo</span>
                 </span>
               </div>
+              {/* The terms have no minimum term and the code never blocks a
+                  cancel, so a product's "minimum months" is never stated here. */}
               <p className="text-[11px] leading-relaxed text-[var(--color-muted)]">
-                {subscriptionMinMonths > 1
-                  ? `${subscriptionMinMonths}-month minimum (${formatGBP(subscriptionMinTermTotal)} total), then cancel anytime.`
-                  : 'Cancel or pause anytime.'}
+                No minimum term. If you cancel early, you settle any unpaid balance on what’s already been sent — never more than you’ve paid us, and nothing if it’s £5 or less.
               </p>
             </>
           ) : (
@@ -530,8 +530,7 @@ export function PlanReceipt({
                       Subscribe &amp; save up to {subscriptionDiscountPct}%
                     </span>
                     <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-2)' }}>
-                      {formatGBP(subscriptionTotal)}/mo ·{' '}
-                      {subscriptionMinMonths > 1 ? `${subscriptionMinMonths}-month minimum` : 'pause or cancel anytime'}
+                      {formatGBP(subscriptionTotal)}/mo · no minimum term
                     </span>
                   </span>
                   <Icon name="chevron-right" size={16} className="flex-shrink-0 text-[var(--color-muted)]" />

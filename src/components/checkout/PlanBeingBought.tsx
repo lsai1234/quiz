@@ -43,7 +43,7 @@ export function PlanBeingBought({ subscription }: { subscription: MemberSubscrip
       </div>
 
       <p className="text-[11px] text-[var(--color-text-2)] mt-1 leading-relaxed">
-        {itemCount} product{itemCount === 1 ? '' : 's'} · delivered monthly · cancel any time
+        {itemCount} product{itemCount === 1 ? '' : 's'} · one flat monthly payment · no minimum term
       </p>
 
       {firstDiffers && (

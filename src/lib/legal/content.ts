@@ -150,7 +150,7 @@ export const CHECKOUT_DISCLAIMER_POINTS: string[] = [
 export const CHECKOUT_BILLING_POINTS: string[] = [
   'You pay one flat amount every month. It is the smoothed average of your plan, so your bill stays the same even in months when a big tub is due.',
   'No minimum term and no cancellation fee — cancel whenever you like, from your account.',
-  'Because longer-lasting items are spread across the months they last, cancelling early can leave a balance on what has already been sent you. You settle that, and nothing more. It falls to zero as your payments catch up, and you always see the figure before you confirm.',
+  'Because longer-lasting items are spread across the months they last, cancelling early can leave a balance on what has already been sent you. You settle that, and nothing more — never more than you have paid us, and nothing at all if it is £5 or less. It goes down as your payments catch up and rises again when a new multi-month item is sent, and you always see the figure, and the next date it would be nothing, before you confirm.',
 ]
 
 /** The liability wording, shared by both documents so it can't drift. */

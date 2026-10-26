@@ -138,7 +138,9 @@ export function SubscriptionProtocol({ plan, answers, minMonths = 1, monthlyTota
             </div>
           )}
           <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-            {minMonths > 1 ? `${minMonths}-month minimum, then cancel or pause anytime.` : 'Cancel or pause anytime.'}
+            No minimum term. Longer-lasting items are paid off over the months they last, so cancelling early can leave
+            a balance on what’s already been sent — never more than you’ve paid us, and nothing if it’s £5 or less. You
+            can pause for up to 3 months with nothing to settle.
           </p>
         </div>
       </div>

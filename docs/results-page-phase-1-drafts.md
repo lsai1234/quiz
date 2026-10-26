@@ -9,7 +9,13 @@ also quotes its current string, so it can be found by searching.
 
 ---
 
-## 4a Subscription cancellation wording (draft)
+## 4a Subscription cancellation wording (applied 2026-10-26)
+
+**Status:** approved and applied. Locations 1–6 use the proposed wording below, 6a
+the "one flat monthly payment" variant, and the "N-month minimum" branch now prints
+the no-minimum wording in every location (receipts included). The emails listed under
+"The same phrase outside the results page" were not drafted and are unchanged. The
+terms/code disagreements at the end are still open for whoever signs off the terms.
 
 ### What actually happens when a subscriber cancels
 

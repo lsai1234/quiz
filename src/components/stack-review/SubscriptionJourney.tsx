@@ -261,7 +261,8 @@ export function SubscriptionJourney({
           <span className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(pricing.subscriptionTotal)}/mo</span>
         </div>
         <p className="text-[11px] text-[var(--color-muted)] mb-3">
-          One predictable payment — items arrive on their own schedule. {pricing.subscriptionMinMonths > 1 ? `${pricing.subscriptionMinMonths}-month minimum.` : 'Cancel anytime.'}
+          One predictable payment — items arrive on their own schedule. No minimum term; cancelling early settles any
+          unpaid balance on what’s already been sent.
         </p>
         <button onClick={onConfirm}
           className="w-full py-3.5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"

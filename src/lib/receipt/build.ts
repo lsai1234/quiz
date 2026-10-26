@@ -27,6 +27,14 @@ import type { ChangePolicy } from '@/lib/recharge/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { ReceiptData, ReceiptItem, ReceiptRow } from './types'
 
+/**
+ * What cancelling means, on every subscription receipt. There is no minimum
+ * term (the terms say so and the code never blocks a cancel), so a product's
+ * "minimum months" is never printed; leaving early settles the unpaid balance
+ * on goods already sent, and nothing more.
+ */
+const CANCEL_NOTE = 'No minimum term. Pause for up to 3 months, or cancel from your account and settle any unpaid balance on what’s already been sent.'
+
 const MERCHANT = {
   name: 'getCHRGD',
   strapline: 'Performance supplement stacks',
@@ -171,7 +179,7 @@ export function receiptFromConfirmation(data: ConfirmationResponse): ReceiptData
         notes.push(`${group.label}: ${group.items.join(', ')}`)
       }
     }
-    notes.push('Cancel any time before your next payment from your account.')
+    notes.push(CANCEL_NOTE)
   }
 
   if (order.deliveryEstimate) {
@@ -260,11 +268,7 @@ function subscriptionReceipt(
       notes.push(`${group.label}: ${group.items.join(', ')}`)
     }
   }
-  notes.push(
-    subscription.minMonths > 1
-      ? `${subscription.minMonths}-month minimum term, then cancel any time before your next payment.`
-      : 'Cancel any time before your next payment from your account.',
-  )
+  notes.push(CANCEL_NOTE)
 
   const address = subscription.shippingAddress
   const shipTo = address
@@ -368,12 +372,7 @@ export function receiptFromStackCheckout(input: StackReceiptInput): ReceiptData 
       charge.push({ label: `First month (${sub.introDiscountPct}% off)`, value: formatGBP(sub.firstMonth), tone: 'saving' })
     }
     charge.push({ label: 'Then per month', value: `${formatGBP(sub.flatMonthly)}/mo` })
-    if (sub.minMonths > 1) {
-      charge.push({ label: `${sub.minMonths}-month minimum`, value: formatGBP(sub.minTermTotal), tone: 'muted' })
-      notes.push(`${sub.minMonths}-month minimum term (${formatGBP(sub.minTermTotal)} total), then cancel any time.`)
-    } else {
-      notes.push('Cancel or pause any time before your next payment.')
-    }
+    notes.push(CANCEL_NOTE)
     notes.push(
       input.changePolicy === 'remove'
         ? 'If an item is unavailable we’ll take it off your plan and lower your monthly from the next payment.'

@@ -204,8 +204,11 @@ describe('the in-page stack checkout receipt', () => {
     expect(receipt.charge).toEqual([
       { label: 'First month (25% off)', value: '£36.00', tone: 'saving' },
       { label: 'Then per month', value: '£48.00/mo' },
-      { label: '3-month minimum', value: '£132.00', tone: 'muted' },
     ])
+    // A product's "minimum months" is never printed: the terms have no
+    // minimum term, and the code never blocks a cancel.
+    expect(receipt.notes.join(' ')).toContain('No minimum term.')
+    expect(receipt.notes.join(' ')).not.toMatch(/month minimum/)
   })
 
   it('shows a one-off stack its saving, derived from the total actually charged', () => {
@@ -361,8 +364,9 @@ describe('a subscription that has no order yet', () => {
     expect(receiptFromConfirmation({ ...plan(), state: 'processing' })).toBeNull()
   })
 
-  it('names a minimum term when there is one', () => {
+  it('never names a minimum term, which the terms do not have, and says what leaving early settles', () => {
     const receipt = receiptFromConfirmation(plan({ minMonths: 3 }))!
-    expect(receipt.notes.join(' ')).toContain('3-month minimum term')
+    expect(receipt.notes.join(' ')).not.toMatch(/month minimum/)
+    expect(receipt.notes.join(' ')).toContain('No minimum term. Pause for up to 3 months, or cancel from your account and settle any unpaid balance on what’s already been sent.')
   })
 })
