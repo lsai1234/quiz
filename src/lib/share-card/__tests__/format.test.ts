@@ -336,11 +336,11 @@ describe('the rest of the view', () => {
     expect(buildShareCardView(PERSONAS.complete, 'og').callout).toBeNull()
   })
 
-  it('picks the picture from what the stack is for', () => {
-    // Not shuffled: two people with the same goals get the same card, and a
-    // strength stack never gets the wellbeing image.
+  it('picks the picture from the stack’s archetype, as its name does', () => {
+    // Not shuffled: a strength stack never gets the wellbeing image, and the
+    // picture says nothing about their goals that the name does not.
     expect(buildShareCardView(PERSONAS.complete, 'story').artKey).toBe('strength')
-    expect(buildShareCardView(PERSONAS.wellbeing, 'story').artKey).toBe('recovery')
+    expect(buildShareCardView(PERSONAS.wellbeing, 'story').artKey).toBe('wellbeing')
   })
 
   it('says out loud that the art is still a placeholder', () => {

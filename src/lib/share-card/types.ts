@@ -61,7 +61,12 @@ export interface ShareLineupEntry {
   dose?: string
 }
 
-/** One coverage bar: a goal of the user's, and how well the stack serves it. */
+/**
+ * Retired: one coverage bar, a goal of the user's and how well the stack
+ * served it. A card built now holds `coverage: []`, because the bars named the
+ * person's goals in a public link; older stored cards may hold entries, and no
+ * format prints them. Kept because stored cards and the decoder carry them.
+ */
 export interface ShareCoverageEntry {
   /** Short axis label — "Muscle", "Sleep". */
   label: string

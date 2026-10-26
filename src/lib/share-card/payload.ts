@@ -1,10 +1,9 @@
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import { stackLevelOf } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { selectStatAxes, stackStatScore, MAX_STAT } from '@/lib/stack-stats'
 import { shortNameOf } from '@/lib/catalogue/short-name'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
-import { pickArtKey } from './art'
+import { artKeyFor } from './art'
 import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } from './types'
 
 /**
@@ -21,9 +20,12 @@ import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } f
  * called); and no slot reason, because a reason is either engine copy saying
  * what a product does or AI text, and both are claims we have not reviewed.
  *
- * The coverage bars are the clearest case. They use `selectStatAxes` and
- * `stackStatScore` — the same axes the product deck already compares cards on —
- * so the card cannot disagree with the screen it was shared from.
+ * Nothing about the person's goals goes into it either. The payload rides in
+ * the share URL (`?d=`) and the share-cards table, readable by anyone with the
+ * link, so it carries only what the card draws: no coverage bars (they named
+ * the goals, "Sleep", "Calm", and scored the stack against them), and a
+ * picture chosen from the stack's archetype, which its name already says
+ * (`artKeyFor`).
  */
 
 /**
@@ -47,9 +49,6 @@ function servingLine(product: CatalogueProduct): string | undefined {
   const size = product.variants?.[0]?.size
   return size ? String(size).toUpperCase() : undefined
 }
-
-/** How many coverage bars the card has room for. */
-const COVERAGE_AXES = 4
 
 /**
  * Words that cannot end a reason. Cutting "Boosts energy, focus and blood flow
@@ -272,15 +271,6 @@ export function buildSharePayload(
 
   const inStack = selected.map((e) => e.product).filter((p): p is CatalogueProduct => !!p)
 
-  const coverage = selectStatAxes(blueprint, products, COVERAGE_AXES).map((axis) => ({
-    label: axis.label,
-    // Stored 0–100 so the renderer draws a meter and does no arithmetic of its
-    // own. A renderer that rescales is one that can rescale differently per
-    // format — and then two cards from the same stack disagree.
-    score: Math.round((stackStatScore(inStack, axis.goal) / MAX_STAT) * 100),
-    targeted: inStack.some((p) => p.goals.includes(axis.goal)),
-  }))
-
   const name = showFirstName ? customerName?.trim().split(/\s+/)[0] : undefined
 
   return {
@@ -293,9 +283,11 @@ export function buildSharePayload(
     focusAreas: [],
     fitScore: null,
     lineup,
-    coverage,
+    // Always empty: coverage named their goals. The field stays because stored
+    // cards and the decoder carry it; no format prints it.
+    coverage: [],
     level: stackLevelOf(blueprint),
-    artKey: pickArtKey([blueprint.primaryGoal, ...blueprint.secondaryGoals]),
+    artKey: artKeyFor([blueprint.primaryGoal, ...blueprint.secondaryGoals]),
     ...(inStack[0]?.imageUrl ? { heroImage: inStack[0].imageUrl } : {}),
     ...(name ? { firstName: name } : {}),
     ...(code ? { code: code.trim().toUpperCase() } : {}),

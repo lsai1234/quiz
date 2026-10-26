@@ -1,6 +1,6 @@
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
-import { ALL_GOALS, type QuizAnswers, type StackIdentity } from '@/lib/types'
+import type { QuizAnswers, StackIdentity } from '@/lib/types'
 import type { BuildSharePayloadOptions } from '../payload'
 import { isProductTypeLabel, productTypeLabel } from '@/lib/catalogue/product-type'
 import { buildSharePayload, shortReason } from '../payload'
@@ -83,7 +83,7 @@ describe('buildSharePayload', () => {
       expect(payload.v).toBe(SHARE_PAYLOAD_VERSION)
       expect(payload.stackName.length).toBeGreaterThan(0)
       expect(payload.lineup.length).toBeGreaterThan(0)
-      expect(payload.coverage).toHaveLength(4)
+      expect(payload.coverage).toEqual([])
     })
 
     it('names a product on every row, and carries no reason', () => {
@@ -137,36 +137,20 @@ describe('buildSharePayload', () => {
       .toBeGreaterThan(build(PERSONAS.essentials).lineup.length)
   })
 
-  it('marks a goal nothing in the stack targets', () => {
-    // Hand-built rather than produced by the engine, and that is itself the
-    // finding: across every safety-gated persona tried, the engine substitutes
-    // something and `unmetGoals` comes back empty on the mock catalogue. The
-    // uncovered case is still reachable in production the moment the real
-    // catalogue is thinner than the mock one — which is exactly when a card
-    // claiming full coverage would be a lie.
-    const blueprint = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
-    const inStack = blueprint.slots
-      .map((s) => MOCK_CATALOGUE.find((p) => p.id === s.selectedProductId)!)
-    const orphan = ALL_GOALS.find((g) => !inStack.some((p) => p.goals.includes(g)))!
-    expect(orphan).toBeDefined()
-
-    const uncovered = buildSharePayload(
-      { ...blueprint, primaryGoal: orphan, secondaryGoals: [], unmetGoals: [orphan] },
-      MOCK_CATALOGUE,
-      { customerName: 'Sam' },
-    )
-
-    const axis = uncovered.coverage[0]
-    expect(axis.targeted).toBe(false)
-    // And the reason `targeted` has to exist: the score alone does not say this.
-    // `stackStatScore` gives every product a baseline on every axis, so a goal
-    // nothing addresses still lands around a third of the way up the bar.
-    expect(axis.score).toBeGreaterThan(20)
-  })
-
-  it('marks the axes the stack does serve', () => {
-    const payload = build(PERSONAS.complete)
-    expect(payload.coverage.some((c) => c.targeted)).toBe(true)
+  it('carries none of their goals: the link is public', () => {
+    // The payload rides in the share URL and the share-cards table. Coverage
+    // bars named the goals ("Sleep", "Calm") and scored the stack against them.
+    for (const answers of Object.values(PERSONAS)) {
+      const payload = build(answers)
+      expect(payload.coverage).toEqual([])
+      const serialised = JSON.stringify(payload).toLowerCase()
+      for (const goal of answers.goals) {
+        // The archetype's picture may share a word with a goal ("performance");
+        // nothing else may name one.
+        const withoutArt = serialised.replace(`"artkey":"${payload.artKey}"`, '')
+        expect(withoutArt).not.toContain(`"${goal}"`)
+      }
+    }
   })
 
   it('leads with the engine’s stack name, the one the results page shows', () => {

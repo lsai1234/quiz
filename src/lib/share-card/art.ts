@@ -1,4 +1,5 @@
 import type { Goal } from '@/lib/types'
+import { getArchetype, type Archetype } from '@/lib/stack-blueprint/factory'
 
 /**
  * The card's picture.
@@ -11,9 +12,8 @@ import type { Goal } from '@/lib/types'
  * properly is a set that can actually look expensive — which is the whole job
  * the picture is doing here.
  *
- * The six are keyed to goal families, not shuffled, so the picture means
- * something: a strength stack gets the strength image every time, and two people
- * with the same goals get the same card. `docs/SHARE_CARD_ART_BRIEF.md` is what
+ * The picture follows the stack's archetype (`artKeyFor`), not shuffled, so it
+ * means something: a strength stack gets the strength image every time. `docs/SHARE_CARD_ART_BRIEF.md` is what
  * each one has to be.
  *
  * ── They are placeholders today ─────────────────────────────────────────────
@@ -167,64 +167,23 @@ export function artField(key: ArtKey | undefined): ArtField {
   return ART_SET[key ?? 'wellbeing'].field
 }
 
-/** Which family a goal belongs to. */
-const GOAL_FAMILY: Record<Goal, ArtKey> = {
+/**
+ * The art family for a stack: by its archetype, which is what the stack's
+ * name already says ("Strength Engine Stack"), so the picture tells a reader
+ * of a shared link nothing more. It used to be ranked from every goal they
+ * chose, which put "recovery" or "hydration" into a public URL. One rule for
+ * the name and the picture also means the card cannot disagree with itself.
+ */
+const ARCHETYPE_ART: Record<Archetype, ArtKey> = {
   muscle: 'strength',
-  bulking: 'strength',
+  'fat-loss': 'performance',
   performance: 'performance',
-  cutting: 'performance',
-  energy: 'energy',
-  focus: 'energy',
-  recovery: 'recovery',
-  'sleep-better': 'recovery',
-  'less-stress': 'recovery',
-  hydration: 'hydration',
   health: 'wellbeing',
-  immune: 'wellbeing',
-  'skin-hair-nails': 'wellbeing',
-  menopause: 'wellbeing',
-  'gut-health': 'wellbeing',
+  wellbeing: 'wellbeing',
 }
 
-/**
- * How loudly a family claims the picture, most insistent first.
- *
- * `muscle` says strength far more than `health` says wellbeing, so a stack built
- * for both gets the strength image. This is the same precedence
- * `getArchetype()` applies to the same goals — strength, then performance, then
- * energy, then the rest — and that is the point: the archetype is printed on the
- * card as its kicker, so a picture chosen by a different rule is a card
- * disagreeing with itself in public.
- *
- * Hydration sits above recovery because it is the goal whose name *is* its
- * picture: someone asking for hydration has already described the frame.
- * Wellbeing is last because it is where the goals with no picture of their own
- * land — it is the family you get when nothing louder was asked for.
- */
-const FAMILY_RANK: ArtKey[] = [
-  'strength', 'performance', 'energy', 'hydration', 'recovery', 'wellbeing',
-]
-
-/**
- * The art family for a stack.
- *
- * ── Not the first goal in the list ──────────────────────────────────────────
- * It used to be: the first goal whose family was known won, on the stated
- * reasoning that the list is in the customer's own order of importance. It is
- * not. `setGoals` records goals in the order they were *tapped* and sets
- * `primaryGoal` to whichever was tapped first, and on the combined track the
- * goals step lists performance goals above a second block of everyday-wellness
- * ones. So a customer who tapped "General health" before "Performance" got a
- * card whose kicker read THE PERFORMANCE ATHLETE over the wellbeing photograph
- * — the archetype ranks the whole goal set, the picture took the first tap.
- *
- * Ranking the set fixes the disagreement at its source, and costs nothing that
- * was actually being expressed: tap order is not a ranking, and nothing in the
- * quiz asks the customer to make one.
- */
-export function pickArtKey(goals: Goal[]): ArtKey {
-  const families = new Set(goals.map((goal) => GOAL_FAMILY[goal]).filter(Boolean))
-  return FAMILY_RANK.find((family) => families.has(family)) ?? 'wellbeing'
+export function artKeyFor(goals: Goal[]): ArtKey {
+  return ARCHETYPE_ART[getArchetype(goals)]
 }
 
 /** Whether this family is still standing in for art that has not been made. */
