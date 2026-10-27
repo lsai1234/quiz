@@ -677,3 +677,23 @@ nothing on either quiz reads them.
 - **Review pack.** The bonus terms are rows in `docs/consult-review-pack.csv`.
   Heroes are live data, so the Offer screen's **Download review rows** gives them,
   with the bonus terms as currently set, in the pack's own columns.
+
+### How the hero and the bonus are chosen (Phase 3)
+
+One module for both quizzes (`lib/offer/select.ts`), reached through an adapter
+each (`stack-blueprint/offer.ts`, `consult/offer.ts`):
+
+- **Hero:** the best-fitting approved hero that clears every one of the
+  person's exclusions (the engine's own gates; for the consult, `consultGate`,
+  the same function the engine ranks with) and meets at least one of their
+  needs. None, or the switch off: the page keeps today's top pick. The hero
+  goes first in every depth; one of its kind already in the stack gives up its
+  place, and each consult tier keeps its size. Its reason names a goal only
+  where the goal-to-claim map backs the claim it was approved to carry.
+- **Bonus, per depth:** the best-fitting pool product that clears every
+  exclusion, isn't in that depth, is in stock and leaves the order above the
+  floor, on a depth that qualifies and meets the minimum. Ties go to the lower
+  cost to us.
+- **Before payment** `/api/cart` re-checks both against the settings and the
+  catalogue as they are now (`lib/offer/server-check.ts`) and answers 409, with
+  nothing charged, when either no longer stands.

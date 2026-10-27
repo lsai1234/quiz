@@ -6,6 +6,9 @@ import { ingredientsOf } from '../knowledge'
 import { chargeProfile } from '../profile'
 import { APPROVED_FINGERPRINT, PERSONAS, type Expectation, type Persona } from '../personas'
 import { COPY_MODEL, COPY_SYSTEM_PROMPT, buildCopyPrompt } from '../ai/copy'
+import { consultOffer } from '../offer'
+import { DEFAULT_OFFER } from '@/lib/offer/settings'
+import { TODAY, allOn } from '@/lib/offer/__tests__/fixtures'
 import { UNDERSTAND_SYSTEM_PROMPT, buildUnderstandPrompt } from '../ai/understand'
 import { EXPLAIN_SYSTEM_PROMPT, buildExplainPrompt } from '../ai/explain'
 import {
@@ -141,4 +144,29 @@ describe('the persona suite', () => {
     // then set APPROVED_FINGERPRINT in personas.ts to the value below.
     expect(promptFingerprint()).toBe(APPROVED_FINGERPRINT)
   })
+})
+
+/*
+  The offer (plan Phase 3): with heroes approved across every kind and a bonus
+  pool, no persona's hero or bonus may carry anything its safety expectations
+  keep out; with the switches off, nothing changes.
+*/
+describe('the persona suite: the hero and the bonus', () => {
+  const settings = allOn()
+  for (const p of PERSONAS) {
+    if (stopReason(p.answers)) continue
+    const never = p.expect.flatMap((e) => e.neverContains ?? [])
+    it(`${p.id}: hero and bonus keep out ${never.join(', ') || 'nothing extra'}`, () => {
+      const engine = runStackEngine(p.answers, MOCK_CATALOGUE)
+      const offer = consultOffer({ answers: p.answers, engine, catalogue: MOCK_CATALOGUE, settings, today: TODAY })
+      const chosen = [offer.hero?.choice.product, ...Object.values(offer.bonuses).map((b) => b.choice?.product)].filter(Boolean)
+      for (const product of chosen) {
+        const has = ingredientsOf(product!)
+        expect([p.id, product!.id, never.filter((i) => has.has(i as never))]).toEqual([p.id, product!.id, []])
+      }
+      const off = consultOffer({ answers: p.answers, engine, catalogue: MOCK_CATALOGUE, settings: DEFAULT_OFFER, today: TODAY })
+      expect(off.hero).toBeNull()
+      expect(off.tiers).toBe(engine.tiers)
+    })
+  }
 })

@@ -24,6 +24,8 @@ export interface StackSlotEntry {
    * says — a product someone asked for is never sized back out of their stack.
    */
   addedByUser?: boolean
+  /** The hero (the offer's core pick, `lib/offer`): first in every depth. Absent everywhere else. */
+  hero?: boolean
 }
 
 export interface StackBlueprint {

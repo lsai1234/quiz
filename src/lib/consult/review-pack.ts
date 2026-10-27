@@ -156,6 +156,14 @@ export function engineRows(engineSource: string): Row[] {
       push('Engine keep-out reasons', 'Stack engine keep-out (engine.ts runStackEngine)', unquote(lit), 'Shown as “Kept out: …” or “Skipped: …”')
     }
   }
+  // The gate's own reasons (`consultGate` → `keepOut`): returned, or the fallback after `??`.
+  const gateStart = engineSource.indexOf('keepOut(product) {')
+  if (gateStart >= 0) {
+    const gate = engineSource.slice(gateStart, engineSource.indexOf('\n  }\n}', gateStart))
+    for (const m of gate.matchAll(new RegExp(String.raw`(?:return|\?\?)\s+${LITERAL}`, 'g'))) {
+      push('Engine keep-out reasons', 'Stack engine keep-out (engine.ts consultGate)', unquote(m[1]), 'Shown as “Kept out: …” or “Skipped: …”')
+    }
+  }
   const protein = engineSource.slice(engineSource.indexOf('function proteinOut'), engineSource.indexOf('export function scoreNeeds'))
   for (const m of protein.matchAll(new RegExp(String.raw`return\s+${LITERAL}`, 'g'))) {
     push('Weight loss: rules', 'Stack engine, tailoring opt-in: protein kept out (engine.ts proteinOut)', unquote(m[1]), 'Shown as “Kept out: …, because …”')

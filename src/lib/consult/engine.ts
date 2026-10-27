@@ -317,6 +317,11 @@ interface Candidate {
   ingredients: Set<Ingredient>
 }
 
+/** How well a product meets this person's needs (0 when it meets none of them). For the offer's hero and bonus. */
+export function needsFit(product: CatalogueProduct, needs: Needs): number {
+  return score(product, needs)?.score ?? 0
+}
+
 function score(product: CatalogueProduct, needs: Needs): Omit<Candidate, 'ingredients'> | null {
   const kind = kindOf(product)
   if (!kind) return null
@@ -332,23 +337,33 @@ function score(product: CatalogueProduct, needs: Needs): Omit<Candidate, 'ingred
   return { product, score: Math.round(total * 100) / 100, need: top.need, reason: sources[0].why }
 }
 
-export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[]): EngineResult {
-  if (a.age === 'under-18') throw new Error('Stack engine called for an under-18 consult')
-  const outcome = circuitOutcome(a)
-  if (outcome.kind === 'stop') {
-    // Belt and braces: the flow never calls the engine after a stop.
-    throw new Error(`Stack engine called after a circuit stop (${outcome.reason})`)
-  }
+/**
+ * Everything that keeps a product out for this person, in one place: the
+ * circuit check's families, the lifestyle keep-outs (caffeine with a sleep
+ * goal, at the caffeine ceiling, at 65 and over), what a confirmed pattern keeps out, a
+ * non-vegan product on a plant-based plate, the tailoring swaps, and what they
+ * already take. The engine ranks only what clears it, and the offer's hero and
+ * bonus (`lib/offer`) are held to the same gate, so the two can never disagree.
+ *
+ * Call only after the circuit check has passed (the engine checks).
+ */
+export interface ConsultGate {
+  /** Ingredient families kept out. */
+  exclude: Set<Ingredient>
+  /** Why each family is out, in the member's terms. */
+  why: Partial<Record<Ingredient, string>>
+  /** Why this product is kept out, or null when it may be offered. Family limits (one caffeine source) are the engine's walk, not this. */
+  keepOut(product: CatalogueProduct): string | null
+}
 
-  const needs = scoreNeeds(a)
-  const excluded: ExcludedEntry[] = []
-  const notes: string[] = []
+export function consultGate(a: ConsultAnswers): ConsultGate {
+  const outcome = circuitOutcome(a)
+  if (outcome.kind === 'stop') throw new Error(`Consult gate asked for after a circuit stop (${outcome.reason})`)
   const exclude = new Set<Ingredient>(outcome.exclude)
   const why: Partial<Record<Ingredient, string>> = { ...outcome.reasons }
 
   const drinks = caffeineCount(a.caffeine)
   const shelf = a.shelf ?? []
-  const shelfCaffeine = shelf.some((s) => SHELF_CAFFEINE.includes(s))
   if (drinks >= CAFFEINE_CEILING) {
     exclude.add('caffeine')
     exclude.add('stimulant')
@@ -375,7 +390,39 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     }
   }
 
+
   const plantBased = a.plate ? readPlate(a.plate).plantBased : false
+  return {
+    exclude,
+    why,
+    keepOut(product) {
+      const hit = [...ingredientsOf(product)].find((i) => exclude.has(i))
+      if (hit) return why[hit] ?? 'ruled out by your circuit check'
+      if (plantBased && !product.dietaryTags.includes('vegan')) return 'it isn’t vegan and your plate is fully plant-based'
+      const unsuited = proteinOut(a, product.swapGroup)
+      if (unsuited) return unsuited
+      const covered = shelf.find((s) => SHELF_COVERS[s].includes(product.swapGroup))
+      if (covered) return `you already take ${SHELF_LABEL[covered].toLowerCase()}`
+      return null
+    },
+  }
+}
+
+export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[]): EngineResult {
+  if (a.age === 'under-18') throw new Error('Stack engine called for an under-18 consult')
+  const outcome = circuitOutcome(a)
+  if (outcome.kind === 'stop') {
+    // Belt and braces: the flow never calls the engine after a stop.
+    throw new Error(`Stack engine called after a circuit stop (${outcome.reason})`)
+  }
+
+  const needs = scoreNeeds(a)
+  const excluded: ExcludedEntry[] = []
+  const notes: string[] = []
+  const gate = consultGate(a)
+  const { exclude } = gate
+  const shelf = a.shelf ?? []
+  const shelfCaffeine = shelf.some((s) => SHELF_CAFFEINE.includes(s))
   const minLinePrice = getPricingConfig().minQuizProductPrice
 
   const pool = inStockOnly(catalogue).filter((p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice))
@@ -385,23 +432,9 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     const scored = score(product, needs)
     if (!scored) continue
     const ingredients = ingredientsOf(product)
-    const hit = [...ingredients].find((i) => exclude.has(i))
-    if (hit) {
-      excluded.push({ what: product.id, why: why[hit] ?? 'ruled out by your circuit check' })
-      continue
-    }
-    if (plantBased && !product.dietaryTags.includes('vegan')) {
-      excluded.push({ what: product.id, why: 'it isn’t vegan and your plate is fully plant-based' })
-      continue
-    }
-    const unsuited = proteinOut(a, product.swapGroup)
-    if (unsuited) {
-      excluded.push({ what: product.id, why: unsuited })
-      continue
-    }
-    const covered = shelf.find((s) => SHELF_COVERS[s].includes(product.swapGroup))
-    if (covered) {
-      excluded.push({ what: product.id, why: `you already take ${SHELF_LABEL[covered].toLowerCase()}` })
+    const out = gate.keepOut(product)
+    if (out) {
+      excluded.push({ what: product.id, why: out })
       continue
     }
     candidates.push({ ...scored, ingredients })

@@ -44,6 +44,8 @@ import { INGREDIENTS, type Ingredient } from '@/lib/consult/circuit'
 import { healthConsentIsCurrent, healthDataDocument } from '@/lib/legal/health-data'
 import { recordConsent, requestMetadata } from '@/lib/legal/consent'
 import type { SafetyConstraints } from '@/lib/recharge/types'
+import { getOfferSettings } from '@/lib/offer/store'
+import { checkBonusClaim, heroStillApproved } from '@/lib/offer/server-check'
 import type { HealthDataConsent } from '@/lib/types'
 
 /**
@@ -168,6 +170,24 @@ function orderSafetyFrom(raw: unknown): { safetyConstraints?: SafetyConstraints;
   }
 }
 
+/**
+ * The person's exclusions for the bonus check: what their answers rule out, as
+ * the browser derived it (`safetyConstraintsFrom`) — only ever able to make the
+ * check stricter, since a bonus refused is a gift not given — plus the
+ * consult's exclusions, which are only kept with consent (`orderSafetyFrom`).
+ * Used for this check and not stored.
+ */
+function bonusConstraintsFrom(raw: unknown, consult: SafetyConstraints | undefined): SafetyConstraints {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<SafetyConstraints>
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 20) : [])
+  return {
+    dietaryTags: list(r.dietaryTags) as SafetyConstraints['dietaryTags'],
+    noStimulants: r.noStimulants === true,
+    safetyFlags: list(r.safetyFlags) as SafetyConstraints['safetyFlags'],
+    excludedIngredients: consult?.excludedIngredients ?? [],
+  }
+}
+
 export async function POST(req: Request) {
   let body: {
     lines?: unknown
@@ -176,6 +196,8 @@ export async function POST(req: Request) {
     shippingAddress?: unknown
     lastChance?: unknown
     safety?: unknown
+    bonus?: unknown
+    constraints?: unknown
   }
   try {
     body = await req.json()
@@ -501,6 +523,8 @@ export async function POST(req: Request) {
       variantId?: unknown
       expectedPrice?: unknown
       expectedDelivery?: unknown
+      /** The page sold it as the hero ("Not the obvious pick"). */
+      hero?: unknown
     }
     const only = matched.length === 1 && matched[0].quantity === 1 ? matched[0] : null
     // The same products the card would ever offer: nothing that cannot be
@@ -511,6 +535,14 @@ export async function POST(req: Request) {
     if (!only || !eligible || only.variant.id !== want.variantId || founder || starter) {
       await releaseClaim()
       return NextResponse.json({ error: 'That offer is for one product on its own.' }, { status: 400 })
+    }
+    // Sold as the hero, it must still be one: approved, every check done, and
+    // the switch on. Withdrawn while the page was open, it is said now.
+    if (want.hero === true && !heroStillApproved(only.product.id, await getOfferSettings(), products)) {
+      return NextResponse.json(
+        { error: `${only.product.title} isn’t our pick on its own any more. Nothing has been charged.`, offerChanged: true, heroChanged: true },
+        { status: 409 },
+      )
     }
     const quote = quoteOffer(offerProductFor(only.product, only.variant), config)
     if (!quote.viable) {
@@ -558,6 +590,34 @@ export async function POST(req: Request) {
         deliveryCharge: quote.deliveryCharge,
         deliveryDeal: quote.deliveryDeal,
       },
+    }
+  }
+
+  /**
+   * The free bonus, re-checked before any money moves (plan Phase 3, 5).
+   *
+   * The page chose it; the hub's settings and the catalogue as they are now
+   * decide whether it still comes with this order — switched on, still in the
+   * pool, on a stack depth that qualifies, in stock, not already in the
+   * basket, suitable for them, over the minimum and leaving the order above the
+   * margin floor. Anything that has changed is said here, with nothing charged.
+   * Adding it to the order and the parcel is Phase 4.
+   */
+  if (body.bonus != null) {
+    const offer = await getOfferSettings()
+    const check = checkBonusClaim({
+      claim: body.bonus,
+      settings: offer,
+      catalogue: products,
+      lines: matched.map((m) => ({ product: m.product, price: m.variant.price, cost: unitCostOf(m.product, m.variant.price), quantity: m.quantity })),
+      constraints: bonusConstraintsFrom(body.constraints, safety.safetyConstraints),
+      isStack: channel === 'quiz' && !lastChance,
+      codeApplied: Boolean(redemption?.ok || founder || starter),
+      config,
+    })
+    if (!check.ok) {
+      await releaseClaim()
+      return NextResponse.json({ error: check.message, bonusChanged: true, bonus: null, reason: check.reason }, { status: 409 })
     }
   }
 

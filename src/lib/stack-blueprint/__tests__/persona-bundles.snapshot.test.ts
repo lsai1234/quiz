@@ -14,6 +14,9 @@ import { buildStackBlueprint } from '../factory'
 import { calculatePricing, levelForStackPreference } from '../pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { QuizAnswers } from '@/lib/types'
+import { quizOffer, quizPerson } from '../offer'
+import { DEFAULT_OFFER } from '@/lib/offer/settings'
+import { TODAY, allOn } from '@/lib/offer/__tests__/fixtures'
 
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
@@ -66,6 +69,38 @@ describe('persona → bundle regression', () => {
   for (const { n, a } of PERSONAS) {
     it(n, () => {
       expect(summarise(a)).toMatchSnapshot()
+    })
+  }
+})
+
+/*
+  The offer (plan Phase 3). With heroes approved across every kind and a bonus
+  pool, each persona's hero and bonus clear every hard gate the engine applies
+  to them and lead (or sit outside) every depth; with the switches off, the
+  stack is the one snapshotted above, untouched.
+*/
+describe('persona → hero and bonus', () => {
+  for (const { n, a } of PERSONAS) {
+    it(n, () => {
+      const blueprint = buildStackBlueprint(a, MOCK_CATALOGUE)
+      const offer = quizOffer({ answers: a, blueprint, catalogue: MOCK_CATALOGUE, settings: allOn(), today: TODAY })
+      const person = quizPerson(a)
+      const vegan = a.lifestyle.includes('vegan')
+      const noStims = a.stimPreference === 'no' || a.caffeineLevel === 'none'
+      const chosen = [offer.hero?.choice.product, ...Object.values(offer.bonuses).map((b) => b.choice?.product)].filter(Boolean)
+      for (const p of chosen) {
+        expect(person.keepOut(p!)).toBeNull()
+        if (vegan) expect(p!.dietaryTags).toContain('vegan')
+        if (noStims) expect(p!.hasStimulants).toBe(false)
+      }
+      if (offer.hero) for (const t of offer.tiers) expect(t.slots[0]?.selectedProductId === offer.hero.choice.product.id || t.slots.some((s) => s.hero)).toBe(true)
+      for (const t of offer.tiers) {
+        const b = offer.bonuses[t.level].choice
+        if (b) expect(t.slots.map((s) => s.selectedProductId)).not.toContain(b.product.id)
+      }
+      const off = quizOffer({ answers: a, blueprint, catalogue: MOCK_CATALOGUE, settings: DEFAULT_OFFER, today: TODAY })
+      expect(off.blueprint).toBe(blueprint)
+      expect(off.hero).toBeNull()
     })
   }
 })
