@@ -8,8 +8,9 @@ import { PersistError } from '@/lib/portal/persist'
 /**
  * Settings → Offer (plan Phase 2): the "Hero products" and "Free bonus"
  * switches, the bonus pool and its settings, and the numbers to set them by.
- * Founders only. Both switches are off by default, and while Phase 3 is not
- * built nothing on either quiz reads them.
+ * Founders only. Both switches are off by default. The results page reads
+ * them through `/api/offer` (`publicOffer`), which keeps the bonus from
+ * customers until the checkout can put it on the order.
  *
  *   GET   everything the screen shows
  *   POST  { heroEnabled?: boolean, bonus?: Partial<BonusSettings> }

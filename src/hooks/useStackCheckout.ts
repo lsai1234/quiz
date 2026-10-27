@@ -33,7 +33,8 @@ export type CheckoutState =
    * Copy here may name the destination, never the outcome.
    */
   | { status: 'redirecting'; plan: PlanType }
-  | { status: 'error'; messages: string[] }
+  /** `bonusRefused`: the server turned the free bonus down (it said why, and charged nothing). */
+  | { status: 'error'; messages: string[]; bonusRefused?: boolean }
   // Subscription checkout requires an account — the page shows the AccountGate.
   | { status: 'needs-account'; payload: CheckoutPayload }
   /**
@@ -202,6 +203,13 @@ export function useStackCheckout() {
          * which of the two things the page believes it is doing.
          */
         claimingStarter?: boolean
+        /**
+         * The free bonus the page showed with this depth (plan Phase 4). The
+         * server re-checks it before any money moves and refuses it, saying
+         * why, if anything has changed. One-off only for now: a subscription's
+         * first box carries it once the checkout supports it.
+         */
+        bonus?: { productId: string; level: StackLevel } | null
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -275,10 +283,17 @@ export function useStackCheckout() {
             // later still clears it. Only with the circuit check's consent; the
             // server drops it without a current one.
             safety: orderSafetyFor(answers),
+            ...(subOpts.bonus
+              ? { bonus: subOpts.bonus, constraints: safetyConstraintsFrom(answers) }
+              : {}),
           }),
         })
-        const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string } | null =
+        const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string; bonusChanged?: boolean } | null =
           await res.json().catch(() => null)
+        if (res.status === 409 && data?.bonusChanged) {
+          setState({ status: 'error', messages: [data.error ?? 'The free gift can’t come with this order. Nothing has been charged.'], bonusRefused: true })
+          return
+        }
         if (!res.ok || !data?.checkoutUrl) {
           console.error(`[checkout] cart failed (${res.status})`, data)
           setState({ status: 'error', messages: [serverErrorMessage(res.status, data?.error)] })

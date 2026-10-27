@@ -1,5 +1,17 @@
 # The last-chance offer — proposal and build
 
+> **Moved up (Amp Consult and offer plan, Phase 4).** The block at the foot of
+> the results page is gone. Its pricing (`quoteOffer`, the settings now called
+> "Hero offer") now prices **Start here**, the first thing under the results:
+> the approved hero ("Not the obvious pick") or, with the hero switch off,
+> their top pick ("Your top pick"), with the full stack under it. A product
+> with no viable deal, or one this browser has already had, is offered at its
+> ordinary delivered price through the ordinary checkout. See
+> `CoreOfferCard`, `src/lib/offer/results.ts` and
+> `docs/offer-phase4-proposals.md`. `LastChance.tsx` is no longer mounted;
+> `LastChanceView` still backs `/styleguide/last-chance`. The rest of this
+> document describes the deal maths, which is unchanged.
+
 At the very foot of the quiz results page, below the plan, the small print and
 the giveaway, somebody who has scrolled past their whole stack without buying
 it gets one more, smaller, yes: **a deal on the single product from their

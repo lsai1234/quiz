@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment } from 'react'
+import Link from 'next/link'
 
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { StackPricing, SubscriptionLine } from '@/lib/stack-blueprint/pricing'
@@ -14,6 +15,7 @@ import type { CodeKind } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from './ProductTile'
 import { ShopAlaCarte } from './ShopAlaCarte'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { FREE_GIFT_TERMS_PATH, OFFER_COPY } from '@/lib/offer/copy'
 
 interface LineItem {
   key: string
@@ -69,6 +71,14 @@ interface Props {
    * never looked again.
    */
   onCtaRef?: (el: HTMLButtonElement | null) => void
+  /**
+   * The free bonus with this order (plan Phase 4): a £0.00 line and nothing
+   * else. It never changes the total, the saving or the delivery above, so
+   * none of those know about it. `worth` is its ordinary shop price.
+   */
+  bonus?: { title: string; worth: number | null; firstBoxOnly: boolean } | null
+  /** Why there is no bonus line: a code worth more took its place. */
+  bonusNote?: string | null
 }
 
 /** Months, said the way a person would say them. */
@@ -192,7 +202,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef,
+  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -371,6 +381,36 @@ export function PlanReceipt({
               </span>
             </div>
           ))}
+          {bonus && (
+            <div className="flex items-start gap-3" data-receipt-bonus>
+              <span
+                aria-hidden
+                className="flex items-center justify-center flex-shrink-0"
+                style={{ width: 40, height: 40, borderRadius: 10, color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }}
+              >
+                <Icon name="sparkle" size={18} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-medium leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>
+                  {OFFER_COPY.receiptFree(bonus.title)}
+                </span>
+                <span className="block text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+                  {[
+                    bonus.worth != null ? OFFER_COPY.worth(bonus.worth) : null,
+                    bonus.firstBoxOnly ? OFFER_COPY.bonusOnSubscription : null,
+                  ].filter(Boolean).join(' · ')}
+                  {bonus.worth != null || bonus.firstBoxOnly ? ' · ' : ''}
+                  <Link href={FREE_GIFT_TERMS_PATH} className="underline underline-offset-2">{OFFER_COPY.terms}</Link>
+                </span>
+              </span>
+              <span className="text-[13px] font-bold tabular-nums flex-shrink-0 leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(0)}
+              </span>
+            </div>
+          )}
+          {bonusNote && (
+            <p className="text-[11px] leading-snug" style={{ color: 'var(--color-text-2)' }}>{bonusNote}</p>
+          )}
         </div>
 
         {/* Discounts + total */}

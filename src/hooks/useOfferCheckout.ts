@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { track } from '@/lib/analytics/events'
-import { LAST_CHANCE_SOURCE } from '@/lib/last-chance/source'
+import { CORE_OFFER_SOURCE, LAST_CHANCE_SOURCE } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
 import { useQuizStore } from '@/lib/store'
 import { orderSafetyFor } from '@/lib/consult/exclusions'
@@ -51,12 +51,21 @@ export function useOfferCheckout() {
     quote: PublicOfferQuote
     /** The register claim shown on the card, kept with the order (OC-C-006). */
     claimId?: string | null
+    /** Sold as the approved hero ("Not the obvious pick"): the server checks it still is one. */
+    hero?: boolean
+    /**
+     * Bought at its ordinary price, not on the deal: the product has no deal,
+     * or this browser has had it. The ordinary checkout prices it, as the shop
+     * would; the delivered price on the card is that same figure.
+     */
+    ordinary?: boolean
   }) => {
     if (inFlight.current) return
     inFlight.current = true
     setState({ status: 'loading' })
-    track('last_chance_buy', { discountPct: offer.quote.discountPct, delivery: offer.quote.deliveryDeal, value: offer.quote.total })
-    track('checkout_start', { source: 'last_chance', items: 1, value: offer.quote.total })
+    const value = offer.ordinary ? offer.quote.normalTotal : offer.quote.total
+    track('last_chance_buy', { discountPct: offer.ordinary ? 0 : offer.quote.discountPct, delivery: offer.ordinary ? 'standard' : offer.quote.deliveryDeal, value })
+    track('checkout_start', { source: 'last_chance', items: 1, value })
 
     const controller = new AbortController()
     const timer = window.setTimeout(() => controller.abort(), INITIATION_TIMEOUT_MS)
@@ -70,16 +79,21 @@ export function useOfferCheckout() {
             variantId: offer.variantId,
             quantity: 1,
             attributes: [
-              { key: 'source', value: LAST_CHANCE_SOURCE },
+              { key: 'source', value: offer.ordinary ? CORE_OFFER_SOURCE : LAST_CHANCE_SOURCE },
               { key: 'product', value: offer.productTitle },
               ...(offer.claimId ? [{ key: 'claim', value: offer.claimId }] : []),
             ],
           }],
-          lastChance: {
-            variantId: offer.variantId,
-            expectedPrice: offer.quote.offerPrice,
-            expectedDelivery: offer.quote.deliveryCharge,
-          },
+          ...(offer.ordinary
+            ? {}
+            : {
+                lastChance: {
+                  variantId: offer.variantId,
+                  expectedPrice: offer.quote.offerPrice,
+                  expectedDelivery: offer.quote.deliveryCharge,
+                  ...(offer.hero ? { hero: true } : {}),
+                },
+              }),
           // A consult stack's exclusions travel with the order (`orderSafetyFor`).
           safety: orderSafetyFor(useQuizStore.getState().answers),
         }),
@@ -89,6 +103,7 @@ export function useOfferCheckout() {
         orderId?: string
         error?: string
         offerChanged?: boolean
+        heroChanged?: boolean
         quote?: PublicOfferQuote
       } | null = await res.json().catch(() => null)
 

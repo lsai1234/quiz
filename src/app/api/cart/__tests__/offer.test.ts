@@ -14,8 +14,15 @@ jest.mock('@/lib/payments', () => ({ ...jest.requireActual('@/lib/payments'), ge
 jest.mock('@/lib/catalogue/resolve', () => ({
   getResolvedCatalogue: async () => ({ products: jest.requireActual('@/lib/catalogue/mock-catalogue').MOCK_CATALOGUE }),
 }))
+// The checkout's bonus line is built (`BONUS_AT_CHECKOUT`); what is tested
+// here is the re-check, which stands in front of it either way.
+const atCheckout = jest.fn(() => true)
+jest.mock('@/lib/offer/public', () => ({ ...jest.requireActual('@/lib/offer/public'), bonusAtCheckout: () => atCheckout() }))
 
 import { POST } from '../route'
+import { getOrder } from '@/lib/orders/repo'
+import { CORE_OFFER_SOURCE } from '@/lib/last-chance/source'
+import { offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { writeJson } from '@/lib/portal/persist'
 import { allOn, approved } from '@/lib/offer/__tests__/fixtures'
@@ -44,6 +51,24 @@ it('takes the order when the bonus still qualifies', async () => {
   expect(res.status).toBe(200)
 })
 
+it('refuses the bonus, with nothing charged, while the checkout cannot add it to the order', async () => {
+  atCheckout.mockReturnValueOnce(false)
+  await setOffer({ ...allOn(), heroes: {} })
+  const res = await stack({ productId: 'chrgd-vitamin-c-zinc', level: 'complete' })
+  expect(res.status).toBe(409)
+  expect(await res.json()).toMatchObject({ bonusChanged: true, reason: 'not-ready' })
+})
+
+it('charges exactly the same with the bonus as without it', async () => {
+  await setOffer({ ...allOn(), heroes: {} })
+  const plain = await getOrder((await (await stack(null)).json()).orderId)
+  const withBonus = await getOrder((await (await stack({ productId: 'chrgd-vitamin-c-zinc', level: 'complete' })).json()).orderId)
+  expect(withBonus?.total).toBe(plain?.total)
+  expect(withBonus?.subtotal).toBe(plain?.subtotal)
+  expect(withBonus?.deliveryDue).toEqual(plain?.deliveryDue)
+  expect(plain?.total).toBeGreaterThan(0)
+})
+
 it('says so before payment when the bonus has been switched off', async () => {
   await setOffer(DEFAULT_OFFER)
   const res = await stack({ productId: 'chrgd-vitamin-c-zinc', level: 'complete' })
@@ -67,4 +92,22 @@ it('refuses a hero whose approval has been withdrawn', async () => {
   )
   expect(res.status).toBe(409)
   expect(await res.json()).toMatchObject({ offerChanged: true, heroChanged: true })
+})
+
+it('sells "Start here" at its ordinary price, through the ordinary checkout, when it has no deal', async () => {
+  await setOffer(DEFAULT_OFFER)
+  const id = 'chrgd-creatine'
+  const product = MOCK_CATALOGUE.find((p) => p.id === id)!
+  const variant = product.variants.find((v) => v.available)!
+  const res = await POST(
+    new Request('http://localhost/api/cart', {
+      method: 'POST',
+      body: JSON.stringify({ lines: [{ variantId: variant.id, quantity: 1, attributes: [{ key: 'source', value: CORE_OFFER_SOURCE }] }] }),
+    }),
+  )
+  expect(res.status).toBe(200)
+  const order = await getOrder((await res.json()).orderId)
+  const quote = quoteOffer(offerProductFor(product, variant))
+  // The card's delivered price (its ordinary price and mainland delivery) is what the order bills.
+  expect(order?.total).toBe(quote.normalTotal)
 })

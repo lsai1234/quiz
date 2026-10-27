@@ -25,6 +25,7 @@ import type { ConsultExclusions } from './exclusions'
 import { resultsOpenFor } from './results-tab'
 import { chargeProfile } from './profile'
 import type { FlowState } from './flow'
+import type { PersonSnapshot } from '@/lib/offer/select'
 
 export interface ResultsBundle {
   payload: HandoffPayload
@@ -33,7 +34,15 @@ export interface ResultsBundle {
   answers: QuizAnswers
   identity: StackIdentity
   catalogue: CatalogueProduct[]
+  /**
+   * The consult's decision on every product, for the offer
+   * (`ConsultExclusions.offerFit`), when the caller worked it out
+   * (`offerFitFor`, passed in so it can be loaded lazily).
+   */
+  offerFit?: PersonSnapshot
 }
+
+type OfferFitFor = (answers: FlowState['answers'], engine: Pick<EngineResult, 'tiers'>, catalogue: readonly CatalogueProduct[]) => PersonSnapshot
 
 export class EmptyStackError extends Error {
   constructor() {
@@ -41,7 +50,7 @@ export class EmptyStackError extends Error {
   }
 }
 
-export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], now = new Date()): ResultsBundle {
+export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], now = new Date(), offerFitFor?: OfferFitFor): ResultsBundle {
   const engine = runStackEngine(state.answers, catalogue)
   if (engine.tiers.complete.length === 0) throw new EmptyStackError()
   const payload = buildHandoff({
@@ -64,6 +73,7 @@ export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], 
     answers,
     identity: identityFor(payload),
     catalogue,
+    offerFit: offerFitFor?.(state.answers, engine, catalogue),
   }
 }
 
@@ -81,7 +91,7 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setStackBlueprint(bundle.blueprint)
   store.setStackLevel('performance')
   store.setAiStackMeta(bundle.payload.reasons, false)
-  store.setConsultExclusions(exclusionsOf(bundle.payload))
+  store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit })
   store.setStackReady(true)
 }
 

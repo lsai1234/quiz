@@ -78,9 +78,10 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   useEffect(() => {
     let live = true
     setError(null)
-    loadProducts()
-      .then((catalogue) => {
-        const b = prepareResults(state, catalogue)
+    // The offer's fit is loaded alongside the catalogue, not with the consult.
+    Promise.all([loadProducts(), import('@/lib/consult/offer-fit')])
+      .then(([catalogue, { offerFitFor }]) => {
+        const b = prepareResults(state, catalogue, new Date(), offerFitFor)
         applyToResultsPage(b)
         saveHandoffLocally(b.payload)
         void saveHandoffRemotely(b.payload)

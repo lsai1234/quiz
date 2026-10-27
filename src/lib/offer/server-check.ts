@@ -20,7 +20,7 @@ import { activeBonusPool, activeHeroIds, STACK_LEVELS, type OfferSettings } from
 import { bonusFloor, costedItem, stackMargin, type CostedItem } from './bonus-economics'
 import { offerable } from './select'
 
-export type BonusRefusal = 'off' | 'not-in-pool' | 'tier' | 'not-a-stack' | 'in-basket' | 'stock' | 'excluded' | 'minimum' | 'margin' | 'code'
+export type BonusRefusal = 'not-ready' | 'off' | 'not-in-pool' | 'tier' | 'not-a-stack' | 'in-basket' | 'stock' | 'excluded' | 'minimum' | 'margin' | 'code'
 
 export interface BonusClaim {
   productId: string
@@ -33,6 +33,7 @@ export type BonusCheck =
 
 /** What the customer is told, by reason. Calm, specific, and says nothing was charged. */
 const WHY: Record<BonusRefusal, string> = {
+  'not-ready': 'free gifts can’t be added to orders yet',
   off: 'the free gift isn’t running any more',
   'not-in-pool': 'it isn’t one of our free gifts any more',
   tier: 'it doesn’t come with this size of stack',
@@ -61,6 +62,8 @@ export function checkBonusClaim(input: {
   isStack: boolean
   /** A code was applied and the settings say a code replaces the bonus. */
   codeApplied: boolean
+  /** The checkout can put a bonus on the order (`bonusAtCheckout`). Until then every claim is refused. */
+  atCheckout: boolean
   config?: PricingConfig
 }): BonusCheck {
   const raw = (input.claim && typeof input.claim === 'object' ? input.claim : {}) as Partial<BonusClaim>
@@ -69,6 +72,7 @@ export function checkBonusClaim(input: {
   const refuse = (reason: BonusRefusal): BonusCheck => ({ ok: false, reason, message: refusalMessage(title, reason) })
   const { bonus } = input.settings
 
+  if (!input.atCheckout) return refuse('not-ready')
   if (!bonus.enabled) return refuse('off')
   if (!product || !activeBonusPool(input.settings, input.catalogue).includes(product.id)) return refuse('not-in-pool')
   if (!STACK_LEVELS.includes(raw.level as StackLevel) || !bonus.tiers.includes(raw.level as StackLevel)) return refuse('tier')

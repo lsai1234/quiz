@@ -20,9 +20,9 @@ import { productHref } from '@/lib/portal/product-links'
  *                  would cost us on three example stacks — with a proposed
  *                  minimum and floor worked out from those numbers.
  *
- * Both switches are off by default. Until the selection is built (Phase 3)
- * nothing on either quiz reads any of this; even then, a switch on with no
- * approved hero or an empty pool changes nothing.
+ * Both switches are off by default, and a switch on with no approved hero or
+ * an empty pool changes nothing. The results page reads them (Phase 4); the
+ * bonus stays hidden from customers until the checkout can carry it.
  */
 
 const money = (n: number | null | undefined) => (n == null ? '—' : `£${n.toFixed(2)}`)
@@ -210,6 +210,12 @@ function BonusCard({ view, saving, onSave }: { view: OfferView; saving: boolean;
             { value: 'on', label: 'On', sub: 'From the pool, where it qualifies' },
           ]}
         />
+        {/* The page can't reach a customer until the checkout carries the gift. */}
+        <Note tone="neutral" icon="info">
+          Customers don’t see the free gift yet, whatever this switch says: the checkout doesn’t add it to the order or the parcel until the Stripe and
+          PowerBody lines are built. The terms are drafted at{' '}
+          <Link href="/legal/free-gift" className="underline">/legal/free-gift</Link>.
+        </Note>
         {bonus.enabled && view.active.bonusPool.length === 0 && (
           <Note tone="attention" icon="info">On, but the pool is empty, so nothing changes: no stack gets a bonus.</Note>
         )}

@@ -30,7 +30,18 @@ import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
-import { LastChance } from './LastChance'
+import { CoreOfferCard } from './CoreOfferCard'
+import { BonusNote } from './BonusNote'
+import { useOfferSettings } from '@/hooks/useOfferSettings'
+import { useOfferCheckout } from '@/hooks/useOfferCheckout'
+import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
+import { chooseHero, heroReason, personFromSnapshot, type OfferInputs, type PersonFit } from '@/lib/offer/select'
+import { bonusLineFor, bonusWorth, codeOrBonus, coreOffer, tierBonuses, tierDelivered, titleOf } from '@/lib/offer/results'
+import { OFFER_COPY } from '@/lib/offer/copy'
+import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
+import type { PublicOfferQuote } from '@/lib/last-chance/economics'
+import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
+import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
 import { StarterDeliveryForm } from './StarterDeliveryForm'
 import type { SupplierAddress } from '@/lib/supplier/types'
@@ -55,7 +66,7 @@ import { ShareStackButton } from '@/components/share-card/ShareStackButton'
 import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
-import type { StackLevel } from '@/lib/types'
+import type { Goal, StackLevel } from '@/lib/types'
 import { TIER_META } from '@/lib/quiz-core'
 
 /**
@@ -69,10 +80,17 @@ import { TIER_META } from '@/lib/quiz-core'
  * folds the rest rather than showing the same stack twice.
  */
 function StackTierSelector({
-  tiers, current, minMonthly, oneOffOnly = false, onChange,
+  tiers, current, chosen = true, gifts = {}, minMonthly, oneOffOnly = false, onChange,
 }: {
   tiers: TierPlan[]
   current: StackLevel
+  /**
+   * The full stack is the option they have chosen. While "Start here" is the
+   * one the sticky bar follows, no depth is shown as picked.
+   */
+  chosen?: boolean
+  /** Depths that come with the free bonus (its conditions are in the note under the row). */
+  gifts?: Partial<Record<StackLevel, boolean>>
   /** The monthly floor a subscription has to clear to be offerable at all. */
   minMonthly: number
   /**
@@ -95,7 +113,7 @@ function StackTierSelector({
         {tiers.map(({ level, slots, oneOff, monthly }) => {
           const size = slots.length
           const meta = TIER_META[level]
-          const active = current === level
+          const active = chosen && current === level
           // A subscription this small cannot be placed, so this depth has no
           // monthly price to advertise. Same floor the plan tab enforces.
           const canSub = !oneOffOnly && monthly > 0 && monthly >= minMonthly
@@ -124,6 +142,12 @@ function StackTierSelector({
               <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
                 {size} product{size === 1 ? '' : 's'}
               </div>
+              {gifts[level] && (
+                <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold leading-tight" style={{ color: 'var(--color-accent)' }}>
+                  <Icon name="sparkle" size={11} />
+                  {OFFER_COPY.tierGift}
+                </div>
+              )}
               {/*
                 Both prices, always, in a fixed order: the monthly subscription
                 leads and the one-off sits under it.
@@ -291,9 +315,49 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   // read "Product unavailable" at £0.00.
   const { products, isLoading: catalogueLoading, isLive, error: catalogueError } = useCatalogueProducts()
 
+  /**
+   * Whether this visit is a partner claiming their free stack.
+   *
+   * ── Why the server is asked, rather than the flag believed ────────────────
+   * The flag in `sessionStorage` is an INTENT. Anyone can set it, and — the
+   * case that actually matters — a real partner can have set it honestly and
+   * then lost their session: a different device, a cleared cookie, thirty days
+   * gone by. Believing it put £0.00 on screen in front of people the checkout
+   * then charged in full.
+   *
+   * A screen that disagrees with the card is the one failure this journey
+   * cannot have. So the flag only decides whether to ASK; `/api/partner/
+   * claimable` decides the answer, from the session cookie the browser cannot
+   * forge.
+   *
+   * ── Why it starts false ───────────────────────────────────────────────────
+   * Because the wrong direction to be wrong in is the expensive one. Starting
+   * false means a partner sees the ordinary price for a moment and then watches
+   * it drop to zero — a pleasant correction. Starting true means everybody else
+   * sees zero and then watches it climb, which is the surprise that loses an
+   * order.
+   */
+  const [claiming, setClaiming] = useState(false)
+  useEffect(() => {
+    if (!isClaimingStarter()) return
+    let live = true
+    fetch('/api/partner/claimable', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { claimable: false }))
+      .then((d: { claimable?: boolean }) => {
+        if (live) setClaiming(d.claimable === true)
+      })
+      .catch(() => {
+        /* Unreachable, so it is not a claim. The ordinary reveal at the
+           ordinary price is the safe answer to a question we could not ask. */
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
   // Default any slot without a selected variant to the product's first available
   // variant so the selector and price always agree.
-  const blueprint = useMemo(() => {
+  const baseBlueprint = useMemo(() => {
     let result = rawBlueprint
     for (const slot of rawBlueprint.slots) {
       if (slot.selectedVariantId) continue
@@ -306,6 +370,57 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     }
     return result
   }, [rawBlueprint, products])
+
+  /*
+   * ── The offer (plan Phase 4) ──────────────────────────────────────────────
+   *
+   * The hub's settings (`/api/offer`), and what the engine decided about this
+   * person: the quiz's own gates and scores (`quizPerson`), or the consult's,
+   * carried over from where its answers were (`offerFit`). From those, the
+   * hero: the approved product that fits them best and clears every one of
+   * their exclusions. It goes first in the stack, in every depth, never
+   * dropped or swapped out. None (switch off, nothing approved fits, a reload
+   * of a consult, a partner's claim) and the stack is exactly the engine's,
+   * and "Start here" is their top pick.
+   */
+  const { settings: offerSettings, ready: offerReady } = useOfferSettings()
+  // Re-worked when the founders' pricing settings land, so an offer is never
+  // priced on defaults the server will not honour.
+  const [pricingVersion, setPricingVersion] = useState(0)
+  useEffect(() => {
+    const bump = () => setPricingVersion((v) => v + 1)
+    window.addEventListener(PRICING_SYNCED_EVENT, bump)
+    return () => window.removeEventListener(PRICING_SYNCED_EVENT, bump)
+  }, [])
+  const offerSnapshot = consultExclusions?.offerFit ?? null
+  const offerPerson = useMemo<PersonFit | null>(
+    () => (consultExclusions ? (offerSnapshot ? personFromSnapshot(offerSnapshot) : null) : quizPerson(answers)),
+    [consultExclusions, offerSnapshot, answers],
+  )
+  const offerInputs = useMemo<OfferInputs>(
+    () => ({ settings: offerSettings, catalogue: products, config: getPricingConfig() }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pricingVersion stands in for the module-level config
+    [offerSettings, products, pricingVersion],
+  )
+  const hero = useMemo(() => {
+    if (claiming || !offerPerson || products.length === 0) return null
+    const choice = chooseHero(offerInputs, offerPerson)
+    if (!choice) return null
+    const primary = answers.primaryGoal ?? baseBlueprint.primaryGoal
+    const goals = [primary, ...(answers.goals ?? []).filter((g) => g !== primary)].filter(Boolean) as Goal[]
+    // The quiz may say why in one of their own answers; the consult's
+    // reasons are its own, and only a goal the claim map backs is named.
+    const explained = consultExclusions
+      ? null
+      : explainProductSafe({ product: choice.product, slotType: (choice.product.stackSlots[0] ?? 'health') as SlotType, answers })
+    return { choice, reason: heroReason(choice, goals, explained?.kind === 'answer' ? explained.sentence : null) }
+  }, [claiming, offerPerson, products.length, offerInputs, answers, baseBlueprint.primaryGoal, consultExclusions])
+  const blueprint = useMemo(() => {
+    if (!hero) return baseBlueprint
+    const kind = offerSnapshot?.[hero.choice.product.id]?.kind
+    const sameKind = offerSnapshot && kind ? (id: string) => offerSnapshot[id]?.kind === kind : undefined
+    return withHeroFirst(baseBlueprint, hero.choice, hero.reason, sameKind)
+  }, [baseBlueprint, hero, offerSnapshot])
 
   // productId → currently selected flavour variant, for the Pour Plan flavour picker.
   const selectedVariantByProductId = useMemo(() => {
@@ -388,45 +503,6 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   // A partner's code, once validated. Feeds both the receipt and the checkout,
   // so what is shown and what is charged come from the same number.
   const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
-  /**
-   * Whether this visit is a partner claiming their free stack.
-   *
-   * ── Why the server is asked, rather than the flag believed ────────────────
-   * The flag in `sessionStorage` is an INTENT. Anyone can set it, and — the
-   * case that actually matters — a real partner can have set it honestly and
-   * then lost their session: a different device, a cleared cookie, thirty days
-   * gone by. Believing it put £0.00 on screen in front of people the checkout
-   * then charged in full.
-   *
-   * A screen that disagrees with the card is the one failure this journey
-   * cannot have. So the flag only decides whether to ASK; `/api/partner/
-   * claimable` decides the answer, from the session cookie the browser cannot
-   * forge.
-   *
-   * ── Why it starts false ───────────────────────────────────────────────────
-   * Because the wrong direction to be wrong in is the expensive one. Starting
-   * false means a partner sees the ordinary price for a moment and then watches
-   * it drop to zero — a pleasant correction. Starting true means everybody else
-   * sees zero and then watches it climb, which is the surprise that loses an
-   * order.
-   */
-  const [claiming, setClaiming] = useState(false)
-  useEffect(() => {
-    if (!isClaimingStarter()) return
-    let live = true
-    fetch('/api/partner/claimable', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { claimable: false }))
-      .then((d: { claimable?: boolean }) => {
-        if (live) setClaiming(d.claimable === true)
-      })
-      .catch(() => {
-        /* Unreachable, so it is not a claim. The ordinary reveal at the
-           ordinary price is the safe answer to a question we could not ask. */
-      })
-    return () => {
-      live = false
-    }
-  }, [])
 
   /**
    * A founder code, once the box has accepted one.
@@ -529,6 +605,121 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   }, [products.length, activeLevel, stackLevel, setStackLevel])
 
   /*
+   * ── The free bonus, per depth ─────────────────────────────────────────────
+   *
+   * Chosen for each depth as it stands (`tierBonuses`), never priced in: the
+   * stack's price, its saving and its delivery are what they would be without
+   * it. Not on a partner's claim or a founder code, which are already the deal
+   * this order is about.
+   *
+   * A code and the bonus don't combine: under the hub's rule the customer gets
+   * whichever is worth more on this order (`codeOrBonus`). A code worth more
+   * keeps its place and the receipt says why there's no gift; a gift worth
+   * more takes the code off again and the code box says why.
+   */
+  const bonusPerson = claiming || founderKind ? null : offerPerson
+  const bonuses = useMemo(() => tierBonuses(offerInputs, bonusPerson, tierPlans), [offerInputs, bonusPerson, tierPlans])
+  /** A gift the checkout turned down (it said why): not offered again on this visit. */
+  const [bonusRefused, setBonusRefused] = useState<string | null>(null)
+  const tierBonus = bonuses[activeLevel]?.choice ?? null
+  const offeredBonus = tierBonus && tierBonus.product.id !== bonusRefused ? tierBonus : null
+  const codeSaving = useMemo(() => {
+    if (!partnerCode || founderKind || !offeredBonus) return 0
+    const without = calculatePricing(activeBlueprint, products, answers, undefined, { ...subOpts, partnerDiscountPct: null })
+    const withIt = calculatePricing(activeBlueprint, products, answers, undefined, subOpts)
+    return planType === 'subscription' && withIt.subscriptionItemCount > 0 && withIt.subscriptionMinOrderMet
+      ? without.subscriptionFirstMonth - withIt.subscriptionFirstMonth
+      : without.oneOffTotal - withIt.oneOffTotal
+  }, [partnerCode, founderKind, offeredBonus, activeBlueprint, products, answers, subOpts, planType])
+  const winner = offeredBonus && partnerCode ? codeOrBonus(offerSettings.bonus.codes, codeSaving, bonusWorth(offeredBonus)) : null
+  const bonus = winner === 'code' ? null : offeredBonus
+  const codeBeatsBonus = winner === 'code' && offeredBonus ? OFFER_COPY.codeBeatsBonus(titleOf(offeredBonus.product)) : null
+  const [codeRefusal, setCodeRefusal] = useState<string | null>(null)
+  useEffect(() => {
+    if (winner === 'bonus' && offeredBonus) {
+      setCodeRefusal(OFFER_COPY.bonusBeatsCode(titleOf(offeredBonus.product)))
+      setPartnerCode(null)
+    }
+  }, [winner, offeredBonus])
+  useEffect(() => {
+    if (!offeredBonus) setCodeRefusal(null)
+  }, [offeredBonus])
+  useEffect(() => {
+    if (checkoutState.status === 'error' && checkoutState.bonusRefused && bonus) setBonusRefused(bonus.product.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on the refusal itself
+  }, [checkoutState])
+
+  /*
+   * ── Start here ────────────────────────────────────────────────────────────
+   *
+   * The core offer: the hero, or their top pick (`coreOffer`), priced as the
+   * hero offer prices one product. It is the option the sticky bar follows
+   * until they choose a depth of the full stack. Not on a partner's claim.
+   */
+  const [dealUsed, setDealUsed] = useState(false)
+  useEffect(() => {
+    try { setDealUsed(window.localStorage.getItem(LAST_CHANCE_USED_KEY) === '1') } catch { /* no storage: the deal stands */ }
+  }, [])
+  const core = useMemo(
+    () =>
+      claiming || products.length === 0
+        ? null
+        : coreOffer({
+            hero,
+            slots: blueprint.slots,
+            catalogue: products,
+            answers,
+            primaryGoal: blueprint.primaryGoal,
+            usage: subscriptionUsage,
+            dealUsed,
+            config: offerInputs.config,
+          }),
+    [claiming, products, hero, blueprint.slots, blueprint.primaryGoal, answers, subscriptionUsage, dealUsed, offerInputs.config],
+  )
+  const [option, setOption] = useState<'core' | 'stack'>('core')
+  // A founder code is for the stack (it sets the stack's price), so with one
+  // applied the bar follows the stack.
+  const chosen: 'core' | 'stack' = core && !founderKind ? option : 'stack'
+  const chooseDepth = useCallback(
+    (level: StackLevel) => {
+      setStackLevel(level)
+      setOption('stack')
+    },
+    [setStackLevel],
+  )
+  const { state: coreState, buy: buyCore } = useOfferCheckout()
+  // When the server says the deal moved, show its figures and buy at those;
+  // when it says there's no deal (or no hero) any more, stand the button down.
+  const [coreOverride, setCoreOverride] = useState<PublicOfferQuote | null>(null)
+  useEffect(() => {
+    if (coreState.status === 'changed' && coreState.quote?.viable) setCoreOverride(coreState.quote)
+  }, [coreState])
+  useEffect(() => setCoreOverride(null), [core?.variant.id])
+  const coreWithdrawn = coreState.status === 'changed' && !coreState.quote?.viable
+  const coreTotal = core ? (coreOverride && core.onDeal ? coreOverride.total : core.total) : 0
+  const coreBusy = coreState.status === 'loading' || coreState.status === 'redirecting'
+
+  // The bonus as the depth picker shows it: a "Gift" mark on each depth that
+  // comes with one, and under the row what this depth comes with or what
+  // would qualify, its conditions beside it.
+  const giftLevels = useMemo(() => {
+    const out: Partial<Record<StackLevel, boolean>> = {}
+    for (const t of tierPlans) {
+      const c = bonuses[t.level]?.choice
+      out[t.level] = Boolean(c) && c!.product.id !== bonusRefused && winner !== 'code'
+    }
+    return out
+  }, [tierPlans, bonuses, bonusRefused, winner])
+  const bonusLine = claiming || founderKind || winner === 'code' || (tierBonus && !offeredBonus)
+    ? null
+    : bonusLineFor(activeLevel, bonuses, offerSettings.bonus)
+  const moreFor = useMemo(() => {
+    if (!core || !bonus) return null
+    const difference = Math.round((tierDelivered(activePlan, products, offerInputs.config) - coreTotal) * 100) / 100
+    return difference > 0 ? OFFER_COPY.moreFor(difference, titleOf(bonus.product)) : null
+  }, [core, bonus, activePlan, products, offerInputs.config, coreTotal])
+
+  /*
     A starter buys one box, never a plan — so it forces the ONE-OFF path here
     rather than trusting the tab.
 
@@ -556,8 +747,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         ...subOpts,
         deliveryAddress: deliveryAddress ?? null,
         claimingStarter: claiming,
+        bonus: bonus ? { productId: bonus.product.id, level: activeLevel } : null,
       }),
-    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming],
+    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel],
   )
 
   /*
@@ -566,6 +758,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     address to Stripe on the next screen.
   */
   const handleCheckout = useCallback(() => {
+    setOption('stack')
     if (claiming || freeCode) {
       setAddressOpen(true)
       return
@@ -704,7 +897,11 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       ? { scope: 'first month' as const, before: without.subscriptionFirstMonth, after: withCode.subscriptionFirstMonth }
       : { scope: 'order' as const, before: without.oneOffTotal, after: withCode.oneOffTotal }
   }, [promo, claiming, founderKind, partnerCode, activeBlueprint, products, answers, subOpts, planType])
-  const showPromo = promo !== null && promoPrices !== null
+  // A code the free gift would beat is not advertised beside it: applying it
+  // would only be taken off again.
+  const promoLosesToBonus = offeredBonus !== null && promoPrices !== null && !promoApplied
+    && codeOrBonus(offerSettings.bonus.codes, promoPrices.before - promoPrices.after, bonusWorth(offeredBonus)) === 'bonus'
+  const showPromo = promo !== null && promoPrices !== null && !promoLosesToBonus
     && (promoApplied || promoPrices.after < promoPrices.before - 0.005)
 
   const applyPromo = useCallback(async (): Promise<string | null> => {
@@ -770,10 +967,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   }, [ctaEl])
 
   /*
-    The last-chance offer has its own buy button at the very foot of the page.
-    While it is on screen the bar would be a second, different purchase sitting
-    on top of it — the whole stack, over the one product — so it steps aside
-    there too.
+    "Start here" has its own buy button. While it is on screen the bar would be
+    the same purchase twice, or a different one sitting on top of it, so it
+    steps aside there too.
   */
   const [offerCtaEl, setOfferCtaEl] = useState<HTMLButtonElement | null>(null)
   const [offerCtaOnScreen, setOfferCtaOnScreen] = useState(false)
@@ -793,6 +989,19 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     && checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
+  const startWithCore = useCallback(() => {
+    if (!core || checkoutState.status === 'loading' || leavingForStripe || coreWithdrawn) return
+    setOption('core')
+    void buyCore({
+      variantId: core.variant.id,
+      productTitle: core.product.title,
+      quote: coreOverride && core.onDeal ? coreOverride : core.quote,
+      claimId: core.claim?.id ?? null,
+      hero: core.kind === 'hero',
+      ordinary: !core.onDeal,
+    })
+  }, [core, checkoutState.status, leavingForStripe, coreWithdrawn, buyCore, coreOverride])
+  const barOnCore = chosen === 'core' && core !== null
 
   // Funnel: the built-bundle screen was reached (once), and the checkout
   // start/success transitions — closing the quiz → checkout conversion loop.
@@ -887,7 +1096,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     />
   )
 
-  if (!blueprint || catalogueLoading) {
+  if (!blueprint || catalogueLoading || !offerReady) {
     return (
       <>
         {youScene(false)}
@@ -964,6 +1173,46 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       {youScene(true)}
       <StackPanel>
         <div className="pb-28">
+          {/* What the circuit check ruled out, before anything is offered. */}
+          {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
+
+          {/* Start here: the core offer, one product, one tap. */}
+          {core && (
+            <CoreOfferCard
+              label={core.label}
+              title={core.product.title}
+              role={productTypeLabel(core.product)}
+              imageUrl={core.product.imageUrl ?? null}
+              formats={core.product.formats}
+              reason={core.reason}
+              claim={core.claim?.wording ?? null}
+              servings={core.servings}
+              perServing={core.perServing}
+              packMonths={core.packMonths}
+              deal={core.onDeal ? { normalTotal: core.quote.normalTotal, deliveryDeal: (coreOverride ?? core.quote).deliveryDeal, discountPct: (coreOverride ?? core.quote).discountPct } : null}
+              total={coreTotal}
+              remoteSurcharge={getPricingConfig().delivery.zone2Surcharge}
+              selected={chosen === 'core'}
+              status={coreState.status}
+              message={coreState.status === 'error' || coreState.status === 'changed' ? coreState.message : null}
+              blocked={checkoutState.status === 'loading' || leavingForStripe || coreWithdrawn}
+              codeNote={partnerCode && !founderKind ? OFFER_COPY.codeNotOnHero : null}
+              onBuy={startWithCore}
+              onCtaRef={setOfferCtaEl}
+            />
+          )}
+
+          {core && (
+            <div className="px-5 pt-10 max-w-lg mx-auto">
+              <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}>
+                {OFFER_COPY.fullStack}
+              </p>
+              <p className="mt-1.5 text-[13px] leading-snug" style={{ color: 'var(--color-text-2)' }}>
+                {OFFER_COPY.fullStackLine(titleOf(core.product))}
+              </p>
+            </div>
+          )}
+
           <StackHero
             blueprint={activeBlueprint}
             productCount={activeSlots.length}
@@ -978,7 +1227,6 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               does not serve says it serves the others, which links a goal to
               a product outside the goal-to-claim map. The products are listed
               in the You scene, and the GP disclaimer is at the foot of the page. */}
-          {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
 
           {/* Value-first depth selector — choose Essentials / Balanced / Complete,
               each filled to its own monthly price band, so value comes first. */}
@@ -987,9 +1235,22 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               <StackTierSelector
                 tiers={tierPlans}
                 current={activeLevel}
+                chosen={chosen === 'stack'}
+                gifts={giftLevels}
                 minMonthly={getPricingConfig().minSubscriptionMonthly}
                 oneOffOnly={claiming || founderKind != null}
-                onChange={setStackLevel}
+                onChange={chooseDepth}
+              />
+            </div>
+          )}
+          {bonusLine && (
+            <div className="px-5 max-w-lg mx-auto">
+              <BonusNote
+                line={bonusLine}
+                minimum={offerSettings.bonus.minSubtotal}
+                firstOrderOnly={offerSettings.bonus.firstOrderOnly}
+                subscription={planType === 'subscription'}
+                moreFor={moreFor}
               />
             </div>
           )}
@@ -1080,6 +1341,11 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
                   onChange={setPartnerCode}
                   prompt={showPromo ? 'Got a different code?' : undefined}
                 />
+                {codeRefusal && (
+                  <p role="status" className="text-[11px] leading-snug mt-1.5" style={{ color: 'var(--color-text-2)' }}>
+                    {codeRefusal}
+                  </p>
+                )}
               </div>
             )}
 
@@ -1099,6 +1365,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               isLoading={checkoutState.status === 'loading'}
               onCtaRef={setCtaEl}
+              bonus={bonus ? { title: bonus.product.title, worth: bonusWorth(bonus), firstBoxOnly: planType === 'subscription' } : null}
+              bonusNote={codeBeatsBonus}
             />
 
             {/* The one form in the journey: a claim, or a free founder code. */}
@@ -1199,31 +1467,6 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
                 competition is open. */}
             <GiveawayEntry payload={sharePayload} onShare={() => setShareOpen(true)} />
 
-            {/*
-              The last word: for somebody who scrolled past the whole stack without
-              buying it, the one product that will do the most for them, at a
-              price the order can afford (`lib/last-chance`). Not during a claim,
-              and not once a code is applied — a founder's, a partner's referral or
-              the day's: that is already the deal this visit is about, and the offer
-              takes no codes, so showing it would only set two prices side by side.
-            */}
-            {!claiming && !partnerCode && (
-              <div className="pb-10">
-                <LastChance
-                  slots={activeSlots}
-                  products={products}
-                  answers={answers}
-                  primaryGoal={activeBlueprint.primaryGoal}
-                  usage={subscriptionUsage}
-                  blocked={checkoutState.status === 'loading' || leavingForStripe}
-                  onBackToStack={() => {
-                    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-                    document.getElementById('scene-plan')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
-                  }}
-                  onCtaRef={setOfferCtaEl}
-                />
-              </div>
-            )}
           </div>
         </div>
       </StackPanel>
@@ -1243,22 +1486,24 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           >
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-                {starterStack ? 'To pay' : stickyIsSub ? 'Monthly' : 'One-off total'}
+                {barOnCore ? `${OFFER_COPY.stickyHero} · ${OFFER_COPY.delivered}` : starterStack ? 'To pay' : stickyIsSub ? 'Monthly' : 'One-off total'}
               </p>
               <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                {formatGBP(stickyTotal)}
-                {stickyIsSub && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
+                {formatGBP(barOnCore ? coreTotal : stickyTotal)}
+                {!barOnCore && stickyIsSub && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
               </p>
             </div>
             <button
-              onClick={handleCheckout}
-              disabled={checkoutState.status === 'loading' || leavingForStripe}
+              onClick={barOnCore ? startWithCore : handleCheckout}
+              disabled={checkoutState.status === 'loading' || leavingForStripe || (barOnCore && (coreBusy || coreWithdrawn))}
               className="flex-1 py-3.5 rounded-xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
               style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
             >
-              {checkoutState.status === 'loading' || leavingForStripe
+              {checkoutState.status === 'loading' || leavingForStripe || (barOnCore && coreBusy)
                 ? 'Taking you to secure checkout…'
-                : starterStack
+                : barOnCore
+                  ? OFFER_COPY.stickyHeroCta
+                  : starterStack
                   // Not "Checkout": there is no checkout to go to and no card
                   // to enter. The button raises the order and lands on the
                   // confirmation, and saying so is the difference between a

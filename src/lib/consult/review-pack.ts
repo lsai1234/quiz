@@ -27,7 +27,7 @@ import type { CircuitFlag, WeightSymptom } from './types'
 import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { DEFAULT_BONUS } from '@/lib/offer/settings'
-import { bonusTermRows } from '@/lib/offer/review-rows'
+import { bonusTermRows, freeGiftTermRows, offerCopyRows } from '@/lib/offer/review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
@@ -249,9 +249,12 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...patternRows(),
     ...glossaryRows(),
     ...claimRows(roster),
-    // The free bonus's terms (plan Phase 2, 5). The wording is drafted in
-    // Phase 4; these rows list the conditions it has to carry, as set by default.
+    // The free bonus's terms (plan Phase 2, 5): the conditions it has to
+    // carry, as set by default; the results page's offer wording; and the
+    // customer terms as drafted (plan Phase 4).
     ...bonusTermRows(DEFAULT_BONUS),
+    ...offerCopyRows(DEFAULT_BONUS),
+    ...freeGiftTermRows(DEFAULT_BONUS),
   ]
 }
 

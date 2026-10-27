@@ -7,6 +7,13 @@
 export const LAST_CHANCE_SOURCE = 'quiz-last-chance'
 
 /**
+ * The line attribute the results page's core offer carries when it is bought
+ * at its ordinary price (no deal on it, or the deal already had). Priced by the
+ * ordinary checkout; "quiz" in it for the same reason.
+ */
+export const CORE_OFFER_SOURCE = 'quiz-core-offer'
+
+/**
  * Set in this browser once an order bought on the deal is confirmed, so the
  * card is not offered again: it is a one-time deal, and that has to be true of
  * the person who has had it.

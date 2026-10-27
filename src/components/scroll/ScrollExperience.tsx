@@ -8,7 +8,6 @@ import { Act1Hero } from './Act1Hero'
 import { Act2Quiz } from './Act2Quiz'
 import { QuizV2 } from '@/components/quiz/v2/QuizV2'
 import { Act3Analysis } from './Act3Analysis'
-import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
 import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
@@ -19,6 +18,19 @@ import { CHANGE_ANSWERS_HASH, clearResultsOpen, resultsOpenFor } from '@/lib/con
  * the consult's code while it isn't offered (the default).
  */
 const AmpConsult = dynamic(() => import('@/components/consult/AmpConsult').then((m) => m.AmpConsult), { ssr: false })
+
+/**
+ * The results page, loaded on the way to it rather than with the hero: nobody
+ * sees it until a quiz or a consult is finished, and it is the largest thing
+ * on this route (the stack, the offer, the receipt, the share card). Fetched as
+ * soon as Act 2 starts (`loadReveal`), so it is here long before the analysis
+ * ends; until then the light shell it sits on.
+ */
+const loadReveal = () => import('./Act4Reveal').then((m) => m.Act4Reveal)
+const Act4Reveal = dynamic(loadReveal, {
+  ssr: false,
+  loading: () => <div className="bg-[#F5F5F0] min-h-screen" />,
+})
 
 type Act = 1 | 2 | 3 | 4 | 5
 
@@ -67,6 +79,12 @@ export function ScrollExperience() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+
+  // Once a quiz or a consult is under way, fetch the results page in the
+  // background, so the reveal never waits on it.
+  useEffect(() => {
+    if (act >= 2 || consult) void loadReveal()
+  }, [act, consult])
 
   useEffect(() => {
     void useQuizStore.persist.rehydrate()

@@ -650,8 +650,9 @@ roster spreadsheet import is separate and refuses PowerBody's file.
 
 Settings → Offer (`components/portal/OfferSettings.tsx`, `lib/offer/*`), from the
 Amp Consult and offer plan (`docs/amp-consult-offer-plan.md`, Phase 2). Both
-switches are **off by default**, and until the selection is built (Phase 3)
-nothing on either quiz reads them.
+switches are **off by default**. The results page reads them through
+`GET /api/offer` (Phase 4), which never shows customers the free bonus until
+the checkout can put it on the order (`BONUS_AT_CHECKOUT`, see below).
 
 - **Hero products.** The core offer: one less obvious product per person. A
   product is put forward from its own page (Products → the product → **Hero**),
@@ -697,3 +698,29 @@ each (`stack-blueprint/offer.ts`, `consult/offer.ts`):
 - **Before payment** `/api/cart` re-checks both against the settings and the
   catalogue as they are now (`lib/offer/server-check.ts`) and answers 409, with
   nothing charged, when either no longer stands.
+
+### On the results page (Phase 4)
+
+Both quizzes, one layout (`StackReviewPage`, `lib/offer/results.ts`):
+
+- **Start here** (`CoreOfferCard`): the hero, or the top pick, with why it's
+  theirs, its register claim verbatim or none, servings, cost per serving, how
+  long it lasts, the delivered price and **Start with this**. Priced by the
+  Hero offer settings; with no viable deal (or the deal already had in this
+  browser) it is its ordinary delivered price through the ordinary checkout.
+- **Or get the full stack**: the depth picker with the hero first in every
+  depth. Depths with the bonus carry a "Gift" mark; under the row, "Comes with a
+  free …" with why, "£X more for the full stack and a free …", the conditions
+  and a link to the terms, or "Free … on stacks from £…".
+- **The sticky bar** follows "Start here" until a depth is chosen.
+- **The receipt** shows "Free: … · £0.00" ("Worth £…", its shop price). The
+  bonus never changes the stack price, saving or delivery.
+- **Codes:** whichever is worth more on this order, the code or the bonus
+  (`codeOrBonus`); the receipt or the code box says which.
+- **Terms:** `/legal/free-gift`, built from these settings (`lib/offer/terms.ts`),
+  marked as a draft until the bonus is live.
+- **Not live yet:** the Stripe line, the PowerBody line and the server half of
+  codes vs the bonus are proposals (`docs/offer-phase4-proposals.md`). Until they
+  are built `BONUS_AT_CHECKOUT` is false: `/api/offer` reports the bonus off to
+  customers and `/api/cart` refuses any bonus claim. `OFFER_BONUS_PREVIEW=1`
+  shows it on a preview server for review only.

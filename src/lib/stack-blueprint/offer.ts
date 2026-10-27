@@ -54,11 +54,25 @@ export function quizPerson(answers: QuizAnswers): PersonFit {
   }
 }
 
-/** The blueprint with the hero as its first slot, an anchor; one of its kind already there gives up its place. */
-export function withHeroFirst(blueprint: StackBlueprint, hero: HeroChoice, reason: HeroReason): StackBlueprint {
+/**
+ * The blueprint with the hero as its first slot, an anchor; one of its kind
+ * already there gives up its place.
+ *
+ * `sameKind` widens "one of its kind" (the consult's families); every slot it
+ * matches comes out. Applying it twice changes nothing, and a flavour already
+ * chosen for the hero is kept, so the results page can apply it on every
+ * render.
+ */
+export function withHeroFirst(
+  blueprint: StackBlueprint,
+  hero: HeroChoice,
+  reason: HeroReason,
+  sameKind?: (productId: string) => boolean,
+): StackBlueprint {
   const p = hero.product
-  const variant = p.variants.find((v) => v.id === p.defaultVariantId && v.available) ?? p.variants.find((v) => v.available) ?? p.variants[0]
   const replaced = blueprint.slots.find((s) => s.selectedProductId === p.id) ?? blueprint.slots.find((s) => s.swapGroup === p.swapGroup)
+  const kept = replaced?.selectedProductId === p.id ? p.variants.find((v) => v.id === replaced.selectedVariantId && v.available) : undefined
+  const variant = kept ?? p.variants.find((v) => v.id === p.defaultVariantId && v.available) ?? p.variants.find((v) => v.available) ?? p.variants[0]
   const heroSlot: StackSlotEntry = {
     slotId: replaced?.slotId ?? `slot-hero-${p.id}`,
     slotType: replaced?.slotType ?? slotOf(p),
@@ -78,7 +92,7 @@ export function withHeroFirst(blueprint: StackBlueprint, hero: HeroChoice, reaso
     hero: true,
   }
   const rest = [...blueprint.slots]
-    .filter((s) => s !== replaced)
+    .filter((s) => s !== replaced && !(sameKind && s.selectedProductId !== p.id && sameKind(s.selectedProductId)))
     .sort((a, b) => a.displayOrder - b.displayOrder)
     .map((s, i) => ({ ...s, displayOrder: i + 1 }))
   return { ...blueprint, slots: [heroSlot, ...rest] }

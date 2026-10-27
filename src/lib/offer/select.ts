@@ -211,3 +211,28 @@ export function costedItemsFor(entries: readonly { productId: string; variantId?
   }
   return out
 }
+
+/* ── A person, carried to the results page ──────────────────────────────── */
+
+/**
+ * What an engine decided about one person, product by product: why each is
+ * kept out (or null), how well it fits and what kind of thing it is. For the
+ * consult, whose answers the results page doesn't have (the store holds the
+ * quiz-shaped answers `toQuizAnswers` made), so the decision is taken where
+ * the answers are (`prepareResults`) and carried over as data.
+ */
+export type PersonSnapshot = Record<string, { out: string | null; fit: number; kind: string }>
+
+export function snapshotPerson(person: PersonFit, catalogue: readonly CatalogueProduct[], kindOf: (p: CatalogueProduct) => string): PersonSnapshot {
+  const snap: PersonSnapshot = {}
+  for (const p of catalogue) snap[p.id] = { out: person.keepOut(p), fit: person.fit(p), kind: kindOf(p) }
+  return snap
+}
+
+/** The snapshot as a `PersonFit`. A product it never saw is kept out: it was never checked. */
+export function personFromSnapshot(snap: PersonSnapshot): PersonFit {
+  return {
+    keepOut: (product) => (snap[product.id] ? snap[product.id].out : 'not checked for this person'),
+    fit: (product) => snap[product.id]?.fit ?? 0,
+  }
+}

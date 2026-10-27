@@ -46,6 +46,7 @@ import { recordConsent, requestMetadata } from '@/lib/legal/consent'
 import type { SafetyConstraints } from '@/lib/recharge/types'
 import { getOfferSettings } from '@/lib/offer/store'
 import { checkBonusClaim, heroStillApproved } from '@/lib/offer/server-check'
+import { bonusAtCheckout } from '@/lib/offer/public'
 import type { HealthDataConsent } from '@/lib/types'
 
 /**
@@ -601,7 +602,9 @@ export async function POST(req: Request) {
    * pool, on a stack depth that qualifies, in stock, not already in the
    * basket, suitable for them, over the minimum and leaving the order above the
    * margin floor. Anything that has changed is said here, with nothing charged.
-   * Adding it to the order and the parcel is Phase 4.
+   * Until the checkout can put it on the order and the parcel
+   * (`bonusAtCheckout`, docs/offer-phase4-proposals.md) every claim is refused
+   * here, so no order is ever taken that promises a gift it doesn't carry.
    */
   if (body.bonus != null) {
     const offer = await getOfferSettings()
@@ -613,6 +616,7 @@ export async function POST(req: Request) {
       constraints: bonusConstraintsFrom(body.constraints, safety.safetyConstraints),
       isStack: channel === 'quiz' && !lastChance,
       codeApplied: Boolean(redemption?.ok || founder || starter),
+      atCheckout: bonusAtCheckout(),
       config,
     })
     if (!check.ok) {

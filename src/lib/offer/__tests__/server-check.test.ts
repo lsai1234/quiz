@@ -22,7 +22,14 @@ const base = {
   constraints: NO_CONSTRAINTS,
   isStack: true,
   codeApplied: false,
+  atCheckout: true,
 }
+
+it('refuses every claim while the checkout cannot put a bonus on the order', () => {
+  const r = checkBonusClaim({ ...base, atCheckout: false })
+  expect(r).toMatchObject({ ok: false, reason: 'not-ready' })
+  if (!r.ok) expect(r.message).toMatch(/can’t be added to orders yet\. Nothing has been charged/)
+})
 
 it('lets a bonus that still qualifies through', () => {
   const r = checkBonusClaim(base)
