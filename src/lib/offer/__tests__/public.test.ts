@@ -8,16 +8,15 @@ import { BONUS_AT_CHECKOUT, bonusShown, publicOffer } from '../public'
 import { activeHeroIds, DEFAULT_OFFER } from '../settings'
 import { HERO_IDS, TODAY, allOn, approved } from './fixtures'
 
-it('keeps the bonus from customers until the checkout carries it', () => {
-  expect(BONUS_AT_CHECKOUT).toBe(false)
-  expect(bonusShown({})).toBe(false)
-  expect(bonusShown({ OFFER_BONUS_PREVIEW: '1' })).toBe(true)
-  const shown = publicOffer(allOn(), MOCK_CATALOGUE, { today: TODAY, bonusShown: false })
-  expect(shown.bonus.enabled).toBe(false)
-  expect(shown.bonus.pool).toEqual([])
+it('shows the bonus once the checkout carries it, and hides it when told to', () => {
+  expect(BONUS_AT_CHECKOUT).toBe(true)
+  expect(bonusShown({})).toBe(true)
+  const hidden = publicOffer(allOn(), MOCK_CATALOGUE, { today: TODAY, bonusShown: false })
+  expect(hidden.bonus.enabled).toBe(false)
+  expect(hidden.bonus.pool).toEqual([])
 })
 
-it('shows the bonus on a preview server, its pool limited to the catalogue', () => {
+it('limits the pool it shows to the catalogue', () => {
   const settings = allOn()
   settings.bonus.pool = [...settings.bonus.pool, 'not-a-product']
   const shown = publicOffer(settings, MOCK_CATALOGUE, { today: TODAY, bonusShown: true })

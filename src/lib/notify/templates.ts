@@ -343,8 +343,9 @@ export interface OrderItemUpdateContext {
    *   removed     — taken off the order and refunded.
    *   swapped     — sent as the closest match instead.
    *   backordered — the rest went now; this follows separately when it is back.
+   *   gift-withheld — the free bonus came off: first order only (plan Phase 4).
    */
-  kind: 'removed' | 'swapped' | 'backordered'
+  kind: 'removed' | 'swapped' | 'backordered' | 'gift-withheld'
   reference: string
   firstName: string | null
   productTitle: string
@@ -393,6 +394,13 @@ export function orderItemUpdate(ctx: OrderItemUpdateContext, brand: BrandContext
       ...(rest ? [rest] : []),
     ]
     footnote = "Want something in its place? Reply to this email and we'll sort it out."
+  } else if (ctx.kind === 'gift-withheld') {
+    heading = 'About your free gift'
+    paragraphs = [
+      `The free ${ctx.productTitle} is for a first order only, one per customer, and we can see you've ordered with us before, so it isn't in this parcel.`,
+      'Everything else in your order is on its way as normal. The gift was free, so what you paid hasn\'t changed.',
+    ]
+    footnote = "Think we've got this wrong? Reply to this email and we'll look into it."
   } else {
     heading = ctx.restOnItsWay ? 'Part of your order will follow' : 'Your order is waiting on stock'
     paragraphs = [

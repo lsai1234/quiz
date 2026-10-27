@@ -126,7 +126,13 @@ export function useStackCheckout() {
         ref?: string
         /** What broke — present only for a signed-in founder. */
         detail?: string
+        /** The free bonus was refused before anything was stored or charged. */
+        bonusChanged?: boolean
       } | null = await res.json().catch(() => null)
+      if (res.status === 409 && data?.bonusChanged) {
+        setState({ status: 'error', messages: [data.error ?? 'The free gift can’t come with this plan. Nothing has been charged.'], bonusRefused: true })
+        return
+      }
       // Consent is the one refusal the member can clear from here: ask for it
       // and re-submit, rather than showing a banner about a box that was never
       // on the screen. `stale-version` carries its own explanation — the terms
@@ -206,8 +212,8 @@ export function useStackCheckout() {
         /**
          * The free bonus the page showed with this depth (plan Phase 4). The
          * server re-checks it before any money moves and refuses it, saying
-         * why, if anything has changed. One-off only for now: a subscription's
-         * first box carries it once the checkout supports it.
+         * why, if anything has changed. On a subscription it ships in the first
+         * box only.
          */
         bonus?: { productId: string; level: StackLevel } | null
       } = {},
@@ -247,6 +253,8 @@ export function useStackCheckout() {
           subscription: memberSubscription,
           quiz: answers ? { answers, level: subOpts.level } : null,
           partnerCode: subOpts.partnerCode ?? null,
+          // The free bonus, for the first box. Re-checked server-side.
+          ...(subOpts.bonus ? { bonus: subOpts.bonus } : {}),
         }
         await runFinalize(payload, result.checkout)
         return

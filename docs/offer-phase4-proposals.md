@@ -1,4 +1,13 @@
-# Offer Phase 4: proposals for approval
+# Offer Phase 4: proposals (approved and built)
+
+> **Status.** Approved as recommended (partner code that loses to the gift:
+> no discount, referral kept) and built. `BONUS_AT_CHECKOUT` is now true; the
+> hub's switch decides whether customers see the gift. One difference from
+> the proposal below: the webhook doesn't re-read the Stripe line's metadata,
+> because the order already carries the gift from the server's own check
+> (`Order.bonus` and the `bonus` line); Stripe's line is display only. The
+> address-only match is honoured as proposed, with no note. The rest of this
+> document is the proposal as approved.
 
 Phase 4 items 3, 4 and 5 change payment logic, Stripe objects and what goes to
 PowerBody, so under the plan's rules they are proposed here before anything is

@@ -31,6 +31,8 @@ import {
   type ConsentVersions,
 } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
+import type { SubscriptionBonus } from '@/lib/recharge/types'
+import type { QuizAnswers } from '@/lib/types'
 import { healthConsentIsCurrent, healthDataDocument, sanitiseHealthData } from '@/lib/legal/health-data'
 import { supplierIdFor } from '@/lib/catalogue/master'
 
@@ -164,6 +166,21 @@ export interface FinalizeOptions {
 }
 
 /**
+ * The free bonus the page showed can't come with this plan (plan Phase 4): the
+ * hub switched it off, it sold out, a code worth more, a repeat customer…
+ * Thrown before anything is stored or charged, with the sentence to show.
+ */
+export class BonusUnavailable extends Error {
+  constructor(
+    message: string,
+    readonly reason: string,
+  ) {
+    super(message)
+    this.name = 'BonusUnavailable'
+  }
+}
+
+/**
  * Something in the plan has sold out. Thrown before anything is stored or
  * charged; the routes answer it with the sentence and the list.
  */
@@ -278,6 +295,17 @@ export async function finalizeCheckout(
   //     not a reason to turn a member away.
   await assertPlanInStock(payload.subscription)
 
+  // 3c. The free bonus, re-checked here as `/api/cart` does for a one-off
+  //     (`resolveCheckoutBonus`). It ships in the first box only. A partner's
+  //     code it beats keeps the referral and loses its discount; a code worth
+  //     more refuses it before anything is stored.
+  let codePct = redemption?.ok ? redemption.discountPct : 0
+  let gift: SubscriptionBonus | null = null
+  if (payload.bonus != null) {
+    gift = await resolveSubscriptionBonus(userId, email, payload, quizAnswers, redemption?.ok ? { code: redemption.code.code, pct: codePct } : null)
+    if (gift?.codeNotApplied) codePct = 0
+  }
+
   // 4. Store the member's bundle + quiz answers on their account, banking the
   //    first-month discount they revealed as we go.
   const subscription = claimIntroDiscount(
@@ -297,9 +325,10 @@ export async function finalizeCheckout(
       safetyConstraints: quizAnswers
         ? safetyConstraintsFrom(quizAnswers)
         : payload.subscription.safetyConstraints ?? safetyConstraintsFrom(quizAnswers),
+      bonus: gift,
     },
     getPricingConfig(),
-    redemption?.ok ? redemption.discountPct : 0,
+    codePct,
   )
   await saveSubscription(userId, subscription)
   if (quiz) await saveQuiz(userId, quiz)
@@ -369,6 +398,10 @@ export async function finalizeCheckout(
       // options in subscription mode, and passing them anyway is what made every
       // subscription checkout fail to start.
       delivery: recurringDeliveryOption(subscription.flatMonthly, getPricingConfig()),
+      // The free bonus: £0.00 on the first invoice only.
+      firstInvoiceLines: gift
+        ? [{ name: `Free: ${gift.variantTitle ? `${gift.title} – ${gift.variantTitle}` : gift.title}`, unitPrice: 0, quantity: 1, metadata: { line: 'bonus', productId: gift.productId } }]
+        : undefined,
     })
     if (url) return { checkoutUrl: url, mock: false }
     // No session URL under LIVE payments. This used to fall through to the mock
@@ -418,4 +451,59 @@ export async function finalizeCheckout(
   }
 
   return { checkoutUrl: '#mock-subscription', mock: true }
+}
+
+/**
+ * The bonus for a subscription's first box, or a `BonusUnavailable` saying
+ * why not. Judged on the plan's products at their shop prices (the minimum is
+ * "before any discount"), against the same rules as a one-off.
+ */
+async function resolveSubscriptionBonus(
+  userId: string,
+  email: string | null,
+  payload: CheckoutPayload,
+  answers: QuizAnswers | undefined,
+  code: { code: string; pct: number } | null,
+): Promise<SubscriptionBonus | null> {
+  const [{ getResolvedCatalogue }, { getOfferSettings }, { resolveCheckoutBonus }, { bonusAtCheckout }, { variantForLine }] = await Promise.all([
+    import('@/lib/catalogue/resolve'),
+    import('@/lib/offer/store'),
+    import('@/lib/offer/checkout-bonus'),
+    import('@/lib/offer/public'),
+    import('@/lib/catalogue/line-variant'),
+  ])
+  const { products } = await getResolvedCatalogue()
+  const lines = payload.subscription.lines.flatMap((line) => {
+    const found = variantForLine(line, products)
+    return found ? [{ product: found.product, price: found.variant.price, cost: found.variant.cost ?? found.product.cost ?? null, quantity: Math.max(1, line.quantity) }] : []
+  })
+  const config = getPricingConfig()
+  const saving = code && code.pct > 0
+    ? Math.max(0, (claimIntroDiscount(payload.subscription, config, 0).firstMonth ?? 0) - (claimIntroDiscount(payload.subscription, config, code.pct).firstMonth ?? 0))
+    : 0
+  const resolved = await resolveCheckoutBonus({
+    claim: payload.bonus,
+    settings: await getOfferSettings(),
+    catalogue: products,
+    lines,
+    constraints: safetyConstraintsFrom(answers),
+    isStack: true,
+    code: code && saving > 0 ? { kind: 'partner', code: code.code, saving } : { kind: 'none' },
+    customer: { userId, email: email || payload.subscription.customerEmail || null },
+    atCheckout: bonusAtCheckout(),
+    config,
+  })
+  if (!resolved.ok) throw new BonusUnavailable(resolved.message, resolved.reason)
+  return {
+    productId: resolved.product.id,
+    variantId: resolved.variant.id,
+    sku: resolved.line.sku,
+    title: resolved.line.title,
+    variantTitle: resolved.line.variantTitle ?? null,
+    worth: resolved.record.worth,
+    supplierCost: resolved.line.supplierCost ?? null,
+    weightGrams: resolved.line.weightGrams ?? null,
+    level: resolved.record.level,
+    codeNotApplied: resolved.record.codeNotApplied ?? null,
+  }
 }

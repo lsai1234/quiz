@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { CheckoutRejected, PaymentStartFailed, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, PaymentStartFailed, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
 import { reportError } from '@/lib/monitoring/report'
@@ -56,6 +56,11 @@ export async function POST(req: Request) {
     // Something in the plan sold out. Theirs to fix — swap it — not ours.
     if (err instanceof StockUnavailable) {
       return NextResponse.json({ error: err.message, unavailable: err.unavailable }, { status: 409 })
+    }
+    // The free bonus can't come with this plan any more. Nothing was stored or
+    // charged; the page drops the gift and says why.
+    if (err instanceof BonusUnavailable) {
+      return NextResponse.json({ error: err.message, bonusChanged: true, bonus: null, reason: err.reason }, { status: 409 })
     }
     // Anything else — a Stripe call that failed, a write that didn't land — is
     // ours. Logged with the member's id so it can be traced, and answered with

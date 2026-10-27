@@ -112,6 +112,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     subscription: input.subscription ?? null,
     ...(input.deliveryDue ? { deliveryDue: input.deliveryDue } : {}),
     ...(input.lastChance ? { lastChance: input.lastChance } : {}),
+    ...(input.bonus ? { bonus: input.bonus } : {}),
     ...(input.safetyConstraints && input.healthDataConsent
       ? { safetyConstraints: input.safetyConstraints, healthDataConsent: input.healthDataConsent }
       : {}),
@@ -119,6 +120,15 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
       ...(input.offer ? [event('offer', input.offer)] : []),
+      ...(input.bonus
+        ? [
+            event(
+              'bonus',
+              `free ${input.bonus.title} (worth £${input.bonus.worth.toFixed(2)}, ${input.bonus.level})` +
+                (input.bonus.codeNotApplied ? `; code ${input.bonus.codeNotApplied} not applied: the gift was worth more` : ''),
+            ),
+          ]
+        : []),
       // On the audit trail rather than only in a column: a £0.00 order needs to
       // say, in the same place every other transition is recorded, why it was
       // free.
@@ -343,12 +353,32 @@ export async function createSubscriptionOrder(input: {
   // the rate `recurringDeliveryOption` put on the Stripe line at signup.
   const postage = recurringDeliveryOption(input.sub.flatMonthly)?.price ?? 0
 
+  // The free bonus the plan earned at signup ships in the first box only.
+  const gift = input.cycle === 0 ? input.sub.bonus ?? null : null
+  const lines = subscriptionOrderLines(input.sub, input.catalogue, input.cycle)
+  if (gift) {
+    lines.push({
+      sku: gift.sku,
+      productId: gift.productId,
+      title: gift.title,
+      variantTitle: gift.variantTitle,
+      quantity: 1,
+      unitPrice: 0,
+      supplierCost: gift.supplierCost,
+      weightGrams: gift.weightGrams,
+      bonus: true,
+    })
+  }
+
   return createOrderFromCheckout({
     id: input.id,
     channel: 'subscription',
     userId: input.userId ?? null,
     email: input.email ?? input.sub.customerEmail ?? null,
-    lines: subscriptionOrderLines(input.sub, input.catalogue, input.cycle),
+    lines,
+    ...(gift
+      ? { bonus: { productId: gift.productId, title: gift.title, worth: gift.worth, level: gift.level, status: 'included' as const, codeNotApplied: gift.codeNotApplied ?? null } }
+      : {}),
     shipping: postage,
     shippingAddress: input.shippingAddress ?? input.sub.shippingAddress ?? null,
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
@@ -411,6 +441,14 @@ export async function markOrderPaid(
   },
 ): Promise<Order | null> {
   let becamePaid = false
+  // The free bonus is first order only: a guest's email arrives here, so this
+  // is where a repeat customer is caught — before the confirmation or the
+  // supplier hear about the order (`bonusIsRepeat`).
+  const before = await getOrder(id)
+  const withholdBonus = before
+    ? await import('@/lib/offer/checkout-bonus').then((m) => m.bonusIsRepeat(before, payment.email)).catch(() => false)
+    : false
+  let bonusWithheld = false
   const order = await updateOrder(id, (o) => {
     // Idempotent: anything already past pending has been handled — except an
     // order WE closed as unpaid. Stripe saying it was paid outranks our sweep,
@@ -431,6 +469,12 @@ export async function markOrderPaid(
     if (payment.email && !o.email) o.email = payment.email
     if (payment.shippingAddress && !o.shippingAddress) o.shippingAddress = payment.shippingAddress
     o.events.push(event('paid'))
+    if (withholdBonus && o.bonus?.status === 'included') {
+      o.lines = o.lines.filter((l) => !l.bonus)
+      o.bonus = { ...o.bonus, status: 'withheld', reason: 'repeat customer: first order only' }
+      o.events.push(event('bonus', `free ${o.bonus.title} withheld: this customer has ordered before`))
+      bonusWithheld = true
+    }
   })
   // Only on the transition. The accrual is idempotent anyway, but a redelivered
   // webhook should not be doing lookups it does not need.
@@ -441,6 +485,10 @@ export async function markOrderPaid(
     // delivery address only exist on the order from this moment, which is also
     // why it cannot be sent when the order was raised.
     await confirmByEmail(order)
+    if (bonusWithheld) {
+      const { queueBonusWithheld } = await import('@/lib/notify/commerce')
+      await queueBonusWithheld(order)
+    }
     await alertFounders(order)
     await sendAutomatically(order)
   }
@@ -777,7 +825,8 @@ export async function supplierOrderInputFor(order: Order, lines: OrderLine[]): P
       return {
         sku: line.sku!,
         quantity: line.quantity,
-        name: [line.title, line.variantTitle].filter(Boolean).join(' — '),
+        // The free bonus prints as one on the packing slip, at £0.00.
+        name: `${line.bonus ? 'Free gift: ' : ''}${[line.title, line.variantTitle].filter(Boolean).join(' — ')}`,
         unitPrice: line.unitPrice,
         // Their `tax` is a percentage; ours is a fraction, and a product with no
         // rate of its own is standard-rated.

@@ -8,7 +8,7 @@
 > with no viable deal, or one this browser has already had, is offered at its
 > ordinary delivered price through the ordinary checkout. See
 > `CoreOfferCard`, `src/lib/offer/results.ts` and
-> `docs/offer-phase4-proposals.md`. `LastChance.tsx` is no longer mounted;
+> `docs/offer-phase4-proposals.md`. `LastChance.tsx` has been removed;
 > `LastChanceView` still backs `/styleguide/last-chance`. The rest of this
 > document describes the deal maths, which is unchanged.
 
@@ -290,5 +290,5 @@ sales from people who would have left, or takes them from the full stack.
 - `src/lib/orders/` — `lastChance` snapshot and `deliveryDue` on the order; the
   receipt's discount line; the queue's Highlands check.
 - `src/hooks/useOfferCheckout.ts` — the one-tap checkout.
-- `src/components/stack-review/LastChance.tsx`, `LastChanceView.tsx` — the card.
+- `src/components/stack-review/LastChanceView.tsx` — the card (drawn by `CoreOfferCard` as "Start here" since Phase 4).
 - `src/app/styleguide/last-chance/` — every state.

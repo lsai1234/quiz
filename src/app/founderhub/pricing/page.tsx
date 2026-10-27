@@ -271,7 +271,7 @@ export default function PricingPage() {
           </Section>
 
           <Section title="Hero offer" desc="How the single-product offer is priced: today the top pick at the foot of the results page, and the hero product once the hero offer is built. A deal worked out for that product: free delivery first, then a percentage off as far as these allow; where free delivery would lose money, delivery is reduced instead. Priced on its own — never with a code — and measured against what the product costs alone at the ordinary checkout.">
-            <Num label="Keep at least (£ per order)" value={draft.lastChance.minContribution} suffix="£" step={0.5} onChange={(n) => setNested('lastChance', { minContribution: n })}
+            <Num label="Keep at least, per order" value={draft.lastChance.minContribution} suffix="£" step={0.5} onChange={(n) => setNested('lastChance', { minContribution: n })}
               help="After every cost — the goods, both sides of delivery, card fees and returns. No deal is offered that keeps less." />
             <Num label="And at least (% of what we keep)" value={pct(draft.lastChance.minMarginPct)} suffix="%" onChange={(n) => setNested('lastChance', { minMarginPct: n / 100 })}
               help="Of the net sale. Protects dear products, where the pound floor above is a thin share." />

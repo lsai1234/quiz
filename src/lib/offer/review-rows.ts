@@ -4,7 +4,7 @@
  * Two kinds:
  *   - The bonus terms: every condition "free" has to carry next to it (CAP
  *     Code 3.23–3.25). The committed pack lists them as set by default; the
- *     customer wording is drafted in Phase 4.
+ *     customer wording is the free gift terms page (`terms.ts`).
  *   - One row per product flagged as a hero, with the wording it was approved
  *     to carry. These are live hub data, not code, so they come from the Offer
  *     screen's "Download review rows", never the committed file.
@@ -36,7 +36,7 @@ export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
       'Condition: codes',
     ],
     ['Bonus terms', where, 'On a subscription, it comes in the first box only.', 'Condition'],
-    ['Bonus terms', where, 'Returns: see "Returns" in the free gift terms (draft).', 'Condition: what happens on a return'],
+    ['Bonus terms', where, 'Returns: see "Returns" in the free gift terms.', 'Condition: what happens on a return'],
     [
       'Bonus terms',
       where,
@@ -71,18 +71,13 @@ export function offerCopyRows(bonus: BonusSettings): ReviewRow[] {
   const ex = 'Example figures; the live ones come from the hub and the catalogue'
   const c = OFFER_COPY
   return [
-    ['Offer wording', where, c.startHere, 'Section heading'],
+    ['Offer wording', where, c.startHere, 'Above the label on the single-product offer card'],
     ['Offer wording', where, c.heroLabel, 'Label on an approved hero'],
     ['Offer wording', where, c.topPickLabel, 'Label with the hero switch off, or no hero that fits'],
-    ['Offer wording', where, c.topPickFallback(4), `Why it is theirs, when nothing better can be said. ${ex}`],
-    ['Offer wording', where, c.whatItDoes, 'Above the approved register claim, verbatim'],
-    ['Offer wording', where, c.whatYouGet, 'Above servings, cost per serving and how long it lasts'],
-    ['Offer wording', where, c.delivered, 'Under the delivered price'],
+    ['Offer wording', where, c.delivered, 'In the sticky bar, with Start here chosen'],
     ['Offer wording', where, c.startWithThis, 'Button'],
-    ['Offer wording', where, c.justThis, 'Under the button'],
-    ['Offer wording', where, c.remote(3), ex],
     ['Offer wording', where, c.codeNotOnHero, 'When a code is applied'],
-    ['Offer wording', where, c.fullStack, 'Section heading'],
+    ['Offer wording', where, c.fullStack, 'Section heading, and the card’s link down to it'],
     ['Offer wording', where, c.fullStackLine('Magnesium'), ex],
     ['Offer wording', where, c.moreFor(23.4, 'Vitamin C & Zinc'), `Next to the bonus conditions. ${ex}`],
     ['Offer wording', where, c.comesWith('Vitamin C & Zinc'), `On a depth that qualifies. ${ex}`],
@@ -102,9 +97,9 @@ export function offerCopyRows(bonus: BonusSettings): ReviewRow[] {
   ]
 }
 
-/** The free gift terms page, as drafted, at the default settings. */
+/** The free gift terms page, at the default settings. */
 export function freeGiftTermRows(bonus: BonusSettings): ReviewRow[] {
   return freeGiftTerms(bonus).flatMap((section) =>
-    section.lines.map((line): ReviewRow => ['Free gift terms (draft)', `/legal/free-gift: ${section.heading}`, line, 'Customer wording, for sign-off']),
+    section.lines.map((line): ReviewRow => ['Free gift terms', `/legal/free-gift: ${section.heading}`, line, 'Customer wording, for sign-off']),
   )
 }

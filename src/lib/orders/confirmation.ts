@@ -168,7 +168,8 @@ function toLines(order: Order): ConfirmationLine[] {
   const shelf = lastChanceApplies(order) ? order.lastChance!.listPrice : null
   return order.lines.map((l: OrderLine) => ({
     sku: l.sku,
-    name: l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title,
+    // The free bonus reads as one, at £0.00, as on the results page's receipt.
+    name: `${l.bonus ? 'Free: ' : ''}${l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title}`,
     qty: l.quantity,
     unitAmount: round(shelf ?? l.unitPrice),
     // A quiz-built stack is a bundle; a shop basket is not.

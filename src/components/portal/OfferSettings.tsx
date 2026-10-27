@@ -21,8 +21,7 @@ import { productHref } from '@/lib/portal/product-links'
  *                  minimum and floor worked out from those numbers.
  *
  * Both switches are off by default, and a switch on with no approved hero or
- * an empty pool changes nothing. The results page reads them (Phase 4); the
- * bonus stays hidden from customers until the checkout can carry it.
+ * an empty pool changes nothing. The results page reads them (Phase 4).
  */
 
 const money = (n: number | null | undefined) => (n == null ? '—' : `£${n.toFixed(2)}`)
@@ -210,10 +209,11 @@ function BonusCard({ view, saving, onSave }: { view: OfferView; saving: boolean;
             { value: 'on', label: 'On', sub: 'From the pool, where it qualifies' },
           ]}
         />
-        {/* The page can't reach a customer until the checkout carries the gift. */}
+        {/* What switching it on does, in one place. */}
         <Note tone="neutral" icon="info">
-          Customers don’t see the free gift yet, whatever this switch says: the checkout doesn’t add it to the order or the parcel until the Stripe and
-          PowerBody lines are built. The terms are drafted at{' '}
+          On, customers see it on both quizzes where a depth qualifies. It goes on the order as a £0.00 line (in Stripe too), to PowerBody in the
+          same parcel with its cost recorded, and the order page marks it “Bonus”. First order only is checked at checkout and again when a
+          guest pays. Terms:{' '}
           <Link href="/legal/free-gift" className="underline">/legal/free-gift</Link>.
         </Note>
         {bonus.enabled && view.active.bonusPool.length === 0 && (
@@ -225,7 +225,7 @@ function BonusCard({ view, saving, onSave }: { view: OfferView; saving: boolean;
           <div className="grid sm:grid-cols-3" style={{ gap: 'var(--space-3)' }}>
             <Input label="Minimum stack subtotal" prefix="£" type="number" inputMode="decimal" value={draft.minSubtotal}
               hint="Before any discount." onChange={(e) => setDraft({ ...draft, minSubtotal: e.target.value })} />
-            <Input label="Margin floor (£ per order)" prefix="£" type="number" inputMode="decimal" value={draft.floorPounds}
+            <Input label="Margin floor, per order" prefix="£" type="number" inputMode="decimal" value={draft.floorPounds}
               hint="What the order keeps after every cost, bonus included." onChange={(e) => setDraft({ ...draft, floorPounds: e.target.value })} />
             <Input label="And at least (% of net revenue)" suffix="%" type="number" inputMode="decimal" value={draft.floorPct}
               hint="The larger of the two floors applies." onChange={(e) => setDraft({ ...draft, floorPct: e.target.value })} />

@@ -179,6 +179,11 @@ describe('Phase 1: a hard reload on the results page', () => {
     const after = useQuizStore.getState()
     expect(after.stackBlueprint!.slots.map((s) => s.selectedProductId)).toEqual(stack)
     expect(after.consultExclusions).toMatchObject({ pharmacistNote: true, excluded: expect.arrayContaining(['vitamin-k', 'fish-oil']) })
+    // The offer's fit comes back too (same hero and gift), keep-outs as a
+    // plain yes/no: the reason can name a medicine and is never stored.
+    expect(before.consultExclusions?.offerFit?.['chrgd-omega-3']?.out).toBeTruthy()
+    expect(after.consultExclusions?.offerFit?.['chrgd-omega-3']).toMatchObject({ out: 'kept out' })
+    expect(JSON.stringify(after.consultExclusions?.offerFit)).not.toMatch(/thinn|blood|medic/i)
   })
 
   it('never rebuilds a consult’s results for a quiz taken since, or in another tab', () => {

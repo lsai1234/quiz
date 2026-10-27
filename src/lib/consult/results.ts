@@ -93,6 +93,36 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setAiStackMeta(bundle.payload.reasons, false)
   store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit })
   store.setStackReady(true)
+  if (bundle.offerFit) saveOfferFit(bundle.payload.consult_id, bundle.offerFit)
+}
+
+/* ── The offer's fit, for this tab ─────────────────────────────────────── */
+
+/**
+ * The consult's offer fit (`ConsultExclusions.offerFit`), kept for this tab so
+ * a hard reload still shows the same hero and gift. `sessionStorage`, like the
+ * results-tab marker: gone when the tab closes. Only whether each product is
+ * kept out, never why (the why can name a medicine), with its fit and kind.
+ */
+const OFFER_FIT_KEY = 'chrgd-consult-offer-fit'
+
+function saveOfferFit(consultId: string, fit: PersonSnapshot): void {
+  try {
+    const slim: PersonSnapshot = {}
+    for (const [id, f] of Object.entries(fit)) slim[id] = { out: f.out ? 'kept out' : null, fit: f.fit, kind: f.kind }
+    window.sessionStorage.setItem(OFFER_FIT_KEY, JSON.stringify({ consultId, fit: slim }))
+  } catch {
+    /* No storage: after a reload the page falls back to the top pick. */
+  }
+}
+
+export function loadOfferFit(consultId: string): PersonSnapshot | undefined {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(OFFER_FIT_KEY) ?? 'null') as { consultId?: string; fit?: PersonSnapshot } | null
+    return raw?.consultId === consultId && raw.fit && typeof raw.fit === 'object' ? raw.fit : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /* ── Surviving a reload ─────────────────────────────────────────────────── */
@@ -131,6 +161,6 @@ export function restoreResultsPage(payload: HandoffPayload, catalogue: Catalogue
   store.setStackBlueprint({ ...toBlueprint(payload, catalogue), stackName: stackNameFor(answers) })
   store.setStackLevel('performance')
   store.setAiStackMeta(payload.reasons, false)
-  store.setConsultExclusions(exclusionsOf(payload))
+  store.setConsultExclusions({ ...exclusionsOf(payload), offerFit: loadOfferFit(payload.consult_id) })
   store.setStackReady(true)
 }

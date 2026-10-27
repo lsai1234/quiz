@@ -20,8 +20,9 @@ export interface ConsultExclusions {
   /**
    * The consult's own decision on every product, for the offer (who may be the
    * hero or the bonus, and how well each fits). Taken where the consult's
-   * answers are (`prepareResults`); absent after a reload, when the page falls
-   * back to today's top pick and no bonus.
+   * answers are (`prepareResults`). Kept for the tab, so a reload restores it
+   * (`loadOfferFit`, keep-outs as yes/no only); absent in a new tab, when the
+   * page falls back to today's top pick and no bonus.
    */
   offerFit?: PersonSnapshot
 }

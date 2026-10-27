@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getHubUser } from '@/lib/auth/session'
 import { kvGet, kvDelete } from '@/lib/db/kv'
-import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, StockUnavailable } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, StockUnavailable } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
 import { getProvider } from '@/lib/auth/providers'
@@ -67,6 +67,11 @@ export async function GET(req: Request) {
       // no plan in it, which is where the fall-through below would land them.
       console.warn('[checkout/continue] plan has sold-out items:', err.message)
       return NextResponse.redirect(`${origin}/?checkout=sold-out`)
+    }
+    if (err instanceof BonusUnavailable) {
+      // Nothing saved or charged: back to the start, as for a sold-out plan.
+      console.warn('[checkout/continue] free bonus refused:', err.message)
+      return NextResponse.redirect(`${origin}/?checkout=gift-changed`)
     }
     console.error('[checkout/continue] finalize failed:', err)
   }

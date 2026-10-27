@@ -36,7 +36,7 @@ import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
 import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
 import { chooseHero, heroReason, personFromSnapshot, type OfferInputs, type PersonFit } from '@/lib/offer/select'
-import { bonusLineFor, bonusWorth, codeOrBonus, coreOffer, tierBonuses, tierDelivered, titleOf } from '@/lib/offer/results'
+import { bonusLineFor, bonusWorth, codeOrBonus, coreOffer, dealPerson, tierBonuses, tierDelivered, titleOf } from '@/lib/offer/results'
 import { OFFER_COPY } from '@/lib/offer/copy'
 import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
@@ -404,7 +404,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   )
   const hero = useMemo(() => {
     if (claiming || !offerPerson || products.length === 0) return null
-    const choice = chooseHero(offerInputs, offerPerson)
+    // Only a hero with a real deal, as the core offer has always been sold.
+    const choice = chooseHero(offerInputs, dealPerson(offerPerson, offerInputs.config))
     if (!choice) return null
     const primary = answers.primaryGoal ?? baseBlueprint.primaryGoal
     const goals = [primary, ...(answers.goals ?? []).filter((g) => g !== primary)].filter(Boolean) as Goal[]
@@ -696,7 +697,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   }, [coreState])
   useEffect(() => setCoreOverride(null), [core?.variant.id])
   const coreWithdrawn = coreState.status === 'changed' && !coreState.quote?.viable
-  const coreTotal = core ? (coreOverride && core.onDeal ? coreOverride.total : core.total) : 0
+  const coreTotal = core ? (coreOverride ?? core.quote).total : 0
   const coreBusy = coreState.status === 'loading' || coreState.status === 'redirecting'
 
   // The bonus as the depth picker shows it: a "Gift" mark on each depth that
@@ -995,10 +996,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     void buyCore({
       variantId: core.variant.id,
       productTitle: core.product.title,
-      quote: coreOverride && core.onDeal ? coreOverride : core.quote,
+      quote: coreOverride ?? core.quote,
       claimId: core.claim?.id ?? null,
       hero: core.kind === 'hero',
-      ordinary: !core.onDeal,
     })
   }, [core, checkoutState.status, leavingForStripe, coreWithdrawn, buyCore, coreOverride])
   const barOnCore = chosen === 'core' && core !== null
@@ -1179,31 +1179,23 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           {/* Start here: the core offer, one product, one tap. */}
           {core && (
             <CoreOfferCard
-              label={core.label}
-              title={core.product.title}
-              role={productTypeLabel(core.product)}
-              imageUrl={core.product.imageUrl ?? null}
-              formats={core.product.formats}
-              reason={core.reason}
-              claim={core.claim?.wording ?? null}
-              servings={core.servings}
-              perServing={core.perServing}
-              packMonths={core.packMonths}
-              deal={core.onDeal ? { normalTotal: core.quote.normalTotal, deliveryDeal: (coreOverride ?? core.quote).deliveryDeal, discountPct: (coreOverride ?? core.quote).discountPct } : null}
-              total={coreTotal}
-              remoteSurcharge={getPricingConfig().delivery.zone2Surcharge}
-              selected={chosen === 'core'}
+              offer={core}
+              override={coreOverride}
               status={coreState.status}
               message={coreState.status === 'error' || coreState.status === 'changed' ? coreState.message : null}
               blocked={checkoutState.status === 'loading' || leavingForStripe || coreWithdrawn}
-              codeNote={partnerCode && !founderKind ? OFFER_COPY.codeNotOnHero : null}
+              note={partnerCode && !founderKind ? OFFER_COPY.codeNotOnHero : null}
               onBuy={startWithCore}
+              onBackToStack={() => {
+                const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+                document.getElementById('offer-full-stack')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+              }}
               onCtaRef={setOfferCtaEl}
             />
           )}
 
           {core && (
-            <div className="px-5 pt-10 max-w-lg mx-auto">
+            <div id="offer-full-stack" className="px-5 pt-10 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
               <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}>
                 {OFFER_COPY.fullStack}
               </p>

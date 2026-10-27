@@ -43,6 +43,30 @@ export interface OrderLine {
    * while what we actually paid to ship this order cannot.
    */
   weightGrams?: number | null
+  /**
+   * The free bonus (Amp Consult and offer plan, Phase 4): £0.00 to the
+   * customer, its real cost in `supplierCost`, sent to the supplier in the same
+   * parcel as everything else. The hub marks it "Bonus".
+   */
+  bonus?: boolean
+}
+
+/**
+ * The free bonus on an order, for the audit trail and the hub: what it was,
+ * what it is worth in the shop, which depth earned it, and whether it went in
+ * the parcel. `withheld` (with a reason) when it was taken off after payment,
+ * e.g. a repeat customer caught at the webhook.
+ */
+export interface OrderBonus {
+  productId: string
+  title: string
+  /** Its ordinary shop price (£) — what "Worth £…" said. */
+  worth: number
+  level: string
+  status: 'included' | 'withheld'
+  reason?: string | null
+  /** A partner code the gift beat, kept for attribution with no discount. */
+  codeNotApplied?: string | null
 }
 
 /**
@@ -324,6 +348,8 @@ export interface Order {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** The last-chance deal this order was sold on — see `LastChanceSnapshot`. */
   lastChance?: LastChanceSnapshot | null
+  /** The free bonus this order carries, or carried — see `OrderBonus`. */
+  bonus?: OrderBonus | null
   /**
    * The customer's hard exclusions at the point of sale, for a one-off order
    * that came from the Amp Consult. The same snapshot a subscription keeps
@@ -394,6 +420,8 @@ export interface CreateOrderInput {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** See `Order.lastChance`. */
   lastChance?: LastChanceSnapshot | null
+  /** See `Order.bonus`. The line itself is in `lines`, flagged `bonus`. */
+  bonus?: OrderBonus | null
   /** See `Order.safetyConstraints`. Only with `healthDataConsent`. */
   safetyConstraints?: SafetyConstraints
   healthDataConsent?: HealthDataConsent | null

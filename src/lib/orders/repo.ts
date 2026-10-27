@@ -133,6 +133,33 @@ export async function hasOrdered(email: string): Promise<boolean> {
 }
 
 /**
+ * Whether this customer has any other order: by account or by email, past
+ * the payment page, other than `excludeId`. What "first order only" means for
+ * the free bonus (plan Phase 4): one per customer, judged on what they have
+ * actually bought rather than on what they started.
+ */
+export async function hasOtherOrder(who: { userId?: string | null; email?: string | null }, excludeId?: string | null): Promise<boolean> {
+  const email = who.email?.trim().toLowerCase() || null
+  if (!email && !who.userId) return false
+  const db = await getEngine()
+  const clauses: string[] = []
+  const args: string[] = []
+  if (email) {
+    clauses.push('LOWER(email) = ?')
+    args.push(email)
+  }
+  if (who.userId) {
+    clauses.push('user_id = ?')
+    args.push(who.userId)
+  }
+  const row = await db.get<{ id: string }>(
+    `SELECT id FROM orders WHERE (${clauses.join(' OR ')}) AND status NOT IN ('pending_payment', 'cancelled', 'failed') AND id <> ? LIMIT 1`,
+    [...args, excludeId ?? ''],
+  )
+  return row != null
+}
+
+/**
  * Whether this member had a subscription order before the given moment.
  *
  * Decides whether an attributed subscription order earns the first-order rate

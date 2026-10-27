@@ -29,7 +29,7 @@ import type { ConfirmationResponse } from '@/lib/orders/confirmation'
 import { appBaseUrl } from './index'
 import { deliverIfAutomatic, queueNotification } from './outbox'
 import { marketingSuppressed, optOutUrl } from './marketing'
-import { orderConfirmation, subscriptionConfirmation, type BrandContext } from './templates'
+import { orderConfirmation, orderItemUpdate, subscriptionConfirmation, type BrandContext } from './templates'
 
 /** `2026-08-14T…` → `14 August 2026`. Null in, null out. */
 function longDate(value: string | null | undefined): string | null {
@@ -190,5 +190,37 @@ export async function queueSubscriptionConfirmation(
     await deliverIfAutomatic(queued)
   } catch (err) {
     console.error('[notify] subscription confirmation could not be queued:', err)
+  }
+}
+
+/**
+ * The free bonus came off a paid order: first order only, and this customer
+ * has ordered before (plan Phase 4). One email, deduped on the order; never
+ * throws.
+ */
+export async function queueBonusWithheld(order: Order): Promise<void> {
+  if (!order.email || !order.bonus) return
+  try {
+    const base = appBaseUrl()
+    const queued = await queueNotification({
+      userId: order.userId,
+      email: order.email,
+      template: 'order-item-update',
+      dedupeKey: `bonus-withheld:${order.id}`,
+      rendered: orderItemUpdate(
+        {
+          kind: 'gift-withheld',
+          reference: orderReference(order),
+          firstName: order.shippingAddress?.name?.split(' ')[0] ?? null,
+          productTitle: order.bonus.title,
+          restOnItsWay: true,
+          accountUrl: order.userId ? `${base}/myhub` : null,
+        },
+        await brandFor(order.email, base),
+      ),
+    })
+    await deliverIfAutomatic(queued)
+  } catch (err) {
+    console.error('[notify] bonus-withheld email could not be queued:', err)
   }
 }

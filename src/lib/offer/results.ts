@@ -3,11 +3,11 @@
  *
  *   Start here        The core offer. The approved hero ("Not the obvious
  *                     pick"), or with the hero switch off (or no hero that
- *                     fits) today's top pick ("Your top pick"). Priced as the
- *                     last-chance offer prices one product (`quoteOffer`, the
- *                     settings now called "Hero offer"): on its deal when it has
- *                     one, at its ordinary delivered price when it hasn't (or
- *                     when this browser has already had the deal).
+ *                     fits) today's top pick ("Your top pick"). Priced and
+ *                     drawn exactly as the single-product offer at the foot of
+ *                     the page was (`quoteOffer`, `LastChanceView`; the settings
+ *                     are now called "Hero offer"): only ever on a real deal,
+ *                     once per browser.
  *   Or the full stack The hero first in every depth, and per depth the free
  *                     bonus or why there isn't one ("Free … on stacks from £…").
  *
@@ -42,16 +42,8 @@ export interface CoreOffer {
   claim: { id: string; wording: string } | null
   servings: number | null
   packMonths: number | null
+  /** The deal, exactly as the old foot-of-page offer priced it (`quoteOffer`). Always viable. */
   quote: OfferQuote
-  /** Bought on its deal (the last-chance checkout), or at its ordinary price. */
-  onDeal: boolean
-  /** What the product costs in this offer (£). */
-  price: number
-  /** Mainland delivery in this offer (£). */
-  delivery: number
-  /** Delivered (£): what the button charges. */
-  total: number
-  perServing: number | null
 }
 
 function variantFor(product: CatalogueProduct, slots: readonly StackSlotEntry[]): CatalogueVariant | null {
@@ -64,12 +56,37 @@ function variantFor(product: CatalogueProduct, slots: readonly StackSlotEntry[])
   )
 }
 
-function priced(quote: OfferQuote, onDeal: boolean, servings: number | null) {
-  const price = onDeal ? quote.offerPrice : quote.basePrice
-  const delivery = onDeal ? quote.deliveryCharge : quote.standardDelivery
-  return { price, delivery, total: round(price + delivery), perServing: servings ? round(price / servings) : null }
+/**
+ * The hero's deal, or null when it has none: the same test the old
+ * foot-of-page offer applied (`quoteOffer` viable), so a hero is only put
+ * forward on a real deal at a profit. The page excludes heroes without one
+ * before choosing (`dealPerson`).
+ */
+export function heroDeal(product: CatalogueProduct, slots: readonly StackSlotEntry[] = [], config: PricingConfig = getPricingConfig()): OfferQuote | null {
+  const variant = variantFor(product, slots)
+  if (!variant) return null
+  const quote = quoteOffer(offerProductFor(product, variant), config)
+  return quote.viable ? quote : null
 }
 
+/**
+ * Who may be the hero on the results page: the person's own exclusions, plus
+ * "has a deal". A hero without one would be a full price dressed up as an
+ * offer, which the core offer, like the offer it replaced, never makes.
+ */
+export function dealPerson(person: PersonFit, config: PricingConfig = getPricingConfig()): PersonFit {
+  return {
+    keepOut: (product) => person.keepOut(product) ?? (heroDeal(product, [], config) ? null : 'no deal on its own'),
+    fit: person.fit,
+  }
+}
+
+/**
+ * The core offer, priced exactly as the single-product offer at the foot of
+ * the page was (`quoteOffer`: delivery first, then the deepest whole percent
+ * the margin floor allows). Null when this browser has already had the deal
+ * (one per browser, as before), or when nothing in the stack has one.
+ */
 export function coreOffer(input: {
   hero: { choice: HeroChoice; reason: HeroReason } | null
   /** The stack on screen, hero first when there is one. */
@@ -78,36 +95,33 @@ export function coreOffer(input: {
   answers: QuizAnswers | null
   primaryGoal?: Goal | null
   usage?: Record<string, UsageLevel>
-  /** This browser has already bought on the deal: it is offered at its ordinary price. */
+  /** This browser has already bought on the deal. */
   dealUsed?: boolean
   config?: PricingConfig
 }): CoreOffer | null {
+  if (input.dealUsed) return null
   const config = input.config ?? getPricingConfig()
   if (input.hero) {
     const { product } = input.hero.choice
     const variant = variantFor(product, input.slots)
-    if (!variant) return null
-    const quote = quoteOffer(offerProductFor(product, variant), config)
-    const onDeal = quote.viable && !input.dealUsed
-    const servings = knownServings(product, variant)
-    const claim = input.hero.reason.claim
-    return {
-      kind: 'hero',
-      label: OFFER_COPY.heroLabel,
-      product,
-      variant,
-      reason: input.hero.reason.line,
-      claim: claim ? { id: claim.id, wording: claim.wording } : null,
-      servings,
-      packMonths: packMonthsFor(product, variant, input.answers, input.usage?.[product.id]),
-      quote,
-      onDeal,
-      ...priced(quote, onDeal, servings),
+    const quote = variant ? quoteOffer(offerProductFor(product, variant), config) : null
+    if (variant && quote?.viable) {
+      const claim = input.hero.reason.claim
+      return {
+        kind: 'hero',
+        label: OFFER_COPY.heroLabel,
+        product,
+        variant,
+        reason: input.hero.reason.line,
+        claim: claim ? { id: claim.id, wording: claim.wording } : null,
+        servings: knownServings(product, variant),
+        packMonths: packMonthsFor(product, variant, input.answers, input.usage?.[product.id]),
+        quote,
+      }
     }
   }
   const pick = pickHeroOffer(input.slots, input.catalogue, { answers: input.answers, primaryGoal: input.primaryGoal, usage: input.usage }, config)
   if (!pick) return null
-  const onDeal = !input.dealUsed
   return {
     kind: 'top-pick',
     label: OFFER_COPY.topPickLabel,
@@ -118,8 +132,6 @@ export function coreOffer(input: {
     servings: pick.servings,
     packMonths: pick.packMonths,
     quote: pick.quote,
-    onDeal,
-    ...priced(pick.quote, onDeal, pick.servings),
   }
 }
 

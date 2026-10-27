@@ -87,6 +87,40 @@ export interface StripeLineInput {
   /** Price per unit in major units (e.g. pounds); converted to minor units here. */
   unitPrice: number
   quantity: number
+  /** Product metadata, e.g. `{ line: 'bonus' }` on the free bonus's £0.00 line. */
+  metadata?: Record<string, string>
+}
+
+/**
+ * Create a session that carries £0.00 lines (the free bonus, plan Phase 4),
+ * and still create it if Stripe won't take them.
+ *
+ * Stripe Checkout accepts zero-amount line items alongside paid ones, so the
+ * bonus normally shows on the payment page as "Free: …  £0.00". Should an
+ * account or API version refuse them, the session is created again without
+ * those lines and with the same words under the pay button instead, so a
+ * customer is never turned away over a line that costs nothing. Our order
+ * carries the bonus either way; what is charged is identical.
+ */
+async function createWithFreeLines(
+  stripe: Stripe,
+  params: Stripe.Checkout.SessionCreateParams,
+): Promise<Stripe.Checkout.Session> {
+  const items = params.line_items ?? []
+  const free = items.filter((i) => i.price_data?.unit_amount === 0)
+  try {
+    return await stripe.checkout.sessions.create(params)
+  } catch (err) {
+    const invalid = (err as { type?: string })?.type === 'StripeInvalidRequestError'
+    if (free.length === 0 || !invalid) throw err
+    console.warn('[stripe] £0 lines refused; naming the free bonus under the button instead:', (err as Error).message)
+    const names = free.map((i) => i.price_data?.product_data?.name).filter(Boolean).join(', ')
+    return stripe.checkout.sessions.create({
+      ...params,
+      line_items: items.filter((i) => i.price_data?.unit_amount !== 0),
+      custom_text: { ...params.custom_text, submit: { message: `Includes ${names} (£0.00).` } },
+    })
+  }
 }
 
 export interface CreateSessionOptions {
@@ -138,14 +172,14 @@ function shippingOptionsFor(
 export async function createCheckoutSession(opts: CreateSessionOptions): Promise<{ id: string; url: string | null }> {
   const stripe = getStripeClient()
   const currency = (opts.currency ?? DEFAULT_CURRENCY).toLowerCase()
-  const session = await stripe.checkout.sessions.create({
+  const session = await createWithFreeLines(stripe, {
     mode: 'payment',
     line_items: opts.lines.map((l) => ({
       quantity: l.quantity,
       price_data: {
         currency,
         unit_amount: Math.round(l.unitPrice * 100),
-        product_data: { name: l.name },
+        product_data: { name: l.name, ...(l.metadata ? { metadata: l.metadata } : {}) },
       },
     })),
     client_reference_id: opts.clientReferenceId,
@@ -186,6 +220,12 @@ export interface CreateSubscriptionSessionOptions {
    * second recurring line item instead. See `recurringDeliveryOption`.
    */
   delivery?: DeliveryOption | null
+  /**
+   * One-time lines on the first invoice only — the free bonus, at £0.00 (plan
+   * Phase 4). In subscription mode Stripe bills a line without `recurring` once,
+   * on the first invoice, which is exactly "first box only".
+   */
+  firstInvoiceLines?: StripeLineInput[]
 }
 
 /**
@@ -287,7 +327,18 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
     })
   }
 
-  const session = await stripe.checkout.sessions.create({
+  for (const l of opts.firstInvoiceLines ?? []) {
+    lineItems.push({
+      quantity: l.quantity,
+      price_data: {
+        currency,
+        unit_amount: Math.round(l.unitPrice * 100),
+        product_data: { name: l.name, ...(l.metadata ? { metadata: l.metadata } : {}) },
+      },
+    })
+  }
+
+  const session = await createWithFreeLines(stripe, {
     mode: 'subscription',
     line_items: lineItems,
     client_reference_id: opts.clientReferenceId,

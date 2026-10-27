@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { DangerZone, type DeletionCheck } from './DangerZone'
 import Link from 'next/link'
 import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
-import { Button, Card, Input, Note } from '@/components/system'
+import { Badge, Button, Card, Input, Note } from '@/components/system'
 import { displayStatus, neverPaid } from '@/lib/orders/unpaid'
 import { OrderSendDiagnosis } from './OrderSendDiagnosis'
 import { OrderLineChange } from './OrderLineChange'
@@ -18,7 +18,10 @@ interface OrderLine {
   quantity: number
   unitPrice: number
   supplierCost?: number | null
+  /** The free bonus: £0.00 to the customer, its cost to us on the line. */
+  bonus?: boolean
 }
+interface OrderBonus { title: string; worth: number; status: 'included' | 'withheld'; reason?: string | null; codeNotApplied?: string | null }
 interface OrderEvent { at: string; type: string; detail?: string }
 interface ShippingAddress {
   name: string
@@ -42,6 +45,7 @@ interface Order {
   shipping: number
   total: number
   lines: OrderLine[]
+  bonus?: OrderBonus | null
   stripeSessionId: string | null
   stripePaymentIntentId: string | null
   supplierOrderId: string | null
@@ -307,6 +311,15 @@ export function OrderDetail({ id }: { id: string }) {
         />
       )}
 
+      {/* The free bonus: why it is there, or why it came off. */}
+      {order.bonus && (
+        <Note tone={order.bonus.status === 'withheld' ? 'attention' : 'neutral'} icon="info">
+          {order.bonus.status === 'withheld'
+            ? `Free ${order.bonus.title} withheld${order.bonus.reason ? ` (${order.bonus.reason})` : ''}. The customer has been emailed.`
+            : `Free ${order.bonus.title} with this order (worth £${order.bonus.worth.toFixed(2)}), sent in the same parcel.${order.bonus.codeNotApplied ? ` Code ${order.bonus.codeNotApplied} not applied: the gift was worth more; the partner keeps the referral.` : ''}`}
+        </Note>
+      )}
+
       {/* Lines */}
       <section>
         <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Items</h2>
@@ -315,12 +328,15 @@ export function OrderDetail({ id }: { id: string }) {
             <div key={`${i}-${l.sku ?? l.productId}`} className="p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[var(--ink-1)] truncate">{l.title}{l.variantTitle ? <span className="text-[var(--ink-3)]"> · {l.variantTitle}</span> : null}</p>
+                  <p className="text-sm font-semibold text-[var(--ink-1)] truncate">
+                    {l.bonus && <span className="mr-1.5 align-middle"><Badge tone="accent">Bonus</Badge></span>}
+                    {l.title}{l.variantTitle ? <span className="text-[var(--ink-3)]"> · {l.variantTitle}</span> : null}
+                  </p>
                   <p className="text-[11px] text-[var(--ink-3)]">SKU {l.sku ?? '—'} · qty {l.quantity}{l.supplierCost != null ? ` · cost ${money(l.supplierCost, order.currency)}` : ''}</p>
                 </div>
                 <div className="flex items-center shrink-0" style={{ gap: 'var(--space-2)' }}>
                   <span className="text-sm text-[var(--ink-1)]">{money(l.unitPrice * l.quantity, order.currency)}</span>
-                  {canChangeLines && changing !== i && (
+                  {canChangeLines && changing !== i && !l.bonus && (
                     <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setChanging(i)}>
                       Change
                     </Button>

@@ -19,7 +19,7 @@ import { runStackEngine } from '@/lib/consult/engine'
 import { consultOffer } from '@/lib/consult/offer'
 import { offerFitFor } from '@/lib/consult/offer-fit'
 import { stackMargin } from '../bonus-economics'
-import { bonusLineFor, codeOrBonus, coreOffer, tierBonuses, tierDelivered } from '../results'
+import { bonusLineFor, codeOrBonus, coreOffer, dealPerson, heroDeal, tierBonuses, tierDelivered } from '../results'
 import { OFFER_COPY } from '../copy'
 import { offerCopyRows } from '../review-rows'
 import { TODAY, allOn } from './fixtures'
@@ -33,36 +33,42 @@ function offerWith(settings: OfferSettings) {
 }
 
 describe('Start here', () => {
-  it('is the approved hero, labelled as one, priced as the hero offer prices it', () => {
+  it('is the approved hero, labelled as one, on the same deal the foot-of-page offer made', () => {
     const offer = offerWith(allOn())
     expect(offer.hero).not.toBeNull()
-    const core = coreOffer({ hero: offer.hero, slots: offer.blueprint.slots, catalogue: MOCK_CATALOGUE, answers, config })!
-    expect(core.kind).toBe('hero')
+    const core = coreOffer({ hero: offer.hero, slots: offer.blueprint.slots, catalogue: MOCK_CATALOGUE, answers, config })
+    if (!core || core.kind !== 'hero') {
+      // The hero this person gets has no deal: it is the top pick instead, as before.
+      expect(heroDeal(offer.hero!.choice.product, offer.blueprint.slots, config)).toBeNull()
+      return
+    }
     expect(core.label).toBe('Not the obvious pick')
     expect(core.product.id).toBe(offer.hero!.choice.product.id)
-    const quote = quoteOffer(offerProductFor(core.product, core.variant), config)
-    expect(core.quote).toEqual(quote)
-    expect(core.total).toBe(core.onDeal ? quote.total : quote.normalTotal)
-    expect(core.total).toBeCloseTo(core.price + core.delivery, 2)
+    expect(core.quote).toEqual(quoteOffer(offerProductFor(core.product, core.variant), config))
+    expect(core.quote.viable).toBe(true)
     // Its claim is the one it was approved to carry, verbatim, or none.
     expect(core.claim?.id ?? null).toBe(offer.hero!.choice.claim?.id ?? null)
   })
 
-  it('is their top pick with the hero switch off', () => {
+  it('only puts forward a hero with a real deal', () => {
+    const person = dealPerson(quizPerson(answers), config)
+    for (const p of MOCK_CATALOGUE) {
+      if (quizPerson(answers).keepOut(p) !== null) continue
+      expect(person.keepOut(p) === null).toBe(heroDeal(p, [], config) !== null)
+    }
+  })
+
+  it('is their top pick with the hero switch off, on its deal', () => {
     const offer = offerWith({ ...allOn(), heroEnabled: false })
     expect(offer.hero).toBeNull()
     const core = coreOffer({ hero: null, slots: offer.blueprint.slots, catalogue: MOCK_CATALOGUE, answers, config })!
     expect(core.kind).toBe('top-pick')
     expect(core.label).toBe('Your top pick')
-    expect(core.onDeal).toBe(true)
-    expect(core.total).toBe(core.quote.total)
+    expect(core.quote.viable).toBe(true)
   })
 
-  it('is at its ordinary delivered price once this browser has had the deal', () => {
-    const core = coreOffer({ hero: null, slots: blueprint.slots, catalogue: MOCK_CATALOGUE, answers, dealUsed: true, config })!
-    expect(core.onDeal).toBe(false)
-    expect(core.total).toBe(core.quote.normalTotal)
-    expect(core.price).toBe(core.quote.basePrice)
+  it('is not offered again once this browser has had the deal, as before', () => {
+    expect(coreOffer({ hero: null, slots: blueprint.slots, catalogue: MOCK_CATALOGUE, answers, dealUsed: true, config })).toBeNull()
   })
 
   it('never says "transformational" or that people haven’t heard of it', () => {

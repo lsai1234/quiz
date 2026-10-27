@@ -45,7 +45,8 @@ import { healthConsentIsCurrent, healthDataDocument } from '@/lib/legal/health-d
 import { recordConsent, requestMetadata } from '@/lib/legal/consent'
 import type { SafetyConstraints } from '@/lib/recharge/types'
 import { getOfferSettings } from '@/lib/offer/store'
-import { checkBonusClaim, heroStillApproved } from '@/lib/offer/server-check'
+import { heroStillApproved, refusalMessage } from '@/lib/offer/server-check'
+import { resolveCheckoutBonus, type ResolvedBonus } from '@/lib/offer/checkout-bonus'
 import { bonusAtCheckout } from '@/lib/offer/public'
 import type { HealthDataConsent } from '@/lib/types'
 
@@ -492,7 +493,7 @@ export async function POST(req: Request) {
   if (redemption && !redemption.ok && typedCode) {
     return NextResponse.json({ error: redemption.reason, codeRejected: true }, { status: 400 })
   }
-  const partnerPct = redemption?.ok ? redemption.discountPct : 0
+  let partnerPct = redemption?.ok ? redemption.discountPct : 0
 
   /**
    * The discount, applied server-side, from the same function the storefront
@@ -606,23 +607,44 @@ export async function POST(req: Request) {
    * (`bonusAtCheckout`, docs/offer-phase4-proposals.md) every claim is refused
    * here, so no order is ever taken that promises a gift it doesn't carry.
    */
+  let bonus: Extract<ResolvedBonus, { ok: true }> | null = null
   if (body.bonus != null) {
     const offer = await getOfferSettings()
-    const check = checkBonusClaim({
+    const resolved = await resolveCheckoutBonus({
       claim: body.bonus,
       settings: offer,
       catalogue: products,
       lines: matched.map((m) => ({ product: m.product, price: m.variant.price, cost: unitCostOf(m.product, m.variant.price), quantity: m.quantity })),
       constraints: bonusConstraintsFrom(body.constraints, safety.safetyConstraints),
       isStack: channel === 'quiz' && !lastChance,
-      codeApplied: Boolean(redemption?.ok || founder || starter),
+      code:
+        founder || starter
+          ? { kind: 'set-price' }
+          : redemption?.ok && partnerPct > 0
+          ? {
+              kind: 'partner',
+              code: redemption.code.code,
+              // What the code takes off this order, priced the way it would be billed.
+              saving: round(priceOneOffLines(pricedLines, getPricingConfig(), 0).total - priceOneOffLines(pricedLines, getPricingConfig(), partnerPct).total),
+            }
+          : { kind: 'none' },
+      customer: { userId: user?.id ?? null, email: user?.email ?? null },
       atCheckout: bonusAtCheckout(),
       config,
     })
-    if (!check.ok) {
+    // The gift is a real parcel item, so PowerBody are asked about it too.
+    const soldOut = resolved.ok ? await unavailableLines([{ product: resolved.product, variant: resolved.variant, quantity: 1 }]) : []
+    if (!resolved.ok || soldOut.length > 0) {
       await releaseClaim()
-      return NextResponse.json({ error: check.message, bonusChanged: true, bonus: null, reason: check.reason }, { status: 409 })
+      const refusal = resolved.ok
+        ? { reason: 'stock' as const, message: refusalMessage(resolved.product.shortName || resolved.product.title, 'stock') }
+        : resolved
+      return NextResponse.json({ error: refusal.message, bonusChanged: true, bonus: null, reason: refusal.reason }, { status: 409 })
     }
+    bonus = resolved
+    // The gift was worth more than the partner's code: no discount, and the
+    // partner keeps the referral (attribution only).
+    if (bonus.dropCodeDiscount) partnerPct = 0
   }
 
   /**
@@ -655,6 +677,9 @@ export async function POST(req: Request) {
     // and what PowerBody actually charge for that size.
     supplierCost: m.variant.cost ?? m.product.cost ?? null,
   }))
+  // The free bonus rides as its own £0.00 line: in the parcel, on the receipt,
+  // in Stripe, never in the price.
+  if (bonus) orderLines.push(bonus.line)
 
   // The minimum order, enforced SERVER-SIDE.
   //
@@ -844,8 +869,9 @@ export async function POST(req: Request) {
         userId: user?.id ?? null,
         email: user?.email ?? null,
         partnerCode: redemption?.ok ? redemption.code.code : null,
-        partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
+        partnerDiscountPct: redemption?.ok ? partnerPct : null,
         offer: lastChance?.note ?? null,
+        bonus: bonus?.record ?? null,
         lastChance: lastChance?.snapshot ?? null,
         deliveryDue,
         ...founderFields,
@@ -868,11 +894,13 @@ export async function POST(req: Request) {
       const { createCheckoutSession } = await import('@/lib/payments/stripe')
       const origin = originFrom(req)
       const { url } = await createCheckoutSession({
-        lines: orderLines.map((l) => ({
-          name: l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title,
-          unitPrice: l.unitPrice,
-          quantity: l.quantity,
-        })),
+        lines: orderLines.map((l) => {
+          const name = l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title
+          // The bonus: a £0.00 line named as free, tagged so it can be told apart.
+          return l.bonus
+            ? { name: `Free: ${name}`, unitPrice: 0, quantity: 1, metadata: { line: 'bonus', productId: l.productId } }
+            : { name, unitPrice: l.unitPrice, quantity: l.quantity }
+        }),
         clientReferenceId: orderId,
         customerId: stripeCustomerId,
         customerEmail: user?.email ?? null,
@@ -911,8 +939,9 @@ export async function POST(req: Request) {
       // Mock mode has no Stripe to pick a rate, so it books the mainland one.
       shipping: mainlandCharge,
       partnerCode: redemption?.ok ? redemption.code.code : null,
-      partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
+      partnerDiscountPct: redemption?.ok ? partnerPct : null,
       offer: lastChance?.note ?? null,
+      bonus: bonus?.record ?? null,
       lastChance: lastChance?.snapshot ?? null,
       deliveryDue,
       ...founderFields,

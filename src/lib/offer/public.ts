@@ -8,13 +8,10 @@
  *           the hub; the page gets the product, its novel-food status and the
  *           wording it may carry, and re-runs the same checks on what it gets.
  *   Bonus   Off unless the hub has switched it on AND the checkout can put it
- *           on the order (`BONUS_AT_CHECKOUT`). Until the Stripe line and the
- *           PowerBody line are built (`docs/offer-phase4-proposals.md`), a gift
- *           shown here would be a gift promised and not sent, so the switch in
- *           the hub cannot reach a customer yet. `OFFER_BONUS_PREVIEW=1` shows
- *           it on a preview server for review; the checkout still refuses it
- *           there (`bonusAtCheckout`), so a preview can never take an order
- *           that promises one.
+ *           on the order (`BONUS_AT_CHECKOUT`: the £0.00 Stripe line, the
+ *           PowerBody line and the cost on the order, all built). Turning
+ *           `BONUS_AT_CHECKOUT` off again hides the gift everywhere and makes
+ *           the checkout refuse any claim, whatever the hub says.
  *
  * Server-only.
  */
@@ -23,17 +20,17 @@ import { activeBonusPool, activeHeroIds, type HeroApproval, type OfferSettings }
 
 /**
  * Whether the checkout puts the bonus on the order: the £0 Stripe line, the
- * PowerBody line and the cost on the order. False until those are approved
- * and built (Phase 4, items 4 and 5).
+ * PowerBody line and the cost on the order (Phase 4, items 4 and 5). A kill
+ * switch above the hub's own: false hides the gift and refuses every claim.
  */
-export const BONUS_AT_CHECKOUT = false
+export const BONUS_AT_CHECKOUT = true
 
-/** The checkout honours a bonus claim. Never in preview. */
+/** The checkout honours a bonus claim. */
 export function bonusAtCheckout(): boolean {
   return BONUS_AT_CHECKOUT
 }
 
-/** Customers are shown the bonus: the checkout honours it, or this is a preview server. */
+/** Customers are shown the bonus: the checkout honours it, or (with it off) a preview server. */
 export function bonusShown(env: Record<string, string | undefined> = process.env): boolean {
   return BONUS_AT_CHECKOUT || env.OFFER_BONUS_PREVIEW === '1'
 }

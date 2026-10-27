@@ -24,4 +24,9 @@ export interface CheckoutPayload {
    * — what the browser sends is a string, never a discount.
    */
   partnerCode?: string | null
+  /**
+   * The free bonus the page showed with this depth (plan Phase 4). Re-checked
+   * server-side in `finalizeCheckout`; ships in the first box only.
+   */
+  bonus?: { productId: string; level: StackLevel } | null
 }

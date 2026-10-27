@@ -1,7 +1,7 @@
 /**
- * The free gift's terms, as customers read them (plan Phase 4). DRAFT for
- * review: nothing here is live until the bonus is (`BONUS_AT_CHECKOUT`), and
- * the founders and whoever reviews the pack sign the wording off first.
+ * The free gift's terms, as customers read them (plan Phase 4). The choices
+ * in them (returns, sold out after payment, codes) were signed off with the
+ * Phase 4 proposals; the wording is in the review pack.
  *
  * Built from the hub's settings, so a minimum or a depth changed there is the
  * minimum or depth the terms state. In the review pack (`bonusTermRows`).
@@ -22,7 +22,7 @@ export function freeGiftTerms(bonus: BonusSettings): TermsSection[] {
       heading: 'Who it’s for',
       lines: [
         bonus.firstOrderOnly
-          ? 'Your first order with us only, and one free gift per customer. We check by account, email address, payment card and delivery address.'
+          ? 'Your first order with us only, and one free gift per customer. We check by account and by email address.'
           : 'Any order that meets these terms, one free gift per order.',
         `Stacks only: ${tiers.length ? tiers.join(', ') : 'no'} stacks from the quiz or the Amp Consult. Not a single product bought on its own, and not a shop basket.`,
       ],

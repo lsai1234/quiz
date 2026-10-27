@@ -1,13 +1,12 @@
 import type { Metadata } from 'next'
 import { getOfferSettings } from '@/lib/offer/store'
-import { BONUS_AT_CHECKOUT } from '@/lib/offer/public'
 import { freeGiftTerms } from '@/lib/offer/terms'
 
 /**
  * The free gift's terms (plan Phase 4), linked from every place the results
  * page says "free" about the bonus. Built from the hub's settings
  * (`freeGiftTerms`), so the minimum and the depths here are the ones the
- * checkout applies. Marked as a draft until the bonus can reach a customer.
+ * checkout applies. Says so when the gift isn't running.
  */
 export const dynamic = 'force-dynamic'
 
@@ -22,9 +21,9 @@ export default async function FreeGiftTermsPage() {
   return (
     <main className="min-h-screen px-5 py-10" style={{ background: 'var(--color-bg)' }}>
       <div className="max-w-lg mx-auto">
-        {!BONUS_AT_CHECKOUT && (
+        {!bonus.enabled && (
           <p className="text-[11px] font-bold mb-4 px-3 py-2 rounded-xl" style={{ color: 'var(--color-text)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-            Draft for review. There is no free gift on orders yet.
+            The free gift isn’t running at the moment. When it is, these are its terms.
           </p>
         )}
         <h1 className="text-2xl font-black tracking-tight mb-6" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>

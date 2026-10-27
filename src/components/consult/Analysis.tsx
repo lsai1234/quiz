@@ -5,8 +5,7 @@ import { loadCatalogue } from '@/lib/catalogue/load'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { DURATION, chargeTransition, haptic, stateTransition } from '@/lib/consult/motion'
 import { chargeProfile, profileInWords } from '@/lib/consult/profile'
-import { EmptyStackError, applyToResultsPage, prepareResults, type ResultsBundle } from '@/lib/consult/results'
-import { saveHandoffLocally, saveHandoffRemotely } from '@/lib/consult/handoff'
+import type { ResultsBundle } from '@/lib/consult/results'
 import { visibleScenes, type FlowState } from '@/lib/consult/flow'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { Amp } from './Amp'
@@ -78,9 +77,13 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   useEffect(() => {
     let live = true
     setError(null)
-    // The offer's fit is loaded alongside the catalogue, not with the consult.
-    Promise.all([loadProducts(), import('@/lib/consult/offer-fit')])
-      .then(([catalogue, { offerFitFor }]) => {
+    // The stack engine, the handoff and the offer's fit load alongside the
+    // catalogue, during the charge-up, rather than with the consult's first
+    // scene (the first-scene budget).
+    let empty: (new () => Error) | null = null
+    Promise.all([loadProducts(), import('@/lib/consult/results'), import('@/lib/consult/handoff'), import('@/lib/consult/offer-fit')])
+      .then(([catalogue, { EmptyStackError, applyToResultsPage, prepareResults }, { saveHandoffLocally, saveHandoffRemotely }, { offerFitFor }]) => {
+        empty = EmptyStackError
         const b = prepareResults(state, catalogue, new Date(), offerFitFor)
         applyToResultsPage(b)
         saveHandoffLocally(b.payload)
@@ -90,7 +93,7 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
       .catch((err: unknown) => {
         if (!live) return
         setError(
-          err instanceof EmptyStackError
+          empty && err instanceof empty
             ? 'Nothing in the shop fits your answers right now. That’s on us, not you.'
             : 'I couldn’t reach the shop just now. Your answers are safe.',
         )

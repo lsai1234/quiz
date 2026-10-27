@@ -81,13 +81,15 @@ function receiptTotal(): string {
 it('starts with the hero, labelled, and the bar follows it until a depth is chosen', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)
-  const core = await screen.findByRole('region', { name: /CHRGD/ })
-  expect(within(core).getByText('Not the obvious pick')).toBeInTheDocument()
+  // The single-product offer's own card, moved up and led by "Start here".
+  const core = await screen.findByRole('region', { name: /Start here.*Not the obvious pick/ })
   // The last-chance card at the foot is gone: its offer is now the first thing.
   expect(screen.queryByText(/Not ready for the whole stack/)).not.toBeInTheDocument()
 
-  const heroTitle = within(core).getByRole('heading').textContent!
-  expect(screen.getByText('Or get the full stack')).toBeInTheDocument()
+  const heroTitle = within(core).getByRole('heading', { level: 3 }).textContent!
+  expect(within(core).getByRole('button', { name: /Start with this/ })).toBeInTheDocument()
+  expect(screen.getByText('Or get the full stack', { selector: 'p' })).toBeInTheDocument()
+  expect(within(core).getByRole('button', { name: 'Or get the full stack' })).toBeInTheDocument()
 
   await waitFor(() => expect(stickyBar()).toHaveTextContent('Start with this →'))
   expect(stickyBar()).toHaveTextContent(/Start here/)

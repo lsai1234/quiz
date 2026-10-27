@@ -79,6 +79,20 @@ export interface LastChanceViewProps {
   sectionRef?: (el: HTMLElement | null) => void
   onBuy: () => void
   onBackToStack: () => void
+  /**
+   * The lead-in, when the card is not the last word on the page. As "Start
+   * here", the core offer (plan Phase 4): "Start here" over "Not the obvious
+   * pick" or "Your top pick". Defaults are the foot-of-page wording.
+   */
+  kicker?: string
+  heading?: string
+  /** The buy button's words. Defaults to "Get it for £X". */
+  ctaLabel?: string
+  /** The link back to the stack, and which way it points. */
+  backLabel?: string
+  backIcon?: 'chevron-up' | 'chevron-down'
+  /** One more line of small print under the button (e.g. a code that doesn't apply here). */
+  note?: string | null
   /** Handed the buy button as it mounts, so the page can retire its sticky bar. */
   onCtaRef?: (el: HTMLButtonElement | null) => void
 }
@@ -282,12 +296,12 @@ export function LastChanceView(p: LastChanceViewProps) {
       {/* ── The lead-in: one heading, its question set small above it ─────── */}
       <div className="lc-rise px-1 text-center" style={d(0)}>
         <h2 id={titleId} className="mx-auto" style={{ maxWidth: 360 }}>
-          <span className="block" style={mono(11, INK_2, 0.22)}>Not ready for the whole stack?</span>{' '}
+          <span className="block" style={mono(11, INK_2, 0.22)}>{p.kicker ?? 'Not ready for the whole stack?'}</span>{' '}
           <span
             className="mt-2 block"
             style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, lineHeight: 1.08, letterSpacing: '-0.02em', color: INK }}
           >
-            Start with your top pick.
+            {p.heading ?? 'Start with your top pick.'}
           </span>
         </h2>
       </div>
@@ -418,9 +432,11 @@ export function LastChanceView(p: LastChanceViewProps) {
           >
             {p.title}
           </h3>
-          <p className="lc-rise mx-auto mt-2" style={{ ...d(300), fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 380 }}>
-            {p.goalLine}
-          </p>
+          {p.goalLine && (
+            <p className="lc-rise mx-auto mt-2" style={{ ...d(300), fontSize: 14, lineHeight: 1.5, color: INK_2, maxWidth: 380 }}>
+              {p.goalLine}
+            </p>
+          )}
         </div>
 
         {/* What it does — register wording or nothing — and what you get. */}
@@ -512,7 +528,7 @@ export function LastChanceView(p: LastChanceViewProps) {
             iconRight={busy ? undefined : 'arrow-right'}
             onClick={p.onBuy}
           >
-            {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : `Get it for ${formatGBP(deal.total)}`}
+            {p.status === 'redirecting' ? 'Taking you to checkout…' : busy ? 'One moment…' : p.ctaLabel ?? `Get it for ${formatGBP(deal.total)}`}
           </Button>
 
           {(p.status === 'error' || p.status === 'changed') && p.message && (
@@ -524,6 +540,12 @@ export function LastChanceView(p: LastChanceViewProps) {
 
           <p className="mt-3 text-center text-[11.5px] leading-snug" style={{ color: INK_2 }}>
             Just this product — no subscription. Pay on the next screen.
+            {p.note && (
+              <>
+                <br />
+                {p.note}
+              </>
+            )}
             {p.remoteSurcharge > 0 && (
               <>
                 <br />
@@ -539,8 +561,8 @@ export function LastChanceView(p: LastChanceViewProps) {
           className="system-focus relative mx-auto mt-4 flex items-center gap-1 rounded-lg px-2 text-xs font-semibold underline underline-offset-4"
           style={{ color: INK_2, minHeight: 44 }}
         >
-          <Icon name="chevron-up" size={14} />
-          Or get your full stack
+          <Icon name={p.backIcon ?? 'chevron-up'} size={14} />
+          {p.backLabel ?? 'Or get your full stack'}
         </button>
       </div>
     </section>

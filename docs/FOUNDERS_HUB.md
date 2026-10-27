@@ -719,8 +719,17 @@ Both quizzes, one layout (`StackReviewPage`, `lib/offer/results.ts`):
   (`codeOrBonus`); the receipt or the code box says which.
 - **Terms:** `/legal/free-gift`, built from these settings (`lib/offer/terms.ts`),
   marked as a draft until the bonus is live.
-- **Not live yet:** the Stripe line, the PowerBody line and the server half of
-  codes vs the bonus are proposals (`docs/offer-phase4-proposals.md`). Until they
-  are built `BONUS_AT_CHECKOUT` is false: `/api/offer` reports the bonus off to
-  customers and `/api/cart` refuses any bonus claim. `OFFER_BONUS_PREVIEW=1`
-  shows it on a preview server for review only.
+- **At checkout** (`lib/offer/checkout-bonus.ts`, both `/api/cart` and the
+  subscription finalize): re-checked before payment; a £0.00 "Free: …" line in
+  Stripe (one-time, first invoice only, on a subscription; if Stripe ever
+  refuses £0.00 lines the gift is named under the pay button instead); a £0.00
+  order line flagged `bonus` with its cost, sent to PowerBody in the same
+  parcel ("Free gift: …" on the slip); "Bonus" on the order page.
+- **Codes at checkout:** a founder code or a starter always wins. A partner's
+  code worth more refuses the gift (nothing charged); the gift worth more takes
+  the code's discount off and the partner keeps the referral.
+- **First order only:** checked by account and email before payment, and again
+  when a guest pays (`markOrderPaid`): a repeat customer's gift comes off and
+  they get one email. An earlier order to the same address alone doesn't count.
+- **Kill switch:** `BONUS_AT_CHECKOUT` in `lib/offer/public.ts`. False hides
+  the gift everywhere and refuses every claim, whatever the hub says.

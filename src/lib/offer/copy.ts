@@ -1,6 +1,7 @@
 /**
  * Every sentence the results page says about the offer (plan Phase 4): the
- * hero, the full stack and the free bonus. Scripted, one file, in the review
+ * hero, the full stack and the free bonus. The hero's card itself is the
+ * single-product offer's (`LastChanceView`), whose fixed wording is its own. Scripted, one file, in the review
  * pack (`offerCopyRows`); nothing here is written by the AI, and nothing here
  * says what a product does. What a product does is only ever the register
  * claim the hero was approved to carry, verbatim, and why it is theirs is only
@@ -20,14 +21,8 @@ export const OFFER_COPY = {
   startHere: 'Start here',
   heroLabel: 'Not the obvious pick',
   topPickLabel: 'Your top pick',
-  /** Under the name, when there is no goal line the map backs. */
-  topPickFallback: (count: number) => `One of the ${count} products we picked for you.`,
-  whatItDoes: 'What it does',
-  whatYouGet: 'What you get',
   delivered: 'Delivered',
   startWithThis: 'Start with this',
-  justThis: 'Just this product, no subscription. Pay on the next screen.',
-  remote: (surcharge: number) => `Highlands, Islands and Isle of Man add ${formatGBP(surcharge)}.`,
   codeNotOnHero: 'Your code works on the full stack, not on this on its own.',
 
   fullStack: 'Or get the full stack',

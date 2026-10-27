@@ -182,6 +182,26 @@ export interface MemberSubscriptionLine {
   changePolicy?: ChangePolicy
 }
 
+/**
+ * The free bonus a subscription earned at signup (Amp Consult and offer plan,
+ * Phase 4). It ships in the first box only (`createSubscriptionOrder`, cycle
+ * 0); renewals never carry it.
+ */
+export interface SubscriptionBonus {
+  productId: string
+  variantId: string
+  sku: string | null
+  title: string
+  variantTitle: string | null
+  /** Its ordinary shop price (£). */
+  worth: number
+  supplierCost: number | null
+  weightGrams: number | null
+  level: string
+  /** A partner code the gift beat, kept for attribution with no discount. */
+  codeNotApplied?: string | null
+}
+
 export interface MemberSubscription {
   /** Recharge subscription/contract id when live. */
   id: string
@@ -263,6 +283,8 @@ export interface MemberSubscription {
   defaultChangePolicy?: ChangePolicy
   /** Hard dietary/stimulant exclusions, snapshotted at checkout. */
   safetyConstraints?: SafetyConstraints
+  /** The free bonus for the first box, when the plan earned one. */
+  bonus?: SubscriptionBonus | null
   /** Audit trail of every move in the recurring amount, newest last. */
   billingHistory?: BillingChange[]
   /**
