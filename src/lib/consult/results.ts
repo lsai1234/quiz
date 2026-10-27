@@ -26,6 +26,7 @@ import { resultsOpenFor } from './results-tab'
 import { chargeProfile } from './profile'
 import type { FlowState } from './flow'
 import type { PersonSnapshot } from '@/lib/offer/select'
+import { buildRead, type ConsultRead } from './read'
 
 export interface ResultsBundle {
   payload: HandoffPayload
@@ -40,6 +41,8 @@ export interface ResultsBundle {
    * (`offerFitFor`, passed in so it can be loaded lazily).
    */
   offerFit?: PersonSnapshot
+  /** "Your read" (Phase 5): shown on Fully charged and at the top of the results page. */
+  read: ConsultRead
 }
 
 type OfferFitFor = (answers: FlowState['answers'], engine: Pick<EngineResult, 'tiers'>, catalogue: readonly CatalogueProduct[]) => PersonSnapshot
@@ -50,7 +53,14 @@ export class EmptyStackError extends Error {
   }
 }
 
-export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], now = new Date(), offerFitFor?: OfferFitFor): ResultsBundle {
+export function prepareResults(
+  state: FlowState,
+  catalogue: CatalogueProduct[],
+  now = new Date(),
+  offerFitFor?: OfferFitFor,
+  /** Amp's "found" line, when the AI wrote one during the round (the client knows it). */
+  found: string | null = null,
+): ResultsBundle {
   const engine = runStackEngine(state.answers, catalogue)
   if (engine.tiers.complete.length === 0) throw new EmptyStackError()
   const payload = buildHandoff({
@@ -64,12 +74,15 @@ export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], 
   const checked = validateHandoff(payload)
   if (!checked.ok) throw new Error(`Invalid handoff payload: ${checked.errors.join('; ')}`)
   const answers = toQuizAnswers(state.answers, payload.excluded)
+  const read = buildRead({ consultId: state.consultId, answers: state.answers, engine, found })
   return {
     payload,
     engine,
-    // One name for the stack everywhere: the quiz's rule-based name, not the
-    // consult identity's ("Lean Line", "Night Shift"), which named an effect.
-    blueprint: { ...toBlueprint(payload, catalogue), stackName: stackNameFor(answers) },
+    // One name for the stack everywhere: the top pinpointed pattern ("Wired
+    // and tired"), else the quiz's rule-based name; never the consult
+    // identity's ("Lean Line", "Night Shift"), which named an effect.
+    blueprint: { ...toBlueprint(payload, catalogue), stackName: read.identity ?? stackNameFor(answers) },
+    read,
     answers,
     identity: identityFor(payload),
     catalogue,
@@ -77,9 +90,14 @@ export function prepareResults(state: FlowState, catalogue: CatalogueProduct[], 
   }
 }
 
-/** What the results page draws its extras through, and whether it shows the pharmacist note. */
+/** What the results page draws its extras through, whether it shows the pharmacist note, and the consult's own tiers. */
 export function exclusionsOf(payload: HandoffPayload): ConsultExclusions {
-  return { consultId: payload.consult_id, excluded: [...payload.excluded], pharmacistNote: payload.flags.pharmacist_note }
+  return {
+    consultId: payload.consult_id,
+    excluded: [...payload.excluded],
+    pharmacistNote: payload.flags.pharmacist_note,
+    tiers: { essentials: [...payload.tiers.essentials], standard: [...payload.tiers.standard], complete: [...payload.tiers.complete] },
+  }
 }
 
 /** Load the results page's data into the store it reads. */
@@ -91,9 +109,32 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setStackBlueprint(bundle.blueprint)
   store.setStackLevel('performance')
   store.setAiStackMeta(bundle.payload.reasons, false)
-  store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit })
+  store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit, read: bundle.read })
   store.setStackReady(true)
   if (bundle.offerFit) saveOfferFit(bundle.payload.consult_id, bundle.offerFit)
+  saveRead(bundle.read)
+}
+
+/* ── The read, for this tab ─────────────────────────────────────────────── */
+
+const READ_KEY = 'chrgd-consult-read'
+
+/** "Your read", kept for this tab so a reload shows it again. On the device only, gone when the tab closes. */
+function saveRead(read: ConsultRead): void {
+  try {
+    window.sessionStorage.setItem(READ_KEY, JSON.stringify(read))
+  } catch {
+    /* No storage: after a reload the page shows the stack without the read. */
+  }
+}
+
+export function loadRead(consultId: string): ConsultRead | undefined {
+  try {
+    const raw = JSON.parse(window.sessionStorage.getItem(READ_KEY) ?? 'null') as ConsultRead | null
+    return raw?.consultId === consultId ? raw : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /* ── The offer's fit, for this tab ─────────────────────────────────────── */
@@ -158,9 +199,10 @@ export function restoreResultsPage(payload: HandoffPayload, catalogue: Catalogue
   const answers = store.answers
   store.setCatalogueProducts(catalogue)
   store.setIdentity(identityFor(payload))
-  store.setStackBlueprint({ ...toBlueprint(payload, catalogue), stackName: stackNameFor(answers) })
+  const read = loadRead(payload.consult_id)
+  store.setStackBlueprint({ ...toBlueprint(payload, catalogue), stackName: read?.identity ?? stackNameFor(answers) })
   store.setStackLevel('performance')
   store.setAiStackMeta(payload.reasons, false)
-  store.setConsultExclusions({ ...exclusionsOf(payload), offerFit: loadOfferFit(payload.consult_id) })
+  store.setConsultExclusions({ ...exclusionsOf(payload), offerFit: loadOfferFit(payload.consult_id), read })
   store.setStackReady(true)
 }

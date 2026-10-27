@@ -64,7 +64,7 @@ interface Props {
   /** Called once the consult has finished collecting (after the circuit check). */
   onComplete?: (state: FlowState) => void
   /**
-   * Called with "See my stacks": the results page's data is already in the
+   * Called with "See my stack": the results page's data is already in the
    * store (`applyToResultsPage`), so the caller only has to open it.
    */
   onHandoff?: (bundle: ResultsBundle) => void

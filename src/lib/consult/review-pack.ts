@@ -28,6 +28,7 @@ import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { DEFAULT_BONUS } from '@/lib/offer/settings'
 import { bonusTermRows, freeGiftTermRows, offerCopyRows } from '@/lib/offer/review-rows'
+import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
@@ -144,9 +145,11 @@ export function engineRows(engineSource: string): Row[] {
   }
   const weightLoss = (index: number) => aboutWeightLoss(engineSource, index)
 
-  for (const m of engineSource.matchAll(new RegExp(String.raw`add\('([a-z0-9-]+)',\s*(\d+(?:\.\d+)?),\s*${LITERAL}\)`, 'g'))) {
+  for (const m of engineSource.matchAll(new RegExp(String.raw`add\('([a-z0-9-]+)',\s*(\d+(?:\.\d+)?),\s*${LITERAL}(?:,\s*(NEED))?\)`, 'g'))) {
     const section = weightLoss(m.index!) ? 'Weight loss: rules' : 'Engine reasons'
-    push(section, `Stack engine reason (engine.ts scoreNeeds)${sectionAt(engineSource, m.index!) ? `: ${sectionAt(engineSource, m.index!)}` : ''}`, unquote(m[3]), `Raises need “${m[1]}” by ${m[2]}. Shown as the product’s reason`)
+    // A reason that names a need is shown only where the consult claims map backs the product's claim (Phase 5).
+    const shown = m[4] ? 'Names a need: shown only where the consult claims map backs the product’s claim, beside it' : 'Shown as the product’s reason'
+    push(section, `Stack engine reason (engine.ts scoreNeeds)${sectionAt(engineSource, m.index!) ? `: ${sectionAt(engineSource, m.index!)}` : ''}`, unquote(m[3]), `Raises need “${m[1]}” by ${m[2]}. ${shown}`)
   }
   for (const m of engineSource.matchAll(new RegExp(String.raw`why(?:\.[a-z-]+|\[[^\]]+\])?\s*\?\?=\s*${LITERAL}`, 'g'))) {
     push('Engine keep-out reasons', `Stack engine keep-out (engine.ts runStackEngine)${sectionAt(engineSource, m.index!) ? `: ${sectionAt(engineSource, m.index!)}` : ''}`, unquote(m[1]), 'Shown as “Kept out: …, because …”')
@@ -247,6 +250,10 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...creatineRows(),
     ...engineRows(input.engineSource),
     ...patternRows(),
+    // Your read, Try this week and Worth a GP check (plan Phase 5).
+    ...readCopyRows(),
+    ...habitRows(),
+    ...gpCheckRows(),
     ...glossaryRows(),
     ...claimRows(roster),
     // The free bonus's terms (plan Phase 2, 5): the conditions it has to

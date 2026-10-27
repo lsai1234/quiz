@@ -92,7 +92,7 @@ describe('explainProduct: rules that hold for every persona and product', () => 
           expect(answers.goals).toContain(e.goal)
           expect(e.claim).toBe(goalClaimFor(e.goal, p))
           expect(e.sentence).toBe(GOAL_LINES[e.goal])
-        } else {
+        } else if (e.kind === 'answer') {
           expect(answers[e.field]).toBe(e.value)
           expect((ANSWER_LINES[e.field] as Record<string, string>)[e.value]).toBe(e.sentence)
           expect(e.claim).toBe(productClaim(p, answers.goals))

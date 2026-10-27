@@ -229,7 +229,7 @@ describe('a whole Pinpoint consult', () => {
     fireEvent.click(first)
     expect(screen.queryByText(name)).toBeNull()
     pressNext()
-    fireEvent.click(await screen.findByRole('button', { name: 'See my stacks' }, { timeout: 5000 }))
+    fireEvent.click(await screen.findByRole('button', { name: 'See my stack' }, { timeout: 5000 }))
     expect(onHandoff).toHaveBeenCalled()
   }, 20_000)
 
@@ -290,10 +290,10 @@ describe('the payoff (phase 4)', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    expect(screen.getByRole('heading', { name: 'Fully charged' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
   })
 
-  it('shows the profile on Fully charged: the pattern, what the stack does, what it kept out', async () => {
+  it('shows Your read on Fully charged: the pattern, its line and the evidence in their words, and no products', async () => {
     await chargeUp(finished())
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp * 2)
@@ -301,17 +301,13 @@ describe('the payoff (phase 4)', () => {
     const card = document.querySelector('article[data-pattern="wired"]') as HTMLElement
     expect(card).toBeInTheDocument()
     expect(within(card).getByText('Pinpointed')).toBeInTheDocument()
-    expect(within(card).getByText('What your stack does')).toBeInTheDocument()
-    expect(within(card).getByText(/^Kept out: caffeine and stimulant pre-workouts, because/)).toBeInTheDocument()
-    // Product wording only ever comes from the claims register.
-    const { CLAIMS } = await import('@/lib/consult/claims')
-    const wordings = new Set(Object.values(CLAIMS).map((c) => `${c.wording}.`))
-    for (const li of Array.from(card.querySelectorAll('li'))) {
-      const lines = Array.from(li.querySelectorAll('p')).slice(1)
-      for (const l of lines) expect(wordings.has(l.textContent!)).toBe(true)
-    }
-    // The stacks follow.
-    expect(screen.getByText('Essentials')).toBeInTheDocument()
+    expect(within(card).getByRole('heading', { name: 'Wired and tired' })).toBeInTheDocument()
+    expect(within(card).getByText('You said')).toBeInTheDocument()
+    expect(card.querySelectorAll('li').length).toBeGreaterThan(0)
+    for (const li of Array.from(card.querySelectorAll('li'))) expect(li.textContent).toMatch(/^“.+”$/)
+    // No product lists here: they appear once, on the results page.
+    expect(screen.queryByText('What your stack does')).toBeNull()
+    expect(screen.queryByText('Essentials')).toBeNull()
   })
 
   it('asks "Did Amp get you?" once, and counts the answer', async () => {

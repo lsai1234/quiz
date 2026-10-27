@@ -15,6 +15,8 @@ import { NextButton, QuietLink } from './controls'
 import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { PatternMap } from './pinpoint/parts'
 import { PinpointProfile } from './pinpoint/Profile'
+import { foundLine } from './pinpoint/pinpointAi'
+import { READ_COPY } from '@/lib/consult/read-copy'
 
 /**
  * Analysis & charge-up (build H6), and the fully-charged handoff.
@@ -32,8 +34,8 @@ import { PinpointProfile } from './pinpoint/Profile'
  * shows the last step still working rather than a blank screen. Under reduced
  * motion the steps are ticked as soon as the data is in.
  *
- * Fully charged shows the three stacks and anything that was kept out, and
- * "See my stacks" opens the results page — already loaded.
+ * Fully charged shows "Your read" (Phase 5), and "See my stack" opens the
+ * results page, already loaded.
  */
 
 type LoadProducts = () => Promise<CatalogueProduct[]>
@@ -84,7 +86,7 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
     Promise.all([loadProducts(), import('@/lib/consult/results'), import('@/lib/consult/handoff'), import('@/lib/consult/offer-fit')])
       .then(([catalogue, { EmptyStackError, applyToResultsPage, prepareResults }, { saveHandoffLocally, saveHandoffRemotely }, { offerFitFor }]) => {
         empty = EmptyStackError
-        const b = prepareResults(state, catalogue, new Date(), offerFitFor)
+        const b = prepareResults(state, catalogue, new Date(), offerFitFor, foundLine(state.answers))
         applyToResultsPage(b)
         saveHandoffLocally(b.payload)
         void saveHandoffRemotely(b.payload)
@@ -149,10 +151,10 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   return (
     <Frame>
       <p className="text-center uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
-        {full ? 'Handing over to your results' : 'Analysing'}
+        {full ? 'Fully charged' : 'Analysing'}
       </p>
       <h1 className="text-center uppercase" style={titleStyle} aria-live="polite">
-        {full ? 'Fully charged' : 'Your charge profile'}
+        {full ? READ_COPY.heading : 'Your charge profile'}
       </h1>
 
       {!full &&
@@ -249,53 +251,27 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   )
 }
 
-/** Fully charged: on Pinpoint, the profile first; then the three stacks, what was kept out, and the way through. */
+/**
+ * Fully charged is "Your read" (plan Phase 5): what Amp found, in their own
+ * words, then the way through. The safety notes stay (pharmacist, weight-loss
+ * medication); what was kept out or skipped moves to the results page's
+ * "What we checked", and the products appear there once, in their tiers.
+ */
 function Handoff({ bundle, state, onOpen }: { bundle: ResultsBundle; state: FlowState; onOpen: () => void }) {
-  const title = new Map(bundle.catalogue.map((p) => [p.id, p.shortName || p.title]))
-  const tiers: [string, string[]][] = [
-    ['Essentials', bundle.payload.tiers.essentials],
-    ['Standard', bundle.payload.tiers.standard],
-    ['Complete', bundle.payload.tiers.complete],
-  ]
+  const safety = bundle.payload.notes.filter((n) => !/^(Kept out|Skipped):/.test(n))
   return (
     <div className="flex flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-4)' }}>
-      <PinpointProfile answers={state.answers} payload={bundle.payload} titleOf={(id) => title.get(id) ?? id} />
-      <div
-        style={{
-          padding: 'var(--amp-space-4)',
-          borderRadius: 'var(--amp-radius-panel)',
-          border: 'var(--amp-hairline) solid var(--amp-edge-strong)',
-          background: 'var(--amp-glass-solid)',
-        }}
-      >
-        {tiers.map(([name, ids], i) => (
-          <div key={name} style={{ paddingTop: i ? 'var(--amp-space-3)' : 0, marginTop: i ? 'var(--amp-space-3)' : 0, borderTop: i ? 'var(--amp-hairline) solid var(--amp-edge)' : 'none' }}>
-            <p className="flex items-baseline justify-between">
-              <span style={{ fontWeight: 'var(--amp-weight-bold)' }}>{name}</span>
-              <span style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}>
-                {ids.length} products
-              </span>
-            </p>
-            <ul className="flex flex-wrap" style={{ gap: 'var(--amp-space-1)', marginTop: 'var(--amp-space-2)' }}>
-              {ids.map((id) => (
-                <li key={id} style={{ padding: 'var(--amp-space-1) var(--amp-space-2)', borderRadius: 'var(--amp-radius-chip)', border: 'var(--amp-hairline) solid var(--amp-edge)', fontSize: 'var(--amp-text-meta)' }}>
-                  {title.get(id) ?? id}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      {bundle.payload.notes.length > 0 && (
-        <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="Kept out and skipped">
-          {bundle.payload.notes.map((n) => (
+      <PinpointProfile answers={state.answers} read={bundle.read} />
+      {safety.length > 0 && (
+        <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="Before you start">
+          {safety.map((n) => (
             <li key={n} style={{ padding: 'var(--amp-space-3) var(--amp-space-4)', borderRadius: 'var(--amp-radius-tile)', background: 'var(--amp-caution-fill)', color: 'var(--amp-caution)', fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)' }}>
               {n}
             </li>
           ))}
         </ul>
       )}
-      <NextButton onClick={onOpen}>See my stacks</NextButton>
+      <NextButton onClick={onOpen}>{READ_COPY.seeMyStack}</NextButton>
     </div>
   )
 }

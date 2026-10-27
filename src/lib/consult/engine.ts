@@ -30,6 +30,9 @@ import type { PatternId } from './pinpoint/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
 import { claimsFor } from './claims'
+import { goalClaimFor } from '@/lib/results/goal-claims'
+import { needClaimFor, patternClaimFor } from '@/lib/results/consult-claims'
+import { GOAL_TO_QUIZ } from './adapter'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { circuitOutcome, type Ingredient } from './circuit'
 import { pharmacistNoteFor } from './exclusions'
@@ -58,10 +61,28 @@ export const CAFFEINE_CEILING = 4
 /** A product has to meet a real need to be picked at all. */
 export const MIN_SCORE = 1
 
+/**
+ * Where a reason came from (plan Phase 5, claims-aware matching). An answer
+ * restated may be said beside any product; a goal, a need or a pattern only
+ * where the claims maps back the claim the product carries
+ * (`goal-claims.ts`, `consult-claims.ts`).
+ */
+export type ReasonOrigin =
+  | { kind: 'answer' }
+  | { kind: 'goal'; goal: ConsultGoal }
+  | { kind: 'need' }
+  | { kind: 'pattern'; pattern: PatternId }
+
+const ANSWER: ReasonOrigin = { kind: 'answer' }
+const NEED: ReasonOrigin = { kind: 'need' }
+
+/** Said when no reason passes the maps: true, and about nothing but their answers. */
+export const NEUTRAL_REASON = 'Picked from your answers'
+
 export interface NeedScore {
   total: number
-  /** Where the weight came from, in the member's terms — the strongest becomes the reason. */
-  sources: { why: string; weight: number }[]
+  /** Where the weight came from, in the member's terms — the strongest allowed one becomes the reason. */
+  sources: { why: string; weight: number; origin?: ReasonOrigin }[]
 }
 
 export type Needs = Record<NeedId, NeedScore>
@@ -72,8 +93,10 @@ export interface RankedProduct {
   score: number
   /** The need it's mainly there for. */
   need: NeedId
-  /** Why, restating an answer. Never a health claim. */
+  /** Why, restating an answer, or naming a goal, need or pattern the claims maps back. Never a health claim of its own. */
   reason: string
+  /** The register claim that backs the reason, to show beside it verbatim; null when it needs none. */
+  reasonClaim: string | null
   /** Register claim IDs its kind may carry (see `claims.ts`). */
   claims: string[]
 }
@@ -168,16 +191,16 @@ function proteinOut(a: ConsultAnswers, group: string): string | null {
 
 export function scoreNeeds(a: ConsultAnswers): Needs {
   const needs = Object.fromEntries(NEEDS.map((n) => [n, { total: 0, sources: [] }])) as unknown as Needs
-  const add = (need: NeedId, weight: number, why: string) => {
+  const add = (need: NeedId, weight: number, why: string, origin: ReasonOrigin = ANSWER) => {
     if (weight <= 0) return
     needs[need].total += weight
-    needs[need].sources.push({ why, weight })
+    needs[need].sources.push({ why, weight, origin })
   }
 
   a.goals.slice(0, 3).forEach((goal, i) => {
     const w = GOAL_WEIGHT[i]
     const why = i === 0 ? `${GOAL_LABEL[goal]} is your top goal` : `${GOAL_LABEL[goal]} is one of your goals`
-    for (const [need, base] of Object.entries(GOAL_NEEDS[goal]) as [NeedId, number][]) add(need, base * w, why)
+    for (const [need, base] of Object.entries(GOAL_NEEDS[goal]) as [NeedId, number][]) add(need, base * w, why, { kind: 'goal', goal })
   })
 
   // Training.
@@ -222,52 +245,52 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   // What's got harder lately (active agers only, batch 5).
   if (journey === 'ager' && a.changes) {
     const changes = a.changes
-    if (changes.includes('getting-about')) add('joints', 3, 'Getting about is harder than it was')
+    if (changes.includes('getting-about')) add('joints', 3, 'Getting about is harder than it was', NEED)
     if (changes.includes('strength')) {
-      add('protein', 2, 'Keeping your strength up')
-      add('strength', 1, 'Keeping your strength up')
+      add('protein', 2, 'Keeping your strength up', NEED)
+      add('strength', 1, 'Keeping your strength up', NEED)
     }
     if (changes.includes('staying-sharp')) {
-      add('focus', 2, 'Staying sharp matters to you')
-      add('omega', 1, 'Staying sharp matters to you')
+      add('focus', 2, 'Staying sharp matters to you', NEED)
+      add('omega', 1, 'Staying sharp matters to you', NEED)
     }
     if (changes.includes('energy')) {
-      add('energy', 2, 'Your energy flags through the day')
-      add('b12-iron', 1, 'Your energy flags through the day')
+      add('energy', 2, 'Your energy flags through the day', NEED)
+      add('b12-iron', 1, 'Your energy flags through the day', NEED)
     }
-    if (changes.includes('sleeping-through')) add('sleep', 2, 'You’re waking in the night')
+    if (changes.includes('sleeping-through')) add('sleep', 2, 'You’re waking in the night', NEED)
   }
 
   // Pinpoint (plan v5): what the person confirmed, in its own words.
   for (const { lead, factor } of pinpointEffects(a)) {
-    for (const { need, weight } of lead.pattern.effects) add(need, weight * factor, lead.pattern.because)
+    for (const { need, weight } of lead.pattern.effects) add(need, weight * factor, lead.pattern.because, { kind: 'pattern', pattern: lead.pattern.id })
   }
 
   // Weight-loss medication, with the tailoring opt-in (plan v4, A4). The
   // reasons never name the medication: they're kept with the stack.
   if (isTailored(a)) {
-    add('protein', 8, 'To keep your protein up while you’re eating less')
-    add('basics', 6, 'To cover the basics while you’re eating less')
+    add('protein', 8, 'To keep your protein up while you’re eating less', NEED)
+    add('basics', 6, 'To cover the basics while you’re eating less', NEED)
     const symptoms = a.symptoms ?? []
-    if (symptoms.includes('constipation')) add('gut', 6, 'To help keep things moving')
-    if (symptoms.includes('nausea')) add('hydration', 5, 'To keep your fluids and salts up when you feel queasy')
-    if (symptoms.includes('tiredness')) add('b12-iron', 4, 'For the tiredness you mentioned')
+    if (symptoms.includes('constipation')) add('gut', 6, 'To help keep things moving', NEED)
+    if (symptoms.includes('nausea')) add('hydration', 5, 'To keep your fluids and salts up when you feel queasy', NEED)
+    if (symptoms.includes('tiredness')) add('b12-iron', 4, 'For the tiredness you mentioned', NEED)
     if (sessions >= 3) add('strength', 4, `You train ${sessions} times a week`)
   }
 
   // Energy.
   if (a.energy !== null && a.energy <= 4) {
-    add('energy', a.energy <= 2 ? 3 : 2, `Afternoon energy at ${a.energy}/10`)
-    add('basics', 1, `Afternoon energy at ${a.energy}/10`)
+    add('energy', a.energy <= 2 ? 3 : 2, `Afternoon energy at ${a.energy}/10`, NEED)
+    add('basics', 1, `Afternoon energy at ${a.energy}/10`, NEED)
   }
 
   // Sleep.
   if (a.sleep) {
     const h = sleepHours(a.sleep)
-    if (h < 7) add('sleep', h < 6 ? 3 : 2, `About ${h} hours a night`)
+    if (h < 7) add('sleep', h < 6 ? 3 : 2, `About ${h} hours a night`, NEED)
     if (a.sleep.quality === 'broken') {
-      add('sleep', 2, 'Your sleep is restless')
-      add('stress', 1, 'Your sleep is restless')
+      add('sleep', 2, 'Your sleep is restless', NEED)
+      add('stress', 1, 'Your sleep is restless', NEED)
     }
   }
 
@@ -275,12 +298,12 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   if (a.daylight === 'hardly') add('low-sun', 4, 'You hardly ever get daylight')
   else if (a.daylight === 'some') add('low-sun', 2, 'You only get daylight some days')
   if (a.age === '55-64' || a.age === '65-plus') {
-    add('low-sun', 1, 'Vitamin D needs rise with age')
-    add('joints', 1, 'Joints need more care with age')
+    add('low-sun', 1, 'Vitamin D needs rise with age', NEED)
+    add('joints', 1, 'Joints need more care with age', NEED)
   }
 
   // Caffeine.
-  if (caffeineCount(a.caffeine) >= CAFFEINE_CEILING) add('sleep', 1, `${caffeineCount(a.caffeine)} caffeinated drinks a day`)
+  if (caffeineCount(a.caffeine) >= CAFFEINE_CEILING) add('sleep', 1, `${caffeineCount(a.caffeine)} caffeinated drinks a day`, NEED)
 
   // Food.
   if (a.plate && a.plate.length > 0) {
@@ -300,8 +323,8 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   // Body.
   const spots = a.body ?? []
   if (spots.length) {
-    add('joints', Math.min(6, spots.length * 1.5), `Stiff or sore ${spots.length === 1 ? 'spot' : 'spots'} to look after`)
-    add('collagen', 1, 'Stiff or sore spots to look after')
+    add('joints', Math.min(6, spots.length * 1.5), `Stiff or sore ${spots.length === 1 ? 'spot' : 'spots'} to look after`, NEED)
+    add('collagen', 1, 'Stiff or sore spots to look after', NEED)
   }
 
   return needs
@@ -314,6 +337,7 @@ interface Candidate {
   score: number
   need: NeedId
   reason: string
+  reasonClaim: string | null
   ingredients: Set<Ingredient>
 }
 
@@ -333,8 +357,36 @@ function score(product: CatalogueProduct, needs: Needs): Omit<Candidate, 'ingred
     if (value > 0 && (!top || value > top.value)) top = { need, value }
   }
   if (!top || total < MIN_SCORE) return null
-  const sources = [...needs[top.need].sources].sort((x, y) => y.weight - x.weight || x.why.localeCompare(y.why))
-  return { product, score: Math.round(total * 100) / 100, need: top.need, reason: sources[0].why }
+  const { reason, reasonClaim } = reasonFor(product, needs, top.need)
+  return { product, score: Math.round(total * 100) / 100, need: top.need, reason, reasonClaim }
+}
+
+/**
+ * The reason a product is in the stack, claims-aware (plan Phase 5): the
+ * strongest source behind the need it's there for, then behind the other
+ * needs it meets, that may be said beside it. An answer restated always may;
+ * a goal, a need or a pattern only where the claims maps back the claim this
+ * product carries, and that claim goes with it. None: `NEUTRAL_REASON`.
+ */
+export function reasonFor(product: CatalogueProduct, needs: Needs, first: NeedId): { reason: string; reasonClaim: string | null } {
+  const kind = kindOf(product)
+  const order = [first, ...(Object.keys(kind?.meets ?? {}) as NeedId[]).filter((n) => n !== first).sort((x, y) => needs[y].total * (kind?.meets[y] ?? 0) - needs[x].total * (kind?.meets[x] ?? 0))]
+  for (const need of order) {
+    const sources = [...needs[need].sources].sort((x, y) => y.weight - x.weight || x.why.localeCompare(y.why))
+    for (const source of sources) {
+      const claim = claimForReason(source.origin ?? ANSWER, need, product)
+      if (claim !== undefined) return { reason: source.why, reasonClaim: claim }
+    }
+  }
+  return { reason: NEUTRAL_REASON, reasonClaim: null }
+}
+
+/** The claim a reason needs beside it: a claim id, null for "none needed", undefined for "may not be said". */
+function claimForReason(origin: ReasonOrigin, need: NeedId, product: CatalogueProduct): string | null | undefined {
+  if (origin.kind === 'answer') return claimsFor(product.swapGroup)[0] ?? null
+  if (origin.kind === 'goal') return goalClaimFor(GOAL_TO_QUIZ[origin.goal], product)?.id ?? undefined
+  if (origin.kind === 'pattern') return patternClaimFor(origin.pattern, product)?.id ?? undefined
+  return needClaimFor(need, product)?.id ?? undefined
 }
 
 /**
@@ -458,7 +510,7 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
       candidates.find((c) => free(c) && meets(c))
     if (!best) continue
     families.add(familyOf(best.product))
-    picked.push({ ...best, need, reason: needs[need].sources.slice().sort((x, y) => y.weight - x.weight)[0]?.why ?? best.reason })
+    picked.push({ ...best, need, ...reasonFor(best.product, needs, need) })
   }
 
   for (const c of candidates) {
@@ -491,6 +543,7 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     score: c.score,
     need: c.need,
     reason: c.reason,
+    reasonClaim: c.reasonClaim,
     claims: claimsFor(c.product.swapGroup),
   }))
 

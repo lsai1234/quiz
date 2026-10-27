@@ -38,6 +38,8 @@ import { ANSWER_LINES, CHECK_LINES, GOAL_LINES, activeDisplayName, type AnswerFi
 export type ProductExplanation =
   | { kind: 'goal'; goal: Goal; sentence: string; claim: Claim }
   | { kind: 'answer'; field: AnswerField; value: string; sentence: string; claim: Claim | null }
+  /** A consult stack's reason (Phase 5): the engine's, already passed through the claims maps. */
+  | { kind: 'consult'; sentence: string; claim: Claim | null }
 
 /**
  * When true, a product whose kind carries no authorised claim gets no line at

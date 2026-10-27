@@ -26,6 +26,7 @@
     "backfill:product-ids": "tsx scripts/backfill-product-ids.ts",
     "clean:descriptions": "tsx scripts/clean-descriptions.ts",
     "claims:signoff": "tsx scripts/claims-signoff.ts",
+    "claims:signoff:consult": "tsx scripts/consult-claims-signoff.ts",
     "review-pack:consult": "tsx scripts/consult-review-pack.ts"
   },
   "dependencies": {

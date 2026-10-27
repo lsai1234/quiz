@@ -62,7 +62,7 @@ describe('H6 analysis & charge-up', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    expect(screen.getByRole('heading', { name: 'Fully charged' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
   })
 
   it('never shows a blank screen: a slow catalogue keeps the last step working', async () => {
@@ -74,9 +74,9 @@ describe('H6 analysis & charge-up', () => {
     })
     expect(screen.getByText('Building three stacks')).toBeInTheDocument()
     expect(screen.getByText(/Building three stacks/).textContent).toMatch(/working/)
-    expect(screen.queryByRole('heading', { name: 'Fully charged' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Your read' })).toBeNull()
     await act(async () => release(MOCK_CATALOGUE))
-    expect(screen.getByRole('heading', { name: 'Fully charged' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
   })
 
   it('preloads the results page’s data while it animates', async () => {
@@ -88,18 +88,21 @@ describe('H6 analysis & charge-up', () => {
     expect(store.identity?.name).toBe('Peak Protocol')
   })
 
-  it('shows the three stacks and what was kept out, then hands over', async () => {
+  it('shows Your read, not product lists, keeps the safety notes, then hands over', async () => {
     const onDone = jest.fn()
     render(<Analysis state={state} onDone={onDone} onBack={jest.fn()} loadProducts={async () => MOCK_CATALOGUE} />)
     await flush()
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    expect(screen.getByText('Essentials')).toBeInTheDocument()
-    expect(screen.getByText('Standard')).toBeInTheDocument()
-    expect(screen.getByText('Complete')).toBeInTheDocument()
-    expect(screen.getByRole('list', { name: 'Kept out and skipped' })).toHaveTextContent(/blood thinners/)
-    fireEvent.click(screen.getByRole('button', { name: 'See my stacks' }))
+    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
+    // The products appear once, on the results page, in their tiers.
+    expect(screen.queryByText('Essentials')).toBeNull()
+    expect(screen.queryByText('Standard')).toBeNull()
+    // What was kept out moves to the results page; the safety notes stay.
+    expect(screen.queryByText(/^Kept out:/)).toBeNull()
+    expect(screen.getByRole('list', { name: 'Before you start' })).toHaveTextContent(/pharmacist/i)
+    fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
     expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ consult_id: 'c_analysis0001' }) }))
   })
 
@@ -125,7 +128,7 @@ describe('H6 analysis & charge-up', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    expect(screen.getByRole('heading', { name: 'Fully charged' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
   })
 })
 
@@ -139,7 +142,7 @@ describe('the consult, end to end', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    fireEvent.click(screen.getByRole('button', { name: 'See my stacks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
     expect(onHandoff).toHaveBeenCalledTimes(1)
     expect(useQuizStore.getState().stackBlueprint?.slots.length).toBeGreaterThan(0)
   })

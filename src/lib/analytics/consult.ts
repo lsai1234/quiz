@@ -53,7 +53,7 @@ export const consultFunnel = {
   complete(p: { route: Route; msTotal: number }) {
     consultEvent('consult_complete', { route: p.route, msTotal: p.msTotal })
   },
-  /** "See my stacks": handed over to the results page. */
+  /** "See my stack": handed over to the results page. */
   handoff(p: { route: Route; stackSize: number }) {
     consultEvent('consult_handoff', { route: p.route, stackSize: p.stackSize })
   },

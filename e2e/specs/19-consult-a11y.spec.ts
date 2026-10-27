@@ -28,7 +28,7 @@ async function audit(page: Page, where: string) {
 }
 
 const heading = (page: Page) => page.locator('h1')
-const NEXT = /^(Next|Looks right|Continue|Back to review|See my stacks)$/
+const NEXT = /^(Next|Looks right|Continue|Back to review|See my stack)$/
 
 /** Tab until the focused element's accessible name matches, then return. Fails if it never gets there. */
 async function tabTo(page: Page, name: RegExp, limit = 60) {
@@ -249,9 +249,9 @@ test.describe('consult accessibility (U7)', () => {
     // Performance at 25–34 is a builder's consult (batch 5).
     expect(seen).toEqual(expect.arrayContaining(['What’s your training split?', 'What are you training for?']))
     expect(seen).not.toContain('Anything harder than it used to be?')
-    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
     await audit(page, 'fully charged')
-    await tabTo(page, /^See my stacks$/)
+    await tabTo(page, /^See my stack$/)
     await page.keyboard.press('Enter')
     await expect(page).not.toHaveURL(/\/quizv2$/)
   })
@@ -325,7 +325,7 @@ test.describe('consult accessibility (U7)', () => {
     // A real round: an intro, questions, a hunch confirmed, and an ending.
     expect(kinds).toEqual(expect.arrayContaining(['intro', 'probe', 'hunch', 'done']))
     expect(seen.has('leads sheet')).toBe(true)
-    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
     await audit(page, 'fully charged, after Pinpoint')
   })
 
@@ -370,7 +370,7 @@ test.describe('consult accessibility (U7)', () => {
       await page.waitForTimeout(450)
     }
     expect(held).toBe(true)
-    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
   })
 
   test('Deep charge review offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
@@ -423,7 +423,7 @@ test.describe('consult accessibility (U7)', () => {
     await expect(heading(page)).toHaveText(/what I've got/i)
     await expect(page.getByRole('button', { name: /^Circuit check: Weight-loss medication · since starting: nausea/ })).toBeVisible()
     await page.getByRole('button', { name: 'Looks right' }).click()
-    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/Tell whoever prescribes your weight-loss medication/)).toBeVisible()
   })
 

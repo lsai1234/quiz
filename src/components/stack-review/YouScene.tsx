@@ -7,6 +7,10 @@ import { productTypeLabel } from '@/lib/catalogue/product-type'
 import { RESULTS_HEADINGS, type ProductExplanation } from '@/lib/results'
 import { ProductTile } from './ProductTile'
 import { YOU_PALETTE as P } from './you-palette'
+import type { ConsultRead } from '@/lib/consult/read'
+import { READ_COPY } from '@/lib/consult/read-copy'
+import { approvedHabits, type HabitLine } from '@/lib/consult/habits'
+import { approvedGpChecks } from '@/lib/consult/gp-check'
 
 /** One product in the stack on screen, with its "Built from your answers" line. */
 export interface YouSceneItem {
@@ -26,8 +30,14 @@ interface Props {
   stackName: string | null
   /** The stack on screen (the active depth, swaps and add-ons included), in deck order. */
   items: readonly YouSceneItem[]
-  /** From `whatWeChecked`. */
+  /** From `whatWeChecked`, or for a consult stack the engine's "Kept out" and "Skipped" notes. */
   checks: readonly string[]
+  /**
+   * A consult stack's read (Phase 5): what Amp found, in their words, then
+   * "Try this week", unmet goals said honestly and "Worth a GP check". Only
+   * approved habit fixes and GP lines are shown.
+   */
+  read?: ConsultRead | null
   reducedMotion?: boolean
 }
 
@@ -98,11 +108,18 @@ const DISPLAY = 'var(--font-display)'
  * goal-to-claim map. A product with no line is listed after them by name
  * and type only, and a section with nothing in it is left out.
  */
-export function YouScene({ name, stackName, items, checks, reducedMotion }: Props) {
+export function YouScene({ name, stackName, items, checks, read = null, reducedMotion }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const headingId = useId()
   const builtId = useId()
   const checkedId = useId()
+  const readId = useId()
+  const tryId = useId()
+  const gpId = useId()
+  const habits = read ? approvedHabits(read.habits) : []
+  const gp = read ? approvedGpChecks(read.gp) : []
+  // An unmet goal is said honestly; "here's what to try instead" only with an approved fix to follow.
+  const unmet = read ? read.unmet.map((u) => ({ goal: u.goal, habit: u.habit && approvedHabits([u.habit]).length ? u.habit : null })) : []
 
   const groups = groupBySentence(items)
   const quiet = items.filter((item) => item.explanation === null)
@@ -209,6 +226,47 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
           </div>
         )}
 
+        {read && (read.patterns.length > 0 || read.words) && (
+          <section data-reveal aria-labelledby={readId} className="relative mt-7 pt-6" style={{ borderTop: `1px solid ${P.hairline}` }} data-read>
+            <SectionHeading id={readId}>{READ_COPY.heading}</SectionHeading>
+            {read.found && (
+              <p className="mt-3 text-[15px] leading-relaxed" style={{ color: P.ink }}>
+                {read.found}
+              </p>
+            )}
+            {read.patterns.length > 0 ? (
+              <ul className="mt-4 space-y-5">
+                {read.patterns.map((p) => (
+                  <li key={p.id} data-pattern={p.id}>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accentInk, fontFamily: DISPLAY }}>
+                      {p.state === 'yes' ? READ_COPY.pinpointed : READ_COPY.partly}
+                    </p>
+                    <p className="mt-1 text-[17px] font-bold leading-snug tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }}>
+                      {p.name}
+                    </p>
+                    <p className="mt-1 text-[14px] leading-snug" style={{ color: P.ink2 }}>
+                      {p.line}
+                    </p>
+                    {p.evidence.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={READ_COPY.youSaid}>
+                        {p.evidence.map((e) => (
+                          <li key={e} className="rounded-full px-2.5 py-1 text-[12px] leading-snug" style={{ background: P.page, color: P.ink2 }}>
+                            “{e}”
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-[15px] leading-relaxed" style={{ color: P.ink2 }}>
+                {read.words}
+              </p>
+            )}
+          </section>
+        )}
+
         {groups.length > 0 && (
           <section
             data-reveal
@@ -247,6 +305,50 @@ export function YouScene({ name, stackName, items, checks, reducedMotion }: Prop
                       {productTypeLabel(item.product)}
                     </p>
                   </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {(habits.length > 0 || unmet.length > 0) && (
+          <section data-reveal aria-labelledby={tryId} className="relative mt-7 pt-6" style={{ borderTop: `1px solid ${P.hairline}` }} data-try>
+            <SectionHeading id={tryId}>{READ_COPY.tryThisWeek}</SectionHeading>
+            {habits.length > 0 && (
+              <p className="mt-1 text-[12px]" style={{ color: P.ink3 }}>
+                {READ_COPY.tryThisWeekNote}
+              </p>
+            )}
+            <ul className="mt-4 space-y-4">
+              {unmet.map((u) => (
+                <li key={u.goal} data-unmet={u.goal}>
+                  <p className="text-[14px] font-semibold leading-snug" style={{ color: P.ink }}>
+                    {u.habit ? READ_COPY.unmetWithFix(u.goal) : READ_COPY.unmet(u.goal)}
+                  </p>
+                  {u.habit && <HabitRow line={u.habit} />}
+                </li>
+              ))}
+              {habits
+                .filter((h) => !unmet.some((u) => u.habit?.id === h.id))
+                .map((h) => (
+                  <li key={h.id}>
+                    <HabitRow line={h} />
+                  </li>
+                ))}
+            </ul>
+          </section>
+        )}
+
+        {gp.length > 0 && (
+          <section data-reveal aria-labelledby={gpId} className="relative mt-7 pt-6" style={{ borderTop: `1px solid ${P.hairline}` }} data-gp>
+            <SectionHeading id={gpId}>{READ_COPY.gpCheck}</SectionHeading>
+            <ul className="mt-4 space-y-3">
+              {gp.map((g) => (
+                <li key={g.id} className="text-[14px] leading-snug" style={{ color: P.ink2 }}>
+                  {g.text}{' '}
+                  <a href={g.source.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" style={{ color: P.ink3 }}>
+                    {g.source.label}
+                  </a>
                 </li>
               ))}
             </ul>
@@ -336,6 +438,21 @@ function AnswerProduct({ item }: { item: ExplainedItem }) {
         ) : null}
       </div>
     </li>
+  )
+}
+
+/** One habit fix: what to do, and where the advice comes from. */
+function HabitRow({ line }: { line: HabitLine }) {
+  return (
+    <div className="flex items-start gap-3 text-[14px] leading-snug" style={{ color: P.ink2 }} data-habit={line.id}>
+      <Tick />
+      <span className="min-w-0">
+        {line.text}{' '}
+        <a href={line.source.url} target="_blank" rel="noopener noreferrer" className="text-[12px] underline underline-offset-2" style={{ color: P.ink3 }}>
+          {line.source.label}
+        </a>
+      </span>
+    </div>
   )
 }
 

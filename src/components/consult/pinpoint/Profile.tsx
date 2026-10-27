@@ -1,25 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { CLAIMS } from '@/lib/consult/claims'
-import type { HandoffPayload } from '@/lib/consult/handoff'
-import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { isOut, leads } from '@/lib/consult/pinpoint/leads'
-import { keepOutLine } from '@/lib/consult/pinpoint/playback'
 import type { ConsultAnswers } from '@/lib/consult/types'
+import type { ConsultRead } from '@/lib/consult/read'
+import { READ_COPY } from '@/lib/consult/read-copy'
+import { pinpointed } from '@/lib/consult/pinpoint/effects'
 import { consultFunnel, type GotYou } from '@/lib/analytics/consult'
 import { Segmented } from '../controls'
+import { ChargeProfileChart } from '../ChargeProfileChart'
 import { PatternMap } from './parts'
-import { foundLine } from './pinpointAi'
 
 /**
- * The profile on Fully charged (plan v5 §6): each pattern Pinpoint found, what
- * the stack does about it, what it kept out, what was ruled out, and one
- * optional tap, "Did Amp get you?".
+ * "Your read" on Fully charged (plan Phase 5): each pattern Pinpoint found,
+ * its line, and the evidence in the person's own words; Amp's "found" line
+ * when the AI wrote one; and one optional tap, "Did Amp get you?". With
+ * nothing pinpointed, the charge profile and its words, as before.
  *
- * What the stack does is said in the product's name and the register's own
- * claim wording, never Amp's: the pattern is why the product is there, not a
- * promise about it.
+ * No products here. They appear once, on the results page, in the consult's
+ * tiers, each with a reason the claims maps allow.
  */
 
 const mono = {
@@ -40,82 +39,77 @@ const THANKS: Record<GotYou, string> = {
   'not-really': 'Thanks for saying. Change my answers from your results and I’ll look again.',
 }
 
-export function PinpointProfile({ answers, payload, titleOf }: { answers: ConsultAnswers; payload: HandoffPayload; titleOf: (id: string) => string }) {
+export function PinpointProfile({ answers, read }: { answers: ConsultAnswers; read: ConsultRead }) {
   const found = pinpointed(answers)
   const out = leads(answers).filter((l) => isOut(l) && l.tested > 0)
   const [gotYou, setGotYou] = useState<GotYou | null>(null)
-  if (!found.length && !out.length) return null
+
+  if (!read.patterns.length) {
+    return (
+      <section className="flex flex-col items-center amp-anim-rise" style={{ gap: 'var(--amp-space-3)' }} aria-label={READ_COPY.heading}>
+        {read.profile && <ChargeProfileChart profile={read.profile} />}
+        {read.words && (
+          <p className="text-center" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-lead)' }}>
+            {read.words}
+          </p>
+        )}
+      </section>
+    )
+  }
 
   return (
-    <section className="flex flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-3)' }} aria-label="What I pinpointed">
-      <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
-        What I pinpointed
-      </p>
-      {/* Amp's two sentences, when the AI wrote them during the round. */}
-      {foundLine(answers) && <p style={{ color: 'var(--amp-ink)' }}>{foundLine(answers)}</p>}
-      {found.length > 0 && <PatternMap answers={answers} leads={found} title={`Pinpointed: ${found.map((l) => l.pattern.name).join(', ')}`} />}
-      {found.map((l) => {
-        const skus = Object.entries(payload.because)
-          .filter(([, ids]) => ids.includes(l.pattern.id))
-          .map(([sku]) => sku)
-        const kept = keepOutLine(l)
-        return (
-          <article
-            key={l.pattern.id}
-            data-pattern={l.pattern.id}
-            style={{ padding: 'var(--amp-space-4)', borderRadius: 'var(--amp-radius-panel)', border: 'var(--amp-hairline) solid var(--amp-go-line)', background: 'var(--amp-go-fill)' }}
-          >
-            <p className="uppercase" style={{ ...mono, color: 'var(--amp-go)' }}>
-              {l.state === 'yes' ? 'Pinpointed' : 'Partly'}
-            </p>
-            <h2 style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-lead)', marginTop: 'var(--amp-space-1)' }}>{l.pattern.name}</h2>
-            <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', marginTop: 'var(--amp-space-1)' }}>{l.pattern.line}</p>
-            <p className="uppercase" style={{ ...mono, color: 'var(--amp-ink-2)', marginTop: 'var(--amp-space-3)' }}>
-              What your stack does
-            </p>
-            {skus.length ? (
-              <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)' }}>
-                {skus.map((sku) => {
-                  const claim = CLAIMS[payload.claims[sku]?.[0] ?? '']
-                  return (
-                    <li key={sku}>
-                      <p style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-meta)' }}>{titleOf(sku)}</p>
-                      {claim && <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>{claim.wording}.</p>}
-                    </li>
-                  )
-                })}
+    <section className="flex flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-3)' }} aria-label={READ_COPY.heading}>
+      {read.found && <p style={{ color: 'var(--amp-ink)' }}>{read.found}</p>}
+      <PatternMap answers={answers} leads={found} title={`Pinpointed: ${read.patterns.map((p) => p.name).join(', ')}`} />
+      {read.patterns.map((p) => (
+        <article
+          key={p.id}
+          data-pattern={p.id}
+          style={{ padding: 'var(--amp-space-4)', borderRadius: 'var(--amp-radius-panel)', border: 'var(--amp-hairline) solid var(--amp-go-line)', background: 'var(--amp-go-fill)' }}
+        >
+          <p className="uppercase" style={{ ...mono, color: 'var(--amp-go)' }}>
+            {p.state === 'yes' ? READ_COPY.pinpointed : READ_COPY.partly}
+          </p>
+          <h2 style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-lead)', marginTop: 'var(--amp-space-1)' }}>{p.name}</h2>
+          <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', marginTop: 'var(--amp-space-1)' }}>{p.line}</p>
+          {p.evidence.length > 0 && (
+            <>
+              <p className="uppercase" style={{ ...mono, color: 'var(--amp-ink-2)', marginTop: 'var(--amp-space-3)' }}>
+                {READ_COPY.youSaid}
+              </p>
+              <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)', marginTop: 'var(--amp-space-1)' }}>
+                {p.evidence.map((e) => (
+                  <li key={e} style={{ fontSize: 'var(--amp-text-meta)' }}>
+                    “{e}”
+                  </li>
+                ))}
               </ul>
-            ) : (
-              <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', marginTop: 'var(--amp-space-2)' }}>Nothing in the shop is right for this one yet.</p>
-            )}
-            {kept && <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-caution)', marginTop: 'var(--amp-space-3)' }}>{kept}</p>}
-          </article>
-        )
-      })}
+            </>
+          )}
+        </article>
+      ))}
       {out.length > 0 && (
         <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
           Ruled out: {out.map((l) => l.pattern.name.charAt(0).toLowerCase() + l.pattern.name.slice(1)).join(', ')}.
         </p>
       )}
-      {found.length > 0 && (
-        <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
-          <p style={{ fontWeight: 'var(--amp-weight-bold)' }}>Did Amp get you?</p>
-          <Segmented
-            label="Did Amp get you?"
-            options={GOT_YOU}
-            value={gotYou}
-            onChange={(v) => {
-              if (!gotYou) consultFunnel.gotYou({ answer: v, found: found.length })
-              setGotYou(v)
-            }}
-          />
-          {gotYou && (
-            <p aria-live="polite" style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
-              {THANKS[gotYou]}
-            </p>
-          )}
-        </div>
-      )}
+      <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
+        <p style={{ fontWeight: 'var(--amp-weight-bold)' }}>Did Amp get you?</p>
+        <Segmented
+          label="Did Amp get you?"
+          options={GOT_YOU}
+          value={gotYou}
+          onChange={(v) => {
+            if (!gotYou) consultFunnel.gotYou({ answer: v, found: read.patterns.length })
+            setGotYou(v)
+          }}
+        />
+        {gotYou && (
+          <p aria-live="polite" style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
+            {THANKS[gotYou]}
+          </p>
+        )}
+      </div>
     </section>
   )
 }

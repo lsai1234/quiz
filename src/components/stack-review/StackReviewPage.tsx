@@ -23,7 +23,9 @@ import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackDeck } from './StackDeck'
 import { YouScene, type YouSceneItem } from './YouScene'
-import { explainProductSafe, whatWeChecked } from '@/lib/results'
+import { explainProductSafe, whatWeChecked, type ProductExplanation } from '@/lib/results'
+import { CLAIMS } from '@/lib/consult/claims'
+import { CONSULT_TIER_LABEL, consultTierPlans } from '@/lib/consult/tiers'
 import type { SlotType } from '@/lib/stack-blueprint/factory'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
@@ -80,8 +82,10 @@ import { TIER_META } from '@/lib/quiz-core'
  * folds the rest rather than showing the same stack twice.
  */
 function StackTierSelector({
-  tiers, current, chosen = true, gifts = {}, minMonthly, oneOffOnly = false, onChange,
+  tiers, current, chosen = true, gifts = {}, labels, minMonthly, oneOffOnly = false, onChange,
 }: {
+  /** The depths' names, when not the quiz's own (a consult stack: Essentials, Standard, Complete). */
+  labels?: Partial<Record<StackLevel, string>>
   tiers: TierPlan[]
   current: StackLevel
   /**
@@ -137,7 +141,7 @@ function StackTierSelector({
                 </span>
               )}
               <div className="text-xs font-bold" style={{ color: active ? 'var(--color-accent)' : 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                {meta.label}
+                {labels?.[level] ?? meta.label}
               </div>
               <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
                 {size} product{size === 1 ? '' : 's'}
@@ -416,12 +420,23 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       : explainProductSafe({ product: choice.product, slotType: (choice.product.stackSlots[0] ?? 'health') as SlotType, answers })
     return { choice, reason: heroReason(choice, goals, explained?.kind === 'answer' ? explained.sentence : null) }
   }, [claiming, offerPerson, products.length, offerInputs, answers, baseBlueprint.primaryGoal, consultExclusions])
-  const blueprint = useMemo(() => {
-    if (!hero) return baseBlueprint
-    const kind = offerSnapshot?.[hero.choice.product.id]?.kind
-    const sameKind = offerSnapshot && kind ? (id: string) => offerSnapshot[id]?.kind === kind : undefined
-    return withHeroFirst(baseBlueprint, hero.choice, hero.reason, sameKind)
-  }, [baseBlueprint, hero, offerSnapshot])
+  // For a consult stack: products of the hero's family give up their place to it.
+  const heroSameKind = useMemo(() => {
+    const kind = hero ? offerSnapshot?.[hero.choice.product.id]?.kind : undefined
+    return offerSnapshot && kind ? (id: string) => offerSnapshot[id]?.kind === kind : undefined
+  }, [hero, offerSnapshot])
+  const blueprint = useMemo(
+    () => (hero ? withHeroFirst(baseBlueprint, hero.choice, hero.reason, heroSameKind) : baseBlueprint),
+    [baseBlueprint, hero, heroSameKind],
+  )
+  /*
+   * A consult stack (Phase 5): the consult's own tiers, names and read. Its
+   * depths are the ones it built, hero first, never re-tiered by price band
+   * (`consultTierPlans`); its products carry the engine's claims-aware
+   * reasons; "What we checked" is the engine's "Kept out" and "Skipped".
+   */
+  const consultRead = consultExclusions?.read ?? null
+  const consultTiers = consultExclusions?.tiers ?? null
 
   // productId → currently selected flavour variant, for the Pour Plan flavour picker.
   const selectedVariantByProductId = useMemo(() => {
@@ -573,9 +588,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
             STARTER_MIN_STEP,
             { basis: 'oneOffList', levels: STARTER_TIERS, hardCeiling: STARTER_GOODS_CAP },
           )
+        : consultTiers
+        ? consultTierPlans({ blueprint, tiers: consultTiers, heroId: hero?.choice.product.id ?? null, sameKind: heroSameKind, catalogue: products, answers, priceOpts })
         : planTiers(blueprint, products, answers, undefined, priceOpts),
-    [claiming, blueprint, products, answers, priceOpts],
+    [claiming, blueprint, products, answers, priceOpts, consultTiers, hero, heroSameKind],
   )
+  const tierLabels = consultTiers && !claiming ? CONSULT_TIER_LABEL : undefined
   // The depth actually on offer for the member's choice: `planTiers` folds
   // depths a small stack can't tell apart, so the stored level may no longer be
   // one of them. Everything downstream — pricing, the receipt, checkout — uses
@@ -806,18 +824,27 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       activeSlots.flatMap((slot) => {
         const product = products.find((p) => p.id === slot.selectedProductId)
         if (!product) return []
-        const explanation = explainProductSafe({ product, slotType: slot.slotType as SlotType, answers })
+        // A consult stack's products carry the consult's own reasons, already
+        // through the claims maps; a product it didn't pick (a swap, an
+        // add-on) gets the quiz's explanation as before.
+        const consult = consultRead?.products[product.id]
+        const explanation: ProductExplanation | null = consult
+          ? consult.reason
+            ? { kind: 'consult', sentence: consult.reason, claim: consult.claim ? CLAIMS[consult.claim] ?? null : null }
+            : null
+          : explainProductSafe({ product, slotType: slot.slotType as SlotType, answers })
         return [{ key: slot.slotId, product, slotType: slot.slotType, explanation }]
       }),
-    [activeSlots, products, answers],
+    [activeSlots, products, answers, consultRead],
   )
   const checkLines = useMemo(() => {
+    if (consultRead) return consultRead.checked
     try {
       return whatWeChecked({ blueprint: activeBlueprint, products, slots: activeSlots, answers })
     } catch {
       return []
     }
-  }, [activeBlueprint, products, activeSlots, answers])
+  }, [activeBlueprint, products, activeSlots, answers, consultRead])
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.
@@ -1092,6 +1119,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       stackName={stackBlueprint || (!catalogueLoading && !isLive) ? activeBlueprint.stackName : null}
       items={withProducts ? youItems : []}
       checks={withProducts ? checkLines : []}
+      read={consultRead}
       reducedMotion={reducedMotion}
     />
   )
@@ -1231,6 +1259,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
                 gifts={giftLevels}
                 minMonthly={getPricingConfig().minSubscriptionMonthly}
                 oneOffOnly={claiming || founderKind != null}
+                labels={tierLabels}
                 onChange={chooseDepth}
               />
             </div>
@@ -1359,6 +1388,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               onCtaRef={setCtaEl}
               bonus={bonus ? { title: bonus.product.title, worth: bonusWorth(bonus), firstBoxOnly: planType === 'subscription' } : null}
               bonusNote={codeBeatsBonus}
+              tierLabels={tierLabels}
             />
 
             {/* The one form in the journey: a claim, or a free founder code. */}

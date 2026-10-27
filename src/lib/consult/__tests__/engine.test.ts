@@ -3,6 +3,7 @@ import { trainingDays } from '@/lib/consult/training'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { circuitOutcome } from '../circuit'
 import { CAFFEINE_CEILING, runStackEngine, scoreNeeds } from '../engine'
+import { NEUTRAL_REASON } from '../engine'
 import { ingredientsOf } from '../knowledge'
 import { chargeProfile } from '../profile'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../types'
@@ -184,9 +185,12 @@ describe('H4 stack engine', () => {
     expect(r.tiers.complete).toContain('chrgd-plant-protein')
   })
 
-  it('gives every pick a reason that restates an answer or a goal', () => {
+  it('gives every pick a reason that restates an answer or a goal, or the neutral one when nothing may be said', () => {
     const r = runStackEngine(persona(), MOCK_CATALOGUE)
-    for (const p of r.ranked) expect(p.reason).toMatch(/goal|week|daylight|hours|restless|energy|plate|fish|spots|age|sessions|drinks/i)
+    for (const p of r.ranked) {
+      if (p.reason === NEUTRAL_REASON) continue
+      expect(p.reason).toMatch(/goal|week|daylight|hours|restless|energy|plate|fish|spots|age|sessions|drinks/i)
+    }
   })
 
   it('never recommends a product that meets no need', () => {

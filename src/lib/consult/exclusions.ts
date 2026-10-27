@@ -12,6 +12,7 @@ import type { HealthDataConsent, QuizAnswers } from '@/lib/types'
 import type { Ingredient } from './circuit'
 import { ingredientsOf } from './knowledge'
 import type { PersonSnapshot } from '@/lib/offer/select'
+import type { ConsultRead } from './read'
 
 export interface ConsultExclusions {
   consultId: string
@@ -25,6 +26,13 @@ export interface ConsultExclusions {
    * page falls back to today's top pick and no bonus.
    */
   offerFit?: PersonSnapshot
+  /** "Your read" (Phase 5): the top of the results page. Absent in a new tab. */
+  read?: ConsultRead
+  /**
+   * The consult's own tiers (Phase 5): the results page shows these, hero
+   * first, rather than re-tiering the stack by price band.
+   */
+  tiers?: { essentials: string[]; standard: string[]; complete: string[] }
 }
 
 export function isExcluded(product: Pick<CatalogueProduct, 'swapGroup' | 'title' | 'contraindications'>, excluded: readonly Ingredient[]): boolean {

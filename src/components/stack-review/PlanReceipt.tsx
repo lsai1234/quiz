@@ -9,6 +9,7 @@ import { cadenceLine, formatGBP, getPricingConfig, planComparison, qualifiesForF
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
 import type { PlanType } from '@/lib/store'
+import type { StackLevel } from '@/lib/types'
 import { TIER_META } from '@/lib/quiz-core'
 import { Icon } from '@/components/ui/Icon'
 import type { CodeKind } from '@/components/checkout/PartnerCodeBox'
@@ -79,6 +80,8 @@ interface Props {
   bonus?: { title: string; worth: number | null; firstBoxOnly: boolean } | null
   /** Why there is no bonus line: a code worth more took its place. */
   bonusNote?: string | null
+  /** The depths' names, when not the quiz's own (a consult stack: Standard, not Balanced). */
+  tierLabels?: Partial<Record<StackLevel, string>>
 }
 
 /** Months, said the way a person would say them. */
@@ -202,7 +205,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null,
+  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null, tierLabels,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -421,7 +424,7 @@ export function PlanReceipt({
                   two cannot drift apart — this line once said "Performance"
                   for the depth the picker calls "Balanced". */}
               {subscriptionDiscountPct > 0 && (
-                <Row label={`${TIER_META[bundleLevel].label} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
+                <Row label={`${tierLabels?.[bundleLevel] ?? TIER_META[bundleLevel].label} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
               )}
               {hasIntro && (
                 <Row
