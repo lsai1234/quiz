@@ -205,3 +205,64 @@ test('consult: Amp glows with the energy being set, and leans as it moves', asyn
   await page.keyboard.press('Home')
   await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', /^0(\.1)?$/)
 })
+
+/* ── The day ring (plan Phase 7.3) ─────────────────────────────────────── */
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: the day ring, round Amp and for the read (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Day ring')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const lg = page.locator('[data-ring-lg]')
+    await expect(lg.getByRole('img', { name: /^Your day: sleep 23:30 to 06:00, last coffee about 16:00, trains around 18:30/ })).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Your day, in words' }).getByRole('listitem')).toHaveCount(5)
+    await expect(page.locator('[data-ring-sm]')).toHaveScreenshot(`day-ring-sm-${mode}.png`, STILL)
+    await expect(lg).toHaveScreenshot(`day-ring-lg-${mode}.png`, STILL)
+  })
+}
+
+test('workshop: the ring fills in one answer at a time, and only with what was said', async ({ page }) => {
+  await openStory(page, 'Day ring')
+  const marks = page.locator('[data-ring-lg] [data-flight-slot]')
+  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Back an answer' }).click()
+  await expect(marks).toHaveCount(0)
+  for (const n of [1, 2, 3, 4, 5]) {
+    await page.getByRole('button', { name: 'Next answer' }).click()
+    await expect(marks).toHaveCount(n)
+  }
+})
+
+test('consult: the answer lands on its own mark in the day ring', async ({ page }) => {
+  await founderSessionViaApi(page)
+  await page.goto('/quizv2')
+  await page.getByRole('button', { name: /^Energy/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('listbox', { name: 'Age band' }).focus()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: 'Prefer not to say' }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(page.locator('[data-day-ring="sm"]')).toBeVisible()
+  await page.getByRole('button', { name: /^Monday:/ }).click()
+  await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(page.locator('[data-day-ring="sm"] [data-flight-slot="training"]')).toBeVisible()
+  await page.getByRole('slider', { name: 'Afternoon energy' }).focus()
+  await page.keyboard.press('ArrowLeft')
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('radio', { name: 'OK' }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  // In flight to the sleep arc, then there.
+  await expect(page.locator('.amp-flight')).toHaveCount(1)
+  const token = await page.locator('.amp-flight').evaluate((el) => el.getAnimations()[0]?.effect?.getKeyframes().at(-1)?.transform as string)
+  // Where the arc settles, once the scene has slid in: where the flight aimed.
+  await expect(page.locator('.amp-flight')).toHaveCount(0)
+  await page.waitForTimeout(300)
+  const arc = (await page.locator('[data-day-ring="sm"] [data-flight-slot="sleep"]').boundingBox())!
+  const [, x, y] = token.match(/translate\(([\d.]+)px, ([\d.]+)px\)/)!.map(Number)
+  expect(x).toBeGreaterThanOrEqual(arc.x - 24)
+  expect(x).toBeLessThanOrEqual(arc.x + arc.width + 24)
+  expect(y).toBeGreaterThanOrEqual(arc.y - 24)
+  expect(y).toBeLessThanOrEqual(arc.y + arc.height + 24)
+  await expect(page.getByRole('img', { name: /^Your day: sleep / })).toBeVisible()
+})

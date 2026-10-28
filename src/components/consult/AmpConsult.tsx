@@ -144,6 +144,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // has, and under reduced motion, nothing flies and nothing waits for it.
   const reducedMotion = useReducedMotion()
   const flights = useRef<typeof import('@/lib/consult/flight') | null>(null)
+  // The day ring (plan Phase 7.3): its code arrives once they're under way.
+  const [ringMod, setRingMod] = useState<typeof import('./DayRing') | null>(null)
+  useEffect(() => {
+    if (underWay && !ringMod) void import('./DayRing').then(setRingMod)
+  }, [underWay, ringMod])
   const pendingFlight = useRef<{ token: import('@/lib/consult/flight').FlightToken; from: import('@/lib/consult/flight').Box } | null>(null)
   useEffect(() => {
     if (underWay && !reducedMotion && !flights.current) void import('@/lib/consult/flight').then((m) => (flights.current = m))
@@ -521,8 +526,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
               <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
                 <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={rig} />
               </Reticle>
+            ) : mode === 'calm' ? (
+              <Amp state={ampState} lean={watching ?? 0} reaction={null} />
             ) : (
-              <Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={mode === 'calm' ? undefined : rig} />
+              <RingSlot ring={ringMod} answers={state.answers}>
+                <Amp state={ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={rig} />
+              </RingSlot>
             )
           }
           // Inside the round, only Pinpoint's own lines: the last core answer's reaction belongs to the intro.
@@ -639,6 +648,23 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
         />
       )}
     </ConsultRoot>
+  )
+}
+
+/**
+ * Amp in his day ring (plan Phase 7.3), in the reticle's footprint. Until the
+ * ring's code has arrived (after scene one, where there's nothing to plot),
+ * an empty track holds its place, so nothing moves when it does.
+ */
+function RingSlot({ ring, answers, children }: { ring: typeof import('./DayRing') | null; answers: ConsultAnswers; children: React.ReactNode }) {
+  if (ring) return <ring.DayRing answers={answers}>{children}</ring.DayRing>
+  return (
+    <span className="relative inline-flex shrink-0 items-center justify-center" data-day-ring="placeholder" style={{ width: 'calc(var(--amp-space-10) + var(--amp-space-2))', height: 'calc(var(--amp-space-10) + var(--amp-space-2))' }}>
+      <svg viewBox="0 0 100 100" aria-hidden className="absolute inset-0 h-full w-full">
+        <circle cx="50" cy="50" r="44" fill="none" stroke="var(--amp-edge-strong)" strokeWidth="2" />
+      </svg>
+      {children}
+    </span>
   )
 }
 

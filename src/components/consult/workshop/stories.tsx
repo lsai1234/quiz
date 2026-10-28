@@ -7,6 +7,9 @@ import { SceneShell } from '../SceneShell'
 import { ChargeMeter, type MeterSection } from '../ChargeMeter'
 import { NextButton, QuietLink, Segmented } from '../controls'
 import { Amp, type AmpState } from '../Amp'
+import { DayRing } from '../DayRing'
+import { trainingDays } from '@/lib/consult/training'
+import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { AMP_NEXT_EVENT, droopFor, type AmpMood, type AmpRig } from '@/lib/consult/amp-rig'
 import type { AmpReaction } from '@/lib/consult/motion'
 import { ChargeProfileChart } from '../ChargeProfileChart'
@@ -239,6 +242,57 @@ function FlightStory() {
   )
 }
 
+/* ── The day ring (plan Phase 7.3) ─────────────────────────────────────── */
+
+/** Answers as a consult would give them, one more each step; then Pinpoint's times. */
+const RING_STEPS: { said: string; answers: Partial<ConsultAnswers> }[] = [
+  { said: 'Nothing yet', answers: {} },
+  { said: 'Training: 4 days a week', answers: { training: trainingDays(['gym', 'rest', 'gym', 'rest', 'cardio', 'sport', 'rest']) } },
+  { said: 'Afternoon energy 4/10', answers: { energy: 4 } },
+  { said: 'Sleep 23:30 to 06:00', answers: { sleep: { bed: 23 * 60 + 30, wake: 6 * 60, quality: 'ok' } } },
+  { said: 'Daylight most days', answers: { daylight: 'most' } },
+  { said: '3 caffeinated drinks a day', answers: { caffeine: { coffee: 2, tea: 1, energy: 0 } } },
+  {
+    said: 'Pinpoint: last coffee about 16:00, trains around 18:30',
+    answers: {
+      pinpoint: {
+        steps: [
+          { kind: 'probe', probe: 'last-caffeine', answer: {}, minutes: 16 * 60, stage: 'follow-fuel' },
+          { kind: 'probe', probe: 'train-when', answer: {}, minutes: 18 * 60 + 30, stage: 'follow-move' },
+        ],
+        stopped: false,
+      },
+    },
+  },
+]
+
+/** The ring in the consult (round Amp) and the larger one for the read, filling in. */
+function DayRingStory() {
+  const [step, setStep] = useState(RING_STEPS.length - 1)
+  const answers = RING_STEPS.slice(0, step + 1).reduce<ConsultAnswers>((a, s) => ({ ...a, ...s.answers }), { ...EMPTY_ANSWERS })
+  return (
+    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <div className="flex items-center" style={{ gap: 'var(--amp-space-3)' }} data-ring-sm>
+        <DayRing answers={answers}>
+          <Amp state="idle" />
+        </DayRing>
+        <span className="uppercase" style={{ ...label, color: 'var(--amp-accent)' }}>
+          {RING_STEPS[step].said}
+        </span>
+      </div>
+      <div data-ring-lg>
+        <DayRing answers={answers} size="lg">
+          <Amp state="idle" size="lg" />
+        </DayRing>
+      </div>
+      <div className="grid w-full grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
+        <NextButton onClick={() => setStep((n) => Math.max(0, n - 1))}>Back an answer</NextButton>
+        <NextButton onClick={() => setStep((n) => Math.min(RING_STEPS.length - 1, n + 1))}>Next answer</NextButton>
+      </div>
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -254,4 +308,5 @@ export const STORIES: Story[] = [
   },
   { id: 'flight', title: 'Shared flight', render: () => <FlightStory /> },
   { id: 'amp-alive', title: 'Amp, alive', render: () => <AmpAliveStory /> },
+  { id: 'day-ring', title: 'Day ring', render: () => <DayRingStory /> },
 ]
