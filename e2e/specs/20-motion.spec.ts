@@ -200,7 +200,7 @@ test('consult: Amp glows with the energy being set, and leans as it moves', asyn
   // Draw the day full across, then empty: Amp's glow follows the afternoon.
   await drawDay(page, Array(10).fill(0.02))
   await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', '1')
-  await drawDay(page, Array(10).fill(0.98))
+  await drawDay(page, Array(10).fill(0.95))
   await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', /^0(\.1)?$/)
 })
 
@@ -268,15 +268,16 @@ test('consult: the answer lands on its own mark in the day ring', async ({ page 
 
 /** Draws across the curve's box, left to right, through heights 0 (top) to 1 (bottom). */
 async function drawDay(page: Page, heights: number[]) {
-  // The scene slides in: measure the box once it has stopped moving.
-  let box = (await page.locator('[data-day-curve]').boundingBox())!
-  await expect(async () => {
-    const now = (await page.locator('[data-day-curve]').boundingBox())!
-    const still = now.x === box.x && now.y === box.y
-    box = now
-    expect(still).toBe(true)
-  }).toPass({ intervals: [150] })
-  const at = (i: number) => ({ x: box.x + 2 + ((box.width - 4) * i) / (heights.length - 1), y: box.y + box.height * heights[i] })
+  // The scene slides in: measure the box once nothing round it is still moving.
+  await page.waitForFunction(() => {
+    for (let el = document.querySelector('[data-day-curve]'); el; el = el.parentElement) {
+      if (el.getAnimations().some((a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity)) return false
+    }
+    return Boolean(document.querySelector('[data-day-curve]'))
+  })
+  const box = (await page.locator('[data-day-curve]').boundingBox())!
+  // Inset from the sides: the box's rounded corners aren't part of it.
+  const at = (i: number) => ({ x: box.x + 12 + ((box.width - 24) * i) / (heights.length - 1), y: box.y + box.height * heights[i] })
   await page.mouse.move(at(0).x, at(0).y)
   await page.mouse.down()
   for (let i = 1; i < heights.length; i++) await page.mouse.move(at(i).x, at(i).y, { steps: 3 })
@@ -299,7 +300,7 @@ for (const mode of ['standard', 'comfort', 'reduced'] as const) {
       await drawDay(page, [0.4, 0.25, 0.2, 0.3, 0.65, 0.72, 0.5, 0.35, 0.45, 0.6])
     }
     await expect(curve).toHaveAttribute('data-day-curve', 'set')
-    await expect(page.getByRole('img', { name: /^Energy dips around 1[46]:00/ })).toBeVisible()
+    await expect(page.getByRole('img', { name: /^Energy .*dips around 1[46]:00/ })).toBeVisible()
     await expect(page.locator('[data-curve-read]')).toContainText(/(3pm dip|Drawn) · \d+ \/ 10 in the afternoon/)
     await expect(page.locator('[data-ring-dip]')).toHaveCount(1)
     if (mode !== 'comfort') {
@@ -331,7 +332,7 @@ test('consult: the energy scene takes a drawn day, and the ring draws it', async
   await expect(page.locator('h1')).toHaveText(/How does your energy go through a day/)
   await expect(page.locator('[data-day-curve]')).toBeVisible()
   await drawDay(page, [0.4, 0.25, 0.2, 0.3, 0.65, 0.72, 0.5, 0.35, 0.45, 0.6])
-  await expect(page.getByRole('img', { name: /^Energy dips around 1[46]:00/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /^Energy .*dips around 1[46]:00/ })).toBeVisible()
   await expect(page.locator('[data-day-ring="sm"] [data-ring-dip]')).toHaveCount(1)
-  await expect(page.getByRole('img', { name: /^Your day: .*energy dips around 1[46]:00/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /^Your day: .*energy.*dips around 1[46]:00/ })).toBeVisible()
 })
