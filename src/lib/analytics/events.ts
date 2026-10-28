@@ -199,8 +199,17 @@ export const SITE_EVENTS = ['page_view'] as const
 
 export type SiteEvent = (typeof SITE_EVENTS)[number]
 
+/**
+ * Speed on real devices (plan Phase 7.1): a Core Web Vital per page load, and
+ * a page's long animation frames, from `rum.ts`. The server adds the device
+ * bucket; the hub reads them in `vitals.ts`.
+ */
+export const PERF_EVENTS = ['web_vital', 'long_frames'] as const
+
+export type PerfEvent = (typeof PERF_EVENTS)[number]
+
 /** Every event the client may emit. */
-export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent | ConsultEvent | SiteEvent
+export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent | ConsultEvent | SiteEvent | PerfEvent
 
 /** Every event the server accepts — one list, so a new family cannot be emitted and silently dropped. */
 export const ALL_EVENTS: readonly AnalyticsEvent[] = [
@@ -209,6 +218,7 @@ export const ALL_EVENTS: readonly AnalyticsEvent[] = [
   ...SHARE_EVENTS,
   ...CONSULT_EVENTS,
   ...SITE_EVENTS,
+  ...PERF_EVENTS,
 ]
 
 export type EventProps = Record<string, string | number | boolean | undefined>

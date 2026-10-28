@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { fly, settledBox, type FlightToken, type RingSlot } from '@/lib/consult/flight'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { SceneShell } from '../SceneShell'
 import { ChargeMeter, type MeterSection } from '../ChargeMeter'
 import { NextButton, QuietLink } from '../controls'
@@ -97,6 +99,91 @@ function AmpStory() {
   )
 }
 
+/* ── Shared-element flights (plan Phase 7.1) ──────────────────────────────── */
+
+/** A stand-in for the day ring (item 3): its five slots, round a circle. */
+const RING_SLOTS: { slot: RingSlot; angle: number; answer: string; scene: FlightToken['scene'] }[] = [
+  { slot: 'sleep', angle: -90, answer: '23:00–07:00', scene: 'sleep' },
+  { slot: 'caffeine', angle: -18, answer: '3 a day', scene: 'caffeine' },
+  { slot: 'training', angle: 54, answer: '4 a week', scene: 'training' },
+  { slot: 'daylight', angle: 126, answer: 'Most days', scene: 'daylight' },
+  { slot: 'energy', angle: 198, answer: '6 / 10', scene: 'energy' },
+]
+
+/**
+ * Answer a stand-in scene, press Next, and the answer flies into its slot as
+ * the "next scene" (a fresh card) arrives. The real thing lands on Amp until
+ * the ring is built; this shows where it's going.
+ */
+function FlightStory() {
+  const reduced = useReducedMotion()
+  const [step, setStep] = useState(0)
+  const [filled, setFilled] = useState<Partial<Record<RingSlot, string>>>({})
+  const source = useRef<HTMLDivElement>(null)
+  const current = RING_SLOTS[step % RING_SLOTS.length]
+
+  const next = () => {
+    const token: FlightToken = { scene: current.scene, slot: current.slot, label: current.answer }
+    const from = source.current ? settledBox(source.current) : null
+    setStep((n) => n + 1)
+    const land = () => setFilled((f) => ({ ...f, [token.slot]: token.label }))
+    const target = document.querySelector(`[data-flight-slot="${token.slot}"]`)
+    const root = (source.current?.closest('.amp-consult') as HTMLElement | null) ?? undefined
+    const flight = !reduced && from && target ? fly(token, from, target, root) : null
+    if (flight) flight.finished.then(land, land)
+    else land()
+  }
+
+  return (
+    <div className="flex flex-col" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <div className="relative mx-auto" style={{ width: 'min(100%, calc(var(--amp-space-10) * 6))', aspectRatio: '1' }} aria-label="Day ring (stand-in)" role="group">
+        <div className="absolute" style={{ inset: 'var(--amp-space-8)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) dashed var(--amp-edge-strong)' }} />
+        <div className="absolute flex items-center justify-center" style={{ inset: 0 }}>
+          <Amp state="idle" size="md" />
+        </div>
+        {RING_SLOTS.map(({ slot, angle }) => (
+          <div
+            key={slot}
+            data-flight-slot={slot}
+            data-filled={filled[slot] ? 'true' : 'false'}
+            className="absolute flex items-center justify-center"
+            style={{
+              left: `calc(50% + ${Math.cos((angle * Math.PI) / 180).toFixed(3)} * (50% - var(--amp-space-6)))`,
+              top: `calc(50% + ${Math.sin((angle * Math.PI) / 180).toFixed(3)} * (50% - var(--amp-space-6)))`,
+              transform: 'translate(-50%, -50%)',
+              minWidth: 'var(--amp-space-10)',
+              minHeight: 'var(--amp-space-6)',
+              padding: '0 var(--amp-space-2)',
+              borderRadius: 'var(--amp-radius-pill)',
+              border: `var(--amp-hairline) solid ${filled[slot] ? 'var(--amp-accent-line)' : 'var(--amp-edge)'}`,
+              background: filled[slot] ? 'var(--amp-accent-fill)' : 'transparent',
+              color: filled[slot] ? 'var(--amp-accent)' : 'var(--amp-ink-3)',
+              fontFamily: 'var(--amp-font-label)',
+              fontSize: 'var(--amp-text-data)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {filled[slot] ?? slot}
+          </div>
+        ))}
+      </div>
+      <div
+        key={step}
+        ref={source}
+        className={reduced ? undefined : 'amp-anim-rise'}
+        style={{ padding: 'var(--amp-space-5)', borderRadius: 'var(--amp-radius-panel)', border: 'var(--amp-hairline) solid var(--amp-edge-strong)', background: 'var(--amp-glass)' }}
+      >
+        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' }}>
+          {current.slot}
+        </p>
+        <p style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-lead)', marginTop: 'var(--amp-space-1)' }}>{current.answer}</p>
+      </div>
+      <NextButton onClick={next}>Next</NextButton>
+      <QuietLink onClick={() => (setFilled({}), setStep(0))}>Start again</QuietLink>
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -110,4 +197,5 @@ export const STORIES: Story[] = [
       </div>
     ),
   },
+  { id: 'flight', title: 'Shared flight', render: () => <FlightStory /> },
 ]

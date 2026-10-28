@@ -44,6 +44,7 @@
     "stripe": "^22.3.2",
     "three": "^0.184.0",
     "web-push": "^3.6.7",
+    "web-vitals": "4.2.4",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

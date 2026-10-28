@@ -7,7 +7,8 @@ import { INVITE_COPY, inviteLine } from '@/lib/consult/hunch-copy'
 import { comboFor } from '@/lib/consult/combo-reactions'
 import type { PinpointStage } from '@/lib/consult/pinpoint/types'
 import { Reticle } from './pinpoint/Reticle'
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import {
   NUDGES,
   backStep,
@@ -136,6 +137,31 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   useEffect(() => {
     if (underWay) preloadLaterScenes()
   }, [underWay])
+
+  // Shared-element flights (plan Phase 7.1): an answer flies into its slot as
+  // the next scene arrives. The code arrives once they're under way; until it
+  // has, and under reduced motion, nothing flies and nothing waits for it.
+  const reducedMotion = useReducedMotion()
+  const flights = useRef<typeof import('@/lib/consult/flight') | null>(null)
+  const pendingFlight = useRef<{ token: import('@/lib/consult/flight').FlightToken; from: import('@/lib/consult/flight').Box } | null>(null)
+  useEffect(() => {
+    if (underWay && !reducedMotion && !flights.current) void import('@/lib/consult/flight').then((m) => (flights.current = m))
+  }, [underWay, reducedMotion])
+  /** Before Next: take off from the scene being answered, if its answer has a slot. */
+  const takeOff = () => {
+    const m = flights.current
+    const source = document.querySelector('[data-flight-source]')
+    const token = m && !reducedMotion && source ? m.flightToken(state.sceneId, state.answers) : null
+    pendingFlight.current = token && source ? { token, from: m!.settledBox(source) } : null
+  }
+  // After Next, as the new scene arrives: land in its slot (Amp, until the day ring).
+  useLayoutEffect(() => {
+    const p = pendingFlight.current
+    pendingFlight.current = null
+    if (!p || !flights.current) return
+    const target = document.querySelector(`[data-flight-slot="${p.token.slot}"]`) ?? document.querySelector('[data-flight-slot="amp"]')
+    if (target) flights.current.fly(p.token, p.from, target, (target.closest('.amp-consult') as HTMLElement | null) ?? undefined)
+  }, [state.sceneId])
 
   // Read the save once, on mount. Same tab → straight back in. Otherwise ask.
   useEffect(() => {
@@ -282,6 +308,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     const timer = setTimeout(() => {
       setAutoNext(null)
       const after = flowReducer(state, { type: 'next' })
+      if (after.sceneId !== state.sceneId) takeOff()
       dispatch({ type: 'next' })
       if (after.phase === 'analysis') onComplete?.(after)
     }, DURATION.heard)
@@ -361,6 +388,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
   const next = () => {
     const after = flowReducer(state, { type: 'next' })
+    if (after.sceneId !== state.sceneId) takeOff()
     dispatch({ type: 'next' })
     if (after.phase === 'analysis') onComplete?.(after)
   }

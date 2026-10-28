@@ -3,7 +3,7 @@ import { AmpConsult } from '../AmpConsult'
 import { SCENES, initialFlow, resolveSceneDef, visibleScenes } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS } from '@/lib/consult/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import { SHORT_LINK, chooseRoute, heading, pickFirstOptionAndNext } from './drive'
+import { SHORT_LINK, answerCurrentScene, chooseRoute, heading, pickFirstOptionAndNext, pressNext } from './drive'
 
 beforeEach(() => {
   localStorage.clear()
@@ -203,5 +203,54 @@ describe('the phone’s back gesture (plan Phase 6)', () => {
     render(<AmpConsult initial={initialFlow('c', 0)} />)
     pickFirstOptionAndNext()
     expect(window.history.length).toBe(start)
+  })
+})
+
+describe('shared-element flights (plan Phase 7.1)', () => {
+  const animate = jest.fn(() => ({ finished: new Promise(() => {}) }) as unknown as Animation)
+  beforeEach(() => {
+    animate.mockClear()
+    ;(Element.prototype as unknown as { animate: unknown }).animate = animate
+  })
+  afterEach(() => {
+    delete (Element.prototype as { animate?: unknown }).animate
+    document.querySelectorAll('.amp-flight').forEach((e) => e.remove())
+  })
+
+  const atSleep = () => ({
+    ...initialFlow('c_fly', 0, { goals: ['energy'], age: '35-44', comfortOffered: true }),
+    sceneId: 'sleep' as const,
+    history: ['goals' as const, 'about' as const, 'training' as const, 'energy' as const],
+  })
+
+  it('flies the answer from the scene into its slot (Amp, until the day ring) as the next scene arrives', async () => {
+    render(<AmpConsult initial={atSleep()} />)
+    await act(async () => new Promise((r) => setTimeout(r, 0)))
+    answerCurrentScene()
+    pressNext()
+    const token = document.querySelector('.amp-flight')
+    expect(token?.textContent).toMatch(/^\d\d:\d\d–\d\d:\d\d$/)
+    expect(animate).toHaveBeenCalled()
+    expect(heading()).toHaveTextContent('How often are you outside in daylight?')
+  })
+
+  it('flies nothing for a scene off the ring, or under reduced motion', async () => {
+    const { unmount } = render(<AmpConsult initial={{ ...atSleep(), sceneId: 'goals', history: [] }} />)
+    pickFirstOptionAndNext()
+    await act(async () => new Promise((r) => setTimeout(r, 0)))
+    pickFirstOptionAndNext()
+    expect(document.querySelector('.amp-flight')).toBeNull()
+    unmount()
+    const original = window.matchMedia
+    window.matchMedia = ((q: string) => ({ ...original(q), matches: q.includes('reduce') })) as typeof window.matchMedia
+    try {
+      render(<AmpConsult initial={atSleep()} />)
+      await act(async () => new Promise((r) => setTimeout(r, 0)))
+      answerCurrentScene()
+      pressNext()
+      expect(document.querySelector('.amp-flight')).toBeNull()
+    } finally {
+      window.matchMedia = original
+    }
   })
 })

@@ -380,6 +380,28 @@
   animation: amp-fade var(--amp-duration-enter) var(--amp-ease-out) both;
 }
 
+/* A shared-element flight (plan Phase 7.1): an answer on its way into its
+   slot on the day ring. Laid out at the origin; `flight.ts` places and moves
+   it by transform. Above the scene, never in the way of a tap. */
+.amp-flight {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  pointer-events: none;
+  transform-origin: 0 0;
+  white-space: nowrap;
+  padding: var(--amp-space-1) var(--amp-space-3);
+  border-radius: var(--amp-radius-pill);
+  border: var(--amp-hairline) solid var(--amp-accent-line);
+  background: var(--amp-glass-solid);
+  box-shadow: var(--amp-glow-soft);
+  color: var(--amp-accent);
+  font-family: var(--amp-font-label);
+  font-size: var(--amp-text-data);
+  letter-spacing: var(--amp-tracking-data);
+}
+
 /* Tap feedback: a short press, no bounce back. */
 .amp-press {
   transition:

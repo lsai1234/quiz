@@ -123,3 +123,16 @@ describe('POST /api/analytics', () => {
     expect(Date.parse(e.created_at)).toBeGreaterThanOrEqual(before - 1000)
   })
 })
+
+describe('speed on real devices (plan Phase 7.1)', () => {
+  it('accepts the perf events and tags each with the device the user agent says, whatever the page claims', async () => {
+    await beacon({ event: 'web_vital', props: { metric: 'LCP', value: 1800, rating: 'good', device: 'desktop' } })
+    await beacon({ event: 'long_frames', props: { count: 3, worstMs: 140, blockingMs: 90 } })
+    const stored = await listEventsSince('2000-01-01T00:00:00Z', 100, { events: ['web_vital', 'long_frames'] })
+    expect(stored.map((e) => [e.event, e.props.device])).toEqual([
+      ['web_vital', 'mobile'],
+      ['long_frames', 'mobile'],
+    ])
+    expect(stored[0].props).toMatchObject({ metric: 'LCP', value: 1800, rating: 'good' })
+  })
+})

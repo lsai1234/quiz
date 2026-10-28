@@ -733,3 +733,22 @@ Both quizzes, one layout (`StackReviewPage`, `lib/offer/results.ts`):
   they get one email. An earlier order to the same address alone doesn't count.
 - **Kill switch:** `BONUS_AT_CHECKOUT` in `lib/offer/public.ts`. False hides
   the gift everywhere and refuses every claim, whatever the hub says.
+
+## 9. Speed on real devices (Monitoring)
+
+**Monitoring → Speed on real devices** shows what visitors' own browsers
+measured (Amp Consult and offer plan, Phase 7.1): the three Core Web Vitals
+(largest paint, response to a tap, layout shift) at the 75th percentile, by
+device type, for the whole site or one part of it (consult, quiz, shop), over
+the last 28 days; and, from browsers that report them, long animation frames
+(over 50ms), the stutters a person sees in motion.
+
+- The page measures itself a few seconds after it has loaded and gone idle
+  (`RealUserMonitoring` → `lib/analytics/rum.ts`, with `web-vitals`), so it
+  never slows the first scene. Two anonymous events, `web_vital` and
+  `long_frames`; the server adds the device bucket from the user agent.
+- Founder sessions are left out unless **Include founder sessions** is ticked.
+  The consult is founders-only until it rolls out, so its figures are all
+  founders' until then.
+- Good is under 2.5s, 200ms and 0.1 (web.dev's thresholds); the badge is
+  the p75's rating.

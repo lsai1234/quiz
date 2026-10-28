@@ -145,7 +145,7 @@ export function SceneShell({
             scene with no reaction yet he sits beside the hint instead. */}
         {reaction && (
           <div className="flex items-center" style={{ gap: 'var(--amp-space-2)', minHeight: 'var(--amp-space-6)', marginBottom: 'var(--amp-space-3)' }}>
-            {amp}
+            <span data-flight-slot="amp" className="inline-flex shrink-0">{amp}</span>
             <p
               aria-live="polite"
               className="uppercase"
@@ -180,7 +180,7 @@ export function SceneShell({
         </h1>
         {(hint || (!reaction && amp)) && (
           <div className="flex items-start" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-3)' }}>
-            {!reaction && amp}
+            {!reaction && amp && <span data-flight-slot="amp" className="inline-flex shrink-0">{amp}</span>}
             {hint && (
               <p style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink-2)', paddingTop: 'var(--amp-hairline)' }}>{hint}</p>
             )}
@@ -190,6 +190,7 @@ export function SceneShell({
 
       {/* ── The interaction ─────────────────────────────────────────────── */}
       <div
+        data-flight-source
         className={`flex flex-1 flex-col ${align === 'start' ? 'justify-start' : 'justify-center'}`}
         style={{ paddingTop: 'var(--amp-shell-gap)', paddingBottom: 'var(--amp-shell-gap)' }}
       >

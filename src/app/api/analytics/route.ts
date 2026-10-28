@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { ALL_EVENTS, type AnalyticsEvent, type EventProps } from '@/lib/analytics/events'
+import { ALL_EVENTS, PERF_EVENTS, type AnalyticsEvent, type EventProps } from '@/lib/analytics/events'
 import { recordEvent } from '@/lib/analytics/repo'
 import { patchFromEvent, recordSessionEvent } from '@/lib/analytics/sessions'
 import { parseUserAgent, sanitiseVisitContext } from '@/lib/analytics/visit'
@@ -56,6 +56,9 @@ export async function POST(req: Request) {
   let props = (body.props && typeof body.props === 'object' && !Array.isArray(body.props) ? body.props : {}) as EventProps
   if (JSON.stringify(props).length > MAX_PROPS_CHARS) props = {}
   props = scrubHealthProps(event, props)
+  // Speed figures are read by device (plan Phase 7.1): the bucket the user
+  // agent says, set here rather than trusted from the page.
+  if ((PERF_EVENTS as readonly string[]).includes(event)) props = { ...props, device: device.device ?? 'unknown' }
   const session = typeof body.session === 'string' && body.session.length <= 64 ? body.session : null
   const path = typeof body.path === 'string' ? body.path.slice(0, 200) : null
   const nowMs = Date.now()
