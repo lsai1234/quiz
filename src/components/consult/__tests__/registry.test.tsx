@@ -13,7 +13,7 @@ describe('the scene registry', () => {
     const unbuilt = { ...SCENES.find((s) => s.id === 'energy')!, interaction: 'not-built-yet' }
     expect(SCENE_REGISTRY['not-built-yet']).toBeUndefined()
     expect(resolveScene(unbuilt).component).toBe(PlaceholderScene)
-    expect(resolveScene(unbuilt).writes).toEqual(['energy'])
+    expect(resolveScene(unbuilt).writes).toEqual(['energy', 'energyCurve'])
   })
 
   it('has a real element for every scene in the script', () => {

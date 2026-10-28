@@ -8,8 +8,8 @@
  *   caffeine   the last cup at its time, when Pinpoint asked; otherwise the count
  *   training   at their training time, when Pinpoint asked; otherwise days a week
  *   daylight   a glow over the middle of the day, as bright as their answer
- *   energy     the afternoon level they set (the curve and its dip come with
- *              "Shape your day", item 4)
+ *   energy     their day's curve, with the dip marked (Shape your day, item 4);
+ *              without one, the afternoon level
  *
  * Midnight at the top, clockwise, like a watch. Pure.
  */
@@ -17,6 +17,17 @@
 import { countsByType, sessionsPerWeek } from './training'
 import type { ConsultAnswers, Daylight } from './types'
 import type { RingSlot } from './flight'
+import { CURVE_HOURS, CURVE_MAX, curveWords, readCurve } from './day-curve'
+
+/** The day's curve round the ring: 06:00 to midnight, its level as distance from the middle. */
+export function curveOnRing(points: readonly number[], inner = 24, outer = 38): string {
+  return points
+    .map((level, i) => {
+      const p = pointAt(CURVE_HOURS[i] * 60, inner + ((outer - inner) * level) / CURVE_MAX)
+      return `${i ? 'L' : 'M'}${p.x} ${p.y}`
+    })
+    .join('')
+}
 
 const DAY = 24 * 60
 
@@ -63,7 +74,7 @@ export interface DayRingData {
   caffeine: { at: number } | { count: number } | null
   training: { at: number } | { days: number } | null
   daylight: { level: number; answer: Daylight } | null
-  energy: { level: number } | null
+  energy: { level: number } | { points: number[]; dip: number | null } | null
 }
 
 export function dayRingData(a: ConsultAnswers): DayRingData {
@@ -77,7 +88,11 @@ export function dayRingData(a: ConsultAnswers): DayRingData {
     caffeine: lastCup !== null && (cups ?? 1) > 0 ? { at: lastCup } : cups !== null ? { count: cups } : null,
     training: trains !== null && by.gym + by.cardio + by.sport > 0 ? { at: trains } : days !== null ? { days } : null,
     daylight: a.daylight ? { level: DAYLIGHT_GLOW[a.daylight], answer: a.daylight } : null,
-    energy: a.energy !== null ? { level: a.energy } : null,
+    energy: a.energyCurve?.points
+      ? { points: a.energyCurve.points, dip: readCurve(a.energyCurve.points).dip?.at ?? null }
+      : a.energy !== null
+        ? { level: a.energy }
+        : null,
   }
 }
 
@@ -95,7 +110,10 @@ export function dayRingLines(d: DayRingData): { slot: RingSlot; text: string }[]
   }
   if (d.training) lines.push({ slot: 'training', text: 'at' in d.training ? `trains around ${clock(d.training.at)}` : d.training.days === 0 ? 'no training' : `trains ${d.training.days} day${d.training.days === 1 ? '' : 's'} a week` })
   if (d.daylight) lines.push({ slot: 'daylight', text: DAYLIGHT_WORDS[d.daylight.answer] })
-  if (d.energy) lines.push({ slot: 'energy', text: `afternoon energy ${d.energy.level} out of 10` })
+  if (d.energy) {
+    const text = 'points' in d.energy ? curveWords(d.energy.points) : `afternoon energy ${d.energy.level} out of 10`
+    lines.push({ slot: 'energy', text: text.charAt(0).toLowerCase() + text.slice(1) })
+  }
   return lines
 }
 

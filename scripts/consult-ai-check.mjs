@@ -103,7 +103,7 @@ const moved = await p.waitForFunction((was) => document.querySelector('h1')?.tex
 if (moved) log('moved on by itself to:', await h1())
 else {
   log('stayed, still to answer:', await p.getByRole('radiogroup', { name: /How hard/ }).count() ? 'how hard sessions feel' : 'something on screen')
-  if (await p.getByRole('radio', { name: 'Steady' }).count()) await p.getByRole('radio', { name: 'Steady' }).click()
+  if (await p.getByRole('radio', { name: 'Steady', exact: true }).count()) await p.getByRole('radio', { name: 'Steady', exact: true }).click()
   await next()
 }
 
@@ -123,9 +123,9 @@ for (let i = 0; i < 16; i++) {
     await shot('06-whats-this')
     await p.keyboard.press('Escape')
   }
-  if (await p.getByRole('radio', { name: 'Steady' }).count()) await p.getByRole('radio', { name: 'Steady' }).click()
+  if (await p.getByRole('radio', { name: 'Steady', exact: true }).count()) await p.getByRole('radio', { name: 'Steady', exact: true }).click()
   if (await p.getByRole('radio', { name: /^Build muscle/ }).count()) await p.getByRole('radio', { name: /^Build muscle/ }).click()
-  if (await p.getByRole('slider', { name: 'Afternoon energy' }).count()) await p.getByRole('slider', { name: 'Afternoon energy' }).press('End')
+  if (await p.getByRole('radio', { name: 'Steady all day' }).count()) await p.getByRole('radio', { name: 'Steady all day' }).click()
   if (await p.getByRole('radio', { name: 'OK', exact: true }).count()) await p.getByRole('radio', { name: 'OK', exact: true }).click()
   if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
   if (await p.getByRole('radio', { name: /^3–5 days/ }).count()) await p.getByRole('radio', { name: /^3–5 days/ }).click()
@@ -181,7 +181,7 @@ for (let i = 0; i < 30; i++) {
     await p.getByRole('button', { name: /^Monday:/ }).click()
     await p.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   }
-  if (await p.getByRole('slider', { name: 'Afternoon energy' }).count()) await p.getByRole('slider', { name: 'Afternoon energy' }).press('Home')
+  if (await p.getByRole('radio', { name: '3pm dip' }).count()) await p.getByRole('radio', { name: '3pm dip' }).click()
   if (await p.getByRole('radio', { name: 'OK', exact: true }).count()) await p.getByRole('radio', { name: 'OK', exact: true }).click()
   if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
   if (await p.getByRole('radio', { name: /^Rarely/ }).count()) await p.getByRole('radio', { name: /^Rarely/ }).click()

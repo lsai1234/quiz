@@ -61,8 +61,9 @@ export function answerCurrentScene(): void {
     case 'shelf-check':
       fireEvent.click(screen.getByRole('button', { name: 'Nothing yet' }))
       return
-    case 'charge-dial':
-      fireEvent.keyDown(screen.getByRole('slider', { name: 'Afternoon energy' }), { key: 'Home' })
+    case 'day-curve':
+      // Shape your day (plan Phase 7.4): the shape with a dip, so an afternoon of 4.
+      fireEvent.click(screen.getByRole('radio', { name: '3pm dip' }))
       return
     case 'sleep-window':
       fireEvent.keyDown(screen.getByRole('slider', { name: 'Bedtime' }), { key: 'ArrowRight' })

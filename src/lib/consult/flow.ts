@@ -243,7 +243,8 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
       return !needsDetail || a.intensity !== null
     }
     case 'energy':
-      return a.energy !== null
+      // "Not sure" is an answer: a shape with no level to read.
+      return a.energy !== null || a.energyCurve?.preset === 'unsure'
     case 'sleep':
       return a.sleep !== null && a.sleep.quality !== null
     case 'daylight':
@@ -297,7 +298,7 @@ export const NUDGES: Record<SceneId, string> = {
   about: 'Pick your age and one option below.',
   training: 'Tap the days you train (or No training right now), then how hard they feel.',
   aim: 'Pick the main thing you’re training for.',
-  energy: 'Fill the battery to where you usually are.',
+  energy: 'Draw your day, or pick the shape most like it.',
   sleep: 'Set your window, then how well you sleep.',
   daylight: 'Move the sun to how often you get outside.',
   caffeine: 'Add your drinks, or tap None.',

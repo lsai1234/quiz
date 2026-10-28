@@ -46,9 +46,9 @@ export const PATTERNS: Pattern[] = [
     journeys: ['everyday', 'weight', 'builder', 'ager'],
     prior: -0.9,
     nudges: [
-      { when: (a) => a.energy !== null && a.energy <= 4, towards: 'strongly', why: (a) => `Energy ${a.energy}/10 by the afternoon` },
-      { when: (a) => a.energy !== null && a.energy >= 5 && a.energy <= 6, towards: 'a little', why: (a) => `Energy ${a.energy}/10 by the afternoon` },
-      { when: (a) => a.energy !== null && a.energy >= 8, towards: 'away clearly', why: (a) => `Energy ${a.energy}/10 by the afternoon` },
+      { when: (a) => a.energy !== null && a.energy <= 4, towards: 'strongly', why: (a) => `Energy ${a.energy}/10 by the afternoon`, afternoon: true },
+      { when: (a) => a.energy !== null && a.energy >= 5 && a.energy <= 6, towards: 'a little', why: (a) => `Energy ${a.energy}/10 by the afternoon`, afternoon: true },
+      { when: (a) => a.energy !== null && a.energy >= 8, towards: 'away clearly', why: (a) => `Energy ${a.energy}/10 by the afternoon`, afternoon: true },
       { when: (a) => drinks(a) >= 3, towards: 'a little', why: (a) => `${drinks(a)} caffeinated drinks a day` },
       { when: (a) => Boolean(a.changes?.includes('energy')), towards: 'clearly', why: 'Flagging by the afternoon' },
     ],

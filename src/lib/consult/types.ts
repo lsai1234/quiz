@@ -3,6 +3,7 @@ import type { HealthDataConsent } from '@/lib/types'
 import type { PatternId, PinpointAnswer } from './pinpoint/types'
 import type { TrainingAnswer } from './training'
 import type { ProteinAnswer } from './protein'
+import type { EnergyCurve } from './day-curve'
 
 /**
  * The Amp Consult's answer model.
@@ -143,8 +144,10 @@ export interface ConsultAnswers {
   aim: TrainingAim | null
   /** Active agers only: what's got harder lately. */
   changes: AgeingChange[] | null
-  /** Afternoon energy, 1–10. */
+  /** Afternoon energy, 1–10. Read off the day's curve when there is one. */
   energy: number | null
+  /** Shape your day (plan Phase 7.4): energy 06:00–24:00, drawn or picked. */
+  energyCurve: EnergyCurve | null
   sleep: SleepAnswer | null
   daylight: Daylight | null
   caffeine: CaffeineAnswer | null
@@ -194,6 +197,7 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   aim: null,
   changes: null,
   energy: null,
+  energyCurve: null,
   sleep: null,
   daylight: null,
   caffeine: null,

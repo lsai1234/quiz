@@ -405,12 +405,12 @@
       "id": "energy",
       "section": "move",
       "label": "Energy",
-      "interaction": "charge-dial",
+      "interaction": "day-curve",
       "speedRun": true,
       "copy": {
-        "question": "How's your energy most afternoons?",
-        "hint": "Drag to fill the battery.",
-        "comfortHint": "Use the minus and plus buttons to set how charged you feel."
+        "question": "How does your energy go through a day?",
+        "hint": "Draw it from 6am to midnight, then drag any point to fine-tune it.",
+        "comfortHint": "Pick the shape most like your day."
       },
       "tell": {
         "lead": false,
@@ -420,21 +420,69 @@
       "placeholder": {
         "options": [
           {
-            "label": "Pretty flat",
+            "label": "3pm dip",
             "set": {
-              "energy": 3
+              "energy": 4,
+              "energyCurve": {
+                "points": [
+                  6,
+                  7,
+                  8,
+                  7,
+                  4,
+                  3,
+                  5,
+                  6,
+                  5,
+                  4
+                ],
+                "how": "preset",
+                "preset": "dip-3pm"
+              }
             }
           },
           {
-            "label": "Middling",
+            "label": "Steady all day",
             "set": {
-              "energy": 5
+              "energy": 7,
+              "energyCurve": {
+                "points": [
+                  6,
+                  7,
+                  7,
+                  7,
+                  7,
+                  7,
+                  7,
+                  6,
+                  5,
+                  4
+                ],
+                "how": "preset",
+                "preset": "steady"
+              }
             }
           },
           {
-            "label": "Charged",
+            "label": "Slow starter",
             "set": {
-              "energy": 8
+              "energy": 7,
+              "energyCurve": {
+                "points": [
+                  2,
+                  3,
+                  5,
+                  7,
+                  7,
+                  7,
+                  7,
+                  6,
+                  5,
+                  4
+                ],
+                "how": "preset",
+                "preset": "slow-starter"
+              }
             }
           }
         ]
@@ -448,7 +496,7 @@
             ]
           },
           "copy": {
-            "hint": "Drag to how you usually feel by the afternoon, or before an evening session."
+            "hint": "Draw how you feel through a normal day, sessions and all. Then drag any point to fine-tune it."
           },
           "tell": {
             "lead": false,
@@ -465,8 +513,8 @@
           },
           "copy": {
             "question": "How’s your energy through the day?",
-            "hint": "Drag to how you usually feel by mid-afternoon.",
-            "comfortHint": "Tap to how you usually feel by mid-afternoon."
+            "hint": "Draw it from 6am to midnight, or pick the shape most like your day.",
+            "comfortHint": "Pick the shape most like your day."
           },
           "tell": {
             "lead": false,
@@ -482,7 +530,7 @@
             ]
           },
           "copy": {
-            "hint": "Eating less can take it out of you. Drag to how you usually feel."
+            "hint": "Eating less can take it out of you. Draw how a normal day goes."
           },
           "tell": {
             "lead": false,

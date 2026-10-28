@@ -76,8 +76,7 @@ test('consult: an answered sleep window flies into Amp as the next scene arrives
   await page.getByRole('button', { name: /^Monday:/ }).click()
   await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('slider', { name: 'Afternoon energy' }).focus()
-  await page.keyboard.press('ArrowLeft')
+  await page.getByRole('radio', { name: '3pm dip' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('radio', { name: 'OK' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
@@ -198,11 +197,10 @@ test('consult: Amp glows with the energy being set, and leans as it moves', asyn
   await page.getByRole('button', { name: /^Monday:/ }).click()
   await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  const slider = page.getByRole('slider', { name: 'Afternoon energy' })
-  await slider.focus()
-  await page.keyboard.press('End')
+  // Draw the day full across, then empty: Amp's glow follows the afternoon.
+  await drawDay(page, Array(10).fill(0.02))
   await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', '1')
-  await page.keyboard.press('Home')
+  await drawDay(page, Array(10).fill(0.98))
   await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', /^0(\.1)?$/)
 })
 
@@ -247,14 +245,13 @@ test('consult: the answer lands on its own mark in the day ring', async ({ page 
   await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await expect(page.locator('[data-day-ring="sm"] [data-flight-slot="training"]')).toBeVisible()
-  await page.getByRole('slider', { name: 'Afternoon energy' }).focus()
-  await page.keyboard.press('ArrowLeft')
+  await page.getByRole('radio', { name: '3pm dip' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('radio', { name: 'OK' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   // In flight to the sleep arc, then there.
   await expect(page.locator('.amp-flight')).toHaveCount(1)
-  const token = await page.locator('.amp-flight').evaluate((el) => el.getAnimations()[0]?.effect?.getKeyframes().at(-1)?.transform as string)
+  const token = await page.locator('.amp-flight').evaluate((el) => (el.getAnimations()[0]?.effect as KeyframeEffect | undefined)?.getKeyframes().at(-1)?.transform as string)
   // Where the arc settles, once the scene has slid in: where the flight aimed.
   await expect(page.locator('.amp-flight')).toHaveCount(0)
   await page.waitForTimeout(300)
@@ -265,4 +262,76 @@ test('consult: the answer lands on its own mark in the day ring', async ({ page 
   expect(y).toBeGreaterThanOrEqual(arc.y - 24)
   expect(y).toBeLessThanOrEqual(arc.y + arc.height + 24)
   await expect(page.getByRole('img', { name: /^Your day: sleep / })).toBeVisible()
+})
+
+/* ── Shape your day (plan Phase 7.4) ───────────────────────────────────── */
+
+/** Draws across the curve's box, left to right, through heights 0 (top) to 1 (bottom). */
+async function drawDay(page: Page, heights: number[]) {
+  // The scene slides in: measure the box once it has stopped moving.
+  let box = (await page.locator('[data-day-curve]').boundingBox())!
+  await expect(async () => {
+    const now = (await page.locator('[data-day-curve]').boundingBox())!
+    const still = now.x === box.x && now.y === box.y
+    box = now
+    expect(still).toBe(true)
+  }).toPass({ intervals: [150] })
+  const at = (i: number) => ({ x: box.x + 2 + ((box.width - 4) * i) / (heights.length - 1), y: box.y + box.height * heights[i] })
+  await page.mouse.move(at(0).x, at(0).y)
+  await page.mouse.down()
+  for (let i = 1; i < heights.length; i++) await page.mouse.move(at(i).x, at(i).y, { steps: 3 })
+  await page.mouse.up()
+}
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: shape your day, drawn or picked (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/styleguide/consult')
+    await page.getByRole('button', { name: 'Shape your day' }).click()
+    const curve = page.locator('[data-day-curve]')
+    await expect(curve).toHaveAttribute('data-day-curve', 'empty')
+    if (mode === 'comfort') {
+      await page.getByRole('button', { name: 'Comfort mode' }).click()
+      await page.getByRole('radio', { name: 'Comfort', exact: true }).click()
+      await page.getByRole('radio', { name: '3pm dip' }).click()
+    } else {
+      // Bright morning, a deep dip mid-afternoon, a lift in the evening.
+      await drawDay(page, [0.4, 0.25, 0.2, 0.3, 0.65, 0.72, 0.5, 0.35, 0.45, 0.6])
+    }
+    await expect(curve).toHaveAttribute('data-day-curve', 'set')
+    await expect(page.getByRole('img', { name: /^Energy dips around 1[46]:00/ })).toBeVisible()
+    await expect(page.locator('[data-curve-read]')).toContainText(/(3pm dip|Drawn) · \d+ \/ 10 in the afternoon/)
+    await expect(page.locator('[data-ring-dip]')).toHaveCount(1)
+    if (mode !== 'comfort') {
+      // Fine-tune: the 16:00 point, dragged up to the top.
+      const point = (await page.locator('[data-curve-point="16"]').boundingBox())!
+      await page.mouse.move(point.x + point.width / 2, point.y + point.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(point.x + point.width / 2, (await curve.boundingBox())!.y, { steps: 5 })
+      await page.mouse.up()
+      await expect(page.locator('[data-curve-read]')).not.toContainText('Dip 16:00')
+    }
+    await expect(page.locator('[data-story="day-curve"]')).toHaveScreenshot(`day-curve-${mode}.png`, STILL)
+  })
+}
+
+test('consult: the energy scene takes a drawn day, and the ring draws it', async ({ page }) => {
+  await founderSessionViaApi(page)
+  await page.goto('/quizv2')
+  await page.getByRole('button', { name: /^Energy/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('listbox', { name: 'Age band' }).focus()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: 'Prefer not to say' }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('button', { name: /^Monday:/ }).click()
+  await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(page.locator('h1')).toHaveText(/How does your energy go through a day/)
+  await expect(page.locator('[data-day-curve]')).toBeVisible()
+  await drawDay(page, [0.4, 0.25, 0.2, 0.3, 0.65, 0.72, 0.5, 0.35, 0.45, 0.6])
+  await expect(page.getByRole('img', { name: /^Energy dips around 1[46]:00/ })).toBeVisible()
+  await expect(page.locator('[data-day-ring="sm"] [data-ring-dip]')).toHaveCount(1)
+  await expect(page.getByRole('img', { name: /^Your day: .*energy dips around 1[46]:00/ })).toBeVisible()
 })

@@ -1,7 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { DAYLIGHT_SPAN, ENERGY_SPAN, arcPath, dayRingData, dayRingLines, dayRingText, pointAt } from '@/lib/consult/day-ring'
+import { DAYLIGHT_SPAN, ENERGY_SPAN, arcPath, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt } from '@/lib/consult/day-ring'
+import { CURVE_HOURS } from '@/lib/consult/day-curve'
 import type { ConsultAnswers } from '@/lib/consult/types'
 
 /**
@@ -66,7 +67,15 @@ export function DayRing({ answers, size = 'sm', children }: { answers: ConsultAn
           <path data-flight-slot="daylight" className="amp-anim-fade" d={arcPath(DAYLIGHT_SPAN.from, DAYLIGHT_SPAN.to, R)} fill="none" stroke={SWATCH.daylight} strokeWidth="11" strokeLinecap="round" strokeOpacity={0.2 + d.daylight.level * 0.6} />
         )}
         {d.sleep && <path data-flight-slot="sleep" className="amp-anim-fade" d={arcPath(d.sleep.bed, d.sleep.wake, R)} fill="none" stroke={SWATCH.sleep} strokeWidth="6" strokeLinecap="round" />}
-        {d.energy && (
+        {d.energy && 'points' in d.energy && (
+          <g data-flight-slot="energy" className="amp-anim-fade">
+            <path d={curveOnRing(d.energy.points)} fill="none" stroke={SWATCH.energy} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {d.energy.dip !== null && (
+              <circle data-ring-dip {...xy(pointAt(d.energy.dip, 24 + (14 * d.energy.points[CURVE_HOURS.indexOf((d.energy.dip / 60) as (typeof CURVE_HOURS)[number])]) / 10))} r="3.2" fill={SWATCH.daylight} stroke="var(--amp-ground)" strokeWidth="1" />
+            )}
+          </g>
+        )}
+        {d.energy && 'level' in d.energy && (
           <path
             data-flight-slot="energy"
             className="amp-anim-fade"

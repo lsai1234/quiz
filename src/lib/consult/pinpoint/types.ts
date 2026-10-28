@@ -59,6 +59,11 @@ export interface Nudge {
    * protein estimate (their weight and what they eat) is one.
    */
   local?: true
+  /**
+   * Read from the afternoon energy level. With a drawn day and drawn evidence
+   * on in "replace" (`drawn.ts`), the curve stands in for it.
+   */
+  afternoon?: true
 }
 
 export interface Pattern {

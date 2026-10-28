@@ -74,10 +74,11 @@ describe('C14 comfort mode', () => {
 
   it('swaps the drags for buttons: energy, sleep and daylight', () => {
     const spy = jest.fn()
+    // Energy: the day's shape (plan Phase 7.4), picked rather than drawn.
     const energy = render(<Harness id="energy" comfort spy={spy} />)
     expect(screen.queryByRole('slider')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'More energy' }))
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 5 }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Second wind at night' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 4, energyCurve: expect.objectContaining({ preset: 'second-wind' }) }))
     energy.unmount()
 
     const sleep = render(<Harness id="sleep" comfort spy={spy} />)
@@ -127,13 +128,13 @@ describe('H1 review screen', () => {
     toReview()
     const before = screen.getAllByRole('button', { name: /\. Change$/ }).map((b) => b.getAttribute('aria-label'))
     fireEvent.click(screen.getByRole('button', { name: /^Energy:/ }))
-    expect(heading()).toHaveTextContent("How's your energy most afternoons?")
-    fireEvent.keyDown(screen.getByRole('slider'), { key: 'End' })
+    expect(heading()).toHaveTextContent('How does your energy go through a day?')
+    fireEvent.click(screen.getByRole('radio', { name: 'Steady all day' }))
     fireEvent.click(screen.getByRole('button', { name: 'Back to review' }))
     expect(heading()).toHaveTextContent("Here's what I've got")
     const after = screen.getAllByRole('button', { name: /\. Change$/ }).map((b) => b.getAttribute('aria-label'))
     expect(after.filter((l) => !l!.startsWith('Energy'))).toEqual(before.filter((l) => !l!.startsWith('Energy')))
-    expect(after.find((l) => l!.startsWith('Energy'))).toBe('Energy: 10 / 10. Change')
+    expect(after.find((l) => l!.startsWith('Energy'))).toBe('Energy: Steady all day · 7 / 10 in the afternoon. Change')
   })
 })
 

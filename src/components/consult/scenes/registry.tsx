@@ -69,8 +69,8 @@ export interface SceneEntry {
 
 /**
  * Scenes kept out of the first scene's JavaScript (the first-scene budget):
- * nobody starts on Pinpoint any more (plan Phase 6), and the protein check
- * comes after the plate. They're fetched once the consult is under way
+ * nobody starts on Pinpoint any more (plan Phase 6), the protein check comes
+ * after the plate, and the day's curve comes after training. They're fetched once the consult is under way
  * (`preloadLaterScenes`), so they're there before anyone reaches them. Under
  * Jest they load at once, so a test drives them like any other scene; the
  * condition is a build-time constant, so the bundle never carries that path.
@@ -79,6 +79,10 @@ const PinpointScene: ComponentType<SceneProps> =
   process.env.NODE_ENV === 'test'
     ? (require('../pinpoint/PinpointScene') as typeof import('../pinpoint/PinpointScene')).PinpointScene
     : dynamic(() => import('../pinpoint/PinpointScene').then((m) => m.PinpointScene))
+const DayCurve: ComponentType<SceneProps> =
+  process.env.NODE_ENV === 'test'
+    ? (require('./DayCurve') as typeof import('./DayCurve')).DayCurve
+    : dynamic(() => import('./DayCurve').then((m) => m.DayCurve))
 const ProteinScene: ComponentType<SceneProps> =
   process.env.NODE_ENV === 'test'
     ? (require('./ProteinScene') as typeof import('./ProteinScene')).ProteinScene
@@ -88,6 +92,7 @@ const ProteinScene: ComponentType<SceneProps> =
 export function preloadLaterScenes(): void {
   void import('../pinpoint/PinpointScene')
   void import('./ProteinScene')
+  void import('./DayCurve')
 }
 
 function Review({ order, answers, onEdit, onAnswer, onUpgrade, onRecheck }: SceneProps) {
@@ -108,6 +113,8 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'sun-arc': { component: SunArc, writes: ['daylight'] },
   'cup-counter': { component: CupCounter, writes: ['caffeine'] },
   'plate-picker': { component: PlatePicker, writes: ['plate'] },
+  // Shape your day (plan Phase 7.4): the curve, and the afternoon level as the energy answer.
+  'day-curve': { component: DayCurve, writes: ['energy', 'energyCurve'] },
   'protein-check': { component: ProteinScene, writes: ['protein'] },
   'body-map': { component: BodyMap, writes: ['body'] },
   'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
@@ -123,7 +130,7 @@ const PLACEHOLDER_WRITES: Record<SceneId, (keyof ConsultAnswers)[]> = {
   about: ['age', 'sex'],
   training: ['training'],
   aim: ['aim'],
-  energy: ['energy'],
+  energy: ['energy', 'energyCurve'],
   sleep: ['sleep'],
   daylight: ['daylight'],
   caffeine: ['caffeine'],

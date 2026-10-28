@@ -52,7 +52,7 @@ it('sits round Amp in the consult, filling in as they answer', async () => {
 })
 
 it('keeps the circuit check calm: Amp on his own, no ring', async () => {
-  const state = { ...initialFlow('c_ring', 0, { goals: ['energy'], age: '35-44', comfortOffered: true, ...A }), sceneId: 'circuit' as const, history: ['goals' as const] }
+  const state = { ...initialFlow('c_ring', 0, { ...A, goals: ['energy'], age: '35-44', comfortOffered: true }), sceneId: 'circuit' as const, history: ['goals' as const] }
   render(<AmpConsult initial={state} />)
   await act(async () => new Promise((r) => setTimeout(r, 0)))
   expect(document.querySelector('[data-day-ring]')).toBeNull()

@@ -7,6 +7,7 @@ import { pinpointed } from './pinpoint/effects'
 import { probeSteps, stepSaid } from './pinpoint/leads'
 import { caffeineCount, sleepHours } from './reactions'
 import { proteinIntake } from './protein'
+import { PRESET_LABEL } from './day-curve'
 import { ACTIVITIES, countsByType, sessionsLabel, sessionsPerWeek } from './training'
 import type {
   AgeingChange,
@@ -187,8 +188,14 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
     case 'changes':
       if (a.changes === null) return ''
       return a.changes.length === 0 ? 'Nothing’s changed' : list(a.changes.map((c) => CHANGE_LABEL[c]))
-    case 'energy':
-      return a.energy === null ? '' : `${a.energy} / 10`
+    case 'energy': {
+      // Shape your day (plan Phase 7.4): the shape, then the afternoon level.
+      const c = a.energyCurve
+      if (c?.preset === 'unsure') return 'Not sure'
+      if (a.energy === null) return ''
+      const shape = c ? (c.how === 'drawn' ? 'Drawn' : PRESET_LABEL[c.preset!]) : null
+      return shape ? `${shape} · ${a.energy} / 10 in the afternoon` : `${a.energy} / 10`
+    }
     case 'sleep':
       if (!a.sleep) return ''
       return [

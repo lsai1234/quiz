@@ -180,7 +180,7 @@ describe('U4 read aloud', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Read aloud' }))
     const scene = SCENES.find((s) => s.id === 'energy')!
     expect(spoken).toEqual([toSpeech(scene.copy.question, hintFor(scene.copy, true))])
-    expect(spoken[0]).toMatch(/minus and plus/)
+    expect(spoken[0]).toMatch(/Pick the shape most like your day/)
     expect(spoken[0]).not.toMatch(/[?!.]\./)
     expect(screen.getByRole('button', { name: 'Reading aloud' })).toHaveAttribute('aria-pressed', 'true')
   })

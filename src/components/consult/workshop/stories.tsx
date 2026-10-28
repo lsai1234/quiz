@@ -13,6 +13,11 @@ import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { AMP_NEXT_EVENT, droopFor, type AmpMood, type AmpRig } from '@/lib/consult/amp-rig'
 import type { AmpReaction } from '@/lib/consult/motion'
 import { ChargeProfileChart } from '../ChargeProfileChart'
+import { DayCurve } from '../scenes/DayCurve'
+import { sceneDef } from '@/lib/consult/flow'
+import { summarise } from '@/lib/consult/summary'
+import { curveWords, readCurve } from '@/lib/consult/day-curve'
+import { clock } from '@/lib/consult/day-ring'
 
 /**
  * The workshop's stories: each renders one piece of the consult on its own,
@@ -248,7 +253,7 @@ function FlightStory() {
 const RING_STEPS: { said: string; answers: Partial<ConsultAnswers> }[] = [
   { said: 'Nothing yet', answers: {} },
   { said: 'Training: 4 days a week', answers: { training: trainingDays(['gym', 'rest', 'gym', 'rest', 'cardio', 'sport', 'rest']) } },
-  { said: 'Afternoon energy 4/10', answers: { energy: 4 } },
+  { said: 'Energy: 3pm dip', answers: { energy: 4, energyCurve: { points: [6, 7, 8, 7, 4, 3, 5, 6, 5, 4], how: 'preset', preset: 'dip-3pm' } } },
   { said: 'Sleep 23:30 to 06:00', answers: { sleep: { bed: 23 * 60 + 30, wake: 6 * 60, quality: 'ok' } } },
   { said: 'Daylight most days', answers: { daylight: 'most' } },
   { said: '3 caffeinated drinks a day', answers: { caffeine: { coffee: 2, tea: 1, energy: 0 } } },
@@ -293,6 +298,49 @@ function DayRingStory() {
   )
 }
 
+/* ── Shape your day (plan Phase 7.4) ───────────────────────────────────── */
+
+/**
+ * The energy scene's curve on its own: draw it, drag a point, or pick a shape
+ * (comfort mode has the shapes only). Underneath, what's read off it, and the
+ * day ring drawing it.
+ */
+function DayCurveStory() {
+  const [answers, setAnswers] = useState<ConsultAnswers>({ ...EMPTY_ANSWERS })
+  const [comfort, setComfort] = useState(false)
+  const points = answers.energyCurve?.points ?? null
+  const shape = points ? readCurve(points) : null
+  return (
+    <div data-story="day-curve" className="flex flex-col" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <Segmented<'standard' | 'comfort'>
+        label="Mode"
+        options={[
+          { value: 'standard', label: 'Standard' },
+          { value: 'comfort', label: 'Comfort' },
+        ]}
+        value={comfort ? 'comfort' : 'standard'}
+        onChange={(v) => setComfort(v === 'comfort')}
+      />
+      <DayCurve scene={sceneDef('energy')} answers={answers} onAnswer={(patch) => setAnswers((a) => ({ ...a, ...patch }))} comfort={comfort} order={[]} onEdit={() => {}} />
+      <div className="flex items-center" style={{ gap: 'var(--amp-space-3)' }}>
+        <DayRing answers={answers}>
+          <Amp state="idle" />
+        </DayRing>
+        <div className="flex flex-col" style={{ gap: 'var(--amp-space-1)', ...label }} data-curve-read>
+          <span style={{ color: 'var(--amp-accent)' }}>{summarise('energy', answers) || 'Nothing yet'}</span>
+          {shape && (
+            <span>
+              Dip {shape.dip ? `${clock(shape.dip.at)}, ${shape.dip.depth} levels` : 'none'} · slow morning {shape.slowMorning ? 'yes' : 'no'} · second wind {shape.eveningRise ? 'yes' : 'no'}
+            </span>
+          )}
+          {points && <span>{curveWords(points)}</span>}
+        </div>
+      </div>
+      <QuietLink onClick={() => setAnswers({ ...EMPTY_ANSWERS })}>Start again</QuietLink>
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -309,4 +357,5 @@ export const STORIES: Story[] = [
   { id: 'flight', title: 'Shared flight', render: () => <FlightStory /> },
   { id: 'amp-alive', title: 'Amp, alive', render: () => <AmpAliveStory /> },
   { id: 'day-ring', title: 'Day ring', render: () => <DayRingStory /> },
+  { id: 'day-curve', title: 'Shape your day', render: () => <DayCurveStory /> },
 ]

@@ -68,9 +68,12 @@ describe('U6 Amp reacting in the consult', () => {
     expect(amp()).toHaveAttribute('data-amp-reaction', 'flex')
   })
 
-  it('bursts when the dial is pushed to full', () => {
+  it('bursts when the afternoon is drawn at full', () => {
     render(<AmpConsult initial={at('energy')} />)
-    fireEvent.keyDown(screen.getByRole('slider', { name: 'Afternoon energy' }), { key: 'End' })
+    const area = screen.getByRole('img', { name: /^Draw your energy/ })
+    area.getBoundingClientRect = () => ({ left: 0, top: 0, width: 450, height: 225, right: 450, bottom: 225, x: 0, y: 0, toJSON: () => ({}) })
+    fireEvent(area, new MouseEvent('pointerdown', { clientX: 0, clientY: 0, bubbles: true }))
+    for (const x of [100, 200, 300, 450]) fireEvent(area, new MouseEvent('pointermove', { clientX: x, clientY: 0, bubbles: true }))
     expect(amp()).toHaveAttribute('data-amp-reaction', 'burst')
   })
 

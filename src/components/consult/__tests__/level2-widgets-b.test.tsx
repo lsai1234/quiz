@@ -23,13 +23,13 @@ if (typeof window.PointerEvent === 'undefined') {
   ;(window as unknown as { PointerEvent: typeof PointerEventPolyfill }).PointerEvent = PointerEventPolyfill
 }
 
-function Harness({ id, start = {}, spy }: { id: string; start?: Partial<ConsultAnswers>; spy?: (a: ConsultAnswers) => void }) {
+function Harness({ id, start = {}, spy, comfort = false }: { id: string; start?: Partial<ConsultAnswers>; spy?: (a: ConsultAnswers) => void; comfort?: boolean }) {
   const [answers, setAnswers] = useState<ConsultAnswers>({ ...EMPTY_ANSWERS, ...start })
   return (
     <SceneRenderer
       scene={SCENES.find((s) => s.id === id)!}
       answers={answers}
-      comfort={false}
+      comfort={comfort}
       order={SCENES.map((s) => s.id)}
       onEdit={() => undefined}
       onAnswer={(patch) => {
@@ -65,35 +65,70 @@ describe('C5 charge dial', () => {
     expect([1, 4, 5, 8, 10].map(energyWord)).toEqual(['Running on empty', 'Pretty flat', 'Getting by', 'Pretty charged', 'Buzzing'])
   })
 
-  it('works by drag', () => {
+  // The battery is replaced by Shape your day (plan Phase 7.4): see below.
+})
+
+describe('Shape your day (plan Phase 7.4)', () => {
+  const area = () => screen.getByRole('img', { name: /energy|Draw your energy/i })
+
+  it('draws the day with a finger, and reads the afternoon level off it as the energy answer', () => {
     const spy = jest.fn()
     render(<Harness id="energy" spy={spy} />)
-    const dial = screen.getByRole('slider', { name: 'Afternoon energy' })
-    box(dial, 300, 90)
-    drag(dial, [[30, 40], [120, 40], [200, 40]])
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 7 }))
-    expect(dial).toHaveAttribute('aria-valuetext', '7 out of 10, pretty charged')
+    box(area(), 450, 225)
+    // High in the morning, down through the afternoon, up again at night.
+    drag(area(), [[0, 30], [100, 30], [175, 160], [225, 175], [300, 90], [350, 40], [450, 60]])
+    const last = spy.mock.calls.at(-1)![0] as ConsultAnswers
+    expect(last.energyCurve).toMatchObject({ how: 'drawn', preset: null })
+    expect(last.energyCurve!.points).toHaveLength(10)
+    expect(last.energy).toBeLessThanOrEqual(3)
+    expect(area()).toHaveAccessibleName(/^Energy dips around 1[46]:00/)
   })
 
-  it('works by tap', () => {
+  it('fine-tunes a point by dragging it', () => {
+    const spy = jest.fn()
+    render(<Harness id="energy" start={{ energyCurve: { points: [6, 7, 7, 7, 7, 7, 7, 6, 5, 4], how: 'preset', preset: 'steady' }, energy: 7 }} spy={spy} />)
+    box(area(), 450, 225)
+    // The 14:00 point (the fifth of ten, drawn at 7), dragged to the top.
+    drag(area(), [[200, 75], [200, 40], [200, 0]])
+    const last = spy.mock.calls.at(-1)![0] as ConsultAnswers
+    expect(last.energyCurve!.points).toEqual([6, 7, 7, 7, 10, 7, 7, 6, 5, 4])
+    expect(last.energyCurve!.how).toBe('drawn')
+    expect(last.energy).toBe(9)
+  })
+
+  it('draws again from anywhere off the points', () => {
+    const spy = jest.fn()
+    render(<Harness id="energy" start={{ energyCurve: { points: [6, 7, 7, 7, 7, 7, 7, 6, 5, 4], how: 'preset', preset: 'steady' }, energy: 7 }} spy={spy} />)
+    box(area(), 450, 225)
+    // Starting low under the 06:00 point (at 6), right across the bottom.
+    drag(area(), [[0, 210], [225, 210], [450, 210]])
+    expect((spy.mock.calls.at(-1)![0] as ConsultAnswers).energyCurve!.points).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  })
+
+  it('in comfort mode, puts the shapes first, one to a row, and draws nothing', () => {
+    const spy = jest.fn()
+    render(<Harness id="energy" comfort spy={spy} />)
+    const shapes = screen.getByRole('radiogroup', { name: 'The shape most like your day' })
+    expect(shapes.compareDocumentPosition(area()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(shapes.className).toContain('grid-cols-1')
+    box(area(), 450, 225)
+    drag(area(), [[0, 30], [450, 30]])
+    expect(spy).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('radio', { name: 'Slow starter' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 7, energyCurve: expect.objectContaining({ preset: 'slow-starter' }) }))
+  })
+
+  it('offers five shapes for the keyboard, and takes "Not sure" as an answer', () => {
     const spy = jest.fn()
     render(<Harness id="energy" spy={spy} />)
-    const dial = screen.getByRole('slider')
-    box(dial, 300, 90)
-    drag(dial, [[100, 40]])
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 4 }))
-  })
-
-  it('works by keyboard arrows', () => {
-    const spy = jest.fn()
-    render(<Harness id="energy" start={{ energy: 5 }} spy={spy} />)
-    const dial = screen.getByRole('slider')
-    fireEvent.keyDown(dial, { key: 'ArrowRight' })
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 6 }))
-    fireEvent.keyDown(dial, { key: 'End' })
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 10 }))
-    fireEvent.keyDown(dial, { key: 'ArrowUp' })
-    expect(spy).toHaveBeenCalledTimes(2)
+    const shapes = screen.getByRole('radiogroup', { name: 'Or pick the shape most like your day' })
+    expect(Array.from(shapes.querySelectorAll('[role="radio"]')).map((r) => r.textContent)).toEqual(['Steady all day', 'Slow starter', '3pm dip', 'Second wind at night', 'Not sure'])
+    fireEvent.click(screen.getByRole('radio', { name: 'Slow starter' }))
+    screen.getByRole('radio', { name: 'Slow starter' }).focus()
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Slow starter' }), { key: 'ArrowRight' })
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 4, energyCurve: expect.objectContaining({ preset: 'dip-3pm', how: 'preset' }) }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Not sure' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: null, energyCurve: { points: null, how: 'preset', preset: 'unsure' } }))
   })
 })
 

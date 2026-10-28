@@ -254,4 +254,8 @@ export const PERSONAS: Persona[] = [
 // 2026-10-28: the scene-copy prompt can now say which two answers connect
 // (plan Phase 6, reactions that connect answers), and the fingerprint covers
 // that prompt. Re-run: all 35 personas and the red-team tests pass.
-export const APPROVED_FINGERPRINT = 'a3c324ef'
+// 2026-10-28: the energy scene asks for the shape of their day, not a battery
+// (plan Phase 7.4), so its copy prompt's question and hints changed. No
+// system prompt or rule changed. Re-run: all 35 personas and the red-team
+// tests pass.
+export const APPROVED_FINGERPRINT = '7cdb8e77'

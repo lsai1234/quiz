@@ -116,9 +116,9 @@ async function answerByKeyboard(page: Page) {
     if (await page.getByRole('radiogroup', { name: 'How hard do most sessions feel?' }).count()) {
       await pickRadio(page, /^(Easy|Steady|Hard)/, /^Steady/)
     }
-  } else if (await page.getByRole('slider', { name: 'Afternoon energy' }).count()) {
-    await tabTo(page, /Afternoon energy/)
-    await page.keyboard.press('End')
+  } else if (await page.getByRole('radiogroup', { name: /shape most like your day$/ }).count()) {
+    // Shape your day: the shapes are the keyboard's way in.
+    await pickRadio(page, /^(Steady all day|Slow starter|3pm dip|Second wind at night|Not sure)$/, /^3pm dip$/)
   } else if (await page.getByRole('button', { name: 'More energy' }).count()) {
     await tabTo(page, /^More energy$/)
     await page.keyboard.press('Enter')

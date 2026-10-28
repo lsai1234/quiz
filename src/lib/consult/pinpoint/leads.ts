@@ -10,6 +10,8 @@
 import { journeyOf } from '../journey'
 import { NUDGE, evidence, sigmoid } from './model'
 import { PATTERNS, PROBES, PROBE_BY_ID } from './library'
+import { DRAWN_AWAY_CAP, DRAWN_ITEMS, REPLACED_NUDGES, drawnAnswers, drawnMode } from './drawn'
+import { clockWords } from './define'
 import type { Answers, Pattern, PatternId, PinpointAnswer, PinpointStep, Probe, Strength } from './types'
 
 /**
@@ -31,6 +33,8 @@ export interface Evidence {
   bodyMap?: true
   /** Stays on the device, never sent to AI (see `Nudge.local`). */
   local?: true
+  /** Read off the day they drew (`drawn.ts`): an answer, never one mainly about the pattern. */
+  drawn?: true
 }
 
 export interface Lead {
@@ -80,12 +84,15 @@ export function touches(probe: Probe, id: PatternId): boolean {
 
 export function leads(a: Answers): Lead[] {
   const patterns = eligiblePatterns(a)
+  const mode = drawnMode()
+  const drawn = mode === 'off' ? null : drawnAnswers(a)
   const out = patterns.map((pattern): Lead => {
     let score = pattern.prior
     const support: Evidence[] = []
     let against: { text: string; size: number } | null = null
     for (const n of pattern.nudges) {
       if (!n.when(a)) continue
+      if (drawn && mode === 'replace' && n.afternoon && REPLACED_NUDGES.includes(pattern.id)) continue
       const size = nudgeSize(n.towards)
       score += size
       const text = typeof n.why === 'function' ? n.why(a) : n.why
@@ -98,6 +105,18 @@ export function leads(a: Answers): Lead[] {
       if (h.pattern !== pattern.id) continue
       score += nudgeSize('a little')
       support.push({ text: `You mentioned: ${h.why.charAt(0).toLowerCase()}${h.why.slice(1)}`, from: 'core' })
+    }
+    // The day they drew, read like a probe answer (a proposal, off: `drawn.ts`).
+    if (drawn) {
+      for (const item of DRAWN_ITEMS) {
+        const index = item.options.findIndex((o) => o.key === drawn.answer[item.key])
+        const e = Math.max(-DRAWN_AWAY_CAP, evidence(item, index, pattern.id))
+        if (e === 0) continue
+        score += e
+        const said = item.said[drawn.answer[item.key]]?.replace('{dip}', drawn.dip === null ? '' : clockWords(drawn.dip))
+        if (e > SUPPORT_AT && said) support.push({ text: said, from: 'answer', direct: false, drawn: true })
+        else if (e < -SUPPORT_AT && said && (!against || e < against.size)) against = { text: said, size: e }
+      }
     }
     return { pattern, score, p: sigmoid(score), state: 'live', support, against: against?.text ?? null, tested: 0 }
   })

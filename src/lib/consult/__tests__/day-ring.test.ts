@@ -1,4 +1,5 @@
-import { angleOf, arcPath, clock, dayRingData, dayRingLines, dayRingText, pointAt } from '../day-ring'
+import { angleOf, arcPath, clock, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt } from '../day-ring'
+import { PRESET_POINTS } from '../day-curve'
 import { trainingDays } from '../training'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../types'
 
@@ -62,5 +63,24 @@ describe('what it plots: only what they’ve told us', () => {
       'no caffeine',
       'no training',
     ])
+  })
+})
+
+describe('the day they drew (plan Phase 7.4)', () => {
+  const drawn = told({ ...FULL, energyCurve: { points: PRESET_POINTS['dip-3pm'], how: 'preset', preset: 'dip-3pm' } })
+
+  it('plots the curve, with the dip marked, in place of the afternoon arc', () => {
+    expect(dayRingData(drawn).energy).toEqual({ points: PRESET_POINTS['dip-3pm'], dip: 16 * 60 })
+  })
+
+  it('runs the curve round the dial from 06:00 to midnight, its level as distance from the middle', () => {
+    const d = curveOnRing([0, 0, 0, 0, 0, 0, 0, 0, 0, 10], 24, 38)
+    expect(d.startsWith(`M${pointAt(6 * 60, 24).x} ${pointAt(6 * 60, 24).y}`)).toBe(true)
+    expect(d.endsWith(`L${pointAt(0, 38).x} ${pointAt(0, 38).y}`)).toBe(true)
+    expect(d.match(/[ML]/g)).toHaveLength(10)
+  })
+
+  it('says the shape in words', () => {
+    expect(dayRingLines(dayRingData(drawn)).find((l) => l.slot === 'energy')?.text).toBe('energy dips around 16:00')
   })
 })
