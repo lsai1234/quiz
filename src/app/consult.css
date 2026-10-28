@@ -305,6 +305,68 @@
   60% { transform: rotate(10deg); }
 }
 
+/* Amp's face (plan Phase 7.2). Poses are CSS variables set from props
+   (--amp-eye) and by ampLife.ts (--amp-gx, --amp-gy, data-blink); each eases
+   between poses on the consult's own timings, so reduced motion stills it. */
+.amp-face {
+  overflow: visible;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--amp-duration-enter) var(--amp-spring);
+}
+
+.amp-eye {
+  transform-box: fill-box;
+  transform-origin: 50% 70%;
+  transform: scaleY(var(--amp-eye, 1));
+  transition: transform var(--amp-duration-state) var(--amp-ease-out);
+}
+
+.amp-character[data-blink] .amp-eye {
+  transform: scaleY(0.08);
+  transition-duration: var(--amp-duration-tap);
+}
+
+.amp-pupil {
+  transform: translate(calc(var(--amp-gx, var(--amp-lean, 0)) * 0.9px), calc(var(--amp-gy, 0) * 0.9px));
+  transition: transform var(--amp-duration-state) var(--amp-ease-out);
+}
+
+[data-amp-state='thinking'] .amp-pupil {
+  transform: translate(0.6px, -0.9px);
+}
+
+[data-amp-state='reading'] .amp-pupil {
+  transform: translate(0, 0.9px);
+}
+
+/* Pinpoint's moods: a tilt and one eye wider while it's unsure; leaning in
+   once a lead passes 0.5. */
+[data-amp-mood='curious'] .amp-face {
+  transform: rotate(-9deg);
+}
+
+[data-amp-mood='curious'] .amp-eye[data-eye='right'] {
+  transform: scaleY(calc(var(--amp-eye, 1) * 1.18));
+}
+
+[data-amp-mood='leaning'] .amp-face {
+  transform: scale(1.12);
+}
+
+.amp-spark {
+  animation: amp-fade var(--amp-duration-scene) var(--amp-ease-out) both;
+}
+
+@keyframes amp-jitter {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-6%, 2%) rotate(-4deg); }
+  30% { transform: translate(5%, -2%) rotate(3deg); }
+  45% { transform: translate(-4%, 1%) rotate(-2deg); }
+  60% { transform: translate(3%, -1%) rotate(2deg); }
+  80% { transform: translate(-1%, 0); }
+}
+
 @keyframes amp-scan {
   from { transform: translate3d(0, -110%, 0); }
   to { transform: translate3d(0, 110%, 0); }

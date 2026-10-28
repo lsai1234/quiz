@@ -30,7 +30,7 @@ export const AMP_RIVE = {
   artboard: 'Amp',
   stateMachine: 'Amp',
   inputs: { state: 'state', lean: 'lean' },
-  triggers: { flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled' },
+  triggers: { flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled', jitter: 'jitter' },
 } as const
 
 export type AmpRiveTriggers = Record<AmpReaction, string>

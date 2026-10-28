@@ -114,3 +114,94 @@ test('real-user monitoring: the page measures itself, and the hub reads it back 
   await page.getByRole('radio', { name: 'Consult' }).click()
   await expect(page.locator('[data-device="mobile"]').first()).toBeVisible()
 })
+
+/* ── Amp, alive (plan Phase 7.2) ───────────────────────────────────────── */
+
+async function openStory(page: Page, name: string) {
+  await page.goto('/styleguide/consult')
+  await page.getByRole('button', { name, exact: true }).click()
+}
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: every Amp state and mood, drawn in SVG (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Amp')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const grid = page.locator('[data-amp-grid]')
+    await expect(grid.locator('[data-amp-drawn="svg"]')).toHaveCount(9)
+    await expect(grid).toHaveScreenshot(`amp-states-${mode}.png`, STILL)
+  })
+}
+
+test('workshop: his eyes follow the pointer, he blinks, squashes on a tap and stretches on Next', async ({ page }) => {
+  await openStory(page, 'Amp, alive')
+  const amp = page.locator('[data-amp-alive] [data-amp-state]')
+  const box = (await amp.boundingBox())!
+  // The first touch wakes him up (his life loads then); then the pointer, well
+  // to his right, moving, as a finger would.
+  const right = { x: (page.viewportSize()?.width ?? 390) - 4, y: box.y + box.height / 2 }
+  await page.mouse.click(right.x, right.y)
+  let wiggle = 0
+  await expect
+    .poll(async () => {
+      await page.mouse.move(right.x - (wiggle++ % 2), right.y)
+      return Number(await amp.evaluate((el) => (el as HTMLElement).style.getPropertyValue('--amp-gx')))
+    })
+    .toBeGreaterThan(0.8)
+  // A blink is 130ms, quicker than a poll: count them as they happen.
+  await amp.evaluate((el) => {
+    const w = window as unknown as { blinks: number }
+    w.blinks = 0
+    new MutationObserver(() => el.hasAttribute('data-blink') && w.blinks++).observe(el, { attributes: true, attributeFilter: ['data-blink'] })
+  })
+  await expect.poll(() => page.evaluate(() => (window as unknown as { blinks: number }).blinks), { timeout: 9000 }).toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  expect(await amp.locator('.amp-face').evaluate((el) => el.getAnimations().length)).toBeGreaterThan(0)
+  // The rig: a later bedtime droops his lids; more energy, more glow.
+  const eye = () => amp.evaluate((el) => Number((el as HTMLElement).style.getPropertyValue('--amp-eye')))
+  const before = await eye()
+  for (let i = 0; i < 4; i++) await page.getByRole('button', { name: /^Bedtime later/ }).click()
+  expect(await eye()).toBeLessThan(before)
+  await page.getByRole('button', { name: /^Energy up/ }).click()
+  await expect(page.locator('[data-amp-alive] [data-amp-glow]')).toHaveAttribute('data-amp-glow', '0.6')
+  await page.getByRole('button', { name: 'Add a cup' }).click()
+  await expect(amp).toHaveAttribute('data-amp-reaction', 'jitter')
+})
+
+test('workshop: under reduced motion he holds still: no following, no blinking, no squash', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await openStory(page, 'Amp, alive')
+  const amp = page.locator('[data-amp-alive] [data-amp-state]')
+  const box = (await amp.boundingBox())!
+  const right = { x: (page.viewportSize()?.width ?? 390) - 4, y: box.y + box.height / 2 }
+  await page.mouse.click(right.x, right.y)
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.move(right.x - (i % 2), right.y)
+    await page.waitForTimeout(500)
+  }
+  expect(await amp.evaluate((el) => (el as HTMLElement).style.getPropertyValue('--amp-gx'))).toBe('')
+  expect(await amp.getAttribute('data-blink')).toBeNull()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  expect(await amp.locator('.amp-face').evaluate((el) => el.getAnimations().length)).toBe(0)
+})
+
+test('consult: Amp glows with the energy being set, and leans as it moves', async ({ page }) => {
+  await founderSessionViaApi(page)
+  await page.goto('/quizv2')
+  await page.getByRole('button', { name: /^Energy/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('listbox', { name: 'Age band' }).focus()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: 'Prefer not to say' }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  await page.getByRole('button', { name: /^Monday:/ }).click()
+  await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+  const slider = page.getByRole('slider', { name: 'Afternoon energy' })
+  await slider.focus()
+  await page.keyboard.press('End')
+  await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', '1')
+  await page.keyboard.press('Home')
+  await expect(page.locator('[data-amp-glow]')).toHaveAttribute('data-amp-glow', /^0(\.1)?$/)
+})

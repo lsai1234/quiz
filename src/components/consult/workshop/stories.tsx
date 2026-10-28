@@ -5,8 +5,10 @@ import { fly, settledBox, type FlightToken, type RingSlot } from '@/lib/consult/
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { SceneShell } from '../SceneShell'
 import { ChargeMeter, type MeterSection } from '../ChargeMeter'
-import { NextButton, QuietLink } from '../controls'
+import { NextButton, QuietLink, Segmented } from '../controls'
 import { Amp, type AmpState } from '../Amp'
+import { AMP_NEXT_EVENT, droopFor, type AmpMood, type AmpRig } from '@/lib/consult/amp-rig'
+import type { AmpReaction } from '@/lib/consult/motion'
 import { ChargeProfileChart } from '../ChargeProfileChart'
 
 /**
@@ -82,19 +84,72 @@ function MeterStory() {
   )
 }
 
-const AMP_STATES: AmpState[] = ['idle', 'watching', 'thinking', 'reading', 'calm', 'charged']
+const AMP_STATES: AmpState[] = ['idle', 'watching', 'thinking', 'reading', 'calm', 'charged', 'hunch']
 
+const label = { fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' } as const
+
+/** Every state, and Pinpoint's two moods, side by side. */
 function AmpStory() {
+  const poses: { name: string; state: AmpState; rig?: AmpRig }[] = [
+    ...AMP_STATES.map((state) => ({ name: state, state })),
+    { name: 'curious', state: 'idle', rig: { mood: 'curious' } },
+    { name: 'leaning', state: 'idle', rig: { mood: 'leaning' } },
+  ]
   return (
-    <div className="grid grid-cols-3" style={{ gap: 'var(--amp-space-6)', padding: 'var(--amp-space-10) var(--amp-gutter)' }}>
-      {AMP_STATES.map((state) => (
-        <div key={state} className="flex flex-col items-center" style={{ gap: 'var(--amp-space-2)' }}>
-          <Amp state={state} size="md" lean={state === 'watching' ? 1 : 0} />
-          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' }}>
-            {state}
+    <div className="grid grid-cols-3" data-amp-grid style={{ gap: 'var(--amp-space-6)', padding: 'var(--amp-space-10) var(--amp-gutter)' }}>
+      {poses.map((p) => (
+        <div key={p.name} className="flex flex-col items-center" style={{ gap: 'var(--amp-space-2)' }}>
+          <Amp state={p.state} size="md" lean={p.state === 'watching' ? 1 : 0} rig={p.rig} />
+          <span className="uppercase" style={label}>
+            {p.name}
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Amp, alive (plan Phase 7.2): the rig's inputs as the consult's inputs would
+ * set them. Move a finger (or the mouse) to see his eyes follow; tap to
+ * squash; Next to stretch. Under reduced motion he holds each pose still.
+ */
+function AmpAliveStory() {
+  const [bed, setBed] = useState(22 * 60)
+  const [energy, setEnergy] = useState(5)
+  const [squint, setSquint] = useState(false)
+  const [mood, setMood] = useState<AmpMood | 'none'>('none')
+  const [reaction, setReaction] = useState<{ name: AmpReaction; id: number } | null>(null)
+  const react = (name: AmpReaction) => setReaction((r) => ({ name, id: (r?.id ?? 0) + 1 }))
+  const clock = `${String(Math.floor(bed / 60) % 24).padStart(2, '0')}:${String(bed % 60).padStart(2, '0')}`
+  return (
+    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <div data-amp-alive>
+        <Amp state={squint ? 'watching' : 'idle'} size="lg" reaction={reaction} rig={{ droop: droopFor(bed), glow: energy / 10, squint: squint ? 1 : 0, mood: mood === 'none' ? null : mood }} />
+      </div>
+      <div className="grid w-full grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
+        <QuietLink onClick={() => setBed((b) => (b + 30) % (24 * 60))}>Bedtime later ({clock})</QuietLink>
+        <QuietLink onClick={() => setBed(21 * 60)}>Bedtime 21:00</QuietLink>
+        <QuietLink onClick={() => setEnergy((e) => Math.min(10, e + 1))}>Energy up ({energy}/10)</QuietLink>
+        <QuietLink onClick={() => setEnergy((e) => Math.max(0, e - 1))}>Energy down</QuietLink>
+        <QuietLink aria-pressed={squint} onClick={() => setSquint((v) => !v)}>
+          {squint ? 'Sun moving' : 'Move the sun'}
+        </QuietLink>
+        <QuietLink onClick={() => react('jitter')}>Add a cup</QuietLink>
+        <QuietLink onClick={() => react('flex')}>Add a gym day</QuietLink>
+        <QuietLink onClick={() => react('eureka')}>Hunch confirmed</QuietLink>
+      </div>
+      <Segmented<AmpMood | 'none'>
+        label="Pinpoint’s mood"
+        options={[
+          { value: 'none', label: 'None' },
+          { value: 'curious', label: 'Curious' },
+          { value: 'leaning', label: 'Leaning in' },
+        ]}
+        value={mood}
+        onChange={setMood}
+      />
+      <NextButton onClick={() => window.dispatchEvent(new Event(AMP_NEXT_EVENT))}>Next</NextButton>
     </div>
   )
 }
@@ -198,4 +253,5 @@ export const STORIES: Story[] = [
     ),
   },
   { id: 'flight', title: 'Shared flight', render: () => <FlightStory /> },
+  { id: 'amp-alive', title: 'Amp, alive', render: () => <AmpAliveStory /> },
 ]

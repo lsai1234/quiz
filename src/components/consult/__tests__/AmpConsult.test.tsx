@@ -254,3 +254,29 @@ describe('shared-element flights (plan Phase 7.1)', () => {
     }
   })
 })
+
+describe('Amp, alive, in the consult (plan Phase 7.2)', () => {
+  const at = (sceneId: 'sleep' | 'energy' | 'goals', answers: Parameters<typeof initialFlow>[2]) => ({
+    ...initialFlow('c_amp', 0, { goals: ['energy'], age: '35-44', comfortOffered: true, ...answers }),
+    sceneId,
+    history: ['goals' as const],
+  })
+  const ampEl = () => document.querySelector<HTMLElement>('[data-amp-state]')!
+
+  it('droops his lids on a late bedtime, and glows with the energy level', () => {
+    const { unmount } = render(<AmpConsult initial={at('sleep', { sleep: { bed: 60, wake: 8 * 60, quality: null } })} />)
+    expect(Number(ampEl().style.getPropertyValue('--amp-eye'))).toBeLessThan(0.6)
+    unmount()
+    render(<AmpConsult initial={at('energy', { energy: 9 })} />)
+    expect(document.querySelector('[data-amp-glow]')).toHaveStyle({ opacity: '0.9' })
+  })
+
+  it('tells him when Next is pressed, so he can stretch', () => {
+    const heard = jest.fn()
+    window.addEventListener('amp:next', heard)
+    render(<AmpConsult />)
+    pickFirstOptionAndNext()
+    window.removeEventListener('amp:next', heard)
+    expect(heard).toHaveBeenCalledTimes(1)
+  })
+})

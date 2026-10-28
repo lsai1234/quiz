@@ -56,22 +56,22 @@ describe('U5 Amp in Rive: the contract', () => {
 })
 
 describe('U5 Amp in Rive: the handover', () => {
-  it('draws the CSS Amp alone while Rive is off', async () => {
+  it('draws the SVG Amp alone while Rive is off', async () => {
     const { container } = render(<Amp state="idle" />)
     await settle()
     expect(container.querySelector('canvas')).toBeNull()
-    expect(container.querySelector('[data-amp-drawn]')).toHaveAttribute('data-amp-drawn', 'css')
+    expect(container.querySelector('[data-amp-drawn]')).toHaveAttribute('data-amp-drawn', 'svg')
   })
 
-  it('shows the CSS Amp until Rive has drawn, then hands over — never nothing', async () => {
+  it('shows the SVG Amp until Rive has drawn, then hands over — never nothing', async () => {
     process.env.NEXT_PUBLIC_AMP_RIVE = '1'
     const { container } = render(<Amp state="thinking" />)
     const amp = container.querySelector('[data-amp-drawn]')!
-    expect(amp).toHaveAttribute('data-amp-drawn', 'css')
-    expect(container.querySelector('svg')).toHaveStyle({ opacity: '1' })
+    expect(amp).toHaveAttribute('data-amp-drawn', 'svg')
+    expect(container.querySelector('svg.amp-face')).toHaveStyle({ opacity: '1' })
     await waitFor(() => expect(amp).toHaveAttribute('data-amp-drawn', 'rive'))
     expect(container.querySelector('canvas')).toHaveStyle({ opacity: '1' })
-    expect(container.querySelector('svg')).toHaveStyle({ opacity: '0' })
+    expect(container.querySelector('svg.amp-face')).toHaveStyle({ opacity: '0' })
     expect(amp).toHaveAttribute('aria-label', 'Amp, thinking')
   })
 
@@ -82,10 +82,10 @@ describe('U5 Amp in Rive: the handover', () => {
     rerender(<Amp state="idle" reaction={{ name: 'flex', id: 1 }} />)
     expect((globalThis as unknown as { lastReaction: unknown }).lastReaction).toEqual({ name: 'flex', id: 1 })
     // Pinpoint added eureka (That's me) and puzzled (Not me): the .riv needs both.
-    expect(AMP_RIVE.triggers).toEqual({ flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled' })
+    expect(AMP_RIVE.triggers).toEqual({ flex: 'flex', sun: 'sun', burst: 'burst', eureka: 'eureka', puzzled: 'puzzled', jitter: 'jitter' })
   })
 
-  it('stays with the still CSS Amp under reduced motion', async () => {
+  it('stays with the still SVG Amp under reduced motion', async () => {
     process.env.NEXT_PUBLIC_AMP_RIVE = '1'
     reduced.current = true
     const { container } = render(<Amp state="idle" />)

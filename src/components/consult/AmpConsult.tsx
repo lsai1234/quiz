@@ -5,6 +5,7 @@ import { pinpointReactionLine, pinpointView } from '@/lib/consult/pinpoint/scree
 import { expectedQuestions } from '@/lib/consult/pinpoint/expect'
 import { INVITE_COPY, inviteLine } from '@/lib/consult/hunch-copy'
 import { comboFor } from '@/lib/consult/combo-reactions'
+import { AMP_NEXT_EVENT, rigFor } from '@/lib/consult/amp-rig'
 import type { PinpointStage } from '@/lib/consult/pinpoint/types'
 import { Reticle } from './pinpoint/Reticle'
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
@@ -389,6 +390,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const next = () => {
     const after = flowReducer(state, { type: 'next' })
     if (after.sceneId !== state.sceneId) takeOff()
+    if (after.sceneId !== state.sceneId || after.phase !== state.phase) window.dispatchEvent(new Event(AMP_NEXT_EVENT))
     dispatch({ type: 'next' })
     if (after.phase === 'analysis') onComplete?.(after)
   }
@@ -486,6 +488,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
 
   const mode = scene.mode ?? 'charge'
+  // Amp, alive (plan Phase 7.2): live poses while an input moves, and
+  // Pinpoint's moods.
+  const rig = rigFor(state.sceneId, state.answers, watching !== null)
   const ampState: AmpState = mode === 'calm' ? 'calm' : reading ? 'reading' : thinking ? 'thinking' : watching !== null ? 'watching' : 'idle'
   // Slow wording never hides these: they have fallbacks of their own. Only a
   // server with no AI configured does.
@@ -514,10 +519,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           amp={
             pView ? (
               <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
-                <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} />
+                <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={rig} />
               </Reticle>
             ) : (
-              <Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} />
+              <Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={mode === 'calm' ? undefined : rig} />
             )
           }
           // Inside the round, only Pinpoint's own lines: the last core answer's reaction belongs to the intro.

@@ -143,6 +143,8 @@ export function ampReactionTo(before: ConsultAnswers, patch: Partial<ConsultAnsw
   if (patch.training && countsByType(patch.training).gym > countsByType(before.training).gym) return 'flex'
   if (patch.energy === 10 && before.energy !== 10) return 'burst'
   if (patch.daylight && patch.daylight !== before.daylight) return 'sun'
+  // Another cup on the stack (plan Phase 7.2): a jitter.
+  if (patch.caffeine && caffeineCount(patch.caffeine) > caffeineCount(before.caffeine)) return 'jitter'
   // Pinpoint (plan v5): a verdict on a hunch, just given.
   const steps = patch.pinpoint?.steps
   if (steps && steps.length > (before.pinpoint?.steps.length ?? 0)) {

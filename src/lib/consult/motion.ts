@@ -204,8 +204,9 @@ export const AMP_ANIMATION: Record<AmpState, string | undefined> = {
  *   burst  the charge dial hits full: a burst of light
  *   eureka   "That's me" to a hunch (plan v5): a burst in go-green
  *   puzzled  "Not me" to a hunch: a small tilt of the head
+ *   jitter   another cup on the stack (plan Phase 7.2): a caffeinated shake
  */
-export type AmpReaction = 'flex' | 'sun' | 'burst' | 'eureka' | 'puzzled'
+export type AmpReaction = 'flex' | 'sun' | 'burst' | 'eureka' | 'puzzled' | 'jitter'
 
 export const AMP_REACTION: Record<AmpReaction, string> = {
   flex: 'amp-flex var(--amp-duration-scene) var(--amp-spring) 1',
@@ -213,6 +214,7 @@ export const AMP_REACTION: Record<AmpReaction, string> = {
   burst: 'amp-full var(--amp-duration-scene) var(--amp-spring) 1',
   eureka: 'amp-eureka var(--amp-duration-scene) var(--amp-spring) 1',
   puzzled: 'amp-puzzled var(--amp-duration-scene) var(--amp-spring) 1',
+  jitter: 'amp-jitter calc(var(--amp-duration-scene) / 1.5) linear 1',
 }
 
 /** The scan line across Amp while he reads an upload. */
