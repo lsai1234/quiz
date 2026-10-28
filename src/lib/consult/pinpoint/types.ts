@@ -54,6 +54,11 @@ export interface Nudge {
    * `aiEvidence` leaves it out and the server refuses its wording.
    */
   bodyMap?: true
+  /**
+   * Stays on the device: shown back to the person, never sent to AI. The
+   * protein estimate (their weight and what they eat) is one.
+   */
+  local?: true
 }
 
 export interface Pattern {

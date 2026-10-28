@@ -90,13 +90,17 @@ describe('claims-aware reasons', () => {
 })
 
 describe('habit fixes and GP lines', () => {
-  it('starts with every line unapproved, so nothing shows', () => {
-    expect(HABITS.every((h) => !h.approved)).toBe(true)
-    expect(GP_CHECKS.every((g) => !g.approved)).toBe(true)
+  it('shows every line once approved (all approved 2026-10-28), and nothing unapproved', () => {
+    expect(HABITS.every((h) => h.approved)).toBe(true)
+    expect(GP_CHECKS.every((g) => g.approved)).toBe(true)
     for (const persona of live) {
       const engine = runStackEngine(persona.answers, MOCK_CATALOGUE)
-      expect(approvedHabits(habitsFor(persona.answers, engine.unmetGoals))).toEqual([])
-      expect(approvedGpChecks(gpChecksFor(persona.answers))).toEqual([])
+      const habits = habitsFor(persona.answers, engine.unmetGoals)
+      expect(approvedHabits(habits)).toEqual(habits)
+      expect(approvedGpChecks(gpChecksFor(persona.answers))).toEqual(gpChecksFor(persona.answers))
+      // The gate still holds: a line nobody approved never shows.
+      expect(approvedHabits(habits, () => false)).toEqual([])
+      expect(approvedGpChecks(gpChecksFor(persona.answers), () => false)).toEqual([])
     }
   })
 

@@ -8,7 +8,7 @@
  *     timeframe, nothing about health);
  *   - carries its source, NHS where there is one;
  *   - has an approval flag, and only approved fixes are shown
- *     (`approvedHabits`). All start unapproved: they go live once reviewed;
+ *     (`approvedHabits`). All approved by the owner on 2026-10-28;
  *   - records how it would change the day ring, for Phase 8 (`ring`).
  *
  * Patterns with no claimable product (`habitOnlyPatterns`) are why these
@@ -21,6 +21,7 @@ import { LIMITS } from './pinpoint/choose'
 import type { PatternId } from './pinpoint/types'
 import { caffeineCount } from './reactions'
 import { readPlate } from './plate'
+import { measuredProtein } from './protein'
 import type { ConsultAnswers, ConsultGoal } from './types'
 
 /** How a fix would change the day ring (Phase 8). Times are minutes past midnight. */
@@ -74,6 +75,15 @@ const day = (m: number) => ((m % (24 * 60)) + 24 * 60) % (24 * 60)
 /** Down to the half hour: a time a person would set. */
 const halfHour = (m: number) => Math.floor(day(m) / 30) * 30
 
+/**
+ * Grams for the protein-breakfast fix: 25, or their measured gap from the
+ * protein check (Phase 5 proposal 2), to the nearest 5, between 15 and 40.
+ */
+export function breakfastGrams(a: ConsultAnswers): number {
+  const gap = measuredProtein(a)?.gapG ?? 0
+  return gap > 0 ? Math.min(40, Math.max(15, Math.round(gap / 5) * 5)) : 25
+}
+
 /** The last caffeine they told Pinpoint about, when they did. */
 export function lastCaffeineAt(a: ConsultAnswers): number | null {
   for (const step of [...(a.pinpoint?.steps ?? [])].reverse()) {
@@ -91,7 +101,7 @@ export const HABITS: readonly HabitFix[] = [
     text: (a) => `Lights out by ${clockWords(halfHour(a.sleep!.wake - SLEEP_TARGET))}: seven hours’ sleep before your ${clockWords(a.sleep!.wake)} alarm, with half an hour to drop off.`,
     ring: (a) => (a.sleep ? { kind: 'lights-out', at: halfHour(a.sleep.wake - SLEEP_TARGET) } : null),
     source: NHS.sleep,
-    approved: false,
+    approved: true,
   },
   {
     id: 'caffeine-cut-off',
@@ -107,7 +117,7 @@ export const HABITS: readonly HabitFix[] = [
     },
     ring: (a) => (a.sleep ? { kind: 'last-caffeine', at: halfHour(a.sleep.bed - CAFFEINE_GAP), from: lastCaffeineAt(a) } : null),
     source: NHS.sleep,
-    approved: false,
+    approved: true,
   },
   {
     id: 'daylight',
@@ -117,7 +127,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'Get outside for 20 minutes in daylight before midday, most days: a walk, a coffee outside, the long way to the shop.',
     ring: () => ({ kind: 'daylight', at: 11 * 60, minutes: 20 }),
     source: NHS.vitaminD,
-    approved: false,
+    approved: true,
   },
   {
     id: 'protein-breakfast',
@@ -126,11 +136,11 @@ export const HABITS: readonly HabitFix[] = [
     applies: () => true,
     text: (a) =>
       a.plate && readPlate(a.plate).plantBased
-        ? 'Put about 25g of protein in your breakfast: tofu, soya yoghurt with seeds, or beans on toast.'
-        : 'Put about 25g of protein in your breakfast: eggs, Greek yoghurt, or beans on toast.',
-    ring: () => ({ kind: 'protein-meal', meal: 'breakfast', grams: 25 }),
+        ? `Put about ${breakfastGrams(a)}g of protein in your breakfast: tofu, soya yoghurt with seeds, or beans on toast.`
+        : `Put about ${breakfastGrams(a)}g of protein in your breakfast: eggs, Greek yoghurt, or beans on toast.`,
+    ring: (a) => ({ kind: 'protein-meal', meal: 'breakfast', grams: breakfastGrams(a) }),
     source: BNF_PROTEIN,
-    approved: false,
+    approved: true,
   },
   {
     id: 'afternoon-walk',
@@ -140,7 +150,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'When the afternoon dip comes, take a 10-minute walk and a glass of water before reaching for a snack or a coffee.',
     ring: () => ({ kind: 'move', at: 15 * 60, minutes: 10 }),
     source: NHS.tiredness,
-    approved: false,
+    approved: true,
   },
   {
     id: 'fluids-around-training',
@@ -150,7 +160,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'Drink water through the day, not just after: a glass before you train and more after long or hot sessions.',
     ring: () => ({ kind: 'fluids', around: 'training' }),
     source: NHS.water,
-    approved: false,
+    approved: true,
   },
   {
     id: 'spread-the-week',
@@ -160,7 +170,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'Move one of your weekend efforts to a weekday: two shorter sessions in the week, one longer one at the weekend.',
     ring: () => null,
     source: NHS.activity,
-    approved: false,
+    approved: true,
   },
   {
     id: 'morning-mobility',
@@ -170,7 +180,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'Five minutes of gentle stretching before you get going in the morning: shoulders, hips and the backs of your legs.',
     ring: () => ({ kind: 'move', at: 7 * 60, minutes: 5 }),
     source: NHS.flexibility,
-    approved: false,
+    approved: true,
   },
   {
     id: 'walk-and-think',
@@ -180,7 +190,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'Most days, a brisk 10-minute walk, and something that makes you think: a puzzle, a new recipe, a different route.',
     ring: () => ({ kind: 'move', at: 10 * 60, minutes: 10 }),
     source: NHS.older,
-    approved: false,
+    approved: true,
   },
   {
     id: 'back-to-sleep',
@@ -190,7 +200,7 @@ export const HABITS: readonly HabitFix[] = [
     text: () => 'If you’re awake for more than 20 minutes in the night, get up and do something quiet in low light until you feel sleepy, then go back to bed.',
     ring: () => null,
     source: NHS.insomnia,
-    approved: false,
+    approved: true,
   },
 ]
 

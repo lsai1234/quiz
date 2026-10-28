@@ -39,7 +39,7 @@ describe('the script', () => {
   it('has the plan’s twelve scenes, two journeys’ own and Pinpoint’s, the safety check before the review (plans v4, v5)', () => {
     expect(SCENES.map((s) => s.id)).toEqual([
       'goals', 'about', 'training', 'aim', 'energy', 'follow-move', 'sleep', 'daylight', 'follow-rest',
-      'caffeine', 'food', 'follow-fuel', 'body', 'changes', 'shelf', 'pinpoint', 'circuit', 'review',
+      'caffeine', 'food', 'protein', 'follow-fuel', 'body', 'changes', 'shelf', 'pinpoint', 'circuit', 'review',
     ])
   })
 
@@ -262,9 +262,10 @@ import type { PinpointStage } from '../pinpoint/types'
 const PINPOINT_SCENES = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
 
 /** Everyday, short on sleep and running on coffee: a strong hunch from the core answers alone. */
-const WIRED: Partial<ConsultAnswers> = { ...CORE.everyday, ...TELLS.wired('everyday'), comfortOffered: true }
+const ASKED = { weight: null, door: 'ask' as const, picks: [], portions: 'average' as const }
+const WIRED: Partial<ConsultAnswers> = { ...CORE.everyday, ...TELLS.wired('everyday'), protein: ASKED, comfortOffered: true }
 /** A builder with nothing much going on: no lead at even odds. */
-const SETTLED: Partial<ConsultAnswers> = { ...CORE.builder, comfortOffered: true }
+const SETTLED: Partial<ConsultAnswers> = { ...CORE.builder, protein: ASKED, comfortOffered: true }
 
 /** On a scene, with every core scene before it behind them, as Next would have left it. */
 function at(sceneId: ConsultAnswers extends never ? never : FlowState['sceneId'], answers: Partial<ConsultAnswers>, route: 'deep' | 'speed' = 'deep'): FlowState {

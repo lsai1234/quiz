@@ -2,6 +2,7 @@ import type { HealthDataConsent } from '@/lib/types'
 
 import type { PatternId, PinpointAnswer } from './pinpoint/types'
 import type { TrainingAnswer } from './training'
+import type { ProteinAnswer } from './protein'
 
 /**
  * The Amp Consult's answer model.
@@ -22,6 +23,8 @@ export type SceneId =
   | 'daylight'
   | 'caffeine'
   | 'food'
+  /** The protein check (Phase 5 proposal 2): Deep and Pinpoint only. */
+  | 'protein'
   | 'body'
   | 'changes'
   | 'shelf'
@@ -146,6 +149,8 @@ export interface ConsultAnswers {
   daylight: Daylight | null
   caffeine: CaffeineAnswer | null
   plate: Food[] | null
+  /** The protein check: an optional weight band, and a day picked or counted, or "just ask me". */
+  protein: ProteinAnswer | null
   body: BodySpot[] | null
   shelf: ShelfItem[] | null
   circuit: CircuitAnswer | null
@@ -193,6 +198,7 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   daylight: null,
   caffeine: null,
   plate: null,
+  protein: null,
   body: null,
   shelf: null,
   circuit: null,

@@ -855,6 +855,45 @@
       ]
     },
     {
+      "id": "protein",
+      "section": "fuel",
+      "label": "Protein",
+      "interaction": "protein-check",
+      "speedRun": false,
+      "copy": {
+        "question": "What does a normal day of eating look like?",
+        "hint": "Roughly is fine. I only need the shape of a normal day."
+      },
+      "placeholder": {
+        "options": [
+          {
+            "label": "I honestly have no idea",
+            "set": {
+              "protein": {
+                "weight": null,
+                "door": "ask",
+                "picks": [],
+                "portions": "average"
+              }
+            }
+          },
+          {
+            "label": "Three normal meals",
+            "set": {
+              "protein": {
+                "weight": "75-90",
+                "door": "day",
+                "picks": [
+                  "day-normal"
+                ],
+                "portions": "average"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "follow-fuel",
       "section": "fuel",
       "label": "Follow-up",

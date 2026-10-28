@@ -15,6 +15,7 @@
 
 import { journeyOf } from '../journey'
 import { readPlate } from '../plate'
+import { MEASURED_GAP_G, measuredProtein, proteinEvidence } from '../protein'
 import { caffeineCount, sleepHours } from '../reactions'
 import { countsByType, sessionsPerWeek } from '../training'
 import type { Food } from '../types'
@@ -126,8 +127,13 @@ export const PATTERNS: Pattern[] = [
     nudges: [
       { when: (a) => a.aim === 'muscle', towards: 'clearly', why: 'Training to build muscle' },
       { when: plantBased, towards: 'clearly', why: 'A plant-based plate' },
-      { when: (a) => (proteinFoods(a) ?? 3) < 2, towards: 'clearly', why: 'Few protein foods most weeks' },
-      { when: (a) => (proteinFoods(a) ?? 0) >= 4, towards: 'away a little', why: 'Plenty of protein foods' },
+      // The protein check (Phase 5 proposal 2, approved): a measured gap of a
+      // scoop or more points strongly here, a met target points away, and a
+      // measurement outweighs the plate's guess. "Just ask me" measures nothing.
+      { when: (a) => (measuredProtein(a)?.gapG ?? 0) >= MEASURED_GAP_G, towards: 'strongly', why: (a) => proteinEvidence(measuredProtein(a)!), local: true },
+      { when: (a) => ['on-target', 'over'].includes(measuredProtein(a)?.verdict ?? ''), towards: 'away clearly', why: (a) => proteinEvidence(measuredProtein(a)!), local: true },
+      { when: (a) => !measuredProtein(a) && (proteinFoods(a) ?? 3) < 2, towards: 'clearly', why: 'Few protein foods most weeks' },
+      { when: (a) => !measuredProtein(a) && (proteinFoods(a) ?? 0) >= 4, towards: 'away a little', why: 'Plenty of protein foods' },
       { when: (a) => Boolean(a.changes?.includes('strength')), towards: 'a little', why: 'Keeping strong is harder' },
     ],
     effects: [{ need: 'protein', weight: 5 }],

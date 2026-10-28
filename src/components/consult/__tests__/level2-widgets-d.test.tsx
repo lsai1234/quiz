@@ -110,7 +110,7 @@ describe('C12 branching', () => {
 
   it('branches the deep charge the same way', () => {
     // A performance goal makes a builder (batch 5): "What are you training for?" joins.
-    expect(visibleScenes({ ...perf, route: 'deep' })).toHaveLength(13)
+    expect(visibleScenes({ ...perf, route: 'deep' })).toHaveLength(14)
     expect(visibleScenes({ ...perf, route: 'deep' })).toContain('aim')
     expect(resolveSceneDef('training', { ...perf, route: 'deep' }).detail).toBe(true)
   })

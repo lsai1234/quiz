@@ -24,7 +24,7 @@ describe('H12 consult instrumentation', () => {
     render(<AmpConsult />)
     chooseRoute()
     expect(named('consult_start')).toEqual([{ route: 'deep', consultArm: 'quiz' }])
-    expect(named('consult_scene_view')[0]).toMatchObject({ sceneId: 'goals', index: 1, total: 12 })
+    expect(named('consult_scene_view')[0]).toMatchObject({ sceneId: 'goals', index: 1, total: 13 })
     fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Focus/ }))
     pressNext()

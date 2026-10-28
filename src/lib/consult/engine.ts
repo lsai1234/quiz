@@ -51,6 +51,7 @@ import {
 import { caffeineCount, sleepHours } from './reactions'
 import { countsByType, sessionsPerWeek } from './training'
 import { readPlate } from './plate'
+import { measuredProtein, proteinEvidence } from './protein'
 import { GOAL_LABEL, SHELF_LABEL } from './summary'
 import type { ConsultAnswers, ConsultGoal } from './types'
 
@@ -319,6 +320,12 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
       add('gut', 1, 'Not much fruit or veg most weeks')
     }
   }
+
+  // The protein check (Phase 5 proposal 2): a measured gap is the protein
+  // need's source, their own answer restated. A met target adds nothing.
+  const measured = measuredProtein(a)
+  if (measured?.verdict === 'big-gap') add('protein', 4, proteinEvidence(measured))
+  else if (measured?.verdict === 'small-gap') add('protein', 2, proteinEvidence(measured))
 
   // Body.
   const spots = a.body ?? []

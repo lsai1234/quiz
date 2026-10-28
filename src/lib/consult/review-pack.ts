@@ -30,6 +30,7 @@ import { DEFAULT_BONUS } from '@/lib/offer/settings'
 import { bonusTermRows, freeGiftTermRows, offerCopyRows } from '@/lib/offer/review-rows'
 import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
+import { proteinRows } from './protein-review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
@@ -258,6 +259,8 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     // The hunch teaser and invite, and reactions that connect answers (plan Phase 6).
     ...hunchRows(),
     ...comboRows(),
+    // The protein check (Phase 5 proposal 2, approved 2026-10-28).
+    ...proteinRows(),
     ...glossaryRows(),
     ...claimRows(roster),
     // The free bonus's terms (plan Phase 2, 5): the conditions it has to

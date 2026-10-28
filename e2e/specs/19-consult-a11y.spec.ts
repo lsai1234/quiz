@@ -79,7 +79,10 @@ async function answerByKeyboard(page: Page) {
   const h = (await heading(page).textContent()) ?? ''
   // Amp's hunch invite (plan Phase 6) has nothing to answer: the way on is "Build my stack now".
   if (await page.locator('[data-scene="invite"]').count()) return
-  if (/what are you after/i.test(h)) {
+  if (/normal day of eating/i.test(h)) {
+    // The protein check: a day, one tap (the weight is optional).
+    await pickRadio(page, /^(Not much until dinner|Three normal meals|Protein at|I honestly)/, /^Three normal meals/)
+  } else if (/what are you after/i.test(h)) {
     await tabTo(page, /^Performance/)
     await page.keyboard.press('Space')
   } else if (/about you/i.test(h)) {

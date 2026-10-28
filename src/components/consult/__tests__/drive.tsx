@@ -77,6 +77,9 @@ export function answerCurrentScene(): void {
     case 'plate-picker':
       fireEvent.click(screen.getByRole('button', { name: /^Oily fish/ }))
       return
+    case 'protein-check':
+      fireEvent.click(screen.getByRole('radio', { name: /^Three normal meals/ }))
+      return
     case 'aim-tiles':
       fireEvent.click(screen.getByRole('radio', { name: /^Build muscle/ }))
       return
@@ -106,17 +109,22 @@ export function pressNext(): void {
  * One scene per call — except that the driver answers as a young builder
  * (Performance, 18–24), whose consult adds "What are you training for?"
  * after training, and whose answers raise a hunch, so Amp's invite comes
- * after the core scenes. Both are answered in the same call, so a count of
- * calls still lands on the same scene for every journey. The journey and
+ * after the core scenes; and the protein check follows the plate on the
+ * longer routes. All three are answered in the same call as the screen before,
+ * so a count of calls still lands on the same scene for every journey. The journey and
  * invite tests drive them on their own.
  */
 export function pickFirstOptionAndNext(): void {
   chooseRoute()
   answerCurrentScene()
   pressNext()
-  if (currentScene()?.id === 'aim') {
-    answerCurrentScene()
-    pressNext()
+  // The aim (builders only) and the protein check (Deep and Pinpoint) are
+  // answered in the same call as the scene before them.
+  for (const extra of ['aim', 'protein']) {
+    if (currentScene()?.id === extra) {
+      answerCurrentScene()
+      pressNext()
+    }
   }
   // The hunch invite after the core scenes (plan Phase 6), when the answers
   // raise one: "Build my stack now", in the same call, for the same reason.

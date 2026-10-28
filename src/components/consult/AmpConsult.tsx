@@ -44,7 +44,7 @@ import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
 import { Hint, NextButton, QuietLink } from './controls'
 import { Plain } from './pinpoint/parts'
-import { SceneRenderer, resolveScene } from './scenes/registry'
+import { SceneRenderer, preloadLaterScenes, resolveScene } from './scenes/registry'
 import { hunchLine, notesOf, readNotes, usePinpointAi } from './pinpoint/pinpointAi'
 import { pickToPatch, type Pick } from '@/lib/consult/ai/understand'
 import { Analysis } from './Analysis'
@@ -128,6 +128,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const [ampReaction, setAmpReaction] = useState<{ name: AmpReaction; id: number; scene: SceneId } | null>(null)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
+
+  // The later scenes' code (Pinpoint, the protein check): fetched once they're
+  // under way, after scene one, so it never competes with the first paint and
+  // is long in hand before anyone reaches either.
+  const underWay = state.history.length > 0 || state.answers.goals.length > 0
+  useEffect(() => {
+    if (underWay) preloadLaterScenes()
+  }, [underWay])
 
   // Read the save once, on mount. Same tab → straight back in. Otherwise ask.
   useEffect(() => {

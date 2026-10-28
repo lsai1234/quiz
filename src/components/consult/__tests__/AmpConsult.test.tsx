@@ -14,7 +14,7 @@ describe('AmpConsult', () => {
   it('opens straight on the goals scene, with the 1-minute version one tap away (plan Phase 6)', () => {
     render(<AmpConsult />)
     expect(heading()).toHaveTextContent('What are you after?')
-    expect(screen.getByText('1/12 · Goals')).toBeInTheDocument()
+    expect(screen.getByText('1/13 · Goals')).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /^Speed run/ })).toBeNull()
     expect(screen.getByRole('button', { name: SHORT_LINK })).toBeInTheDocument()
   })
@@ -23,7 +23,7 @@ describe('AmpConsult', () => {
     render(<AmpConsult />)
     chooseRoute('Speed run')
     expect(heading()).toHaveTextContent('What are you after?')
-    expect(screen.getByText(/^1\/(\d+) · Goals$/).textContent).not.toBe('1/12 · Goals')
+    expect(screen.getByText(/^1\/(\d+) · Goals$/).textContent).not.toBe('1/13 · Goals')
     expect(screen.queryByRole('button', { name: SHORT_LINK })).toBeNull()
     pickFirstOptionAndNext()
     expect(screen.queryByRole('button', { name: SHORT_LINK })).toBeNull()
@@ -41,7 +41,7 @@ describe('AmpConsult', () => {
     // As the driver's young builder sees it: a builder's wording, the aim
     // answered along with training, and no "what's got harder" (that's for over-55s).
     const builder = { ...EMPTY_ANSWERS, route: 'deep' as const, goals: ['performance' as const], age: '18-24' as const }
-    expect(seen).toEqual(visibleScenes(builder).filter((id) => id !== 'aim').map((id) => resolveSceneDef(id, builder).copy.question))
+    expect(seen).toEqual(visibleScenes(builder).filter((id) => id !== 'aim' && id !== 'protein').map((id) => resolveSceneDef(id, builder).copy.question))
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(heading()).toHaveTextContent('Your charge profile')
   })

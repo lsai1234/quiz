@@ -105,7 +105,10 @@ export interface ConsultClaimsSignoff {
   date: string
   sha256: string
 }
-export const CONSULT_CLAIMS_SIGNOFF: ConsultClaimsSignoff | null = null
+// Signed off by the owner, 2026-10-28, against docs/consult-claims-signoff.csv
+// (Amp Consult and offer plan, Phase 5). A change to the map changes the
+// sheet's hash, and the sign-off test fails until it is signed off again.
+export const CONSULT_CLAIMS_SIGNOFF: ConsultClaimsSignoff | null = { date: '2026-10-28', sha256: 'b9525b0c09214a52432d41b22759b1b65a000a493cf737a499fa1029f3076e61' }
 
 let preview: boolean | null = null
 

@@ -9,6 +9,7 @@
 
 import type { AmpReaction } from './motion'
 import { countsByType, sessionsPerWeek } from './training'
+import { proteinIntake } from './protein'
 import type { AgeBand, ConsultAnswers, ConsultGoal, SceneId } from './types'
 
 const GOAL_WORDS: Record<ConsultGoal, string> = {
@@ -93,6 +94,11 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
     }
     case 'food':
       return a.plate ? 'Plate noted.' : ''
+    case 'protein': {
+      if (!a.protein) return ''
+      const intake = proteinIntake(a.protein)
+      return intake !== null ? `About ${intake}g a day. Noted.` : a.protein.door === 'ask' ? 'Rough is fine. Noted.' : ''
+    }
     case 'body':
       return a.body === null ? '' : a.body.length === 0 ? 'All good. Great.' : 'Noted the sore spots.'
     case 'shelf':

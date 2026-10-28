@@ -21,6 +21,7 @@ import { circuitOutcome } from './circuit'
 import { sessionsPerWeek } from './training'
 import { pickToPatch, type Pick } from './ai/understand'
 import { teaserLine } from './hunch-copy'
+import { proteinAnswered } from './protein'
 import {
   EMPTY_ANSWERS,
   type ConsultAnswers,
@@ -251,6 +252,8 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
       return a.caffeine !== null
     case 'food':
       return a.plate !== null && a.plate.length > 0
+    case 'protein':
+      return proteinAnswered(a.protein)
     case 'body':
     case 'changes':
       // "Leave it blank if you're all good": blank is an answer. See BLANK_MEANS.
@@ -299,6 +302,7 @@ export const NUDGES: Record<SceneId, string> = {
   daylight: 'Move the sun to how often you get outside.',
   caffeine: 'Add your drinks, or tap None.',
   food: 'Tap at least one food.',
+  protein: 'Pick the day that fits, count it, or tap I honestly have no idea.',
   body: '',
   changes: '',
   shelf: 'Pick what you take, or Nothing yet.',

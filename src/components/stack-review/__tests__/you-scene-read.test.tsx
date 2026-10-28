@@ -32,8 +32,21 @@ it('shows the read: the pattern, its line and their own words', () => {
   expect(screen.getByText(read.checked[0])).toBeInTheDocument()
 })
 
-it('shows no habit fix and no GP line until they are approved, and promises no fix for an unmet goal', () => {
+it('shows the approved habit fixes and GP lines, each with its source (approved 2026-10-28)', () => {
   render(<YouScene name="Sam" stackName="Wired and tired" items={[]} checks={[]} read={read} reducedMotion />)
+  expect(document.querySelector('[data-habit="caffeine-cut-off"]')).toHaveTextContent('Have your last caffeine by 2pm.')
+  expect(document.querySelector('[data-gp]')).toHaveTextContent('If you’ve felt this tired')
+  expect(screen.getByText(/what to try instead/)).toBeInTheDocument()
+})
+
+it('shows no line that isn’t approved, and promises no fix for an unmet goal without one', () => {
+  const unapproved: ConsultRead = {
+    ...read,
+    habits: [{ ...read.habits[0], id: 'not-approved' }],
+    gp: [{ ...read.gp[0], id: 'not-approved' }],
+    unmet: [{ goal: 'focus', habit: { ...read.unmet[0].habit!, id: 'not-approved' } }],
+  }
+  render(<YouScene name="Sam" stackName="Wired and tired" items={[]} checks={[]} read={unapproved} reducedMotion />)
   expect(document.querySelector('[data-habit]')).toBeNull()
   expect(document.querySelector('[data-gp]')).toBeNull()
   expect(screen.getByText('Nothing we stock is right for focus.')).toBeInTheDocument()

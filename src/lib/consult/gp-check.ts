@@ -3,7 +3,7 @@
  * answer combinations a supplement shouldn't paper over. Calm, never
  * diagnostic: each says what to mention and to whom, never what it might be.
  * Sourced from NHS pages, in the review pack, and shown only once approved
- * (`approvedGpChecks`). All start unapproved.
+ * (`approvedGpChecks`). Approved by the owner on 2026-10-28.
  */
 import { pinpointed } from './pinpoint/effects'
 import type { ConsultAnswers } from './types'
@@ -28,7 +28,7 @@ export const GP_CHECKS: readonly GpCheck[] = [
     applies: (a) => a.sleep?.quality === 'broken' || confirmed(a, 'broken-nights'),
     text: 'Waking in the night most nights is worth mentioning to your GP, especially if it’s been going on for a while or is affecting your days.',
     source: { label: 'NHS: Insomnia', url: 'https://www.nhs.uk/conditions/insomnia/' },
-    approved: false,
+    approved: true,
   },
   {
     id: 'losing-the-thread',
@@ -36,7 +36,7 @@ export const GP_CHECKS: readonly GpCheck[] = [
     applies: (a) => confirmed(a, 'staying-sharp'),
     text: 'If you’re forgetting things more than you used to, or someone close to you has noticed, it’s worth a chat with your GP.',
     source: { label: 'NHS: Memory loss (amnesia)', url: 'https://www.nhs.uk/conditions/memory-loss-amnesia/' },
-    approved: false,
+    approved: true,
   },
   {
     id: 'flagging-eating-less',
@@ -44,7 +44,7 @@ export const GP_CHECKS: readonly GpCheck[] = [
     applies: (a) => confirmed(a, 'eating-less') || (a.goals[0] === 'weight' && a.energy !== null && a.energy <= 3),
     text: 'Feeling tired a lot while you’re eating less is worth mentioning to your GP, or to whoever is supporting your weight loss.',
     source: { label: 'NHS: Tiredness and fatigue', url: 'https://www.nhs.uk/conditions/tiredness-and-fatigue/' },
-    approved: false,
+    approved: true,
   },
   {
     id: 'always-tired',
@@ -52,7 +52,7 @@ export const GP_CHECKS: readonly GpCheck[] = [
     applies: (a) => a.energy !== null && a.energy <= 2,
     text: 'If you’ve felt this tired for a few weeks without an obvious reason, it’s worth seeing your GP.',
     source: { label: 'NHS: Tiredness and fatigue', url: 'https://www.nhs.uk/conditions/tiredness-and-fatigue/' },
-    approved: false,
+    approved: true,
   },
 ]
 

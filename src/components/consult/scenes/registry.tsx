@@ -1,6 +1,6 @@
 'use client'
 
-import { PinpointScene } from '../pinpoint/PinpointScene'
+import dynamic from 'next/dynamic'
 import type { PatternId } from '@/lib/consult/pinpoint/types'
 import { AimTiles } from './AimTiles'
 import { ChangesPicker } from './ChangesPicker'
@@ -67,6 +67,29 @@ export interface SceneEntry {
   writes: (keyof ConsultAnswers)[]
 }
 
+/**
+ * Scenes kept out of the first scene's JavaScript (the first-scene budget):
+ * nobody starts on Pinpoint any more (plan Phase 6), and the protein check
+ * comes after the plate. They're fetched once the consult is under way
+ * (`preloadLaterScenes`), so they're there before anyone reaches them. Under
+ * Jest they load at once, so a test drives them like any other scene; the
+ * condition is a build-time constant, so the bundle never carries that path.
+ */
+const PinpointScene: ComponentType<SceneProps> =
+  process.env.NODE_ENV === 'test'
+    ? (require('../pinpoint/PinpointScene') as typeof import('../pinpoint/PinpointScene')).PinpointScene
+    : dynamic(() => import('../pinpoint/PinpointScene').then((m) => m.PinpointScene))
+const ProteinScene: ComponentType<SceneProps> =
+  process.env.NODE_ENV === 'test'
+    ? (require('./ProteinScene') as typeof import('./ProteinScene')).ProteinScene
+    : dynamic(() => import('./ProteinScene').then((m) => m.ProteinScene))
+
+/** Fetch the later scenes' code, ahead of need. */
+export function preloadLaterScenes(): void {
+  void import('../pinpoint/PinpointScene')
+  void import('./ProteinScene')
+}
+
 function Review({ order, answers, onEdit, onAnswer, onUpgrade, onRecheck }: SceneProps) {
   return <ReviewScene scenes={order} answers={answers} onEdit={onEdit} onAnswer={onAnswer} onUpgrade={onUpgrade} onRecheck={onRecheck} />
 }
@@ -85,6 +108,7 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'sun-arc': { component: SunArc, writes: ['daylight'] },
   'cup-counter': { component: CupCounter, writes: ['caffeine'] },
   'plate-picker': { component: PlatePicker, writes: ['plate'] },
+  'protein-check': { component: ProteinScene, writes: ['protein'] },
   'body-map': { component: BodyMap, writes: ['body'] },
   'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
   'circuit-check': { component: CircuitCheck, writes: ['circuit', 'healthConsent', 'tailorConsent', 'symptoms'] },
@@ -104,6 +128,7 @@ const PLACEHOLDER_WRITES: Record<SceneId, (keyof ConsultAnswers)[]> = {
   daylight: ['daylight'],
   caffeine: ['caffeine'],
   food: ['plate'],
+  protein: ['protein'],
   body: ['body'],
   changes: ['changes'],
   shelf: ['shelf'],

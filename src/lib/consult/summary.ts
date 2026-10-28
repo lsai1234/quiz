@@ -6,6 +6,7 @@
 import { pinpointed } from './pinpoint/effects'
 import { probeSteps, stepSaid } from './pinpoint/leads'
 import { caffeineCount, sleepHours } from './reactions'
+import { proteinIntake } from './protein'
 import { ACTIVITIES, countsByType, sessionsLabel, sessionsPerWeek } from './training'
 import type {
   AgeingChange,
@@ -212,6 +213,12 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
     }
     case 'food':
       return a.plate ? list(a.plate.map((f) => FOOD_LABEL[f])) : ''
+    case 'protein': {
+      if (!a.protein) return ''
+      if (a.protein.door === 'ask') return 'No idea, roughly'
+      const intake = proteinIntake(a.protein)
+      return intake === null ? '' : `About ${intake}g of protein a day`
+    }
     case 'body':
       if (a.body === null) return ''
       return a.body.length === 0 ? 'Nothing sore' : list(a.body.map((b) => BODY_LABEL[b]))

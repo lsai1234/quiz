@@ -1,12 +1,13 @@
 # Consult Phase 5: two proposals
 
-The plan asks for two things to be proposed in Phase 5. The first is built as
-proposed (it was needed for "results-page tiers match what the consult
-built"); it can be changed without touching anything else. The second is not
-built, because it changes the Pinpoint maths and the screen count, which the
-plan says to propose first.
+The plan asks for two things to be proposed in Phase 5. **Both are approved
+(2026-10-28) and built**: the consult keeps its own tiers, and the protein
+module is on Deep and Pinpoint, with a measured gap outweighing the plate's
+guess, as proposed below. In the same decision the consult claims map was
+signed off (`CONSULT_CLAIMS_SIGNOFF`) and every habit fix and GP line was
+approved.
 
-## 1. The consult's tiers on the results page (built)
+## 1. The consult's tiers on the results page (built; kept, 2026-10-28)
 
 **What changed.** A consult stack is no longer re-tiered by price band
 (`planTiers`). The depth picker shows the consult's own three tiers, with the
@@ -41,7 +42,7 @@ band breaks that. If you'd rather keep bands, the alternative is to band the
 consult's ranking (take its order, cut at the band), which is a small change
 in `consultTierPlans`.
 
-## 2. The protein module in the consult (not built; needs a yes)
+## 2. The protein module in the consult (approved and built, 2026-10-28)
 
 **What it is.** v2's protein check (`docs/QUIZ_V2_PROTEIN.md`): a target from
 weight and training, an estimate from one of three doors (just ask me /
@@ -74,9 +75,21 @@ waits for a yes):
   its claim.
 - **Try this week.** The protein-breakfast fix uses their gap instead of a
   flat 25g: "Put about 35g of protein in your breakfast…", capped at 40g.
-- **Privacy.** Body weight is already collected on "about"; the estimate stays
-  on the device and in the handoff like every other answer, and is never sent
-  to the AI (it isn't free text and isn't on the AI's allow list).
+- **Privacy.** *Correction:* this said body weight was already collected on
+  "about"; it isn't. As in v2, the scene asks for a weight band itself, one
+  optional row of chips, and without one there's no number (the estimate
+  still shows, against nothing). The weight and the estimate stay on the device
+  and in the handoff like every other answer, and are never sent to the AI:
+  they aren't on the copy AI's allow list, the evidence line is marked
+  `local` so Pinpoint's AI never gets it, and the server refuses gram figures
+  as evidence anyway.
+
+**As built** (`src/lib/consult/protein.ts`, `scenes/ProteinScene.tsx`): v2's
+sums and options, unchanged (a test holds the grams to v2's bank), with the
+consult's own words, which say the number and where it sits and never mention
+a product. A small gap (under a scoop) adds 2 to the protein need and nudges
+no pattern; a met target adds nothing to the need (it doesn't remove protein
+a goal asked for).
 
 **To decide.** (a) Yes or no to the scene on Deep and Pinpoint. (b) Whether a
 measured gap should outweigh "Protein at one meal, not three" (the pattern's

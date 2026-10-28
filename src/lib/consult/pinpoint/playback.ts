@@ -60,7 +60,7 @@ export function hunchEvidence(lead: Lead): string[] {
  * read from the body map, which stays on the device.
  */
 export function aiEvidence(lead: Lead): string[] {
-  return hunchEvidence({ ...lead, support: lead.support.filter((e) => !e.bodyMap) })
+  return hunchEvidence({ ...lead, support: lead.support.filter((e) => !e.bodyMap && !e.local) })
 }
 
 /** Why something was ruled out, in one line. */
