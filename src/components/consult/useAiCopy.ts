@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { COPY_BUDGET_MS, NEVER_AI, copyAnswersFor, summariseForCopy, validateSceneCopy, type AiSceneCopy } from '@/lib/consult/ai/copy'
-import { isAnswered, resolveSceneDef, sceneAfter, visibleScenes, type FlowState, type SceneDef } from '@/lib/consult/flow'
+import { isAnswered, resolveSceneDef, sceneAfter, type FlowState, type SceneDef } from '@/lib/consult/flow'
 import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
 
 /**
@@ -15,8 +15,7 @@ import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
  * for next time, never swapped in under someone's eyes. Anything slow, failed
  * or invalid leaves the scripted copy, with no visible break.
  *
- * The first scene has no scene before it, so its words are asked for while
- * the route choice is on screen.
+ * The first scene has no scene before it, so it keeps its scripted words.
  *
  * Lost signal (V6): after `BREAKER` misses in a row the hook stops asking for
  * words for the rest of the visit — a down or slow service costs nothing more,
@@ -63,7 +62,7 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
   const [unavailable, setUnavailable] = useState(false)
 
   const ready = state.phase === 'scenes' && isAnswered(state.sceneId, state.answers)
-  const next = state.phase === 'intro' ? visibleScenes(state.answers)[0] ?? null : ready ? sceneAfter(state.sceneId, state.answers) : null
+  const next = ready ? sceneAfter(state.sceneId, state.answers) : null
   const summary = summariseForCopy(state.answers)
 
   useEffect(() => {
@@ -73,8 +72,7 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
     inflight.current.add(k)
     const scene = resolveSceneDef(next, state.answers)
     // The scene being answered now is the one the next scene reacts to (V4).
-    // On the route choice there's no answered scene to react to.
-    const previous = state.phase === 'intro' ? null : state.sceneId
+    const previous = state.sceneId
     void fetcher(scene, state.answers, previous).then((result) => {
       inflight.current.delete(k)
       if (result === UNAVAILABLE) {

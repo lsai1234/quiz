@@ -19,8 +19,9 @@
  *
  *   bytes   everything transferred until the first scene is usable
  *   js      the JavaScript part of that, compressed
- *   ready   navigation → the route choice on screen AND answering a tap
- *           (a hydrated page, not just painted HTML)
+ *   ready   navigation → the first scene (the goals) on screen AND answering
+ *           a tap (a hydrated page, not just painted HTML). There is no
+ *           route choice any more (plan Phase 6): the goals are the first scene.
  *
  * Exits non-zero if any is over budget. Must run against a production build:
  * a dev server's bundles are unminified and several times the size.
@@ -80,11 +81,11 @@ cdp.on('Network.loadingFinished', (e) => sizes.set(e.requestId, e.encodedDataLen
 
 const t0 = Date.now()
 await page.goto(`${base}/quizv2`, { waitUntil: 'commit' })
-const choice = page.getByRole('radio', { name: /^Speed run/ })
-await choice.waitFor({ state: 'visible', timeout: 60_000 })
+const goal = page.getByRole('button', { name: /^Performance/ })
+await goal.waitFor({ state: 'visible', timeout: 60_000 })
 // Usable means hydrated: a tap has to do something.
 await page.waitForFunction(() => {
-  const el = [...document.querySelectorAll('[role="radio"]')][0]
+  const el = document.querySelector('[data-scene] button')
   return el && Object.keys(el).some((k) => k.startsWith('__reactFiber'))
 }, null, { timeout: 60_000 })
 const readyMs = Date.now() - t0

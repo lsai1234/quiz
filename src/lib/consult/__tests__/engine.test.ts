@@ -69,7 +69,11 @@ describe('H3 circuit outcomes', () => {
 
   it('never reaches analysis or the results page after a stop', () => {
     let s = initialFlow('c', 0, { route: 'deep' })
-    for (let guard = 0; guard < 20 && s.phase === 'scenes'; guard++) {
+    for (let guard = 0; guard < 20 && (s.phase === 'scenes' || s.phase === 'invite'); guard++) {
+      if (s.phase === 'invite') {
+        s = flowReducer(s, { type: 'invite', choice: 'build' })
+        continue
+      }
       const def = SCENES.find((d) => d.id === s.sceneId)!
       const opt = def.placeholder?.options[0]
       if (opt) s = flowReducer(s, { type: 'answer', patch: applyPlaceholder(opt, s.answers) })

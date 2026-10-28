@@ -29,7 +29,7 @@ function consultEvent(event: Parameters<typeof track>[0], props: EventProps): vo
 }
 
 export const consultFunnel = {
-  /** The route was chosen: top of the funnel. */
+  /** The consult opened on scene one: top of the funnel. */
   start(p: { route: Route }) {
     consultEvent('consult_start', { route: p.route })
   },
@@ -60,9 +60,9 @@ export const consultFunnel = {
   abandon(p: { lastSceneId: SceneId }) {
     consultEvent('consult_abandon', { lastSceneId: p.lastSceneId })
   },
-  /** "Want me to pinpoint it?" taken from a Speed run or Deep charge review. */
-  upgrade(p: { from: 'speed' | 'deep' }) {
-    consultEvent('consult_upgrade', { from: p.from })
+  /** Pinpoint taken up: from the hunch invite after the core scenes (plan Phase 6), or "Pinpoint it" on a review. */
+  upgrade(p: { from: 'speed' | 'deep'; via: 'invite' | 'review' }) {
+    consultEvent('consult_upgrade', { from: p.from, via: p.via })
   },
   /** "Did Amp get you?" on Fully charged, and how many patterns it had found. */
   gotYou(p: { answer: GotYou; found: number }) {

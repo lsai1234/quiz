@@ -12,14 +12,15 @@
  */
 
 import { nextStep, roundDone } from './pinpoint/choose'
-import { probeSteps } from './pinpoint/leads'
-import { withoutVerdict } from './pinpoint/screen'
+import { isIn, leads, probeSteps, type Lead } from './pinpoint/leads'
+import { undoInRound, withoutVerdict } from './pinpoint/screen'
 import type { PatternId } from './pinpoint/types'
 import { journeyOf, type Journey } from './journey'
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
 import { sessionsPerWeek } from './training'
 import { pickToPatch, type Pick } from './ai/understand'
+import { teaserLine } from './hunch-copy'
 import {
   EMPTY_ANSWERS,
   type ConsultAnswers,
@@ -312,13 +313,17 @@ export const NUDGES: Record<SceneId, string> = {
 /* ── State ──────────────────────────────────────────────────────────────── */
 
 /**
- * intro    — the route choice (speed run or deep charge), before scene one
  * scenes   — collecting
+ * invite   — after the core scenes, Amp's hunch and the way into Pinpoint
+ *            (plan Phase 6); the scene stays the last core scene under it
  * analysis — everything's in, the stack is being worked out
  * stop     — the circuit check ended the consult (a signpost, no products)
  * done     — handed over to the results page
+ *
+ * There is no route choice any more (Phase 6): everyone starts the core
+ * scenes, and the first offers the 1-minute version.
  */
-export type Phase = 'intro' | 'scenes' | 'analysis' | 'stop' | 'done'
+export type Phase = 'scenes' | 'invite' | 'analysis' | 'stop' | 'done'
 
 export interface FlowState {
   consultId: string
@@ -331,6 +336,8 @@ export interface FlowState {
   /** Set while editing from the review: Next returns there. */
   returnTo: SceneId | null
   phase: Phase
+  /** The hunch invite, once answered: "Check it" or "Build my stack now". It is offered once. */
+  invite?: 'checked' | 'skipped' | null
   startedAt: number
   updatedAt: number
 }
@@ -344,8 +351,10 @@ export type FlowAction =
   | { type: 'restore'; state: FlowState }
   | { type: 'reset'; consultId: string; now: number }
   | { type: 'phase'; phase: Phase }
-  /** The choice on the intro screen. */
+  /** "Short on time? Do the 1-minute version" on the first scene: the Speed run. */
   | { type: 'route'; route: Route }
+  /** The hunch invite's two buttons (plan Phase 6). */
+  | { type: 'invite'; choice: 'check' | 'build' }
   /** "I'd rather not answer these" on the circuit check: a stop, with nothing kept. */
   | { type: 'decline' }
   /** A "Tell Amp more" card added (V3), merged into the latest answers. */
@@ -364,11 +373,11 @@ export function newConsultId(): string {
 }
 
 /**
- * A fresh consult. It opens on the route choice unless a route is already
- * known (the workshop, tests, a deep link), in which case it opens on scene one.
+ * A fresh consult, on scene one. Everyone starts on the core scenes (the Deep
+ * charge route) unless a route is already known (the workshop, tests).
  */
 export function initialFlow(consultId: string, now: number, answers: Partial<ConsultAnswers> = {}): FlowState {
-  const merged = { ...EMPTY_ANSWERS, ...answers }
+  const merged = { ...EMPTY_ANSWERS, ...answers, route: answers.route ?? 'deep' }
   return {
     consultId,
     scriptVersion: SCRIPT_VERSION,
@@ -377,7 +386,8 @@ export function initialFlow(consultId: string, now: number, answers: Partial<Con
     answers: merged,
     direction: 'forward',
     returnTo: null,
-    phase: merged.route ? 'scenes' : 'intro',
+    phase: 'scenes',
+    invite: null,
     startedAt: now,
     updatedAt: now,
   }
@@ -395,6 +405,99 @@ export function sceneAfter(id: SceneId, answers: ConsultAnswers): SceneId | null
     return order.find((s) => full.indexOf(s) > at) ?? null
   }
   return order[i + 1] ?? null
+}
+
+/* ── Hunches (plan Phase 6) ─────────────────────────────────────────────── */
+
+/** A lead this likely, from the core answers alone, is worth a teaser and an invite. */
+export const INVITE_AT = 0.5
+
+/** The strongest lead the answers so far point at, if it is at least `INVITE_AT`. */
+export function hunchLead(a: ConsultAnswers): Lead | null {
+  const top = leads(a)
+    .filter((l) => isIn(l) && l.p >= INVITE_AT)
+    .sort((x, y) => y.p - x.p)[0]
+  return top ?? null
+}
+
+const CORE_SECTIONS: SectionId[] = ['you', 'move', 'rest', 'fuel', 'body']
+const PINPOINT_STAGES: SceneId[] = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
+/** The core scenes: the ones everyone starts on, not Pinpoint's, the circuit check or the review. */
+const isCore = (id: SceneId) => CORE_SECTIONS.includes(sceneDef(id).section) && !PINPOINT_STAGES.includes(id)
+
+/**
+ * Leaving the last core scene: where the invite goes. Only on the core
+ * scenes' own route: a Speed run asked for the short way, and Pinpoint is
+ * already Pinpoint. Offered once, and never on the way back to the review.
+ */
+export function invites(state: FlowState): Lead | null {
+  if (state.answers.route !== 'deep' || state.invite || state.returnTo) return null
+  if (!isCore(state.sceneId)) return null
+  const next = sceneAfter(state.sceneId, state.answers)
+  if (next && isCore(next)) return null
+  return hunchLead(state.answers)
+}
+
+/**
+ * The early teaser: on the scene after the Rest section, Amp's reaction holds
+ * back a theory about the strongest lead, naming its area and never a cause.
+ * Not inside Pinpoint, which says its hunches out loud.
+ */
+export function teaser(previous: SceneId | undefined, answers: ConsultAnswers): { lead: Lead; line: string } | null {
+  if (!previous || answers.route === 'pinpoint') return null
+  const rest = visibleScenes(answers).filter((id) => sceneDef(id).section === 'rest' && isCore(id))
+  if (rest[rest.length - 1] !== previous) return null
+  const lead = hunchLead(answers)
+  return lead ? { lead, line: teaserLine(lead.pattern.id) } : null
+}
+
+/**
+ * Next, once the stops and the invite are behind it: back to the review if
+ * editing, the circuit check if it hasn't been done, otherwise the scene after.
+ */
+function advance(state: FlowState): FlowState {
+  if (state.returnTo && state.returnTo !== state.sceneId) {
+    return {
+      ...state,
+      history: [...state.history, state.sceneId],
+      sceneId: state.returnTo,
+      returnTo: null,
+      direction: 'forward',
+    }
+  }
+  let next = sceneAfter(state.sceneId, state.answers)
+  // Leaving the core scenes on Pinpoint, a follow-up still to answer behind
+  // them comes first (Back from the first follow-up, then Next, lands here).
+  if (state.answers.route === 'pinpoint' && isCore(state.sceneId)) {
+    const order = visibleScenes(state.answers)
+    const here = order.indexOf(state.sceneId)
+    const missed = order.slice(0, here).find((id) => PINPOINT_STAGES.includes(id) && !isAnswered(id, state.answers))
+    if (missed && !order.slice(here + 1).some(isCore)) next = missed
+  }
+  // From a Pinpoint screen taken up after the core scenes (the invite, or the
+  // review's "Pinpoint it"), the core scenes already answered are behind them:
+  // straight on to the next Pinpoint screen, not back through sleep and food.
+  // The circuit check is never skipped.
+  if (PINPOINT_STAGES.includes(state.sceneId)) {
+    while (next && isCore(next) && state.history.includes(next) && isAnswered(next, state.answers)) next = sceneAfter(next, state.answers)
+  }
+  // Nothing is decided without the circuit check. Its answers are never
+  // saved, so a review reopened after a reload goes back through it.
+  if (!next && !isAnswered('circuit', state.answers)) {
+    return { ...state, history: [...state.history, state.sceneId], sceneId: 'circuit', returnTo: 'review', direction: 'forward' }
+  }
+  if (!next) return { ...state, phase: 'analysis', direction: 'forward' }
+  return { ...state, history: [...state.history, state.sceneId], sceneId: next, direction: 'forward' }
+}
+
+/** On to Pinpoint, every answer kept: from the first screen still to answer. */
+function upgrade(state: FlowState): FlowState {
+  const answers = { ...state.answers, route: 'pinpoint' as const, pinpoint: state.answers.pinpoint ?? { steps: [], stopped: false } }
+  // Onwards from the first screen still to answer: the core screens a
+  // Speed run skipped, or the follow-ups. What's answered stays, and the
+  // walk passes back through the circuit check, its answers in place.
+  const target = visibleScenes(answers).find((id) => id !== 'review' && !isAnswered(id, answers)) ?? 'pinpoint'
+  return { ...state, answers, phase: 'scenes', history: [...state.history, state.sceneId], sceneId: target, returnTo: null, direction: 'forward' }
 }
 
 export function flowReducer(state: FlowState, action: FlowAction): FlowState {
@@ -417,23 +520,15 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       if (state.sceneId === 'circuit' && circuitOutcome(state.answers).kind === 'stop') {
         return { ...state, phase: 'stop', direction: 'forward', returnTo: null }
       }
-      if (state.returnTo && state.returnTo !== state.sceneId) {
-        return {
-          ...state,
-          history: [...state.history, state.sceneId],
-          sceneId: state.returnTo,
-          returnTo: null,
-          direction: 'forward',
-        }
-      }
-      const next = sceneAfter(state.sceneId, state.answers)
-      // Nothing is decided without the circuit check. Its answers are never
-      // saved, so a review reopened after a reload goes back through it.
-      if (!next && !isAnswered('circuit', state.answers)) {
-        return { ...state, history: [...state.history, state.sceneId], sceneId: 'circuit', returnTo: 'review', direction: 'forward' }
-      }
-      if (!next) return { ...state, phase: 'analysis', direction: 'forward' }
-      return { ...state, history: [...state.history, state.sceneId], sceneId: next, direction: 'forward' }
+      // After the core scenes, before the circuit check: Amp's hunch, if it has one.
+      if (invites(state)) return { ...state, phase: 'invite', direction: 'forward' }
+      return advance(state)
+    }
+
+    case 'invite': {
+      if (state.phase !== 'invite') return state
+      if (action.choice === 'check') return upgrade({ ...state, invite: 'checked' })
+      return advance({ ...state, phase: 'scenes', invite: 'skipped' })
     }
 
     case 'route': {
@@ -443,15 +538,8 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
     }
 
-    case 'upgrade': {
-      if (state.answers.route === 'pinpoint') return state
-      const answers = { ...state.answers, route: 'pinpoint' as const, pinpoint: state.answers.pinpoint ?? { steps: [], stopped: false } }
-      // Onwards from the first screen still to answer: the core screens a
-      // Speed run skipped, or the follow-ups. What's answered stays, and the
-      // walk passes back through the circuit check, its answers in place.
-      const target = visibleScenes(answers).find((id) => id !== 'review' && !isAnswered(id, answers)) ?? 'pinpoint'
-      return { ...state, answers, phase: 'scenes', history: [...state.history, state.sceneId], sceneId: target, returnTo: null, direction: 'forward' }
-    }
+    case 'upgrade':
+      return state.answers.route === 'pinpoint' ? state : upgrade(state)
 
     case 'recheck': {
       if (state.answers.route !== 'pinpoint' || !state.answers.pinpoint) return state
@@ -471,18 +559,25 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       }
 
     case 'back': {
-      if (state.phase === 'stop') return { ...state, phase: 'scenes', direction: 'back' }
-      if (state.phase === 'scenes' && state.history.length === 0 && state.answers.route) {
-        // Back from scene one returns to the route choice.
-        return { ...state, phase: 'intro', direction: 'back' }
-      }
+      // The stop, the invite and the charge-up all sit over a scene: Back
+      // returns to it (the circuit check, the last core scene, the review).
+      if (state.phase === 'stop' || state.phase === 'invite' || state.phase === 'analysis') return { ...state, phase: 'scenes', direction: 'back' }
       const history = [...state.history]
       const visible = visibleScenes(state.answers)
       // Skip anything an edit has since branched away.
       let previous = history.pop()
       while (previous && !visible.includes(previous)) previous = history.pop()
       if (!previous) return state
-      return { ...state, history, sceneId: previous, direction: 'back', returnTo: null }
+      const back: FlowState = { ...state, history, sceneId: previous, direction: 'back', returnTo: null }
+      // Back past the invite shows it again, both choices open: it was a
+      // screen of its own. From "Check it", only before Pinpoint has asked
+      // anything, and the route goes back with it.
+      const reopen = (s: FlowState) => (invites({ ...s, invite: null }) ? { ...s, invite: null, phase: 'invite' as const } : null)
+      if (state.invite === 'skipped' && !isCore(state.sceneId)) return reopen(back) ?? back
+      if (state.invite === 'checked' && PINPOINT_STAGES.includes(state.sceneId) && !state.answers.pinpoint?.steps.length) {
+        return reopen({ ...back, answers: { ...back.answers, route: 'deep', pinpoint: null } }) ?? back
+      }
+      return back
     }
 
     case 'jump': {
@@ -508,6 +603,34 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case 'phase':
       return { ...state, phase: action.phase }
   }
+}
+
+/* ── Back, and the phone's back gesture (plan Phase 6) ─────────────────── */
+
+/**
+ * What one step back does, whether from the Back button or the browser's
+ * back: inside the Pinpoint round, take back the last answer; otherwise back
+ * a screen (off the stop, the invite or the charge-up, back to the scene
+ * under it). Null on scene one: there the gesture leaves the page.
+ */
+export function backStep(state: FlowState): FlowAction | null {
+  if (state.phase === 'stop' || state.phase === 'invite' || state.phase === 'analysis') return { type: 'back' }
+  if (state.phase !== 'scenes') return null
+  if (state.sceneId === 'pinpoint') {
+    const undone = undoInRound(state.answers)
+    if (undone) return { type: 'answer', patch: { pinpoint: undone } }
+  }
+  const visible = visibleScenes(state.answers)
+  return state.history.some((id) => visible.includes(id)) ? { type: 'back' } : null
+}
+
+/**
+ * The screen as the browser's history sees it: one entry per scene, and one
+ * per answer inside the Pinpoint round, where Back undoes an answer.
+ */
+export function screenKey(state: FlowState): string {
+  const round = state.phase === 'scenes' && state.sceneId === 'pinpoint' ? `:${state.answers.pinpoint?.steps.length ?? 0}` : ''
+  return `${state.phase}:${state.sceneId}${round}`
 }
 
 /* ── Placeholders ───────────────────────────────────────────────────────── */
@@ -554,12 +677,14 @@ export interface SectionProgress {
 export function sectionProgress(state: FlowState): SectionProgress[] {
   const order = visibleScenes(state.answers)
   const here = order.indexOf(state.sceneId)
-  const finished = state.phase !== 'scenes' && state.phase !== 'intro'
+  const finished = state.phase !== 'scenes' && state.phase !== 'invite'
   // A section with nothing to ask on this route (Pinpoint off the Pinpoint
   // route, say) has no cell: counted as full, it lit up ahead of the fill.
   return SECTIONS.filter((section) => order.some((id) => sceneDef(id).section === section.id)).map((section) => {
     const scenes = order.filter((id) => sceneDef(id).section === section.id)
-    const done = scenes.filter((id) => finished || order.indexOf(id) < here).length
+    // Behind them in the order, or already passed: Pinpoint taken up after the
+    // core scenes sits earlier in the order than the scenes it follows.
+    const done = scenes.filter((id) => finished || order.indexOf(id) < here || (id !== state.sceneId && state.history.includes(id))).length
     return { id: section.id, label: section.label, fill: done / scenes.length }
   })
 }

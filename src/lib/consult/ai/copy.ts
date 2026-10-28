@@ -12,6 +12,7 @@
  */
 
 import type { SceneDef } from '../flow'
+import { comboFor } from '../combo-reactions'
 import { caffeineCount, sessionsPerWeek, sleepHours } from '../reactions'
 import { AGE_LABEL, DAYLIGHT_LABEL, GOAL_LABEL } from '../summary'
 import type { ConsultAnswers, SceneId } from '../types'
@@ -175,9 +176,13 @@ Rules you must never break:
 
 export function buildCopyPrompt(scene: SceneDef, answers: ConsultAnswers, previous?: SceneId | null): string {
   const reactTo = previous && REACT_SAFE.includes(previous) ? previous : null
+  // Two answers that point the same way (plan Phase 6): worked out here from
+  // the answers the route was sent, so the browser can't put words in.
+  const combo = reactTo ? comboFor(reactTo, answers) : null
   return [
     `Screen: ${scene.label} (${scene.interaction})`,
     reactTo ? `They just answered the ${reactTo} screen; react to that in a few words, restating it — never judging or advising.` : '',
+    combo ? `That answer connects with an earlier one: ${combo.connects(answers)}. Say the two together in the reaction, restating both — never why, never what it means.` : '',
     `Scripted question: ${scene.copy.question}`,
     `Scripted hint: ${scene.copy.hint ?? ''}`,
     scene.aiLabels?.length ? `Option keys needing a sub-line: ${scene.aiLabels.join(', ')}` : '',

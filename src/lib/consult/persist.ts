@@ -65,7 +65,7 @@ export function forStorage(state: FlowState): FlowState {
   if (state.phase === 'stop' && state.sceneId !== 'circuit') return { ...state, answers, phase: 'scenes' }
   // The review now comes after the circuit check (plan v4), so a review saved
   // without the check's answers resumes on the check, not past it.
-  const past = state.sceneId === 'circuit' || state.sceneId === 'review' || (state.phase !== 'scenes' && state.phase !== 'intro')
+  const past = state.sceneId === 'circuit' || state.sceneId === 'review' || (state.phase !== 'scenes' && state.phase !== 'invite')
   return {
     ...state,
     answers,
@@ -100,6 +100,8 @@ export function loadConsult(now = Date.now()): FlowState | null {
       clearConsult()
       return null
     }
+    // Saved before Phase 6, on the route choice that has gone: scene one.
+    if ((saved.state.phase as string) === 'intro') return { ...saved.state, phase: 'scenes', answers: { ...saved.state.answers, route: saved.state.answers.route ?? 'deep' } }
     return saved.state
   } catch {
     return null

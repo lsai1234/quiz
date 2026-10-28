@@ -12,7 +12,7 @@ import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { resetQuizArm } from '@/lib/experiments/client'
 import { AmpConsult } from '../AmpConsult'
 import { SWIPE_AT } from '../pinpoint/formats'
-import { PINPOINT_SCENES, answerCurrentScene, answerPinpoint, chooseRoute, heading, playPinpoint, pressNext, sceneOnScreen } from './drive'
+import { PINPOINT_SCENES, answerCurrentScene, answerPinpoint, heading, onInvite, playPinpoint, pressNext, sceneOnScreen } from './drive'
 
 /**
  * Pinpoint on screen (plan v5, phase 2): the route, the follow-ups, the
@@ -66,17 +66,39 @@ const at = (sceneId: FlowState['sceneId'], answers: Partial<ConsultAnswers> = {}
   answers: { ...EMPTY_ANSWERS, ...SAM, ...answers },
 })
 
-describe('the route choice', () => {
-  it('offers three routes, Pinpoint first and recommended, and says why', () => {
-    render(<AmpConsult />)
-    const routes = within(screen.getByRole('radiogroup', { name: 'Route' })).getAllByRole('radio')
-    expect(routes.map((r) => r.textContent)).toEqual([
-      expect.stringMatching(/^Pinpoint · Recommended/),
-      expect.stringMatching(/^Deep charge/),
-      expect.stringMatching(/^Speed run/),
-    ])
-    fireEvent.click(screen.getByRole('button', { name: 'Why Pinpoint?' }))
-    expect(screen.getByText(/which tired you are/)).toBeInTheDocument()
+describe('the way in: the hunch invite (plan Phase 6)', () => {
+  /** Sam on the core scenes' own route, on the last of them, every one before it behind him. */
+  const deep = (): FlowState => ({ ...at('shelf', { route: 'deep', pinpoint: null }), history: ['goals', 'about', 'training', 'energy', 'sleep', 'daylight', 'caffeine', 'food', 'body'] })
+
+  it('names the area, says how many questions, and offers two plain choices', () => {
+    render(<AmpConsult initial={deep()} />)
+    pressNext()
+    expect(heading()).toHaveTextContent(/^I’ve got a hunch about your [a-z ]+\.$/)
+    expect(screen.getByText(/^About \d+ quick questions? and I’ll know for sure\.$/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Check it' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Build my stack now' })).toBeInTheDocument()
+  })
+
+  it('Check it: on into Pinpoint, every answer kept', () => {
+    const upgrade = jest.spyOn(consultFunnel, 'upgrade')
+    render(<AmpConsult initial={deep()} />)
+    pressNext()
+    fireEvent.click(screen.getByRole('button', { name: 'Check it' }))
+    expect(PINPOINT_SCENES).toContain(sceneOnScreen())
+    expect(upgrade).toHaveBeenCalledWith({ from: 'deep', via: 'invite' })
+    upgrade.mockRestore()
+  })
+
+  it('Build my stack now: straight on to the circuit check', () => {
+    render(<AmpConsult initial={deep()} />)
+    pressNext()
+    fireEvent.click(screen.getByRole('button', { name: 'Build my stack now' }))
+    expect(heading()).toHaveTextContent('Circuit check')
+  })
+
+  it('teases it after the Rest section, by area, never by cause', () => {
+    render(<AmpConsult initial={{ ...at('caffeine', { route: 'deep', pinpoint: null }), history: ['goals', 'about', 'training', 'energy', 'sleep', 'daylight'] }} />)
+    expect(screen.getByText(/^I’ve got a theory about your [a-z ]+\. Hold that thought\.$/)).toBeInTheDocument()
   })
 })
 
@@ -207,17 +229,21 @@ describe('comfort mode', () => {
 describe('a whole Pinpoint consult', () => {
   // Every screen of the consult: about 4.7s on its own, so the default 5s limit
   // failed it whenever the full suite ran beside it. Slow, not stuck — hence 20s.
-  it('runs from the route choice to the handoff, and the review shows what was pinpointed', async () => {
+  it('runs from scene one through the invite to the handoff, and the review shows what was pinpointed', async () => {
     const onHandoff = jest.fn()
     render(<AmpConsult onHandoff={onHandoff} loadProducts={async () => MOCK_CATALOGUE} />)
-    chooseRoute('Pinpoint')
+    let invited = false
     for (let i = 0; i < 40 && sceneOnScreen() !== 'circuit'; i++) {
-      if (PINPOINT_SCENES.includes(sceneOnScreen() ?? '')) playPinpoint()
+      if (onInvite()) {
+        invited = true
+        fireEvent.click(screen.getByRole('button', { name: 'Check it' }))
+      } else if (PINPOINT_SCENES.includes(sceneOnScreen() ?? '')) playPinpoint()
       else {
         answerCurrentScene()
         pressNext()
       }
     }
+    expect(invited).toBe(true)
     expect(heading()).toHaveTextContent('Circuit check')
     answerCurrentScene()
     pressNext()
@@ -341,7 +367,7 @@ describe('the upgrade and the recheck (phase 4)', () => {
     render(<AmpConsult initial={{ ...at('review', { route: 'deep', pinpoint: null, circuit: { flags: [], none: true }, healthConsent: { accepted: true, version: 'x', at: 'x' } }), history: ['goals'] }} />)
     expect(screen.getByText('Want me to pinpoint it?')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Pinpoint it' }))
-    expect(upgrade).toHaveBeenCalledWith({ from: 'deep' })
+    expect(upgrade).toHaveBeenCalledWith({ from: 'deep', via: 'review' })
     expect(PINPOINT_SCENES).toContain(sceneOnScreen())
     upgrade.mockRestore()
   })

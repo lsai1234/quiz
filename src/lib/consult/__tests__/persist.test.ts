@@ -18,7 +18,12 @@ beforeEach(() => {
 
 function advancedTo(sceneId: string): FlowState {
   let s = initialFlow('c_abc', 0, { route: 'deep' })
-  for (let guard = 0; guard < 20 && s.sceneId !== sceneId && s.phase === 'scenes'; guard++) {
+  for (let guard = 0; guard < 20 && s.sceneId !== sceneId && (s.phase === 'scenes' || s.phase === 'invite'); guard++) {
+    // Amp's hunch invite, after the core scenes (Phase 6): build the stack now.
+    if (s.phase === 'invite') {
+      s = flowReducer(s, { type: 'invite', choice: 'build' })
+      continue
+    }
     const def = SCENES.find((d) => d.id === s.sceneId)!
     if (def.placeholder) s = flowReducer(s, { type: 'answer', patch: applyPlaceholder(def.placeholder.options[0], s.answers) })
     s = flowReducer(s, { type: 'next' })
@@ -106,5 +111,15 @@ describe('knowing whether to resume', () => {
     clearConsult()
     expect(loadConsult()).toBeNull()
     expect(hasActiveConsultSession()).toBe(false)
+  })
+})
+
+describe('a consult saved before Phase 6', () => {
+  it('opens on the core scenes, not the route choice that has gone', () => {
+    const old = { ...advancedTo('about'), phase: 'intro', answers: { ...advancedTo('about').answers, route: null } } as unknown as FlowState
+    localStorage.setItem(CONSULT_STORAGE_KEY, JSON.stringify({ v: 1, savedAt: Date.now(), state: old }))
+    const loaded = loadConsult()!
+    expect(loaded.phase).toBe('scenes')
+    expect(loaded.answers.route).toBe('deep')
   })
 })

@@ -17,11 +17,21 @@ export function currentScene() {
   return SCENES.find((s) => s.copy.question === q || s.variants?.some((v) => v.copy?.question === q))
 }
 
-export const ROUTE_QUESTION = 'How well should I get to know you?'
+/** The 1-minute version's link on scene one (plan Phase 6): there's no route choice any more. */
+export const SHORT_LINK = 'Short on time? Do the 1-minute version'
 
-/** On the route choice, take the deep charge (every scene). */
-export function chooseRoute(route: 'Deep charge' | 'Speed run' | 'Pinpoint' = 'Deep charge'): void {
-  if (heading().textContent === ROUTE_QUESTION) fireEvent.click(screen.getByRole('radio', { name: new RegExp(`^${route}`) }))
+/**
+ * Everyone starts on the core scenes (the Deep charge route). A Speed run is
+ * the link on scene one; Pinpoint is the hunch invite after the core scenes,
+ * or "Pinpoint it" on the review.
+ */
+export function chooseRoute(route: 'Deep charge' | 'Speed run' = 'Deep charge'): void {
+  if (route === 'Speed run') fireEvent.click(screen.getByRole('button', { name: SHORT_LINK }))
+}
+
+/** Amp's hunch invite (plan Phase 6) is on screen. */
+export function onInvite(): boolean {
+  return document.querySelector('[data-scene="invite"]') !== null
 }
 
 /** "Same most weeks": tap a day, then what's done on it. */
@@ -31,7 +41,7 @@ export function setDay(day: string, activity: 'Gym' | 'Cardio' | 'Sport' = 'Gym'
 }
 
 export function answerCurrentScene(): void {
-  if (heading().textContent === ROUTE_QUESTION) return chooseRoute()
+  if (onInvite()) return
   const scene = currentScene()
   if (!scene) return
   switch (scene.interaction) {
@@ -85,7 +95,9 @@ export function answerCurrentScene(): void {
   if (first) fireEvent.click(screen.getByRole(scene.placeholder!.multi ? 'button' : 'radio', { name: first.label }))
 }
 
+/** Next, or on the hunch invite, "Build my stack now": the way on that keeps the route. */
 export function pressNext(): void {
+  if (onInvite()) return void fireEvent.click(screen.getByRole('button', { name: 'Build my stack now' }))
   const next = screen.getAllByRole('button').find((b) => /^(Next|Looks right|Continue|Back to review)$/.test(b.textContent ?? ''))!
   fireEvent.click(next)
 }
@@ -93,9 +105,10 @@ export function pressNext(): void {
 /**
  * One scene per call — except that the driver answers as a young builder
  * (Performance, 18–24), whose consult adds "What are you training for?"
- * after training. It's answered in the same call, so a count of calls still
- * lands on the same scene for every journey. The journey tests drive it on
- * its own.
+ * after training, and whose answers raise a hunch, so Amp's invite comes
+ * after the core scenes. Both are answered in the same call, so a count of
+ * calls still lands on the same scene for every journey. The journey and
+ * invite tests drive them on their own.
  */
 export function pickFirstOptionAndNext(): void {
   chooseRoute()
@@ -105,6 +118,9 @@ export function pickFirstOptionAndNext(): void {
     answerCurrentScene()
     pressNext()
   }
+  // The hunch invite after the core scenes (plan Phase 6), when the answers
+  // raise one: "Build my stack now", in the same call, for the same reason.
+  if (onInvite()) pressNext()
 }
 
 /* ── Pinpoint (plan v5) ─────────────────────────────────────────────────── */

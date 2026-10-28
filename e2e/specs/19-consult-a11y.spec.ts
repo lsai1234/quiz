@@ -28,7 +28,8 @@ async function audit(page: Page, where: string) {
 }
 
 const heading = (page: Page) => page.locator('h1')
-const NEXT = /^(Next|Looks right|Continue|Back to review|See my stack)$/
+/** The way on. On Amp's hunch invite (plan Phase 6), "Build my stack now" keeps the route. */
+const NEXT = /^(Next|Looks right|Continue|Back to review|See my stack|Build my stack now)$/
 
 /** Tab until the focused element's accessible name matches, then return. Fails if it never gets there. */
 async function tabTo(page: Page, name: RegExp, limit = 60) {
@@ -76,6 +77,8 @@ async function nextByKeyboard(page: Page) {
 /** Answers whatever scene is showing, by keyboard only. */
 async function answerByKeyboard(page: Page) {
   const h = (await heading(page).textContent()) ?? ''
+  // Amp's hunch invite (plan Phase 6) has nothing to answer: the way on is "Build my stack now".
+  if (await page.locator('[data-scene="invite"]').count()) return
   if (/what are you after/i.test(h)) {
     await tabTo(page, /^Performance/)
     await page.keyboard.press('Space')
@@ -225,15 +228,11 @@ test.describe('consult accessibility (U7)', () => {
       sessionStorage.clear()
     })
     await page.goto('/quizv2')
-    await expect(page.getByRole('radio', { name: /^Deep charge/ })).toBeVisible()
+    // No route choice (plan Phase 6): everyone opens on the goals.
+    await expect(heading(page)).toHaveText(/what are you after/i)
   })
 
   test('the whole consult by keyboard, with axe on every screen', async ({ page }) => {
-    await audit(page, 'route choice')
-    await tabTo(page, /Deep charge/)
-    await page.keyboard.press('Space')
-    await page.waitForTimeout(450)
-
     const seen: string[] = []
     for (let i = 0; i < 16; i++) {
       const h = (await heading(page).textContent()) ?? ''
@@ -256,9 +255,38 @@ test.describe('consult accessibility (U7)', () => {
     await expect(page).not.toHaveURL(/\/quizv2$/)
   })
 
+  test('the phone’s back gesture goes back a screen, and the 1-minute version is one tap from scene one (plan Phase 6)', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Short on time? Do the 1-minute version' })).toBeVisible()
+    await answerByKeyboard(page)
+    await nextByKeyboard(page)
+    await expect(heading(page)).toHaveText(/about you/i)
+    await answerByKeyboard(page)
+    await nextByKeyboard(page)
+    await page.goBack()
+    await expect(heading(page)).toHaveText(/about you/i)
+    await expect(page).toHaveURL(/\/quizv2$/)
+    await page.goBack()
+    await expect(heading(page)).toHaveText(/what are you after/i)
+    await expect(page).toHaveURL(/\/quizv2$/)
+    // The Back button and the gesture stay in step: forward again, Back, then a gesture.
+    await nextByKeyboard(page)
+    await answerByKeyboard(page)
+    await nextByKeyboard(page)
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await expect(heading(page)).toHaveText(/about you/i)
+    await page.goBack()
+    await expect(heading(page)).toHaveText(/what are you after/i)
+    await expect(page).toHaveURL(/\/quizv2$/)
+    // The short way: fewer screens, from the same scene one.
+    const total = () => page.evaluate(() => Number(document.body.textContent?.match(/1\/(\d+)\s*·\s*Goals/i)?.[1]))
+    const full = await total()
+    await page.getByRole('button', { name: 'Short on time? Do the 1-minute version' }).click()
+    await expect(page.getByRole('button', { name: 'Short on time? Do the 1-minute version' })).toHaveCount(0)
+    expect(await total()).toBeLessThan(full)
+  })
+
   test('comfort mode passes axe on every screen too', async ({ page }) => {
     // Comfort mode isn't offered: it switches itself on for 65 and over.
-    await page.getByRole('radio', { name: /^Deep charge/ }).click()
     await page.getByRole('button', { name: /^Healthy ageing/ }).click()
     await nextByKeyboard(page)
     await page.getByRole('listbox', { name: 'Age band' }).focus()
@@ -285,14 +313,22 @@ test.describe('consult accessibility (U7)', () => {
 
   test('Pinpoint: axe on every screen, and every question fits a phone without scrolling', async ({ page }) => {
     await page.setViewportSize(PHONES[0])
-    await page.getByRole('radio', { name: /^Pinpoint/ }).click()
-    await page.waitForTimeout(450)
     const seen = new Set<string>()
     const kinds: string[] = []
     for (let i = 0; i < 70; i++) {
       const h = (await heading(page).textContent()) ?? ''
       if (/fully charged|your charge profile/i.test(h)) break
       const scene = (await sceneId(page)) ?? ''
+      // Into Pinpoint the way everyone is now: Amp's hunch after the core scenes (plan Phase 6).
+      if (scene === 'invite') {
+        kinds.push('invite')
+        await audit(page, `invite: ${h}`)
+        await fitsPhones(page, 'the invite')
+        await tabTo(page, /^Check it$/)
+        await page.keyboard.press('Enter')
+        await page.waitForTimeout(450)
+        continue
+      }
       if (!PINPOINT.includes(scene)) {
         if (!seen.has(h)) {
           seen.add(h)
@@ -323,14 +359,13 @@ test.describe('consult accessibility (U7)', () => {
       await page.waitForTimeout(450)
     }
     // A real round: an intro, questions, a hunch confirmed, and an ending.
-    expect(kinds).toEqual(expect.arrayContaining(['intro', 'probe', 'hunch', 'done']))
+    expect(kinds).toEqual(expect.arrayContaining(['invite', 'intro', 'probe', 'hunch', 'done']))
     expect(seen.has('leads sheet')).toBe(true)
     await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
     await audit(page, 'fully charged, after Pinpoint')
   })
 
   test('Pinpoint in comfort mode passes axe too, and waits for Next', async ({ page }) => {
-    await page.getByRole('radio', { name: /^Pinpoint/ }).click()
     await page.getByRole('button', { name: /^Healthy ageing/ }).click()
     await nextByKeyboard(page)
     await page.getByRole('listbox', { name: 'Age band' }).focus()
@@ -344,6 +379,13 @@ test.describe('consult accessibility (U7)', () => {
       const h = (await heading(page).textContent()) ?? ''
       if (/fully charged|your charge profile/i.test(h)) break
       const scene = (await sceneId(page)) ?? ''
+      // In by Amp's hunch after the core scenes, or the review's offer if it had none.
+      if (scene === 'invite' || (await page.getByRole('button', { name: 'Pinpoint it' }).count())) {
+        await audit(page, `${scene === 'invite' ? 'invite' : 'review offer'} (comfort)`)
+        await page.getByRole('button', { name: scene === 'invite' ? 'Check it' : 'Pinpoint it' }).click()
+        await page.waitForTimeout(450)
+        continue
+      }
       if (!PINPOINT.includes(scene)) {
         await answerByKeyboard(page)
         await nextByKeyboard(page)
@@ -373,9 +415,7 @@ test.describe('consult accessibility (U7)', () => {
     await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
   })
 
-  test('Deep charge review offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
-    await page.getByRole('radio', { name: /^Deep charge/ }).click()
-    await page.waitForTimeout(450)
+  test('after "Build my stack now", the review still offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
     for (let i = 0; i < 16; i++) {
       if (/what I've got/i.test((await heading(page).textContent()) ?? '')) break
       await answerByKeyboard(page)
@@ -398,7 +438,6 @@ test.describe('consult accessibility (U7)', () => {
   })
 
   test('weight loss with a jab: the card opens, the safety check takes it from there, review shows it', async ({ page }) => {
-    await page.getByRole('radio', { name: /^Deep charge/ }).click()
     await tabTo(page, /^Weight loss/)
     await page.keyboard.press('Space')
     await tabTo(page, /weight-loss injections or tablets/)
@@ -432,7 +471,7 @@ test.describe('consult accessibility (U7)', () => {
     await page.goto('/consult')
     await expect(page).toHaveURL(/\/quizv2$/)
     await expect(page.getByLabel(/email/i)).toBeVisible()
-    await expect(page.getByRole('radio', { name: /^Deep charge/ })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: /what are you after/i })).toHaveCount(0)
   })
 
   test('tells founders what is on: with no OpenAI key, the AI features are off and say why', async ({ page }) => {

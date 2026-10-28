@@ -1,12 +1,19 @@
 'use client'
 
 import { focus as pinpointFocus } from '@/lib/consult/pinpoint/choose'
-import { pinpointReactionLine, pinpointView, undoInRound } from '@/lib/consult/pinpoint/screen'
+import { pinpointReactionLine, pinpointView } from '@/lib/consult/pinpoint/screen'
+import { expectedQuestions } from '@/lib/consult/pinpoint/expect'
+import { INVITE_COPY, inviteLine } from '@/lib/consult/hunch-copy'
+import { comboFor } from '@/lib/consult/combo-reactions'
 import type { PinpointStage } from '@/lib/consult/pinpoint/types'
 import { Reticle } from './pinpoint/Reticle'
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import {
   NUDGES,
+  backStep,
+  hunchLead,
+  screenKey,
+  teaser,
   firstSceneIn,
   hintFor,
   flowReducer,
@@ -26,7 +33,7 @@ import { STOP_COPY, stopReason } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
 import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
 import { markResultsOpen } from '@/lib/consult/results-tab'
-import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
+import type { ConsultAnswers, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
 import { voiceSupported } from './HoldToTalk'
@@ -35,7 +42,8 @@ import { toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
-import { Hint, NextButton, QuietLink, Tile, radioArrows } from './controls'
+import { Hint, NextButton, QuietLink } from './controls'
+import { Plain } from './pinpoint/parts'
 import { SceneRenderer, resolveScene } from './scenes/registry'
 import { hunchLine, notesOf, readNotes, usePinpointAi } from './pinpoint/pinpointAi'
 import { pickToPatch, type Pick } from '@/lib/consult/ai/understand'
@@ -197,6 +205,65 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const spoken = pView ? toSpeech(pView.heading, pView.kind === 'probe' ? [pView.text, pView.hint].filter(Boolean).join(' ') : pView.hint) : shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : ''
   const aloud = useReadAloud(onScene ? `${state.sceneId}:${pKey}` : state.phase, spoken, onScene && state.answers.comfort)
 
+  // The phone's back gesture (plan Phase 6): one browser history entry per
+  // screen, so the gesture goes back a screen, or undoes the last Pinpoint
+  // answer, instead of leaving the page. Every step back, from the Back
+  // button or the gesture, goes through `stepBack`; a Back button press takes
+  // its entry off the browser's history too, so the two never drift apart.
+  const backing = useRef(false)
+  const stepBack = useRef<(exit: boolean) => void>(() => {})
+  stepBack.current = (exit) => {
+    const step = backStep(state)
+    if (!step) return exit ? onExit?.() : undefined
+    backing.current = true
+    dispatch(step)
+  }
+  /** Our entries on the browser's history, above the page's own. */
+  const entries = useRef(0)
+  /** Pops we caused ourselves (a Back button press), to let through. */
+  const ownPops = useRef(0)
+  const lastKey = useRef<string | null>(null)
+  const tracksHistory = persist && boot === 'ready'
+  const key = screenKey(state)
+  useEffect(() => {
+    if (!tracksHistory || state.phase === 'done' || lastKey.current === key) return
+    const first = lastKey.current === null
+    lastKey.current = key
+    const wasBack = backing.current
+    backing.current = false
+    // Forward a screen: a new entry. Back, or on arrival: make sure there is
+    // one to catch the next gesture while there's still somewhere to go back
+    // to (a resumed consult starts with none).
+    if ((!first && !wasBack) || (entries.current === 0 && backStep(state))) {
+      window.history.pushState({ ampConsult: state.consultId }, '')
+      entries.current++
+    }
+    // Only the screen decides; the rest of the state rides along.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracksHistory, key])
+  useEffect(() => {
+    if (!tracksHistory) return
+    const onPop = () => {
+      if (ownPops.current > 0) {
+        ownPops.current--
+        return
+      }
+      if (entries.current === 0) return
+      entries.current--
+      stepBack.current(false)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [tracksHistory])
+
+  // What a hunch invite says: the lead, and the questions Pinpoint expects to
+  // ask. Worked out once, when the invite opens.
+  const invite = useMemo(() => {
+    if (state.phase !== 'invite') return null
+    const lead = hunchLead(state.answers)
+    return lead ? inviteLine(lead.pattern.id, expectedQuestions(state.answers)) : null
+  }, [state.phase, state.answers])
+
   // The beat, then Next: only while still on that scene and still answered.
   useEffect(() => {
     if (!autoNext) return
@@ -241,14 +308,27 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
 
   // Only once the scene is actually showing: words() fixes a scene's wording
-  // for the visit, and the route choice comes before the first scene.
+  // for the visit, and the invite and the stop sit over a scene without showing it.
   const baseScene = resolveSceneDef(state.sceneId, state.answers)
   const scene = state.phase === 'scenes' ? words(baseScene) : baseScene
   const order = visibleScenes(state.answers)
-  const index = order.indexOf(state.sceneId) + 1
-  const previous = state.history[state.history.length - 1]
-  // Amp's line about the last answer: the AI's (V4) when it has one, else the script's.
-  const reaction = scene.copy.react ?? (previous ? reactionTo(previous, state.answers) : '')
+  // Pinpoint taken up after the core scenes (the invite, or the review's
+  // offer) opens on screens that sit earlier in the order: count what is
+  // behind them, so the counter carries on from 12/12 rather than jumping back.
+  const onPinpoint = PINPOINT_SCENES.includes(state.sceneId)
+  const index = onPinpoint ? Math.min(order.length, new Set(state.history.filter((id) => order.includes(id))).size + 1) : order.indexOf(state.sceneId) + 1
+  const last = state.history[state.history.length - 1]
+  // A Pinpoint screen reached from somewhere other than the scene before it
+  // (the invite, the review) has no answer of its own to react to.
+  const previous = onPinpoint && last !== order[order.indexOf(state.sceneId) - 1] ? undefined : last
+  // Amp's line about the last answer. After the Rest section, the teaser
+  // holds back a theory (scripted, never the AI's). Otherwise the AI's (V4)
+  // when it has one; then two answers that point the same way, said
+  // together; then the single answer.
+  const reaction =
+    teaser(previous, state.answers)?.line ??
+    scene.copy.react ??
+    (previous ? comboFor(previous, state.answers)?.line(state.answers) ?? reactionTo(previous, state.answers) : '')
   const ready = isAnswered(state.sceneId, state.answers)
 
   const interact = (lean: number) => {
@@ -277,10 +357,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (after.phase === 'analysis') onComplete?.(after)
   }
   const back = () => {
-    // Inside the round, Back takes back the last answer first (plan v5).
-    const undone = state.sceneId === 'pinpoint' ? undoInRound(state.answers) : null
-    if (undone) return dispatch({ type: 'answer', patch: { pinpoint: undone } })
-    return state.history.length > 0 || state.answers.route ? dispatch({ type: 'back' }) : onExit?.()
+    // Inside the round, Back takes back the last answer first (plan v5);
+    // `backStep` decides. The browser's entry for this screen goes with it.
+    if (entries.current > 0 && backStep(state)) {
+      ownPops.current++
+      entries.current--
+      window.history.back()
+    }
+    stepBack.current(true)
   }
   const jumpToSection = (section: string) => {
     const target = firstSceneIn(section as SectionId, state.answers)
@@ -310,11 +394,20 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (touched && isAnswered(state.sceneId, after) && !state.answers.comfort) setAutoNext(state.sceneId)
   }
 
-  if (state.phase === 'intro') {
+  if (state.phase === 'invite' && invite) {
     return (
-      <ConsultRoot>
-        <SceneStage sceneKey="intro" direction={state.direction} headingRef={headingRef}>
-          <RouteChoice headingRef={headingRef} onPick={(route) => dispatch({ type: 'route', route })} onBack={onExit} />
+      <ConsultRoot comfort={state.answers.comfort}>
+        <SceneStage sceneKey="invite" direction={state.direction} headingRef={headingRef}>
+          <InviteScreen
+            line={invite}
+            headingRef={headingRef}
+            onCheck={() => {
+              consultFunnel.upgrade({ from: 'deep', via: 'invite' })
+              dispatch({ type: 'invite', choice: 'check' })
+            }}
+            onBuild={() => dispatch({ type: 'invite', choice: 'build' })}
+            onBack={back}
+          />
         </SceneStage>
       </ConsultRoot>
     )
@@ -381,7 +474,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           meter={sectionProgress(state)}
           currentSectionId={scene.section}
           onJump={jumpToSection}
-          onBack={state.history.length > 0 || onExit || (state.sceneId === 'pinpoint' && undoInRound(state.answers)) ? back : undefined}
+          onBack={backStep(state) || onExit ? back : undefined}
           amp={
             pView ? (
               <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
@@ -431,6 +524,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
                   {aloud.on ? 'Reading aloud' : 'Read aloud'}
                 </QuietLink>
               )}
+              {/* Everyone starts the core scenes (plan Phase 6); the short way is one tap, on scene one. */}
+              {index === 1 && state.answers.route === 'deep' && !state.returnTo && (
+                <QuietLink icon="bolt" onClick={() => dispatch({ type: 'route', route: 'speed' })}>
+                  Short on time? Do the 1-minute version
+                </QuietLink>
+              )}
             </div>
           }
         >
@@ -456,7 +555,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             onUpgrade={
               scene.id === 'review' && (state.answers.route === 'speed' || state.answers.route === 'deep')
                 ? () => {
-                    consultFunnel.upgrade({ from: state.answers.route as 'speed' | 'deep' })
+                    consultFunnel.upgrade({ from: state.answers.route as 'speed' | 'deep', via: 'review' })
                     dispatch({ type: 'upgrade' })
                   }
                 : undefined
@@ -597,12 +696,24 @@ export function autoComfort(a: ConsultAnswers): boolean {
 }
 
 /**
- * The route (build C13, plan v5): Pinpoint, Deep charge or Speed run.
- * Pinpoint goes first and says why it's worth the extra minutes; the other
- * two are the quick ways through, unchanged.
+ * The hunch invite (plan Phase 6): after the core scenes, before the circuit
+ * check, when a lead is at least even odds. Amp names the area, says how
+ * many questions it expects to need, and offers two plain choices. Building
+ * the stack now is a full answer: "Pinpoint it" stays on the review.
  */
-function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) => void; onBack?: () => void; headingRef: React.Ref<HTMLHeadingElement> }) {
-  const [why, setWhy] = useState(false)
+function InviteScreen({
+  line,
+  headingRef,
+  onCheck,
+  onBuild,
+  onBack,
+}: {
+  line: { heading: string; body: string }
+  headingRef: React.Ref<HTMLHeadingElement>
+  onCheck: () => void
+  onBuild: () => void
+  onBack: () => void
+}) {
   return (
     <div
       className="mx-auto flex flex-col"
@@ -614,12 +725,14 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
       }}
     >
       <div className="flex items-center" style={{ minHeight: 'calc(var(--amp-space-8) + var(--amp-space-1))' }}>
-        {onBack && <QuietLink icon="back" onClick={onBack}>Back</QuietLink>}
+        <QuietLink icon="back" onClick={onBack}>
+          Back
+        </QuietLink>
       </div>
       <div className="flex flex-1 flex-col justify-center" style={{ gap: 'var(--amp-space-4)' }}>
-        <Amp state="idle" size="md" />
+        <Amp state="hunch" size="md" />
         <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
-          I&apos;m Amp. Let&apos;s charge you up.
+          {INVITE_COPY.kicker}
         </p>
         <h1
           ref={headingRef}
@@ -627,26 +740,16 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
           className="uppercase"
           style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)', outline: 'none' }}
         >
-          How well should I get to know you?
+          {line.heading}
         </h1>
-        <div role="radiogroup" aria-label="Route" onKeyDown={(e) => radioArrows(e, false)} className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-1)' }}>
-          <Tile kind="radio" layout="row" icon="focus" tone="accent" label="Pinpoint · Recommended" sub="About 6 min · I follow up until I know what’s really going on. Your most accurate stack." selected={false} onSelect={() => onPick('pinpoint')} />
-          <Tile kind="radio" layout="row" icon="battery" label="Deep charge" sub="3–4 min · Your whole week, one screen at a time" selected={false} onSelect={() => onPick('deep')} />
-          <Tile kind="radio" layout="row" icon="bolt" label="Speed run" sub="About a minute · The essentials" selected={false} onSelect={() => onPick('speed')} />
-        </div>
-        <p style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
-          Stop Pinpoint whenever you like: I&apos;ll use what I&apos;ve got.
+        <p style={{ fontSize: 'var(--amp-text-lead)', color: 'var(--amp-ink-2)' }}>{line.body}</p>
+      </div>
+      <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
+        <NextButton onClick={onCheck}>{INVITE_COPY.check}</NextButton>
+        <Plain onClick={onBuild}>{INVITE_COPY.build}</Plain>
+        <p className="text-center" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
+          {INVITE_COPY.note}
         </p>
-        <div>
-          <QuietLink aria-expanded={why} onClick={() => setWhy((w) => !w)}>
-            Why Pinpoint?
-          </QuietLink>
-          {why && (
-            <p className="amp-anim-rise" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)', marginTop: 'var(--amp-space-2)' }}>
-              Two people who both say they&apos;re tired can need completely different things. One&apos;s short on sleep, one&apos;s running on coffee, one isn&apos;t eating before training. The quick routes give you a good stack for tired. Pinpoint works out which tired you are.
-            </p>
-          )}
-        </div>
       </div>
     </div>
   )

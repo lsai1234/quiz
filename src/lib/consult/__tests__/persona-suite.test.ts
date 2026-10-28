@@ -51,6 +51,8 @@ export function promptInputs(): string[] {
     VOICE_FALLBACK_MODEL,
     COPY_SYSTEM_PROMPT,
     buildCopyPrompt(sceneDef('energy'), persona, 'training'),
+    // A reaction that connects two answers (plan Phase 6): short nights and four coffees.
+    buildCopyPrompt(sceneDef('food'), { ...persona, sleep: { bed: 23 * 60 + 30, wake: 6 * 60, quality: 'ok' }, caffeine: { coffee: 4, tea: 0, energy: 0 } }, 'caffeine'),
     UNDERSTAND_SYSTEM_PROMPT,
     buildUnderstandPrompt(sceneDef('sleep'), '<typed>'),
     EXPLAIN_SYSTEM_PROMPT,

@@ -70,12 +70,11 @@ log('AI test:', await p.getByText(/Amp’s words \(/).locator('xpath=..').innerT
 await shot('01-panel')
 await p.getByRole('button', { name: 'Close' }).click()
 
-// 3. First scene AI-worded (asked for during the route choice).
-await p.waitForTimeout(2500)
-await p.getByRole('radio', { name: /^Deep charge/ }).click()
+// 3. The first scene, in its scripted words: there is no screen before it to
+// ask for its words from (plan Phase 6 removed the route choice).
 await p.waitForTimeout(500)
-log('goals heading:', await h1(), '| a label:', await p.getByText(/^AI: performance/).count())
-await shot('02-goals-ai')
+log('goals heading:', await h1())
+await shot('02-goals')
 
 // 4. Goals and about: no "Tell Amp" on either.
 await p.getByRole('button', { name: /^Performance/ }).click()

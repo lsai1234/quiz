@@ -117,11 +117,11 @@ describe('C12 branching', () => {
 })
 
 describe('C13 speed run or deep charge', () => {
-  it('offers the choice at the start', () => {
+  it('starts everyone on the core scenes, with the speed run one tap away on scene one (plan Phase 6)', () => {
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('How well should I get to know you?')
-    expect(screen.getByRole('radio', { name: /^Speed run/ })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /^Deep charge/ })).toBeInTheDocument()
+    expect(heading()).toHaveTextContent('What are you after?')
+    expect(screen.queryByRole('radio', { name: /^Speed run/ })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Short on time? Do the 1-minute version' })).toBeInTheDocument()
   })
 
   it('runs fewer scenes on a speed run', () => {

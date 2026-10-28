@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { AmpConsult } from '../AmpConsult'
-import { SCENES, resolveSceneDef, visibleScenes } from '@/lib/consult/flow'
+import { SCENES, initialFlow, resolveSceneDef, visibleScenes } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS } from '@/lib/consult/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import { chooseRoute, heading, pickFirstOptionAndNext } from './drive'
+import { SHORT_LINK, chooseRoute, heading, pickFirstOptionAndNext } from './drive'
 
 beforeEach(() => {
   localStorage.clear()
@@ -11,12 +11,22 @@ beforeEach(() => {
 })
 
 describe('AmpConsult', () => {
-  it('opens on the route choice, then the goals scene', () => {
+  it('opens straight on the goals scene, with the 1-minute version one tap away (plan Phase 6)', () => {
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('How well should I get to know you?')
-    chooseRoute()
     expect(heading()).toHaveTextContent('What are you after?')
     expect(screen.getByText('1/12 · Goals')).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /^Speed run/ })).toBeNull()
+    expect(screen.getByRole('button', { name: SHORT_LINK })).toBeInTheDocument()
+  })
+
+  it('takes the 1-minute version from scene one, and offers it nowhere else', () => {
+    render(<AmpConsult />)
+    chooseRoute('Speed run')
+    expect(heading()).toHaveTextContent('What are you after?')
+    expect(screen.getByText(/^1\/(\d+) · Goals$/).textContent).not.toBe('1/12 · Goals')
+    expect(screen.queryByRole('button', { name: SHORT_LINK })).toBeNull()
+    pickFirstOptionAndNext()
+    expect(screen.queryByRole('button', { name: SHORT_LINK })).toBeNull()
   })
 
   it('clicks through every scene to the end on scripted answers', () => {
@@ -58,12 +68,12 @@ describe('AmpConsult', () => {
     expect(heading()).toHaveTextContent('What are you after?')
   })
 
-  it('backs out of the first scene to the route choice, and from there to wherever it came from', () => {
+  it('backs out of the first scene to wherever it came from', () => {
     const onExit = jest.fn()
     render(<AmpConsult onExit={onExit} />)
-    chooseRoute()
+    pickFirstOptionAndNext()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(heading()).toHaveTextContent('How well should I get to know you?')
+    expect(heading()).toHaveTextContent('What are you after?')
     expect(onExit).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(onExit).toHaveBeenCalled()
@@ -151,5 +161,47 @@ describe('Amp', () => {
     render(<AmpConsult loadProducts={async () => MOCK_CATALOGUE} />)
     for (let i = 0; i < 12; i++) pickFirstOptionAndNext()
     expect(await screen.findByRole('img', { name: 'Amp, charged' }, { timeout: 5000 })).toBeInTheDocument()
+  })
+})
+
+describe('the phone’s back gesture (plan Phase 6)', () => {
+  /** The browser's back: what a back swipe sends the page. */
+  const gesture = () => act(() => void window.dispatchEvent(new PopStateEvent('popstate', { state: null })))
+
+  it('adds one browser history entry per screen, and the gesture goes back a screen', () => {
+    render(<AmpConsult />)
+    const start = window.history.length
+    pickFirstOptionAndNext()
+    pickFirstOptionAndNext()
+    expect(window.history.length).toBe(start + 2)
+    expect(heading()).toHaveTextContent('What’s your training split?')
+    gesture()
+    expect(heading()).toHaveTextContent('A bit about you')
+    gesture()
+    expect(heading()).toHaveTextContent('What are you after?')
+    // Scene one: nothing of ours left, so the next gesture leaves the page.
+    gesture()
+    expect(heading()).toHaveTextContent('What are you after?')
+  })
+
+  it('keeps the Back button and the gesture in step', async () => {
+    render(<AmpConsult />)
+    pickFirstOptionAndNext()
+    pickFirstOptionAndNext()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(heading()).toHaveTextContent('A bit about you')
+    // The Back button took its entry off the browser's history too (jsdom
+    // delivers that pop a moment later): it is not read as a second Back.
+    await act(async () => new Promise((r) => setTimeout(r, 20)))
+    expect(heading()).toHaveTextContent('A bit about you')
+    gesture()
+    expect(heading()).toHaveTextContent('What are you after?')
+  })
+
+  it('leaves the history alone for a fixed-state run (the workshop, tests)', () => {
+    const start = window.history.length
+    render(<AmpConsult initial={initialFlow('c', 0)} />)
+    pickFirstOptionAndNext()
+    expect(window.history.length).toBe(start)
   })
 })

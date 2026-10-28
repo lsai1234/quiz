@@ -39,6 +39,15 @@ const ANSWERED: Partial<ConsultAnswers> = {
   comfortOffered: true,
 }
 
+/** Short on sleep and running on coffee: Amp has a hunch after the core scenes (plan Phase 6). */
+const INVITED: Partial<ConsultAnswers> = {
+  ...ANSWERED,
+  goals: ['energy'],
+  energy: 4,
+  sleep: { bed: 23 * 60 + 30, wake: 6 * 60, quality: 'broken' },
+  caffeine: { coffee: 4, tea: 0, energy: 0 },
+}
+
 const at = (sceneId: SceneId, answers: Partial<ConsultAnswers>): FlowState => ({
   ...initialFlow('a11y', 0, { route: 'deep' }),
   sceneId,
@@ -66,9 +75,19 @@ describe.each([
 })
 
 describe('U7 axe, the rest', () => {
-  it('the route choice', async () => {
-    const { container } = render(<AmpConsult initial={initialFlow('a11y', 0)} />)
+  it('scene one, with the 1-minute version link', async () => {
+    const { container, getByRole } = render(<AmpConsult initial={initialFlow('a11y', 0)} />)
+    expect(getByRole('button', { name: 'Short on time? Do the 1-minute version' })).toBeInTheDocument()
     expect(await audit(container)).toEqual([])
+  })
+
+  it('the hunch invite', async () => {
+    for (const comfort of [false, true]) {
+      const { container, getByRole, unmount } = render(<AmpConsult initial={{ ...at('shelf', { ...INVITED, comfort }), phase: 'invite' }} />)
+      expect(getByRole('heading', { level: 1 })).toHaveTextContent(/^I’ve got a hunch about your /)
+      expect(await audit(container)).toEqual([])
+      unmount()
+    }
   })
 
   it('the stop screen', async () => {
@@ -113,12 +132,8 @@ describe('U7 keyboard: arrows move through tile radio groups', () => {
     expect(getByRole('radio', { name: '18–24' })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('only moves focus on the route choice, which navigates when picked', () => {
-    const { getByRole } = render(<AmpConsult initial={initialFlow('a11y', 0)} />)
-    const pinpoint = getByRole('radio', { name: /^Pinpoint/ })
-    pinpoint.focus()
-    fireEvent.keyDown(pinpoint, { key: 'ArrowDown' })
-    expect(getByRole('radio', { name: /^Deep charge/ })).toHaveFocus()
-    expect(getByRole('heading', { level: 1 })).toHaveTextContent('How well should I get to know you?')
+  it('puts the invite’s two choices in reading order, after Back', () => {
+    const { getAllByRole } = render(<AmpConsult initial={{ ...at('shelf', INVITED), phase: 'invite' }} />)
+    expect(getAllByRole('button').map((b) => b.textContent)).toEqual(['Back', 'Check it', 'Build my stack now'])
   })
 })

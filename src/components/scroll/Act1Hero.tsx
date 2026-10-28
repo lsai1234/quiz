@@ -37,8 +37,8 @@ const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
 
 /**
  * How long each door takes, in the words each door uses about itself: the quiz
- * says "about a minute" on its first step, and the consult's three routes run
- * from about a minute (Speed run) to about 6 (Pinpoint). The trust row used to
+ * says "about a minute" on its first step, and the consult runs from about a
+ * minute (its 1-minute version) to about 6 (with Pinpoint, after the hunch invite). The trust row used to
  * say "~90 seconds" whichever door it sat under. Check both against the
  * median quiz time in the hub's analytics report once there is real traffic.
  */

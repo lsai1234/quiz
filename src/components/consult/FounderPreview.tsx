@@ -97,7 +97,7 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
     {
       label: 'Tracker read',
       tone: CONSULT_FEATURES.uploads && aiConfigured ? 'on' : 'off',
-      note: CONSULT_FEATURES.uploads ? '“Fill from my tracker” on the training and sleep screens, on the Deep charge route.' : 'Switched off for now: no screenshots from wearables.',
+      note: CONSULT_FEATURES.uploads ? '“Fill from my tracker” on the training and sleep screens, except on the 1-minute version.' : 'Switched off for now: no screenshots from wearables.',
     },
     { label: 'What’s this?', tone: 'info', note: 'The ⓘ on options. With the AI on it also takes a follow-up question.' },
     { label: 'Animated Amp', tone: rive ? 'on' : 'off', note: rive ? 'Rive file loaded.' : 'Waiting for the Rive file (public/consult/amp.riv) and NEXT_PUBLIC_AMP_RIVE=1. Until then Amp is the drawn version.' },

@@ -40,7 +40,7 @@ export function useConsultAnalytics(state: FlowState, enabled: boolean) {
       })
 
     if (state.phase === 'scenes') {
-      if (!prev || prev.phase === 'intro') consultFunnel.start({ route })
+      if (!prev) consultFunnel.start({ route })
       if (!prev || prev.sceneId !== state.sceneId || prev.phase !== 'scenes') {
         if (prev && prev.phase === 'scenes' && prev.sceneId !== state.sceneId) {
           if (state.direction === 'forward') complete(prev)

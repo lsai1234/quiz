@@ -52,8 +52,15 @@ describe('V6 lost-signal fallback', () => {
       pickFirstOptionAndNext()
       await settle()
     }
-    expect(copyCalls()).toBe(BREAKER)
+    // The driver answers training and the builder's aim in one go, so one
+    // more may already be asked before the third miss comes back.
+    const calls = copyCalls()
+    expect(calls).toBeGreaterThanOrEqual(BREAKER)
+    expect(calls).toBeLessThanOrEqual(BREAKER + 1)
     expect(screen.getAllByRole('button', { name: /Tell Amp/ }).length).toBeGreaterThan(0)
+    pickFirstOptionAndNext()
+    await settle()
+    expect(copyCalls()).toBe(calls)
     expect(heading()).toBeInTheDocument()
   })
 
@@ -62,23 +69,23 @@ describe('V6 lost-signal fallback', () => {
     global.fetch = jest.fn(async () => reply({ unavailable: true })) as typeof fetch
     render(<AmpConsult />)
     await settle()
-    chooseRoute()
+    pickFirstOptionAndNext()
     await settle()
     expect(copyCalls()).toBe(1)
     for (let i = 0; i < 3; i++) pickFirstOptionAndNext()
     expect(screen.queryByRole('button', { name: /Tell Amp/ })).toBeNull()
   })
 
-  it('asks for the first scene’s words while the route choice is on screen', async () => {
+  it('keeps the first scene in its scripted words: with no route choice, there is no screen before it to ask from (plan Phase 6)', async () => {
     setQuizArm({ arm: 'v1', consultAi: true })
     global.fetch = jest.fn(async (u: RequestInfo | URL, init?: RequestInit) =>
       reply(String(u) === '/api/consult/copy' && JSON.parse(String(init?.body)).sceneId === 'goals' ? { copy: { question: 'What are you chasing?', hint: 'Up to three.', labels: { performance: 'Lift more', energy: 'Last all day', sleep: 'Wake up ready', focus: 'Stay sharp', ageing: 'Keep moving well', allround: 'A bit of everything', weight: 'Lose fat, keep strong' } } } : { fallback: true }),
     ) as typeof fetch
     render(<AmpConsult />)
     await settle()
-    chooseRoute()
-    expect(heading()).toHaveTextContent('What are you chasing?')
-    expect(screen.getByText('Lift more')).toBeInTheDocument()
+    expect(heading()).toHaveTextContent('What are you after?')
+    expect(screen.queryByText('Lift more')).toBeNull()
+    expect(copyCalls()).toBe(0)
   })
 })
 

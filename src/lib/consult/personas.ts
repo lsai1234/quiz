@@ -251,4 +251,7 @@ export const PERSONAS: Persona[] = [
 // prompt the consult uses (Pinpoint's hunch, found, tell and notes, the
 // user-prompt templates, uploads, voice and moderation), not just three system
 // prompts. Re-run: all 35 personas pass.
-export const APPROVED_FINGERPRINT = '9bd96e4d'
+// 2026-10-28: the scene-copy prompt can now say which two answers connect
+// (plan Phase 6, reactions that connect answers), and the fingerprint covers
+// that prompt. Re-run: all 35 personas and the red-team tests pass.
+export const APPROVED_FINGERPRINT = 'a3c324ef'
