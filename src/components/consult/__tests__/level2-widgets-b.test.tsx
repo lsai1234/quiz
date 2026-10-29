@@ -4,7 +4,6 @@ import { SCENES } from '@/lib/consult/flow'
 import { sleepHours } from '@/lib/consult/reactions'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { SceneRenderer } from '../scenes/registry'
-import { energyWord, levelAt } from '../scenes/ChargeDial'
 import { MIN_GAP, TRACK_SPAN, fromTrack, moveHandle, toTrack } from '../scenes/SleepWindow'
 import { DAYLIGHT_STEPS, stepNearest, sunPosition } from '../scenes/SunArc'
 
@@ -52,21 +51,6 @@ function drag(el: Element, points: [number, number][]) {
   for (const [x, y] of rest) fireEvent.pointerMove(el, { pointerId: 1, clientX: x, clientY: y })
   fireEvent.pointerUp(el, { pointerId: 1 })
 }
-
-describe('C5 charge dial', () => {
-  it('maps the battery to 1–10, never 0', () => {
-    expect(levelAt(0)).toBe(1)
-    expect(levelAt(0.05)).toBe(1)
-    expect(levelAt(0.35)).toBe(4)
-    expect(levelAt(1)).toBe(10)
-  })
-
-  it('changes its word as it fills', () => {
-    expect([1, 4, 5, 8, 10].map(energyWord)).toEqual(['Running on empty', 'Pretty flat', 'Getting by', 'Pretty charged', 'Buzzing'])
-  })
-
-  // The battery is replaced by Shape your day (plan Phase 7.4): see below.
-})
 
 describe('Shape your day (plan Phase 7.4)', () => {
   const area = () => screen.getByRole('img', { name: /energy|Draw your energy/i })

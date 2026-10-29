@@ -19,36 +19,12 @@
  * squash and stretch on taps and Next) is `ampLife.ts`, loaded once the page
  * has been touched or gone idle: never on the first scene's path, and never
  * under reduced motion, where Amp holds each pose still.
- *
- * The Rive layer (U5) is still wired behind NEXT_PUBLIC_AMP_RIVE, off; the
- * plan replaces it with this drawing, and its files go once that's agreed.
  */
 
-import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState } from 'react'
-import { ampRiveEnabled } from '@/lib/consult/ampRive'
 import { eyeOpen, mouthFor, type AmpRig } from '@/lib/consult/amp-rig'
 import { AMP_ANIMATION, AMP_REACTION, AMP_SCAN, springTransition, stateTransition, type AmpReaction, type AmpState } from '@/lib/consult/motion'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
-
-const AmpRive = dynamic(() => import('./AmpRive'), { ssr: false })
-
-/** Wait for the page to be idle before fetching the Rive runtime: never on the first paint's path. */
-function useRiveUpgrade(): boolean {
-  const reduced = useReducedMotion()
-  const [go, setGo] = useState(false)
-  useEffect(() => {
-    if (!ampRiveEnabled() || reduced) return
-    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (id: number) => void }
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(() => setGo(true))
-      return () => w.cancelIdleCallback?.(id)
-    }
-    const t = setTimeout(() => setGo(true), 1)
-    return () => clearTimeout(t)
-  }, [reduced])
-  return go
-}
 
 /**
  * Amp's life, fetched once: on the first touch anywhere, or a few seconds
@@ -102,15 +78,12 @@ const MOUTH = {
 
 export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }: Props) {
   const reduced = useReducedMotion()
-  const upgrade = useRiveUpgrade()
-  const [rive, setRive] = useState(false)
   const self = useRef<HTMLSpanElement>(null)
   // A reaction plays until its own animation ends — no timer.
   const [ended, setEnded] = useState<number | null>(null)
   const playing = reaction && reaction.id !== ended ? reaction : null
-  // Once Rive has drawn, it is the whole character: the ring and face step aside.
-  const lit = state === 'charged' && !rive
-  const quiet = state === 'calm' && !rive
+  const lit = state === 'charged'
+  const quiet = state === 'calm'
   const mood = state === 'calm' || state === 'charged' ? null : rig.mood ?? null
 
   // His life: the eyes, the blinks, the squash. Not under reduced motion.
@@ -134,7 +107,6 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }:
       aria-label={`Amp, ${state}`}
       data-amp-state={state}
       data-amp-mood={mood ?? undefined}
-      data-amp-drawn={rive ? 'rive' : 'svg'}
       data-amp-reaction={playing?.name}
       onAnimationEnd={(e) => {
         if (playing && REACTION_NAMES.has(e.animationName)) setEnded(playing.id)
@@ -144,25 +116,19 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }:
         width: SIZE[size],
         height: SIZE[size],
         borderRadius: 'var(--amp-radius-pill)',
-        // Rive's burst can reach past the ring.
-        overflow: rive ? 'visible' : undefined,
-        border: `var(--amp-hairline) solid ${rive || lit ? 'transparent' : quiet ? 'var(--amp-edge-strong)' : 'var(--amp-accent-line)'}`,
-        background: rive ? 'transparent' : lit ? 'var(--amp-accent)' : quiet ? 'var(--amp-glass-solid)' : 'var(--amp-accent-fill)',
+        border: `var(--amp-hairline) solid ${lit ? 'transparent' : quiet ? 'var(--amp-edge-strong)' : 'var(--amp-accent-line)'}`,
+        background: lit ? 'var(--amp-accent)' : quiet ? 'var(--amp-glass-solid)' : 'var(--amp-accent-fill)',
         color: lit ? 'var(--amp-ink-on-accent)' : quiet ? 'var(--amp-ink-2)' : 'var(--amp-accent)',
-        boxShadow: rive || quiet ? 'none' : lit ? 'var(--amp-glow-strong)' : 'var(--amp-glow-soft)',
-        animation: rive ? undefined : AMP_ANIMATION[state],
-        transform: rive
-          ? undefined
-          : state === 'watching'
-            ? `translateX(calc(var(--amp-hairline) * ${Math.round(lean * 3)})) rotate(${Math.round(lean * 8)}deg) scale(1.06)`
-            : undefined,
+        boxShadow: quiet ? 'none' : lit ? 'var(--amp-glow-strong)' : 'var(--amp-glow-soft)',
+        animation: AMP_ANIMATION[state],
+        transform: state === 'watching' ? `translateX(calc(var(--amp-hairline) * ${Math.round(lean * 3)})) rotate(${Math.round(lean * 8)}deg) scale(1.06)` : undefined,
         transition: `${springTransition('transform')}, ${stateTransition('background-color', 'box-shadow')}`,
         ['--amp-eye' as string]: eyeOpen(state, rig),
         ['--amp-lean' as string]: state === 'watching' ? lean : 0,
       }}
     >
       {/* The light behind him: follows the energy level while it's being set. */}
-      {!rive && !quiet && rig.glow !== undefined && (
+      {!quiet && rig.glow !== undefined && (
         <span
           aria-hidden
           data-amp-glow={rig.glow}
@@ -175,7 +141,7 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }:
           }}
         />
       )}
-      {!rive && playing && !MOVES.has(playing.name) && (
+      {playing && !MOVES.has(playing.name) && (
         <span
           key={playing.id}
           aria-hidden
@@ -195,7 +161,7 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }:
         height="78%"
         aria-hidden
         fill="currentColor"
-        style={{ opacity: rive ? 0 : 1, transition: stateTransition('opacity'), animation: playing && MOVES.has(playing.name) ? AMP_REACTION[playing.name] : undefined }}
+        style={{ animation: playing && MOVES.has(playing.name) ? AMP_REACTION[playing.name] : undefined }}
       >
         {/* His mark: the bolt, small, above the eyes. */}
         <path className="amp-mark" d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z" transform="translate(9.3 2.2) scale(0.22)" />
@@ -221,8 +187,7 @@ export function Amp({ state, size = 'sm', lean = 0, reaction = null, rig = {} }:
           </g>
         )}
       </svg>
-      {upgrade && <AmpRive state={state} lean={lean} reaction={reaction} ready={rive} onReady={() => setRive(true)} />}
-      {state === 'reading' && !rive && (
+      {state === 'reading' && (
         <span
           aria-hidden
           className="absolute inset-x-0"

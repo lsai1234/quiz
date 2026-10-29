@@ -21,8 +21,6 @@ import { speechSupported } from './useReadAloud'
 interface Props {
   /** The server has an OpenAI key, so the AI layer is on here. */
   aiConfigured: boolean
-  /** The animated Amp is switched on and its file is in place. */
-  rive: boolean
 }
 
 interface Health {
@@ -36,7 +34,7 @@ interface Health {
 
 type Tone = 'on' | 'off' | 'info'
 
-export function FounderPreview({ aiConfigured, rive }: Props) {
+export function FounderPreview({ aiConfigured }: Props) {
   const [open, setOpen] = useState(false)
   const [support, setSupport] = useState<{ voice: boolean; speech: boolean } | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
@@ -100,7 +98,6 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
       note: CONSULT_FEATURES.uploads ? '“Fill from my tracker” on the training and sleep screens, except on the 1-minute version.' : 'Switched off for now: no screenshots from wearables.',
     },
     { label: 'What’s this?', tone: 'info', note: 'The ⓘ on options. With the AI on it also takes a follow-up question.' },
-    { label: 'Animated Amp', tone: rive ? 'on' : 'off', note: rive ? 'Rive file loaded.' : 'Waiting for the Rive file (public/consult/amp.riv) and NEXT_PUBLIC_AMP_RIVE=1. Until then Amp is the drawn version.' },
     { label: 'Customers', tone: 'info', note: 'The public home page follows Founder hub → Settings → Quiz, which is off by default.' },
   ]
 

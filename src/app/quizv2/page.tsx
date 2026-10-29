@@ -1,8 +1,5 @@
 import type { Metadata } from 'next'
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import { Suspense } from 'react'
-import { AMP_RIVE, ampRiveEnabled } from '@/lib/consult/ampRive'
 import { ConsultPage } from '@/components/consult/ConsultPage'
 import { PortalLogin } from '@/components/portal/PortalLogin'
 import { founderAuthMode } from '@/lib/portal/auth'
@@ -36,10 +33,9 @@ export default async function QuizV2Page() {
   // The page reads `?review=1`, and a search param read has to sit under a
   // Suspense boundary.
   const aiConfigured = Boolean(process.env.OPENAI_API_KEY)
-  const rive = ampRiveEnabled() && existsSync(path.join(process.cwd(), 'public', AMP_RIVE.src))
   return (
     <Suspense>
-      <ConsultPage aiConfigured={aiConfigured} rive={rive} />
+      <ConsultPage aiConfigured={aiConfigured} />
     </Suspense>
   )
 }

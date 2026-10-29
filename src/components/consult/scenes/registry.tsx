@@ -12,7 +12,6 @@ import { ReviewScene } from './ReviewScene'
 import { GoalTiles } from './GoalTiles'
 import { AgeWheel } from './AgeWheel'
 import { TrainingWeek } from './TrainingWeek'
-import { ChargeDial } from './ChargeDial'
 import { SleepWindow } from './SleepWindow'
 import { SunArc } from './SunArc'
 import { CupCounter } from './CupCounter'
@@ -108,7 +107,6 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'training-week': { component: TrainingWeek, writes: ['training', 'intensity'] },
   'aim-tiles': { component: AimTiles, writes: ['aim'] },
   'changes-picker': { component: ChangesPicker, writes: ['changes'] },
-  'charge-dial': { component: ChargeDial, writes: ['energy'] },
   'sleep-window': { component: SleepWindow, writes: ['sleep'] },
   'sun-arc': { component: SunArc, writes: ['daylight'] },
   'cup-counter': { component: CupCounter, writes: ['caffeine'] },

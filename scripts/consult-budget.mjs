@@ -32,8 +32,7 @@ import { existsSync } from 'node:fs'
 
 /**
  * About a quarter above what it measured when set (205KB, 448KB, 3.3s), so
- * growth is a decision, not a drift. The Rive runtime is not in here and must
- * never be: it loads after idle (see `ampRive.ts`).
+ * growth is a decision, not a drift.
  */
 const BUDGET = {
   /** Compressed JS for the first scene. */

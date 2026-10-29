@@ -127,7 +127,7 @@ for (const mode of ['standard', 'comfort', 'reduced'] as const) {
     await openStory(page, 'Amp')
     if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
     const grid = page.locator('[data-amp-grid]')
-    await expect(grid.locator('[data-amp-drawn="svg"]')).toHaveCount(9)
+    await expect(grid.locator('.amp-character svg.amp-face')).toHaveCount(9)
     await expect(grid).toHaveScreenshot(`amp-states-${mode}.png`, STILL)
   })
 }

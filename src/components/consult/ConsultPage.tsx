@@ -15,16 +15,14 @@ import { FounderPreview } from './FounderPreview'
 interface Props {
   /** The server has an OpenAI key: the founder preview runs with the AI layer on. */
   aiConfigured: boolean
-  /** The animated Amp's file is in place and switched on. */
-  rive: boolean
 }
 
-export function ConsultPage({ aiConfigured, rive }: Props) {
+export function ConsultPage({ aiConfigured }: Props) {
   const router = useRouter()
   const reopen = useSearchParams().get('review') === '1'
   return (
     <>
-      <FounderPreview aiConfigured={aiConfigured} rive={rive} />
+      <FounderPreview aiConfigured={aiConfigured} />
       <AmpConsult
         reopen={reopen}
         ai={aiConfigured}

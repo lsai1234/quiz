@@ -10,7 +10,7 @@ const amp = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-amp-state]')
 describe('the face', () => {
   it('draws Amp in SVG: his mark, two eyes with pupils, a mouth', () => {
     const { container } = render(<Amp state="idle" />)
-    expect(amp(container)).toHaveAttribute('data-amp-drawn', 'svg')
+    expect(amp(container).querySelector('svg.amp-face')).not.toBeNull()
     expect(face(container).querySelector('.amp-mark')).not.toBeNull()
     expect(face(container).querySelectorAll('.amp-eye')).toHaveLength(2)
     expect(face(container).querySelectorAll('.amp-pupil')).toHaveLength(2)
