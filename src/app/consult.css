@@ -464,6 +464,28 @@
   letter-spacing: var(--amp-tracking-data);
 }
 
+/* Watch Amp think (plan Phase 7.5): a pulse from the answer into a pattern
+   it moved. `Constellation.tsx` sets where it starts and lands. */
+@keyframes amp-pulse {
+  0% { transform: var(--pulse-from); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: var(--pulse-to); opacity: 0; }
+}
+
+.amp-pulse {
+  opacity: 0;
+  animation: amp-pulse var(--amp-duration-streak) var(--amp-ease-out) both;
+}
+
+/* The constellation's names, in its own units; a size up in comfort mode. */
+.amp-consult [data-constellation] {
+  --amp-star-text: 9px;
+}
+
+.amp-consult[data-comfort="true"] [data-constellation] {
+  --amp-star-text: 11px;
+}
+
 /* Tap feedback: a short press, no bounce back. */
 .amp-press {
   transition:
@@ -496,7 +518,8 @@
   .amp-consult .amp-anim-flow,
   .amp-consult .amp-anim-streak,
   .amp-consult .amp-anim-surge,
-  .amp-consult .amp-anim-sheen {
+  .amp-consult .amp-anim-sheen,
+  .amp-consult .amp-pulse {
     animation: none;
   }
 

@@ -11,7 +11,8 @@ import { haptic } from '@/lib/consult/motion'
 import { NextButton, QuietLink } from '../controls'
 import type { SceneProps } from '../scenes/registry'
 import { ProbeFormat, type ProbeAnswer } from './formats'
-import { HunchCard, LeadBars, LeadsSheet, PatternMap, Plain } from './parts'
+import { HunchCard, LeadsSheet, Plain } from './parts'
+import { Constellation } from './Constellation'
 import { TELLABLE_FORMATS, type ProbePick } from '@/lib/consult/ai/pinpoint'
 import { foundLine, tellCandidates } from './pinpointAi'
 import { TellSheet } from './TellSheet'
@@ -99,15 +100,14 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
 
   const buildNow = round && asked >= LIMITS.buildNowFrom ? () => write({ ...pp, stopped: true }) : undefined
   const gone = justRuledOut(stage, answers)
-  const contenders = leads.filter((l) => l.state !== 'no' && l.state !== 'out' && l.p >= 0.3)
+  const onScreen = view.kind === 'probe' ? view.probe : null
 
   let body: React.ReactNode
   switch (view.kind) {
     case 'intro': {
-      const top = leads.filter((l) => l.state === 'live').sort((x, y) => y.p - x.p).slice(0, 3)
       body = (
         <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
-          <PatternMap answers={answers} leads={top} title={`Amp’s leads so far: ${top.map((l) => l.pattern.name).join(', ')}`} />
+          <Constellation size="lg" answers={answers} label="Amp’s leads so far" />
           {(answers.noteHints ?? []).length > 0 && (
             <div className="amp-anim-rise" style={{ padding: 'var(--amp-space-3) var(--amp-space-4)', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', background: 'var(--amp-accent-fill)' }}>
               <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
@@ -123,14 +123,6 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
               </ul>
             </div>
           )}
-          <ul className="flex flex-col" aria-label="Leads so far">
-            {top.map((l) => (
-              <li key={l.pattern.id} className="flex items-center justify-between" style={{ gap: 'var(--amp-space-3)', padding: 'var(--amp-space-2) 0', borderBottom: 'var(--amp-hairline) solid var(--amp-edge)' }}>
-                <span style={{ fontSize: 'var(--amp-text-meta)' }}>{l.pattern.name}</span>
-                <LeadBars p={l.p} />
-              </li>
-            ))}
-          </ul>
           <NextButton onClick={() => write({ ...pp, started: true })}>Let’s go</NextButton>
           {ai && (
             <div className="flex justify-center">
@@ -228,7 +220,7 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
               Ruled out: {out.map((l) => l.pattern.name.charAt(0).toLowerCase() + l.pattern.name.slice(1)).join(', ')}.
             </p>
           )}
-          {view.found.length > 0 && <PatternMap answers={answers} leads={view.found} title={`Pinpointed: ${view.found.map((l) => l.pattern.name).join(', ')}`} />}
+          <Constellation size="lg" answers={answers} label="What I found" />
         </div>
       )
       break
@@ -253,15 +245,8 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
               'Checkpoint'
             )}
           </p>
-          <button
-            type="button"
-            onClick={() => setSheet(true)}
-            className="amp-press inline-flex items-center uppercase"
-            aria-label={`What I’m thinking: ${contenders.length} lead${contenders.length === 1 ? '' : 's'}`}
-            style={{ ...mono, gap: 'var(--amp-space-1)', minHeight: 'var(--amp-target)', padding: '0 var(--amp-space-3)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', color: 'var(--amp-accent)', whiteSpace: 'nowrap' }}
-          >
-            Leads · {contenders.length}
-          </button>
+          {/* Watch Amp think (plan Phase 7.5): live, and the way into "What I'm thinking". */}
+          <Constellation size="strip" answers={answers} probe={onScreen} onOpen={() => setSheet(true)} />
         </div>
       )}
       {round && gone.length > 0 && (
@@ -314,7 +299,11 @@ export function PinpointScene({ scene, answers, onAnswer, comfort, onNext, ai }:
           onClose={() => setTyping(null)}
         />
       )}
-      {sheet && <LeadsSheet leads={leads} onClose={() => setSheet(false)} onBuild={buildNow ? () => (setSheet(false), buildNow()) : undefined} />}
+      {sheet && (
+        <LeadsSheet leads={leads} onClose={() => setSheet(false)} onBuild={buildNow ? () => (setSheet(false), buildNow()) : undefined}>
+          <Constellation size="lg" answers={answers} probe={onScreen} label="What I’m thinking" quietWhenStill />
+        </LeadsSheet>
+      )}
       <span className="sr-only" aria-live="polite">
         {view.kind === 'hunch' ? `Amp’s lead: ${view.lead.pattern.name}` : ''}
       </span>

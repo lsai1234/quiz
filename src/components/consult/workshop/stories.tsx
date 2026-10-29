@@ -18,6 +18,9 @@ import { sceneDef } from '@/lib/consult/flow'
 import { summarise } from '@/lib/consult/summary'
 import { curveWords, readCurve } from '@/lib/consult/day-curve'
 import { clock } from '@/lib/consult/day-ring'
+import { Constellation } from '../pinpoint/Constellation'
+import { pinpointView } from '@/lib/consult/pinpoint/screen'
+import type { PinpointStep } from '@/lib/consult/pinpoint/types'
 
 /**
  * The workshop's stories: each renders one piece of the consult on its own,
@@ -341,6 +344,63 @@ function DayCurveStory() {
   )
 }
 
+/* ── Watch Amp think (plan Phase 7.5) ──────────────────────────────────── */
+
+/** Four coffees, restless nights, flat afternoons: wired and tired, with a crash. */
+const THINKER: ConsultAnswers = {
+  ...EMPTY_ANSWERS,
+  route: 'pinpoint',
+  goals: ['energy'],
+  age: '35-44',
+  sex: 'female',
+  training: trainingDays(['gym', 'rest', 'rest', 'cardio', 'rest', 'rest', 'rest']),
+  energy: 4,
+  sleep: { bed: 23 * 60, wake: 6 * 60 + 30, quality: 'broken' },
+  daylight: 'most',
+  caffeine: { coffee: 4, tea: 0, energy: 0 },
+  plate: ['oily-fish', 'poultry', 'eggs', 'dairy', 'greens', 'fruit', 'wholegrains'],
+  body: [],
+  shelf: [],
+}
+
+/** The round, one answer at a time. */
+const THINK_STEPS: { said: string; step: PinpointStep | null }[] = [
+  { said: 'After the core answers', step: null },
+  { said: 'Flat by 3pm: That’s me', step: { kind: 'probe', probe: 'three-pm', answer: { main: 'me' }, stage: 'pinpoint' } },
+  { said: '11pm, mind racing', step: { kind: 'probe', probe: 'eleven-pm', answer: { main: 'a' }, stage: 'pinpoint' } },
+  { said: 'Tired, then wide awake: That’s me', step: { kind: 'probe', probe: 'tired-then-awake', answer: { main: 'me' }, stage: 'pinpoint' } },
+  { said: 'Wired and tired: That’s me', step: { kind: 'verdict', pattern: 'wired', verdict: 'yes', stage: 'pinpoint' } },
+  { said: 'Snoozes: never', step: { kind: 'probe', probe: 'snooze', answer: { main: 'never' }, stage: 'pinpoint' } },
+  { said: 'The 3pm crash: That’s me', step: { kind: 'verdict', pattern: 'crash', verdict: 'yes', stage: 'pinpoint' } },
+]
+
+/** The strip as it sits in the round, and the full constellation, as the answers come in. */
+function ConstellationStory() {
+  const [n, setN] = useState(3)
+  const steps = THINK_STEPS.slice(1, n + 1).map((s) => s.step!)
+  const answers: ConsultAnswers = { ...THINKER, pinpoint: { steps, stopped: false, started: true } }
+  const view = pinpointView('pinpoint', answers)
+  const probe = view.kind === 'probe' ? view.probe : null
+  return (
+    <div data-story="constellation" className="flex flex-col" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <div className="flex items-center justify-between" style={{ gap: 'var(--amp-space-2)' }} data-strip-row>
+        <span className="uppercase" style={label}>
+          {probe ? `Next: ${probe.question}` : view.kind === 'hunch' ? 'Amp’s hunch' : 'Done'}
+        </span>
+        <Constellation size="strip" answers={answers} probe={probe} />
+      </div>
+      <Constellation size="lg" answers={answers} probe={probe} label="What I’m thinking" />
+      <span className="uppercase" style={{ ...label, color: 'var(--amp-accent)' }}>
+        {THINK_STEPS[n].said}
+      </span>
+      <div className="grid w-full grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
+        <NextButton onClick={() => setN((k) => Math.max(0, k - 1))}>Back an answer</NextButton>
+        <NextButton onClick={() => setN((k) => Math.min(THINK_STEPS.length - 1, k + 1))}>Next answer</NextButton>
+      </div>
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -358,4 +418,5 @@ export const STORIES: Story[] = [
   { id: 'amp-alive', title: 'Amp, alive', render: () => <AmpAliveStory /> },
   { id: 'day-ring', title: 'Day ring', render: () => <DayRingStory /> },
   { id: 'day-curve', title: 'Shape your day', render: () => <DayCurveStory /> },
+  { id: 'constellation', title: 'Watch Amp think', render: () => <ConstellationStory /> },
 ]

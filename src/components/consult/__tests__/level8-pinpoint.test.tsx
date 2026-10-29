@@ -138,7 +138,9 @@ describe('the round', () => {
     expect(screen.getByText('Knew it. Locked in.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^What I’m thinking:/ }))
     const sheet = screen.getByRole('dialog', { name: 'What I’m thinking' })
-    expect(within(sheet).getByText('Wired and tired')).toBeInTheDocument()
+    // The constellation (plan Phase 7.5), then the leads in words.
+    expect(within(sheet).getByRole('img', { name: /^What I’m thinking\. Narrowing it down: .*pinpointed: Wired and tired/ })).toBeInTheDocument()
+    expect(within(sheet).getByText('Wired and tired', { selector: 'span' })).toBeInTheDocument()
     expect(within(sheet).getByText('You said so')).toBeInTheDocument()
   })
 

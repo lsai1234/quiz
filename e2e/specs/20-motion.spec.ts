@@ -336,3 +336,39 @@ test('consult: the energy scene takes a drawn day, and the ring draws it', async
   await expect(page.locator('[data-day-ring="sm"] [data-ring-dip]')).toHaveCount(1)
   await expect(page.getByRole('img', { name: /^Your day: .*energy.*dips around 1[46]:00/ })).toBeVisible()
 })
+
+/* ── Watch Amp think (plan Phase 7.5) ──────────────────────────────────── */
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: watch Amp think, live and in full (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Watch Amp think')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const story = page.locator('[data-story="constellation"]')
+    if (mode === 'reduced') {
+      // A ranked list with bars, and the strip is the plain count.
+      await expect(story.getByRole('list', { name: 'What I’m thinking' })).toBeVisible()
+      await expect(story.getByRole('button', { name: /^What I’m thinking/ })).toHaveText(/^Leads · \d+$/)
+    } else {
+      await expect(story.getByRole('img', { name: /^What I’m thinking\. Narrowing it down: \d+ → / })).toBeVisible()
+      await expect(story.locator('[data-constellation="strip"] [data-star]')).not.toHaveCount(0)
+    }
+    await expect(story.locator('[data-narrowing]')).toHaveText(/^Narrowing it down: \d+( → \d+)+$/)
+    await expect(story).toHaveScreenshot(`constellation-${mode}.png`, STILL)
+  })
+}
+
+test('workshop: an answer sends pulses into what it moved, and the stars move', async ({ page }) => {
+  await openStory(page, 'Watch Amp think')
+  const story = page.locator('[data-story="constellation"]')
+  const wired = story.locator('[data-constellation="lg"] [data-star="wired"]')
+  // Back to before "11pm, mind racing", then answer it.
+  await page.getByRole('button', { name: 'Back an answer' }).click()
+  await page.getByRole('button', { name: 'Back an answer' }).click()
+  const before = await wired.evaluate((el) => (el as SVGGElement).style.transform)
+  await page.getByRole('button', { name: 'Next answer' }).click()
+  // Wired and tired: in towards Amp, with a pulse into it.
+  expect(await wired.evaluate((el) => (el as SVGGElement).style.transform)).not.toBe(before)
+  await expect(story.locator('[data-constellation="lg"] [data-pulse="wired"]')).toHaveCount(1)
+  expect(await story.locator('[data-constellation="lg"] [data-pulse="wired"]').evaluate((el) => el.getAnimations().length)).toBe(1)
+})

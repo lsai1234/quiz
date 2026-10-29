@@ -164,7 +164,8 @@ export function Plain({ children, onClick }: { children: React.ReactNode; onClic
 
 /* ── What I'm thinking ────────────────────────────────────────────────── */
 
-export function LeadsSheet({ leads, onClose, onBuild }: { leads: Lead[]; onClose: () => void; onBuild?: () => void }) {
+/** "What I'm thinking": the constellation (`children`), then the leads in words. */
+export function LeadsSheet({ leads, onClose, onBuild, children }: { leads: Lead[]; onClose: () => void; onBuild?: () => void; children?: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     box.current?.querySelector<HTMLElement>('button')?.focus()
@@ -205,6 +206,7 @@ export function LeadsSheet({ leads, onClose, onBuild }: { leads: Lead[]; onClose
             {''}
           </QuietLink>
         </div>
+        {children}
         {pinned.length > 0 && heading('Pinpointed')}
         {pinned.map((l) => (
           <p key={l.pattern.id} className="flex items-center justify-between" style={{ gap: 'var(--amp-space-3)' }}>
