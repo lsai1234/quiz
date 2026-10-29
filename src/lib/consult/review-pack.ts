@@ -31,6 +31,7 @@ import { bonusTermRows, freeGiftTermRows, offerCopyRows } from '@/lib/offer/revi
 import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
 import { proteinRows } from './protein-review-rows'
+import { drawnRows } from './drawn-review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
@@ -261,6 +262,8 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...comboRows(),
     // The protein check (Phase 5 proposal 2, approved 2026-10-28).
     ...proteinRows(),
+    // Shape your day as Pinpoint evidence (plan Phase 7.4, live 2026-10-29).
+    ...drawnRows(),
     ...glossaryRows(),
     ...claimRows(roster),
     // The free bonus's terms (plan Phase 2, 5): the conditions it has to

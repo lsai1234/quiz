@@ -4,10 +4,9 @@ Amp Consult and offer plan, Phase 7.4: "Propose how these feed Pinpoint as
 evidence, like a probe answer marked `drawn`. This touches the maths, so
 propose it first, with `twenty-questions.test.ts` results before and after."
 
-**Nothing here is live.** `DRAWN_EVIDENCE_LIVE` in
-`src/lib/consult/pinpoint/drawn.ts` is `false`. As built, the curve reaches
-Pinpoint only through the afternoon level, the same 1–10 `energy` the battery
-gave, so every score is unchanged (a test checks that).
+**Decided 2026-10-29: live as "add", with the cap.** `DRAWN_EVIDENCE_LIVE`
+in `src/lib/consult/pinpoint/drawn.ts` is `true`. Its reason lines are in the
+review pack (`drawn-review-rows.ts`). The proposal as it was put follows.
 
 ## What's read off the curve
 
@@ -122,18 +121,16 @@ per-pattern and per-case tables come from
   its own 20 seeds (90.8%). That's not something this change causes, and
   changing it would touch the maths, so it's flagged here rather than fixed.
 
-## To decide
+## Decided (2026-10-29)
 
-1. Turn drawn evidence on, as **add** with the cap (recommended), as replace,
-   or leave it off.
-2. If on: the four reasons it can add to the read ("Your day drops sharply
-   around 4pm", "Your day dips around 4pm", "Slow to get going in the
-   morning", "A second wind in the evening") go into the review pack first,
-   like any new line in the read. They restate the drawing; they don't
-   interpret it.
-3. Should the test's 90% bar be checked at 60 people a case? Today that
-   would fail (88.1%) without the drawn evidence.
-
-Going live is one line (`DRAWN_EVIDENCE_LIVE = true`), plus moving the "add"
-checks in `drawn-evidence.test.ts` into `twenty-questions.test.ts` with drawn
-people.
+1. **On, as add with the cap.** `twenty-questions.test.ts` is unchanged and
+   passes: its people have no curve. `drawn-evidence.test.ts` checks, with 60
+   people a case, that with drawn days Pinpoint finds at least as many, as
+   often in the worst case, in fewer questions, with fewer wrong guesses, and
+   pins nothing wrongly; and that "off" changes nothing.
+2. **The reason lines are in the review pack**: all seven, the four that can
+   be reasons and the three that can be "ruled out because".
+3. **The 90% bar stays checked on the test's own 20 people a case.** Checked
+   at 60 it fails today (88.1%) without drawn evidence, and raising it would
+   mean changing the Pinpoint maths, which is a separate proposal. The finding
+   stays recorded here.

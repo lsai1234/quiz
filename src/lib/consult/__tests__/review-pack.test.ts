@@ -13,6 +13,7 @@ import { PATTERNS } from '../pinpoint/library'
 import { CLAIMS_BY_KIND } from '../claims'
 import { STOP_COPY } from '../circuit'
 import { PHARMACIST_NOTE } from '../pharmacist-note'
+import { DRAWN_ITEMS } from '../pinpoint/drawn'
 
 const ROOT = process.cwd()
 const input = {
@@ -36,6 +37,8 @@ it('lists everything the plan names', () => {
     expect(rows.some((r) => r[0] === section)).toBe(true)
   }
   // The engine's inline reasons are read from its source, not copied.
+  // Shape your day's reasons (plan Phase 7.4): every line the drawn day can add.
+  for (const item of DRAWN_ITEMS) for (const line of Object.values(item.said)) expect(wording).toContain(line!.replace('{dip}', '4pm'))
   expect(wording).toContain('Vitamin D needs rise with age')
   expect(wording).toContain('To keep your fluids and salts up when you feel queasy')
 })

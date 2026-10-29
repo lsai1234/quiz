@@ -1,13 +1,12 @@
 /**
- * Shape your day as Pinpoint evidence (plan Phase 7.4): a PROPOSAL, off.
+ * Shape your day as Pinpoint evidence (plan Phase 7.4). Signed off 2026-10-29
+ * as "add", with the cap on pointing away (docs/shape-your-day-proposal.md).
  *
  * What the drawn curve shows (`readCurve`) is read like an answer to a probe
  * nobody had to ask, marked `drawn`: three items, each through the same
  * `evidence()` as every probe, so the maths is the maths Pinpoint already
- * uses. Nothing here changes a score until `DRAWN_EVIDENCE_LIVE` is true,
- * which needs sign-off (it touches the Pinpoint maths). `previewDrawn` lets
- * the report in `docs/shape-your-day-proposal.md` measure it with the 20
- * Questions people first.
+ * uses. `previewDrawn` lets the report in the proposal measure each way
+ * against the 20 Questions people.
  *
  *   dip      deep (3+ levels) · some (2) · none
  *   morning  slow · fine
@@ -21,7 +20,7 @@ import { readCurve } from '../day-curve'
 import { pull } from './define'
 import type { Answers, PatternId, ProbeItem } from './types'
 
-export const DRAWN_EVIDENCE_LIVE = false
+export const DRAWN_EVIDENCE_LIVE = true
 
 /**
  *   off      the curve feeds Pinpoint only through the afternoon level, as the battery did

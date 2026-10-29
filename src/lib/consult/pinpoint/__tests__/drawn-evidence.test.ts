@@ -2,7 +2,7 @@ import { writeFileSync } from 'fs'
 import { eligiblePatterns, leads } from '../leads'
 import { PATTERNS } from '../library'
 import { LIMITS } from '../choose'
-import { DRAWN_EVIDENCE_LIVE, drawnAnswers, drawnMode, previewDrawn, type DrawnMode } from '../drawn'
+import { DRAWN_AWAY_CAP, DRAWN_EVIDENCE_LIVE, drawnAnswers, drawnMode, previewDrawn, type DrawnMode } from '../drawn'
 import { CORE, personFor, simulate, truthFor, type JourneyKey, type Run } from './simulate'
 import { withCurve } from './drawn-people'
 import { PRESET_POINTS } from '../../day-curve'
@@ -10,12 +10,12 @@ import type { ConsultAnswers } from '../../types'
 import type { PatternId } from '../types'
 
 /**
- * Shape your day as Pinpoint evidence: a proposal, off (plan Phase 7.4).
+ * Shape your day as Pinpoint evidence (plan Phase 7.4), live as "add".
  *
  * The 20 Questions people from `twenty-questions.test.ts`, the same seeds,
- * now with the day they'd draw. Off, the curve changes nothing. On, either
- * way it's proposed, every 20 Questions check still holds. `DRAWN_REPORT=1`
- * writes the before-and-after table for `docs/shape-your-day-proposal.md`.
+ * now with the day they'd draw. Off, the curve changes nothing; on, Pinpoint
+ * finds more, sooner, with fewer wrong guesses. `DRAWN_REPORT=<file>` writes
+ * the before-and-after table in `docs/shape-your-day-proposal.md`.
  */
 
 const JOURNEYS = Object.keys(CORE) as JourneyKey[]
@@ -102,16 +102,21 @@ const off = measure(casesFor(true, SEEDS), true, 'off')
 const beforeMore = measure(casesFor(false, MORE), false, 'off')
 const addMore = measure(casesFor(true, MORE), true, 'add')
 
-describe('Shape your day as Pinpoint evidence (proposal, off)', () => {
-  it('is off: nothing to sign off has gone live', () => {
-    expect(DRAWN_EVIDENCE_LIVE).toBe(false)
-    expect(drawnMode()).toBe('off')
+describe('Shape your day as Pinpoint evidence', () => {
+  it('is live as signed off: "add"', () => {
+    expect(DRAWN_EVIDENCE_LIVE).toBe(true)
+    expect(drawnMode()).toBe('add')
   })
 
   it('off, a drawn day changes nothing: the same questions, the same leads', () => {
     expect(off.runs.map((rs) => rs.map((r) => r.asked))).toEqual(before.runs.map((rs) => rs.map((r) => r.asked)))
     const person = withCurve(personFor('everyday', ['crash']), ['crash'], 1)
-    expect(leads(person)).toEqual(leads({ ...person, energyCurve: null }))
+    previewDrawn('off')
+    try {
+      expect(leads(person)).toEqual(leads({ ...person, energyCurve: null }))
+    } finally {
+      previewDrawn(null)
+    }
   })
 
   it('reads the shapes as the presets mean them', () => {
@@ -123,19 +128,27 @@ describe('Shape your day as Pinpoint evidence (proposal, off)', () => {
     expect(read('steady')).toEqual({ dip: 'none', morning: 'fine', evening: 'flat' })
   })
 
-  it('on, drawn evidence counts as an answer, never as one mainly about a pattern', () => {
-    previewDrawn('add')
-    try {
-      const person = { ...personFor('everyday', []), energyCurve: { points: PRESET_POINTS['dip-3pm'], how: 'preset' as const, preset: 'dip-3pm' as const } }
-      const crash = leads(person).find((l) => l.pattern.id === 'crash')!
-      expect(crash.support).toContainEqual({ text: 'Your day drops sharply around 4pm', from: 'answer', direct: false, drawn: true })
-      expect(crash.tested).toBe(0)
-    } finally {
-      previewDrawn(null)
-    }
+  it('counts drawn evidence as an answer, never as one mainly about a pattern', () => {
+    const person = { ...personFor('everyday', []), energyCurve: { points: PRESET_POINTS['dip-3pm'], how: 'preset' as const, preset: 'dip-3pm' as const } }
+    const crash = leads(person).find((l) => l.pattern.id === 'crash')!
+    expect(crash.support).toContainEqual({ text: 'Your day drops sharply around 4pm', from: 'answer', direct: false, drawn: true })
+    expect(crash.tested).toBe(0)
   })
 
-  it('on, as proposed ("add"), it finds more, sooner, with fewer wrong guesses, and pins nothing wrongly', () => {
+  it('points away only a little, however flat the day', () => {
+    const flat = { ...personFor('everyday', []), energyCurve: { points: PRESET_POINTS.steady, how: 'preset' as const, preset: 'steady' as const } }
+    const score = (mode: 'off' | 'add') => {
+      previewDrawn(mode)
+      try {
+        return leads(flat).find((l) => l.pattern.id === 'crash')!.score
+      } finally {
+        previewDrawn(null)
+      }
+    }
+    expect(score('off') - score('add')).toBeCloseTo(DRAWN_AWAY_CAP)
+  })
+
+  it('on, it finds more, sooner, with fewer wrong guesses, and pins nothing wrongly', () => {
     expect(addMore.found).toBeGreaterThanOrEqual(beforeMore.found)
     expect(addMore.worst.hit).toBeGreaterThanOrEqual(beforeMore.worst.hit)
     expect(addMore.mean).toBeLessThan(beforeMore.mean)
