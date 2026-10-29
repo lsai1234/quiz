@@ -20,6 +20,7 @@ import { caffeineCount, sleepHours } from '../reactions'
 import { countsByType, sessionsPerWeek } from '../training'
 import type { Food } from '../types'
 import { clockWords, dayLine, howOften, quickFire, scenario, thisOrThat } from './define'
+import { drawnAnswers, drawnMode } from './drawn'
 import type { Answers, Pattern, PatternId, Probe } from './types'
 
 /* ── Reading the core answers ───────────────────────────────────────────── */
@@ -465,6 +466,8 @@ export const PROBES: Probe[] = [
   dayLine({
     id: 'slump-when',
     area: 'move',
+    // Someone who drew their day has shown when it dips (plan Phase 7.4, agreed 2026-10-29).
+    askIf: (a) => drawnMode() === 'off' || drawnAnswers(a) === null,
     question: 'When does your energy dip?',
     hint: 'Drag to when it usually hits.',
     line: { from: 7 * 60, to: 22 * 60, step: 30, start: 15 * 60, said: (m) => `Energy dips around ${clockWords(m)}` },

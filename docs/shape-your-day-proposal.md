@@ -134,3 +134,22 @@ per-pattern and per-case tables come from
    at 60 it fails today (88.1%) without drawn evidence, and raising it would
    mean changing the Pinpoint maths, which is a separate proposal. The finding
    stays recorded here.
+
+## Follow-up: no "When does your energy dip?" after a drawn day (agreed 2026-10-29)
+
+Someone who drew their day has shown when it dips, so Pinpoint no longer asks
+them (`slump-when`'s `askIf`); before, a hunch could list both "Your day drops
+sharply around 4pm" and "Energy dips around 3:30pm". The people who pick "Not
+sure" instead of drawing still get it.
+
+Re-run, 60 people a case, drawn evidence on as add:
+
+| | Found within 12 | Worst case | Mean questions | Wrong guesses a consult | Nothing going on: most questions |
+| --- | --- | --- | --- | --- | --- |
+| Before (no drawn evidence) | 88.1% | 76.7% | 5.43 | 0.497 | 10 |
+| Add, still asking it | 90.3% | 81.7% | 5.17 | 0.426 | 8 |
+| **Add, skipping it** | **90.2%** | **81.7%** | **5.25** | **0.443** | **8** |
+
+The 3pm crash, found within 12: 203 of 240 skipping it, 205 asking it, 193
+before. Every check in `drawn-evidence.test.ts` still holds, and
+`twenty-questions.test.ts` (no drawn days) is unchanged.
