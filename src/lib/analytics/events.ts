@@ -160,6 +160,9 @@ export const CONSULT_EVENTS = [
   // Pinpoint (plan v5 §11).
   'consult_upgrade',
   'consult_got_you',
+  // The read's story (plan Phase 8): which card, and skipping to the stack.
+  'consult_story_card',
+  'consult_story_skip',
 ] as const
 
 export type ConsultEvent = (typeof CONSULT_EVENTS)[number]

@@ -18,6 +18,7 @@ import { countsByType, sessionsPerWeek } from './training'
 import type { ConsultAnswers, Daylight } from './types'
 import type { RingSlot } from './flight'
 import { CURVE_HOURS, CURVE_MAX, curveWords, readCurve } from './day-curve'
+import type { RingChange } from './habits'
 
 /** The day's curve round the ring: 06:00 to midnight, its level as distance from the middle. */
 export function curveOnRing(points: readonly number[], inner = 24, outer = 38): string {
@@ -115,6 +116,40 @@ export function dayRingLines(d: DayRingData): { slot: RingSlot; text: string }[]
     lines.push({ slot: 'energy', text: text.charAt(0).toLowerCase() + text.slice(1) })
   }
   return lines
+}
+
+/**
+ * A "Try this week" fix on the ring (plan Phase 8, the read's story): their
+ * day as it would be. Lights out earlier stretches the sleep arc; the last cup
+ * slides earlier; time outside or a walk is a new dashed arc where it would
+ * go. A fix with nothing to plot (a protein breakfast, fluids round training)
+ * leaves the ring as it is.
+ */
+export interface RingTry {
+  data: DayRingData
+  /** The mark it moves, or the slot of the arc it adds. */
+  slot: RingSlot | null
+  /** An arc it adds: from and to, minutes past midnight. */
+  arc: { from: number; to: number } | null
+  /** It, in words, for the ring's legend. */
+  text: string | null
+}
+
+export function withChange(d: DayRingData, change: RingChange | null): RingTry {
+  const none: RingTry = { data: d, slot: null, arc: null, text: null }
+  if (!change) return none
+  switch (change.kind) {
+    case 'lights-out':
+      return d.sleep ? { data: { ...d, sleep: { ...d.sleep, bed: change.at } }, slot: 'sleep', arc: null, text: `Try: lights out by ${clock(change.at)}` } : none
+    case 'last-caffeine':
+      return { data: { ...d, caffeine: { at: change.at } }, slot: 'caffeine', arc: null, text: `Try: last coffee by ${clock(change.at)}` }
+    case 'daylight':
+      return { data: d, slot: 'daylight', arc: { from: change.at, to: change.at + change.minutes }, text: `Try: outside at ${clock(change.at)}, ${change.minutes} minutes` }
+    case 'move':
+      return { data: d, slot: 'training', arc: { from: change.at, to: change.at + change.minutes }, text: `Try: moving at ${clock(change.at)}, ${change.minutes} minutes` }
+    default:
+      return none
+  }
 }
 
 export function dayRingText(d: DayRingData): string {

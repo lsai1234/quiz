@@ -1,7 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { DAYLIGHT_SPAN, ENERGY_SPAN, arcPath, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt } from '@/lib/consult/day-ring'
+import { DAYLIGHT_SPAN, ENERGY_SPAN, arcPath, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt, withChange } from '@/lib/consult/day-ring'
+import type { RingChange } from '@/lib/consult/habits'
+import { springTransition } from '@/lib/consult/motion'
 import { CURVE_HOURS } from '@/lib/consult/day-curve'
 import type { ConsultAnswers } from '@/lib/consult/types'
 
@@ -32,9 +34,10 @@ const SWATCH = {
   energy: 'var(--amp-accent)',
 } as const
 
-export function DayRing({ answers, size = 'sm', children }: { answers: ConsultAnswers; size?: 'sm' | 'lg'; children?: ReactNode }) {
-  const d = dayRingData(answers)
-  const text = dayRingText(d)
+export function DayRing({ answers, size = 'sm', change = null, children }: { answers: ConsultAnswers; size?: 'sm' | 'lg'; /** A "Try this week" fix, drawn as their day would be with it. */ change?: RingChange | null; children?: ReactNode }) {
+  const tried = withChange(dayRingData(answers), change)
+  const d = tried.data
+  const text = tried.text ? `${dayRingText(d)}. ${tried.text}` : dayRingText(d)
   const lg = size === 'lg'
   const ring = (
     <span
@@ -66,7 +69,23 @@ export function DayRing({ answers, size = 'sm', children }: { answers: ConsultAn
         {d.daylight && (
           <path data-flight-slot="daylight" className="amp-anim-fade" d={arcPath(DAYLIGHT_SPAN.from, DAYLIGHT_SPAN.to, R)} fill="none" stroke={SWATCH.daylight} strokeWidth="11" strokeLinecap="round" strokeOpacity={0.2 + d.daylight.level * 0.6} />
         )}
-        {d.sleep && <path data-flight-slot="sleep" className="amp-anim-fade" d={arcPath(d.sleep.bed, d.sleep.wake, R)} fill="none" stroke={SWATCH.sleep} strokeWidth="6" strokeLinecap="round" />}
+        {d.sleep && (
+          // The arc's shape as a style too, so a fix that moves bedtime stretches it rather than jumping (where the browser animates `d`).
+          <path
+            data-flight-slot="sleep"
+            data-tried={tried.slot === 'sleep' || undefined}
+            className="amp-anim-fade"
+            d={arcPath(d.sleep.bed, d.sleep.wake, R)}
+            fill="none"
+            stroke={SWATCH.sleep}
+            strokeWidth="6"
+            strokeLinecap="round"
+            style={{ d: `path("${arcPath(d.sleep.bed, d.sleep.wake, R)}")`, transition: springTransition('d') } as React.CSSProperties}
+          />
+        )}
+        {tried.arc && tried.slot && (
+          <path data-tried data-ring-try={tried.slot} className="amp-anim-fade" d={arcPath(tried.arc.from, tried.arc.to, R)} fill="none" stroke={SWATCH[tried.slot]} strokeWidth="4" strokeLinecap="round" strokeDasharray="3 3" />
+        )}
         {d.energy && 'points' in d.energy && (
           <g data-flight-slot="energy" className="amp-anim-fade">
             <path d={curveOnRing(d.energy.points)} fill="none" stroke={SWATCH.energy} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -89,7 +108,10 @@ export function DayRing({ answers, size = 'sm', children }: { answers: ConsultAn
         )}
         {d.caffeine &&
           ('at' in d.caffeine ? (
-            <circle data-flight-slot="caffeine" className="amp-anim-fade" {...xy(pointAt(d.caffeine.at, R))} r="4" fill={SWATCH.caffeine} stroke="var(--amp-ground)" strokeWidth="1.5" />
+            // Placed by transform, so a fix that moves the last cup slides it there.
+            <g data-flight-slot="caffeine" data-tried={tried.slot === 'caffeine' || undefined} className="amp-anim-fade" style={{ transform: `translate(${pointAt(d.caffeine.at, R).x}px, ${pointAt(d.caffeine.at, R).y}px)`, transition: springTransition('transform') }}>
+              <circle r="4" fill={SWATCH.caffeine} stroke="var(--amp-ground)" strokeWidth="1.5" />
+            </g>
           ) : (
             // No time to put it at: the count, as a tally under Amp.
             <g data-flight-slot="caffeine" className="amp-anim-fade">
@@ -119,7 +141,12 @@ export function DayRing({ answers, size = 'sm', children }: { answers: ConsultAn
   return (
     <figure className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)' }}>
       {ring}
-      <figcaption>
+      <figcaption className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
+        {tried.text && (
+          <p data-ring-try-text style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-accent)', fontWeight: 'var(--amp-weight-bold)' }}>
+            {tried.text}
+          </p>
+        )}
         {lines.length ? (
           <ul className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }} aria-label="Your day, in words">
             {lines.map((l) => (

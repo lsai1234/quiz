@@ -37,7 +37,7 @@ describe('V6 lost-signal fallback', () => {
       pickFirstOptionAndNext()
       await settle()
     }
-    fireEvent.click(await screen.findByRole('button', { name: 'See my stack' }, { timeout: DURATION.chargeUp + 2000 }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip to my stack' }, { timeout: DURATION.chargeUp + 2000 }))
     expect(onHandoff).toHaveBeenCalled()
   })
 

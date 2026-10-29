@@ -477,6 +477,16 @@
   animation: amp-pulse var(--amp-duration-streak) var(--amp-ease-out) both;
 }
 
+/* The read's story (plan Phase 8): the day ring assembles, a mark at a time. */
+[data-story-ring] [data-flight-slot] {
+  animation-duration: var(--amp-duration-scene);
+}
+[data-story-ring] [data-flight-slot="sleep"] { animation-delay: calc(var(--amp-duration-tap) * 1); }
+[data-story-ring] [data-flight-slot="daylight"] { animation-delay: calc(var(--amp-duration-tap) * 2); }
+[data-story-ring] [data-flight-slot="training"] { animation-delay: calc(var(--amp-duration-tap) * 3); }
+[data-story-ring] [data-flight-slot="caffeine"] { animation-delay: calc(var(--amp-duration-tap) * 4); }
+[data-story-ring] [data-flight-slot="energy"] { animation-delay: calc(var(--amp-duration-tap) * 5); }
+
 /* The constellation's names, in its own units; a size up in comfort mode. */
 .amp-consult [data-constellation] {
   --amp-star-text: 9px;

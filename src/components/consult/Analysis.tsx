@@ -34,8 +34,10 @@ import { READ_COPY } from '@/lib/consult/read-copy'
  * shows the last step still working rather than a blank screen. Under reduced
  * motion the steps are ticked as soon as the data is in.
  *
- * Fully charged shows "Your read" (Phase 5), and "See my stack" opens the
- * results page, already loaded.
+ * Fully charged opens the read's story (plan Phase 8, `story/ReadStory`),
+ * loaded during the charge-up so it's there when the battery is full; its
+ * last card, or "Skip to my stack" on any, opens the results page, already
+ * loaded. Until the story's code has arrived, "Your read" as before.
  */
 
 type LoadProducts = () => Promise<CatalogueProduct[]>
@@ -131,6 +133,20 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
   }, [full])
 
   const retry = useCallback(() => setAttempt((n) => n + 1), [])
+
+  // The read's story: fetched as the charge-up starts, never on the first scene's path.
+  const [story, setStory] = useState<typeof import('./story/ReadStory') | null>(null)
+  useEffect(() => {
+    let live = true
+    void import('./story/ReadStory').then((m) => live && setStory(m))
+    return () => {
+      live = false
+    }
+  }, [])
+
+  if (full && bundle && story) {
+    return <story.ReadStory bundle={bundle} state={state} onDone={() => onDone(bundle)} />
+  }
 
   if (error) {
     return (

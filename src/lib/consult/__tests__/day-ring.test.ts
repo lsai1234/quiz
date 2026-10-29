@@ -1,4 +1,4 @@
-import { angleOf, arcPath, clock, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt } from '../day-ring'
+import { angleOf, arcPath, clock, curveOnRing, dayRingData, dayRingLines, dayRingText, pointAt, withChange } from '../day-ring'
 import { PRESET_POINTS } from '../day-curve'
 import { trainingDays } from '../training'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../types'
@@ -82,5 +82,32 @@ describe('the day they drew (plan Phase 7.4)', () => {
 
   it('says the shape in words', () => {
     expect(dayRingLines(dayRingData(drawn)).find((l) => l.slot === 'energy')?.text).toBe('energy dips around 16:00')
+  })
+})
+
+describe('a "Try this week" fix on the ring (plan Phase 8)', () => {
+  const day = dayRingData(told({ ...FULL, ...TIMES }))
+
+  it('stretches the sleep arc to the earlier lights out', () => {
+    const t = withChange(day, { kind: 'lights-out', at: 22 * 60 + 30 })
+    expect(t.data.sleep).toEqual({ bed: 22 * 60 + 30, wake: 6 * 60 })
+    expect(t.slot).toBe('sleep')
+    expect(t.text).toBe('Try: lights out by 22:30')
+  })
+
+  it('slides the last cup earlier', () => {
+    const t = withChange(day, { kind: 'last-caffeine', at: 14 * 60, from: 16 * 60 })
+    expect(t.data.caffeine).toEqual({ at: 14 * 60 })
+    expect(t.text).toBe('Try: last coffee by 14:00')
+  })
+
+  it('adds time outside, or a walk, as an arc where it would go', () => {
+    expect(withChange(day, { kind: 'daylight', at: 12 * 60 + 30, minutes: 20 })).toMatchObject({ slot: 'daylight', arc: { from: 750, to: 770 } })
+    expect(withChange(day, { kind: 'move', at: 7 * 60, minutes: 10 })).toMatchObject({ slot: 'training', arc: { from: 420, to: 430 } })
+  })
+
+  it('leaves the ring as it is for a fix with nothing to plot', () => {
+    expect(withChange(day, { kind: 'protein-meal', meal: 'breakfast', grams: 25 })).toEqual({ data: day, slot: null, arc: null, text: null })
+    expect(withChange(day, null).data).toBe(day)
   })
 })

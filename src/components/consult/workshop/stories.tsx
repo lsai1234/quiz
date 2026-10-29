@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { fly, settledBox, type FlightToken, type RingSlot } from '@/lib/consult/flight'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { SceneShell } from '../SceneShell'
@@ -20,6 +20,12 @@ import { curveWords, readCurve } from '@/lib/consult/day-curve'
 import { clock } from '@/lib/consult/day-ring'
 import { Constellation } from '../pinpoint/Constellation'
 import { CupCounter } from '../scenes/CupCounter'
+import { ReadStory } from '../story/ReadStory'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { initialFlow } from '@/lib/consult/flow'
+import { prepareResults } from '@/lib/consult/results'
+import { offerFitFor } from '@/lib/consult/offer-fit'
+import { DEFAULT_OFFER, claimChoicesFor, type OfferSettings } from '@/lib/offer/settings'
 import { pinpointView } from '@/lib/consult/pinpoint/screen'
 import type { PinpointStep } from '@/lib/consult/pinpoint/types'
 
@@ -414,6 +420,73 @@ function CupStory() {
   )
 }
 
+/* ── Your Read, the story (plan Phase 8) ───────────────────────────────── */
+
+/** THINKER, finished: their day drawn, two patterns pinpointed, the last cup at 16:00. */
+const READER: ConsultAnswers = {
+  ...THINKER,
+  energyCurve: { points: [6, 7, 8, 7, 4, 3, 5, 6, 5, 4], how: 'preset', preset: 'dip-3pm' },
+  circuit: { flags: [], none: true },
+  healthConsent: { accepted: true, version: 'workshop', at: '2026-10-29T00:00:00Z' },
+  pinpoint: {
+    started: true,
+    stopped: false,
+    steps: [
+      ...THINK_STEPS.slice(1).map((s) => s.step!),
+      { kind: 'probe', probe: 'last-caffeine', answer: { main: 'late-afternoon' }, minutes: 16 * 60, stage: 'pinpoint' },
+    ],
+  },
+}
+
+/**
+ * The workshop's own offer: a hero and a gift switched on, so Start here shows
+ * every part. Workshop only; the consult reads the shop's settings.
+ */
+const DEMO_OFFER: OfferSettings = {
+  heroEnabled: true,
+  heroes: Object.fromEntries(
+    ['chrgd-omega-3', 'chrgd-pre-workout', 'chrgd-ashwagandha', 'chrgd-collagen', 'chrgd-magnesium', 'chrgd-clear-whey', 'chrgd-creatine'].map((id) => {
+      const product = MOCK_CATALOGUE.find((p) => p.id === id)!
+      return [id, { productId: id, hero: true, legalGB: true, novelFood: 'not-novel' as const, safetyReviewed: true, safetyNotes: 'Workshop.', claimId: claimChoicesFor(product.swapGroup)[0]?.id ?? 'none', checkedBy: 'Workshop', checkedAt: new Date().toISOString().slice(0, 10), updatedBy: null, updatedAt: null }]
+    }),
+  ),
+  bonus: { ...DEFAULT_OFFER.bonus, enabled: true, pool: ['chrgd-vitamin-d3-k2', 'chrgd-electrolytes', 'chrgd-vitamin-c-zinc'], minSubtotal: 40, floorPounds: 1, floorPct: 0.02 },
+}
+
+/** The story as it opens after the charge-up, for someone with patterns found and someone without. */
+function ReadStoryStory() {
+  const [found, setFound] = useState<'found' | 'none'>('found')
+  const [done, setDone] = useState(false)
+  const flow = useMemo(() => {
+    const answers: ConsultAnswers = found === 'found' ? READER : { ...READER, route: 'deep', pinpoint: null }
+    const state = { ...initialFlow(`c_story${found}`, 0, answers), phase: 'analysis' as const, sceneId: 'circuit' as const }
+    return { state, bundle: prepareResults(state, MOCK_CATALOGUE, new Date('2026-10-29T10:00:00Z'), offerFitFor) }
+  }, [found])
+  return (
+    <div data-story-frame>
+      <div style={{ padding: 'var(--amp-space-3) var(--amp-gutter) 0' }}>
+        <Segmented<'found' | 'none'>
+          label="Their consult"
+          options={[
+            { value: 'found', label: 'Pinpointed' },
+            { value: 'none', label: 'Nothing pinpointed' },
+          ]}
+          value={found}
+          onChange={(v) => (setFound(v), setDone(false))}
+        />
+      </div>
+      {done ? (
+        <div style={{ padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+          <p style={{ color: 'var(--amp-ink-2)' }}>On to the results page.</p>
+          <QuietLink onClick={() => setDone(false)}>Back to the story</QuietLink>
+        </div>
+      ) : (
+        <ReadStory key={found} bundle={flow.bundle} state={flow.state} onDone={() => setDone(true)} offer={DEMO_OFFER} />
+      )}
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -433,4 +506,5 @@ export const STORIES: Story[] = [
   { id: 'day-curve', title: 'Shape your day', render: () => <DayCurveStory /> },
   { id: 'constellation', title: 'Watch Amp think', render: () => <ConstellationStory /> },
   { id: 'cups', title: 'Cup stack', render: () => <CupStory /> },
+  { id: 'read-story', title: 'Your read', render: () => <ReadStoryStory /> },
 ]

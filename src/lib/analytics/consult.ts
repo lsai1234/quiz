@@ -68,6 +68,14 @@ export const consultFunnel = {
   gotYou(p: { answer: GotYou; found: number }) {
     consultEvent('consult_got_you', { answer: p.answer, found: p.found })
   },
+  /** A card of the read's story seen: which, and where it sits. Never what's on it. */
+  storyCard(p: { card: string; index: number; of: number }) {
+    consultEvent('consult_story_card', { card: p.card, index: p.index, of: p.of })
+  },
+  /** Straight to the stack from the story, and from which card. */
+  storySkip(p: { card: string; index: number }) {
+    consultEvent('consult_story_skip', { card: p.card, index: p.index })
+  },
 }
 
 export type GotYou = 'spot-on' | 'mostly' | 'not-really'

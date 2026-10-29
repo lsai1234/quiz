@@ -82,7 +82,7 @@ describe('H10 change my answers', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip to my stack' }))
     const before = useQuizStore.getState().stackBlueprint!.id
     first.unmount()
 
@@ -102,7 +102,7 @@ describe('H10 change my answers', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip to my stack' }))
     expect(onHandoff).toHaveBeenCalledTimes(1)
     // The same consult, updated — not a new one.
     expect(useQuizStore.getState().stackBlueprint!.id).toBe(before)
@@ -162,7 +162,7 @@ describe('Phase 1: a hard reload on the results page', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip to my stack' }))
     const before = useQuizStore.getState()
     const stack = before.stackBlueprint!.slots.map((s) => s.selectedProductId)
     first.unmount()

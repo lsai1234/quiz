@@ -421,3 +421,89 @@ test('workshop: a cup drops in and settles; from four, the stack wobbles', async
   expect(Math.max(...angles.map(Math.abs))).toBeGreaterThan(1)
   expect(Math.abs(angles.at(-1)!)).toBeLessThan(0.1)
 })
+
+/* ── Your Read, the story (plan Phase 8) ───────────────────────────────── */
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: your read as a story, card by card (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Your read')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const story = page.getByRole('region', { name: 'Your read' })
+    const cards: string[] = []
+    for (let i = 0; i < 8; i++) {
+      const card = (await story.getAttribute('data-story'))!
+      cards.push(card)
+      await page.waitForTimeout(mode === 'reduced' ? 100 : 900)
+      await expect(story).toHaveScreenshot(`read-story-${card}-${mode}.png`, STILL)
+      if (card === 'share') break
+      await story.getByRole('button', { name: 'Next', exact: true }).click()
+    }
+    expect(cards).toEqual(['day', 'spotted', 'dots', 'try', 'start', 'share'])
+  })
+}
+
+test('workshop: the story moves by tap and swipe, a fix redraws the ring, and swipe down skips to the stack', async ({ page }) => {
+  await openStory(page, 'Your read')
+  const story = page.getByRole('region', { name: 'Your read' })
+  const box = (await story.boundingBox())!
+  // A tap on the right of the card goes on; on the left, back.
+  await page.mouse.click(box.x + box.width * 0.85, box.y + box.height * 0.3)
+  await expect(story).toHaveAttribute('data-story', 'spotted')
+  await page.mouse.click(box.x + box.width * 0.1, box.y + box.height * 0.3)
+  await expect(story).toHaveAttribute('data-story', 'day')
+  // Swipe left: on.
+  // On the part of the story that's on screen now (tapping a fix can scroll the page).
+  const swipe = async (dx: number, dy: number) => {
+    const b = (await story.boundingBox())!
+    const view = page.viewportSize()!
+    const top = Math.max(b.y, 0)
+    const y = top + (Math.min(b.y + b.height, view.height) - top) * 0.3
+    await page.mouse.move(b.x + b.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(b.x + b.width / 2 + dx, y + dy, { steps: 6 })
+    await page.mouse.up()
+  }
+  for (const card of ['spotted', 'dots', 'try']) {
+    await swipe(-120, 0)
+    await expect(story).toHaveAttribute('data-story', card)
+  }
+  // Try this week: tap a fix and the ring shows it.
+  await story.locator('[data-habit]').first().click()
+  await expect(story.locator('[data-ring-try-text]')).toHaveText(/^Try: /)
+  await expect(story.locator('[data-tried]')).not.toHaveCount(0)
+  // Swipe down: straight to the stack.
+  await swipe(0, 200)
+  await expect(page.getByText('On to the results page.')).toBeVisible()
+})
+
+test('workshop: Start here is the hero, the classics in battery cells, and the gift with its conditions', async ({ page }) => {
+  await openStory(page, 'Your read')
+  const story = page.getByRole('region', { name: 'Your read' })
+  for (let i = 0; i < 4; i++) await story.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(story).toHaveAttribute('data-story', 'start')
+  await expect(story.locator('[data-story-start] [data-cell]').first()).toBeVisible()
+  // Wherever "free" is said, its conditions are beside it and the terms a tap away.
+  const gift = story.locator('[data-story-gift]')
+  if (await gift.count()) {
+    await expect(gift).toContainText(/^Comes with a free /)
+    await expect(gift).toContainText(/While stocks last\./)
+    await expect(gift.getByRole('link', { name: 'Free gift terms' })).toHaveAttribute('href', '/legal/free-gift')
+  }
+})
+
+test('workshop: with nothing pinpointed, the story is their day, their profile in words, and the offer', async ({ page }) => {
+  await openStory(page, 'Your read')
+  await page.getByRole('radio', { name: 'Nothing pinpointed' }).click()
+  const story = page.getByRole('region', { name: 'Your read' })
+  const cards: string[] = []
+  for (let i = 0; i < 4; i++) {
+    cards.push((await story.getAttribute('data-story'))!)
+    if (cards.at(-1) === 'start') break
+    await story.getByRole('button', { name: 'Next', exact: true }).click()
+  }
+  expect(cards).toEqual(['day', 'profile', 'start'])
+  await story.getByRole('button', { name: 'Back' }).click()
+  await page.waitForTimeout(900)
+  await expect(story).toHaveScreenshot('read-story-profile-standard.png', STILL)
+})

@@ -259,7 +259,7 @@ describe('a whole Pinpoint consult', () => {
     fireEvent.click(first)
     expect(screen.queryByText(name)).toBeNull()
     pressNext()
-    fireEvent.click(await screen.findByRole('button', { name: 'See my stack' }, { timeout: 5000 }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip to my stack' }, { timeout: 5000 }))
     expect(onHandoff).toHaveBeenCalled()
   }, 20_000)
 
@@ -320,24 +320,57 @@ describe('the payoff (phase 4)', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })
-    expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Your read' })).toBeInTheDocument()
   })
 
-  it('shows Your read on Fully charged: the pattern, its line and the evidence in their words, and no products', async () => {
+  it('tells Your read as a story: your day, what I spotted in their words, the dots joined, Start here, Share', async () => {
     await chargeUp(finished())
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp * 2)
     })
-    const card = document.querySelector('article[data-pattern="wired"]') as HTMLElement
-    expect(card).toBeInTheDocument()
-    expect(within(card).getByText('Pinpointed')).toBeInTheDocument()
-    expect(within(card).getByRole('heading', { name: 'Wired and tired' })).toBeInTheDocument()
-    expect(within(card).getByText('You said')).toBeInTheDocument()
-    expect(card.querySelectorAll('li').length).toBeGreaterThan(0)
-    for (const li of Array.from(card.querySelectorAll('li'))) expect(li.textContent).toMatch(/^“.+”$/)
-    // No product lists here: they appear once, on the results page.
-    expect(screen.queryByText('What your stack does')).toBeNull()
+    const story = screen.getByRole('region', { name: 'Your read' })
+    const kicker = () => story.getAttribute('data-story')
+    expect(kicker()).toBe('day')
+    expect(document.querySelector('[data-story-ring] [data-day-ring="lg"]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    // What I spotted: the top pattern, its line, the evidence in their words. No products.
+    expect(kicker()).toBe('spotted')
+    expect(screen.getByRole('heading', { name: 'Wired and tired' })).toBeInTheDocument()
+    expect(screen.getByText('You said')).toBeInTheDocument()
+    const said = Array.from(story.querySelectorAll('li')).filter((li) => /^“/.test(li.textContent ?? ''))
+    expect(said.length).toBeGreaterThan(0)
+    for (const li of said) expect(li.textContent).toMatch(/^“.+”$/)
     expect(screen.queryByText('Essentials')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(kicker()).toBe('dots')
+    expect(screen.getByRole('img', { name: /^Pinpointed: Wired and tired\. Narrowing it down/ })).toBeInTheDocument()
+    // On through the rest with the arrow keys; Back goes back.
+    fireEvent.keyDown(story, { key: 'ArrowRight' })
+    fireEvent.keyDown(story, { key: 'ArrowLeft' })
+    expect(kicker()).toBe('dots')
+    for (let i = 0; i < 4 && kicker() !== 'share'; i++) fireEvent.keyDown(story, { key: 'ArrowRight' })
+    expect(kicker()).toBe('share')
+    expect(screen.getByRole('button', { name: 'Share my read' })).toBeInTheDocument()
+  })
+
+  it('skips straight to the stack on a swipe down, or Escape', async () => {
+    const onDone = jest.fn()
+    const skip = jest.spyOn(consultFunnel, 'storySkip')
+    render(<Analysis state={finished()} onDone={onDone} onBack={jest.fn()} loadProducts={async () => MOCK_CATALOGUE} />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    act(() => {
+      jest.advanceTimersByTime(DURATION.chargeUp * 2)
+    })
+    const story = screen.getByRole('region', { name: 'Your read' })
+    fireEvent.pointerDown(story, { clientX: 100, clientY: 100 })
+    fireEvent.pointerUp(story, { clientX: 104, clientY: 260 })
+    expect(onDone).toHaveBeenCalledTimes(1)
+    expect(skip).toHaveBeenCalledWith({ card: 'day', index: 0 })
+    fireEvent.keyDown(story, { key: 'Escape' })
+    expect(onDone).toHaveBeenCalledTimes(2)
+    skip.mockRestore()
   })
 
   it('asks "Did Amp get you?" once, and counts the answer', async () => {
@@ -346,6 +379,7 @@ describe('the payoff (phase 4)', () => {
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp * 2)
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     const group = screen.getByRole('radiogroup', { name: 'Did Amp get you?' })
     fireEvent.click(within(group).getByRole('radio', { name: 'Spot on' }))
     expect(got).toHaveBeenCalledWith({ answer: 'spot-on', found: 1 })

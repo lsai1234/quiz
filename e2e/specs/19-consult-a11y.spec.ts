@@ -74,6 +74,25 @@ async function nextByKeyboard(page: Page) {
   await page.waitForTimeout(450)
 }
 
+/**
+ * The read's story after the charge-up (plan Phase 8): every card by keyboard,
+ * with axe on each, until `stopAt` or its last card.
+ */
+async function throughStory(page: Page, where: string, stopAt?: string) {
+  const story = page.getByRole('region', { name: 'Your read' })
+  await expect(story).toBeVisible({ timeout: 20_000 })
+  for (let i = 0; i < 8; i++) {
+    const card = await story.getAttribute('data-story')
+    await audit(page, `${where}: story, ${card}`)
+    if (card === stopAt) return
+    const segments = story.locator('[data-segment]')
+    if ((await segments.count()) === (await story.locator('[data-segment="lit"]').count())) return
+    await tabTo(page, /^Next$/)
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(450)
+  }
+}
+
 /** Answers whatever scene is showing, by keyboard only. */
 async function answerByKeyboard(page: Page) {
   const h = (await heading(page).textContent()) ?? ''
@@ -239,7 +258,7 @@ test.describe('consult accessibility (U7)', () => {
     const seen: string[] = []
     for (let i = 0; i < 16; i++) {
       const h = (await heading(page).textContent()) ?? ''
-      if (/fully charged|your charge profile/i.test(h)) break
+      if (/fully charged|your charge profile|this is your day/i.test(h)) break
       if (!seen.includes(h)) {
         seen.push(h)
         await audit(page, h)
@@ -251,8 +270,7 @@ test.describe('consult accessibility (U7)', () => {
     // Performance at 25–34 is a builder's consult (batch 5).
     expect(seen).toEqual(expect.arrayContaining(['What’s your training split?', 'What are you training for?']))
     expect(seen).not.toContain('Anything harder than it used to be?')
-    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
-    await audit(page, 'fully charged')
+    await throughStory(page, 'fully charged')
     await tabTo(page, /^See my stack$/)
     await page.keyboard.press('Enter')
     await expect(page).not.toHaveURL(/\/quizv2$/)
@@ -300,7 +318,7 @@ test.describe('consult accessibility (U7)', () => {
     const seen: string[] = []
     for (let i = 0; i < 16; i++) {
       const h = (await heading(page).textContent()) ?? ''
-      if (/fully charged|your charge profile/i.test(h)) break
+      if (/fully charged|your charge profile|this is your day/i.test(h)) break
       if (!seen.includes(h)) {
         seen.push(h)
         await audit(page, `${h} (comfort)`)
@@ -320,7 +338,7 @@ test.describe('consult accessibility (U7)', () => {
     const kinds: string[] = []
     for (let i = 0; i < 70; i++) {
       const h = (await heading(page).textContent()) ?? ''
-      if (/fully charged|your charge profile/i.test(h)) break
+      if (/fully charged|your charge profile|this is your day/i.test(h)) break
       const scene = (await sceneId(page)) ?? ''
       // Into Pinpoint the way everyone is now: Amp's hunch after the core scenes (plan Phase 6).
       if (scene === 'invite') {
@@ -364,8 +382,7 @@ test.describe('consult accessibility (U7)', () => {
     // A real round: an intro, questions, a hunch confirmed, and an ending.
     expect(kinds).toEqual(expect.arrayContaining(['invite', 'intro', 'probe', 'hunch', 'done']))
     expect(seen.has('leads sheet')).toBe(true)
-    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
-    await audit(page, 'fully charged, after Pinpoint')
+    await throughStory(page, 'fully charged, after Pinpoint')
   })
 
   test('Pinpoint in comfort mode passes axe too, and waits for Next', async ({ page }) => {
@@ -380,7 +397,7 @@ test.describe('consult accessibility (U7)', () => {
     let held = false
     for (let i = 0; i < 70; i++) {
       const h = (await heading(page).textContent()) ?? ''
-      if (/fully charged|your charge profile/i.test(h)) break
+      if (/fully charged|your charge profile|this is your day/i.test(h)) break
       const scene = (await sceneId(page)) ?? ''
       // In by Amp's hunch after the core scenes, or the review's offer if it had none.
       if (scene === 'invite' || (await page.getByRole('button', { name: 'Pinpoint it' }).count())) {
@@ -417,7 +434,7 @@ test.describe('consult accessibility (U7)', () => {
       await page.waitForTimeout(450)
     }
     expect(held).toBe(true)
-    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('region', { name: 'Your read' })).toBeVisible({ timeout: 20_000 })
   })
 
   test('after "Build my stack now", the review still offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
@@ -467,7 +484,8 @@ test.describe('consult accessibility (U7)', () => {
     await expect(heading(page)).toHaveText(/what I've got/i)
     await expect(page.getByRole('button', { name: /^Circuit check: Weight-loss medication · since starting: nausea/ })).toBeVisible()
     await page.getByRole('button', { name: 'Looks right' }).click()
-    await expect(page.getByRole('button', { name: 'See my stack' })).toBeVisible({ timeout: 20_000 })
+    // The safety notes are on Start here, before the stack.
+    await throughStory(page, 'weight-loss medication', 'start')
     await expect(page.getByText(/Tell whoever prescribes your weight-loss medication/)).toBeVisible()
   })
 
