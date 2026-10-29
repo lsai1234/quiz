@@ -400,9 +400,11 @@ test.describe('consult accessibility (U7)', () => {
         seen.add(key)
         await audit(page, `${key} (comfort)`)
       }
-      if (!held && kind === 'probe' && (await page.locator('[data-scene]').getByRole('radio', { name: 'That’s me', exact: true }).count())) {
+      // The first question with answers to tap (which one depends on what Pinpoint asks).
+      const option = page.locator('[data-scene]').getByRole('radio').first()
+      if (!held && kind === 'probe' && (await option.count())) {
         // A tap picks; nothing moves until Next.
-        await page.locator('[data-scene]').getByRole('radio', { name: 'That’s me', exact: true }).click()
+        await option.click()
         await page.waitForTimeout(600)
         await expect(heading(page)).toHaveText(h)
         await audit(page, `${key}, picked (comfort)`)

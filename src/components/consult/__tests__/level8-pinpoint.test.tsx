@@ -132,6 +132,8 @@ describe('the round', () => {
     expect(screen.getByText('Does this sound like you?', { exact: true })).toBeInTheDocument()
     expect(screen.getByText('4 caffeinated drinks a day')).toBeInTheDocument()
     expect(document.querySelector('[data-reticle="locked"]')).not.toBeNull()
+    // The reticle closes in round Amp's day ring, which stays (option B).
+    expect(document.querySelector('[data-reticle="locked"] [data-day-ring] [data-amp-state="hunch"]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'That’s me' }))
     expect(screen.getByText('Knew it. Locked in.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^What I’m thinking:/ }))

@@ -523,8 +523,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           onBack={backStep(state) || onExit ? back : undefined}
           amp={
             pView ? (
+              // The reticle closes in round his day ring (option B), which keeps filling in as Pinpoint learns times.
               <Reticle focus={pinpointFocus(state.answers)} locked={pView.kind === 'hunch' || (pView.kind === 'done' && pView.found.length > 0)}>
-                <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={rig} />
+                <RingSlot ring={ringMod} answers={state.answers}>
+                  <Amp state={pView.kind === 'hunch' ? 'hunch' : ampState} lean={watching ?? 0} reaction={ampReaction?.scene !== state.sceneId ? null : ampReaction} rig={rig} />
+                </RingSlot>
               </Reticle>
             ) : mode === 'calm' ? (
               <Amp state={ampState} lean={watching ?? 0} reaction={null} />
@@ -555,32 +558,35 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             )
           }
           footer={
-            <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
-              {/* Never advertised: comfort mode switches itself on when it
-                  suits (see autoComfort), and this is only the way back. */}
-              {state.answers.comfort && (
-                <QuietLink
-                  icon="comfort"
-                  onClick={() => {
-                    consultFunnel.comfort({ on: false, via: 'toggle' })
-                    answer({ comfort: false, comfortOffered: true })
-                  }}
-                >
-                  Standard size
-                </QuietLink>
-              )}
-              {aloud.available && (
-                <QuietLink icon="speaker" aria-pressed={aloud.on} onClick={aloud.toggle}>
-                  {aloud.on ? 'Reading aloud' : 'Read aloud'}
-                </QuietLink>
-              )}
-              {/* Everyone starts the core scenes (plan Phase 6); the short way is one tap, on scene one. */}
-              {index === 1 && state.answers.route === 'deep' && !state.returnTo && (
-                <QuietLink icon="bolt" onClick={() => dispatch({ type: 'route', route: 'speed' })}>
-                  Short on time? Do the 1-minute version
-                </QuietLink>
-              )}
-            </div>
+            // Nothing to show, no bar: Pinpoint's questions need the height.
+            (state.answers.comfort || aloud.available || (index === 1 && state.answers.route === 'deep' && !state.returnTo)) ? (
+              <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
+                {/* Never advertised: comfort mode switches itself on when it
+                    suits (see autoComfort), and this is only the way back. */}
+                {state.answers.comfort && (
+                  <QuietLink
+                    icon="comfort"
+                    onClick={() => {
+                      consultFunnel.comfort({ on: false, via: 'toggle' })
+                      answer({ comfort: false, comfortOffered: true })
+                    }}
+                  >
+                    Standard size
+                  </QuietLink>
+                )}
+                {aloud.available && (
+                  <QuietLink icon="speaker" aria-pressed={aloud.on} onClick={aloud.toggle}>
+                    {aloud.on ? 'Reading aloud' : 'Read aloud'}
+                  </QuietLink>
+                )}
+                {/* Everyone starts the core scenes (plan Phase 6); the short way is one tap, on scene one. */}
+                {index === 1 && state.answers.route === 'deep' && !state.returnTo && (
+                  <QuietLink icon="bolt" onClick={() => dispatch({ type: 'route', route: 'speed' })}>
+                    Short on time? Do the 1-minute version
+                  </QuietLink>
+                )}
+              </div>
+            ) : undefined
           }
         >
           {comfortNote === state.sceneId && (

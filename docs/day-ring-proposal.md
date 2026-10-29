@@ -1,9 +1,15 @@
 # The day ring: how it sits with the reticle and the battery
 
-Amp Consult and offer plan, Phase 7.3 asks to propose this. What's built is
-option A in each case, the least disruptive; the recommendation is marked.
+Amp Consult and offer plan, Phase 7.3 asks to propose this. The
+recommendation is marked in each case.
 
-## What's built
+**Decided 2026-10-29:** reticle **B**, built: the ring stays on Pinpoint's
+screens and the reticle's arcs close in round it (`pinpoint/Reticle.tsx`).
+Rather than growing the slot to 56px, the slot stays 48px and the arcs draw
+4px out into the space round it: at 56px a hunch with three reasons scrolled
+on a 390×664 phone. Battery **A**: kept in the top bar.
+
+## What was built first
 
 - On every core scene and the review, Amp sits inside his day ring, a
   24-hour dial in the reticle's footprint (48px), so no screen moved. It
@@ -30,6 +36,7 @@ option A in each case, the least disruptive; the recommendation is marked.
 | **A (built, recommended)** | Keep the battery in the top bar. | It's progress and navigation (tap a section to jump to it); the ring is their day, not how far through they are. | Two small graphics at the top of the screen. |
 | B | Retire the battery; the ring's rim fills as progress. | One graphic. | Loses jump-to-section, and mixes "how far through" with "what your day looks like". |
 
-## To decide
+## Decided
 
-Reticle: A (as built) or B. Battery: keep (A) or retire (B).
+Reticle: B, built 2026-10-29; Pinpoint's questions still fit both phone sizes
+without scrolling (`19-consult-a11y.spec.ts`). Battery: kept (A).

@@ -368,8 +368,9 @@ export function DayLineFormat({ probe, comfort, selected, pick }: FormatProps) {
   const commit = () => pick(extra ? { answer: { [item.key]: extra } } : { answer: { [item.key]: bucketAt(spec, minutes) }, minutes })
 
   return (
-    <div className="flex flex-col" style={{ gap: 'var(--amp-space-5)' }}>
-      <div style={{ paddingTop: 'var(--amp-space-6)' }}>
+    <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+      {/* Room above the track for the "About 3pm" label. */}
+      <div style={{ paddingTop: 'var(--amp-space-5)' }}>
         <div
           ref={track}
           role="slider"
@@ -395,7 +396,7 @@ export function DayLineFormat({ probe, comfort, selected, pick }: FormatProps) {
           onPointerCancel={() => setDragging(false)}
           className="relative"
           style={{
-            height: comfort ? 'calc(var(--amp-target) * 1.6)' : 'calc(var(--amp-target) * 1.3)',
+            height: comfort ? 'calc(var(--amp-target) * 1.6)' : 'calc(var(--amp-target) * 1.05)',
             borderRadius: 'var(--amp-radius-tile)',
             border: 'var(--amp-hairline) solid var(--amp-edge-strong)',
             background: 'linear-gradient(90deg, var(--amp-glass-solid), var(--amp-sun-fill) 35%, var(--amp-sun-fill) 60%, var(--amp-glass-solid))',
@@ -441,7 +442,7 @@ export function DayLineFormat({ probe, comfort, selected, pick }: FormatProps) {
             </span>
           )}
         </div>
-        <div aria-hidden className="flex justify-between uppercase" style={{ ...eyebrow, marginTop: 'var(--amp-space-2)' }}>
+        <div aria-hidden className="flex justify-between uppercase" style={{ ...eyebrow, marginTop: 'var(--amp-space-1)' }}>
           {ticks.map((m) => (
             <span key={m}>{clockWords(m % (24 * 60))}</span>
           ))}

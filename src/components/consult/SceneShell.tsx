@@ -198,7 +198,8 @@ export function SceneShell({
       </div>
 
       {/* ── Action bar ──────────────────────────────────────────────────── */}
-      {(action || footer) && (
+      {/* Only when there's something in it: an empty bar's padding is height a phone hasn't got. */}
+      {(action || footer || moreBelow) && (
         <footer
           className="sticky bottom-0 flex flex-col items-stretch"
           style={{
