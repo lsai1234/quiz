@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { consultFontVars } from './fonts'
 import { Glyph } from './Glyph'
-import { NextButton, QuietLink } from './controls'
+import { NextButton, QuietLink, Switch } from './controls'
+import { setSounds, soundsOn } from '@/lib/consult/sound-switch'
 import { voiceSupported } from './HoldToTalk'
 import { CONSULT_FEATURES } from '@/lib/consult/features'
 import { speechSupported } from './useReadAloud'
@@ -39,6 +40,9 @@ export function FounderPreview({ aiConfigured }: Props) {
   const [support, setSupport] = useState<{ voice: boolean; speech: boolean } | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
   const [testing, setTesting] = useState(false)
+  // UI sounds (plan Phase 7.6): off by default, here while they're tried out.
+  const [sounds, setSoundsState] = useState(false)
+  useEffect(() => setSoundsState(soundsOn()), [])
 
   // The consult below fills the screen less this strip, so it doesn't start
   // one strip's height taller than the phone.
@@ -184,6 +188,16 @@ export function FounderPreview({ aiConfigured }: Props) {
                 </li>
               ))}
             </ul>
+
+            <Switch
+              label="UI sounds"
+              sub="Soft blips on taps and a knock as cups land. Off by default; on this device only, while we see if they add anything."
+              on={sounds}
+              onToggle={() => {
+                setSounds(!sounds)
+                setSoundsState(!sounds)
+              }}
+            />
 
             <NextButton ready={!testing} nudge="Testing…" onClick={() => void test()}>
               <span className="inline-flex items-center" style={{ gap: 'var(--amp-space-2)' }}>

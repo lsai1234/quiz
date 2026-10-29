@@ -14,7 +14,6 @@ import { AgeWheel } from './AgeWheel'
 import { TrainingWeek } from './TrainingWeek'
 import { SleepWindow } from './SleepWindow'
 import { SunArc } from './SunArc'
-import { CupCounter } from './CupCounter'
 import { PlatePicker } from './PlatePicker'
 import { BodyMap } from './BodyMap'
 import { ShelfCheck } from './ShelfCheck'
@@ -69,7 +68,8 @@ export interface SceneEntry {
 /**
  * Scenes kept out of the first scene's JavaScript (the first-scene budget):
  * nobody starts on Pinpoint any more (plan Phase 6), the protein check comes
- * after the plate, and the day's curve comes after training. They're fetched once the consult is under way
+ * after the plate, the day's curve after training, and the cups (with their
+ * physics) after sleep. They're fetched once the consult is under way
  * (`preloadLaterScenes`), so they're there before anyone reaches them. Under
  * Jest they load at once, so a test drives them like any other scene; the
  * condition is a build-time constant, so the bundle never carries that path.
@@ -82,6 +82,10 @@ const DayCurve: ComponentType<SceneProps> =
   process.env.NODE_ENV === 'test'
     ? (require('./DayCurve') as typeof import('./DayCurve')).DayCurve
     : dynamic(() => import('./DayCurve').then((m) => m.DayCurve))
+const CupCounter: ComponentType<SceneProps> =
+  process.env.NODE_ENV === 'test'
+    ? (require('./CupCounter') as typeof import('./CupCounter')).CupCounter
+    : dynamic(() => import('./CupCounter').then((m) => m.CupCounter))
 const ProteinScene: ComponentType<SceneProps> =
   process.env.NODE_ENV === 'test'
     ? (require('./ProteinScene') as typeof import('./ProteinScene')).ProteinScene
@@ -92,6 +96,7 @@ export function preloadLaterScenes(): void {
   void import('../pinpoint/PinpointScene')
   void import('./ProteinScene')
   void import('./DayCurve')
+  void import('./CupCounter')
 }
 
 function Review({ order, answers, onEdit, onAnswer, onUpgrade, onRecheck }: SceneProps) {

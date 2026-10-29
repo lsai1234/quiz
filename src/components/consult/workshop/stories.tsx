@@ -19,6 +19,7 @@ import { summarise } from '@/lib/consult/summary'
 import { curveWords, readCurve } from '@/lib/consult/day-curve'
 import { clock } from '@/lib/consult/day-ring'
 import { Constellation } from '../pinpoint/Constellation'
+import { CupCounter } from '../scenes/CupCounter'
 import { pinpointView } from '@/lib/consult/pinpoint/screen'
 import type { PinpointStep } from '@/lib/consult/pinpoint/types'
 
@@ -401,6 +402,18 @@ function ConstellationStory() {
   )
 }
 
+/* ── Small delights (plan Phase 7.6) ───────────────────────────────────── */
+
+/** The caffeine scene's cups: tap a plus and watch it drop; the fourth on a stack sets it wobbling. */
+function CupStory() {
+  const [answers, setAnswers] = useState<ConsultAnswers>({ ...EMPTY_ANSWERS, caffeine: { coffee: 3, tea: 1, energy: 0 } })
+  return (
+    <div data-story="cups" style={{ padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <CupCounter scene={sceneDef('caffeine')} answers={answers} onAnswer={(patch) => setAnswers((a) => ({ ...a, ...patch }))} comfort={false} order={[]} onEdit={() => {}} />
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -419,4 +432,5 @@ export const STORIES: Story[] = [
   { id: 'day-ring', title: 'Day ring', render: () => <DayRingStory /> },
   { id: 'day-curve', title: 'Shape your day', render: () => <DayCurveStory /> },
   { id: 'constellation', title: 'Watch Amp think', render: () => <ConstellationStory /> },
+  { id: 'cups', title: 'Cup stack', render: () => <CupStory /> },
 ]

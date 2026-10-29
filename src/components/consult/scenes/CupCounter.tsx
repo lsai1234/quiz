@@ -2,17 +2,19 @@
 
 import type { CaffeineAnswer } from '@/lib/consult/types'
 import { caffeineCount } from '@/lib/consult/reactions'
-import { haptic, staggerStyle } from '@/lib/consult/motion'
+import { haptic } from '@/lib/consult/motion'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { Glyph, type GlyphName } from '../Glyph'
 import { Chip, Hint } from '../controls'
 import type { SceneProps } from './registry'
+import { CupStack } from './CupStack'
 
 /**
  * The cup counter (build C8).
  *
  * Tap to stack coffees, teas and energy drinks. The day's count shows twice:
- * as a big number, and as a row of cups you can see growing. It feeds the
+ * as a big number, and as stacks of cups you can see growing (`CupStack`:
+ * they drop in, and wobble from four). It feeds the
  * stimulant rules — four or more a day and nothing with caffeine goes in the
  * stack, which the scene says out loud so it isn't a surprise later.
  *
@@ -45,8 +47,6 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
     onAnswer({ caffeine: { ...value, [key]: next } })
   }
 
-  const cups = DRINKS.flatMap((d) => Array.from({ length: value[d.key] }, (_, i) => ({ ...d, n: i })))
-
   return (
     <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)' }}>
       <div className="flex flex-col items-center" aria-live="polite">
@@ -67,19 +67,9 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
         </span>
       </div>
 
-      {/* The stack, as cups. */}
-      <div aria-hidden className="flex flex-wrap items-end justify-center" style={{ gap: 'var(--amp-space-1)', minHeight: 'var(--amp-space-10)', maxWidth: '100%' }}>
-        {cups.length === 0 ? (
-          <span style={{ color: 'var(--amp-ink-3)' }}>
-            <Glyph name="cup" size={32} />
-          </span>
-        ) : (
-          cups.map((c, i) => (
-            <span key={`${c.key}-${c.n}`} className="amp-anim-rise" style={{ color: c.tone, ...staggerStyle(0, reduced) }} data-cup={c.key}>
-              <Glyph name={c.icon} size={i < 12 ? 32 : 24} />
-            </span>
-          ))
-        )}
+      {/* The stack, as cups (plan Phase 7.6): they drop in, settle, and wobble from four. */}
+      <div className="flex items-end justify-center" style={{ minHeight: 'var(--amp-space-10)', maxWidth: '100%' }}>
+        <CupStack value={value} drinks={DRINKS} reduced={reduced} />
       </div>
 
       <ul className="flex w-full flex-col" style={{ gap: 'var(--amp-space-2)' }}>

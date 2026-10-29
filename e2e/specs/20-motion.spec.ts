@@ -372,3 +372,52 @@ test('workshop: an answer sends pulses into what it moved, and the stars move', 
   await expect(story.locator('[data-constellation="lg"] [data-pulse="wired"]')).toHaveCount(1)
   expect(await story.locator('[data-constellation="lg"] [data-pulse="wired"]').evaluate((el) => el.getAnimations().length)).toBe(1)
 })
+
+/* ── Small delights (plan Phase 7.6) ───────────────────────────────────── */
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: the cups as a physical stack (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Cup stack')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const story = page.locator('[data-story="cups"]')
+    await story.getByRole('button', { name: 'Add a coffee' }).click()
+    await expect(story.locator('[data-stack="coffee"] [data-cup]')).toHaveCount(4)
+    // Landed and still: every cup in its place, every stack upright.
+    await expect
+      .poll(() => story.evaluate((el) => [...el.querySelectorAll<HTMLElement>('[data-cup], [data-stack]')].every((c) => /^(|translateY\(0(\.0)?px\)|rotate\(-?0\.0\d?deg\))$/.test(c.style.transform))))
+      .toBe(true)
+    await expect(story).toHaveScreenshot(`cups-${mode}.png`, STILL)
+  })
+}
+
+test('workshop: a cup drops in and settles; from four, the stack wobbles', async ({ page }) => {
+  await openStory(page, 'Cup stack')
+  const story = page.locator('[data-story="cups"]')
+  // Sample the newest cup and its stack each frame for a second after the tap.
+  const seen = story.evaluate(
+    (el) =>
+      new Promise<{ ys: number[]; angles: number[] }>((done) => {
+        const ys: number[] = []
+        const angles: number[] = []
+        const start = performance.now()
+        const look = () => {
+          const cups = el.querySelectorAll<HTMLElement>('[data-stack="coffee"] [data-cup]')
+          const top = cups[cups.length - 1]
+          ys.push(Number(/translateY\((-?[\d.]+)px\)/.exec(top?.style.transform ?? '')?.[1] ?? 0))
+          const stack = el.querySelector<HTMLElement>('[data-stack="coffee"]')!
+          angles.push(Number(/rotate\((-?[\d.]+)deg\)/.exec(stack.style.transform)?.[1] ?? 0))
+          if (performance.now() - start < 1200) requestAnimationFrame(look)
+          else done({ ys, angles })
+        }
+        requestAnimationFrame(look)
+      }),
+  )
+  await story.getByRole('button', { name: 'Add a coffee' }).click()
+  const { ys, angles } = await seen
+  expect(Math.min(...ys)).toBeLessThan(-30)
+  expect(ys.at(-1)).toBe(0)
+  // The fourth coffee: the stack leans one way and back, then stands still.
+  expect(Math.max(...angles.map(Math.abs))).toBeGreaterThan(1)
+  expect(Math.abs(angles.at(-1)!)).toBeLessThan(0.1)
+})

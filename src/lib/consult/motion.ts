@@ -18,6 +18,7 @@
  */
 
 import type { CSSProperties } from 'react'
+import { cue } from './sound-switch'
 
 /** The one spring. Damping ratio ≈ 0.74: a single small overshoot (~3%) and
  *  settled before a second one is visible. */
@@ -164,6 +165,8 @@ const HAPTIC_PATTERN: Record<HapticKind, number | number[]> = {
  * because some browsers throw when vibrate is called without a user gesture.
  */
 export function haptic(kind: HapticKind): void {
+  // The same moments get a sound, when sounds are on (off by default).
+  cue(kind)
   if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return
   try {
     navigator.vibrate(HAPTIC_PATTERN[kind])
