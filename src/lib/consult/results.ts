@@ -27,6 +27,7 @@ import { chargeProfile } from './profile'
 import type { FlowState } from './flow'
 import type { PersonSnapshot } from '@/lib/offer/select'
 import { buildRead, type ConsultRead } from './read'
+import { buildTraces, saveTraces, type Trace } from './trace'
 
 export interface ResultsBundle {
   payload: HandoffPayload
@@ -43,6 +44,11 @@ export interface ResultsBundle {
   offerFit?: PersonSnapshot
   /** "Your read" (Phase 5): shown on Fully charged and at the top of the results page. */
   read: ConsultRead
+  /**
+   * "Why this?" (plan Phase 8): each picked product's path back to the answers.
+   * Kept in this tab only (`saveTraces`), never in `payload`.
+   */
+  traces: Record<string, Trace>
 }
 
 type OfferFitFor = (answers: FlowState['answers'], engine: Pick<EngineResult, 'tiers'>, catalogue: readonly CatalogueProduct[]) => PersonSnapshot
@@ -83,6 +89,7 @@ export function prepareResults(
     // identity's ("Lean Line", "Night Shift"), which named an effect.
     blueprint: { ...toBlueprint(payload, catalogue), stackName: read.identity ?? stackNameFor(answers) },
     read,
+    traces: buildTraces(state.answers, engine, catalogue),
     answers,
     identity: identityFor(payload),
     catalogue,
@@ -113,6 +120,7 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setStackReady(true)
   if (bundle.offerFit) saveOfferFit(bundle.payload.consult_id, bundle.offerFit)
   saveRead(bundle.read)
+  saveTraces(bundle.payload.consult_id, bundle.traces)
 }
 
 /* ── The read, for this tab ─────────────────────────────────────────────── */

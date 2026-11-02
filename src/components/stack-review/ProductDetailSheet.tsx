@@ -16,6 +16,11 @@ import { cardClaim, cardFacts, usageFor } from '@/lib/results/card-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { IconButton } from '@/components/ui/IconButton'
 import { ProductTile } from './ProductTile'
+import { TraceView } from './TraceView'
+import { Button } from '@/components/system'
+import { useQuizStore } from '@/lib/store'
+import { loadTrace } from '@/lib/consult/trace'
+import { TRACE_COPY } from '@/lib/consult/trace-copy'
 
 interface Props {
   slot: StackSlotEntry
@@ -145,6 +150,11 @@ export function ProductDetailSheet({
     () => (product && answers ? explainProductSafe({ product, slotType: slot.slotType as SlotType, answers }) : null),
     [product, slot.slotType, answers],
   )
+  // Trace it back (plan Phase 8): a consult product's path back to the
+  // answers, kept in this tab only. None for a swap or an add-on.
+  const consultId = useQuizStore((s) => s.consultExclusions?.consultId ?? null)
+  const trace = useMemo(() => (product ? loadTrace(consultId, product.id) : null), [consultId, product])
+  const [tracing, setTracing] = useState(false)
   // The card's claim. When the why-line carries it, it is said there, once.
   const claim = product ? cardClaim(product, explanation, answers) : null
   const whatItDoes = claim && !explanation?.claim ? claim : null
@@ -254,20 +264,34 @@ export function ProductDetailSheet({
         <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
           {/* Why it's in your stack: something they told us, then the product
               and its claim. Left out when nothing may honestly be said. */}
-          {explanation && (
+          {(explanation || trace) && (
             <section data-testid="why-in-stack">
               <p className={`${SECTION_LABEL} mb-2`} style={{ color: hue, fontFamily: 'var(--font-display)' }}>
                 Why it&apos;s in your stack
               </p>
-              <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>
-                {explanation.sentence}
-              </p>
-              {explanation.claim ? (
+              {explanation && (
+                <p className="text-sm font-semibold leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>
+                  {explanation.sentence}
+                </p>
+              )}
+              {explanation && (explanation.claim ? (
                 <ClaimQuote title={product?.title} wording={explanation.claim.wording} hue={hue} />
               ) : (
                 <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                   {product?.title}
                 </p>
+              ))}
+              {trace && product && (
+                <div style={{ marginTop: 'var(--space-3)' }}>
+                  <Button variant="ghost" size="sm" aria-expanded={tracing} onClick={() => setTracing((t) => !t)}>
+                    {tracing ? TRACE_COPY.hide : TRACE_COPY.button}
+                  </Button>
+                  {tracing && (
+                    <div style={{ marginTop: 'var(--space-3)' }}>
+                      <TraceView trace={trace} product={product.title} />
+                    </div>
+                  )}
+                </div>
               )}
             </section>
           )}

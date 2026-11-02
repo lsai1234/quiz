@@ -21,6 +21,7 @@ import { clock } from '@/lib/consult/day-ring'
 import { Constellation } from '../pinpoint/Constellation'
 import { CupCounter } from '../scenes/CupCounter'
 import { ReadStory } from '../story/ReadStory'
+import { TraceView } from '@/components/stack-review/TraceView'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { initialFlow } from '@/lib/consult/flow'
 import { prepareResults } from '@/lib/consult/results'
@@ -487,6 +488,33 @@ function ReadStoryStory() {
   )
 }
 
+/* ── Trace it back (plan Phase 8) ──────────────────────────────────────── */
+
+/** "Why this?" for each product READER's consult picked: the path back to their answers. */
+function TraceStory() {
+  const traces = useMemo(() => {
+    const state = { ...initialFlow('c_storytrace1', 0, READER), phase: 'analysis' as const, sceneId: 'circuit' as const }
+    return prepareResults(state, MOCK_CATALOGUE, new Date('2026-10-29T10:00:00Z'), offerFitFor).traces
+  }, [])
+  const ids = Object.keys(traces)
+  // The one with most to show first: a named step, if any has one.
+  const first = ids.find((id) => traces[id].steps.some((s) => s.kind !== 'answers')) ?? ids[0]
+  const [id, setId] = useState(first)
+  const title = (pid: string) => MOCK_CATALOGUE.find((p) => p.id === pid)?.title ?? pid
+  return (
+    <div data-story="trace" className="flex flex-col" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
+      <div className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
+        {ids.map((pid) => (
+          <QuietLink key={pid} aria-pressed={pid === id} onClick={() => setId(pid)}>
+            {title(pid)}
+          </QuietLink>
+        ))}
+      </div>
+      <TraceView key={id} trace={traces[id]} product={title(id)} />
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
@@ -507,4 +535,5 @@ export const STORIES: Story[] = [
   { id: 'constellation', title: 'Watch Amp think', render: () => <ConstellationStory /> },
   { id: 'cups', title: 'Cup stack', render: () => <CupStory /> },
   { id: 'read-story', title: 'Your read', render: () => <ReadStoryStory /> },
+  { id: 'trace', title: 'Why this?', render: () => <TraceStory /> },
 ]

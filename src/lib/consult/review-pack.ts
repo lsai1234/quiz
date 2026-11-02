@@ -32,7 +32,7 @@ import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
 import { proteinRows } from './protein-review-rows'
 import { drawnRows } from './drawn-review-rows'
-import { storyRows } from './story-review-rows'
+import { storyRows, traceRows } from './story-review-rows'
 
 export const REVIEW_PACK_HEADER = ['Section', 'Where it’s used', 'Current wording', 'Context', 'Approved', 'Change to', 'Notes'] as const
 
@@ -267,6 +267,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...drawnRows(),
     // The read's story (plan Phase 8).
     ...storyRows(),
+    ...traceRows(),
     ...glossaryRows(),
     ...claimRows(roster),
     // The free bonus's terms (plan Phase 2, 5): the conditions it has to

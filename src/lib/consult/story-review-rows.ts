@@ -6,6 +6,7 @@
 import type { ReviewRow } from './review-pack'
 import { STORY_CARD_COPY, STORY_COPY } from './story-copy'
 import { withChange, type DayRingData } from './day-ring'
+import { NEED_LABEL, TRACE_COPY } from './trace-copy'
 
 const WHERE = 'The read’s story, after the charge-up (story-copy.ts)'
 
@@ -23,4 +24,13 @@ export function storyRows(): ReviewRow[] {
   ]
   for (const t of tries) rows.push(['Your read, the story', '“Try this week”, on the day ring (day-ring.ts withChange)', t.text!, 'Under the ring when a fix is tapped; the times are their own, these are examples'])
   return rows
+}
+
+/** "Why this?" on the results page (plan Phase 8, Trace it back). */
+export function traceRows(): ReviewRow[] {
+  const where = '“Why this?” in a product’s detail sheet (trace-copy.ts)'
+  return [
+    ...(Object.entries(TRACE_COPY) as [string, string][]).map(([key, line]): ReviewRow => ['Trace it back', where, line, `“${key}”`]),
+    ...Object.entries(NEED_LABEL).map(([need, label]): ReviewRow => ['Trace it back', where, label, `A need’s name (${need}): only shown beside a product with the approved claim that lets it be named`]),
+  ]
 }

@@ -534,3 +534,69 @@ test('the story card route refuses a crafted card', async ({ request }) => {
   expect(ok.status()).toBe(200)
   expect(ok.headers()['content-type']).toBe('image/png')
 })
+
+/* ── Trace it back (plan Phase 8) ──────────────────────────────────────── */
+
+for (const mode of ['standard', 'comfort', 'reduced'] as const) {
+  test(`workshop: why this, the path back to the answers (${mode})`, async ({ page }) => {
+    if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openStory(page, 'Why this?')
+    if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
+    const story = page.locator('[data-story="trace"]')
+    const tree = story.getByRole('list', { name: 'How this got into your stack' })
+    await expect(tree).toBeVisible()
+    await expect(tree.locator('[data-step]').first()).toBeVisible()
+    await expect(tree.locator('[data-answer]').first()).toBeVisible()
+    await page.waitForTimeout(mode === 'reduced' ? 100 : 1500)
+    await expect(story).toHaveScreenshot(`trace-${mode}.png`, STILL)
+  })
+}
+
+test('results page: Why this? on a consult product traces it back, in this tab only', async ({ page }) => {
+  await founderSessionViaApi(page)
+  await page.goto('/quizv2')
+  // The quickest way through: the 1-minute version, each scene answered, then straight to the stack.
+  await page.getByRole('button', { name: /^Energy/ }).click()
+  await page.getByRole('button', { name: 'Short on time? Do the 1-minute version' }).click()
+  const has = async (l: ReturnType<typeof page.getByRole>) => (await l.count()) > 0
+  for (let i = 0; i < 30; i++) {
+    if (await has(page.getByRole('region', { name: 'Your read' }))) break
+    if (await has(page.getByRole('listbox', { name: 'Age band' }))) {
+      await page.getByRole('listbox', { name: 'Age band' }).focus()
+      await page.keyboard.press('Home')
+      for (let k = 0; k < 3; k++) await page.keyboard.press('ArrowDown')
+      await page.getByRole('radio', { name: 'Prefer not to say' }).click()
+    }
+    if (await has(page.getByRole('button', { name: /^Monday:/ }))) {
+      await page.getByRole('button', { name: /^Monday:/ }).click()
+      await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
+    }
+    for (const name of ['3pm dip', 'OK', 'Steady', 'None of these'] as const) {
+      const r = page.getByRole('radio', { name, exact: true })
+      if (await has(r)) await r.click()
+    }
+    const days = page.getByRole('radio', { name: /^3–5 days/ })
+    if (await has(days)) await days.click()
+    for (const name of ['None', 'Nothing yet', 'Nothing sore', 'Nothing’s changed'] as const) {
+      const b = page.getByRole('button', { name, exact: true })
+      if (await has(b) && (await b.getAttribute('aria-pressed')) !== 'true') await b.click()
+    }
+    const eggs = page.getByRole('button', { name: /^Eggs/ })
+    if (await has(eggs) && (await eggs.getAttribute('aria-pressed')) !== 'true') await eggs.click()
+    const consent = page.getByRole('checkbox', { name: /^Use my answers here/ })
+    if (await has(consent) && !(await consent.isChecked())) await consent.check()
+    const on = page.getByRole('button', { name: /^(Next|Looks right|Continue|Build my stack now)$/ })
+    if (await has(on)) await on.first().click()
+    await page.waitForTimeout(500)
+  }
+  await page.getByRole('button', { name: 'Skip to my stack' }).click()
+  await page.waitForURL((u) => !u.pathname.startsWith('/quizv2'))
+  await page.getByText('Tap for details ›').first().click()
+  const why = page.getByRole('button', { name: 'Why this?' })
+  await expect(why).toBeVisible()
+  await why.click()
+  await expect(page.getByRole('list', { name: 'How this got into your stack' }).locator('[data-answer]').first()).toBeVisible()
+  // Kept in this tab, never in what was saved to the server.
+  const saved = await page.evaluate(() => localStorage.getItem('chrgd-consult-handoff') ?? '')
+  expect(saved).not.toContain('From your answers')
+})
