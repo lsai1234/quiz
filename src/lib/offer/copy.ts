@@ -48,8 +48,19 @@ export const OFFER_COPY = {
   bonusBeatsCode: (bonus: string) =>
     `Not applied: the free ${bonus} is worth more on this order, and codes don’t combine with the free gift. Remove the gift by choosing a smaller stack, or keep it.`,
 
-  stickyHero: 'Start here',
   stickyHeroCta: 'Start with this →',
+  /** Above the price in the sticky bar, with "Start here" chosen: what it is. */
+  stickyCore: (product: string) => `${product} · delivered`,
+
+  /* The offer at a glance, at the top of the page (the clarity pass). */
+  summaryHeading: 'Your offer',
+  summaryCoreLine: 'One product, delivered. No subscription.',
+  summaryStackLine: (n: number) => `${n} products, picked from your answers.`,
+  summaryMonthly: (monthly: number, oneOff: number) => `${formatGBP(monthly)} a month, or ${formatGBP(oneOff)} once`,
+  summaryOnce: (oneOff: number) => `${formatGBP(oneOff)} once`,
+  seeFullStack: 'See the full stack',
+  whyThese: 'Why these products?',
+  hideWhy: 'Hide the reasons',
 } as const
 
 /** Where the terms live. */

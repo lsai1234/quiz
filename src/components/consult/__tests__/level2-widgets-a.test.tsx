@@ -83,37 +83,30 @@ describe('C2 goal tiles', () => {
   })
 })
 
-describe('C3 age wheel', () => {
-  it('lists every band, none picked until touched', () => {
-    render(<Harness id="about" />)
-    const options = screen.getAllByRole('option')
-    expect(options.map((o) => o.textContent)).toEqual(['Under 18', '18–24', '25–34', '35–44', '45–54', '55–64', '65+'])
-    expect(options.every((o) => o.getAttribute('aria-selected') === 'false')).toBe(true)
-  })
+describe('C3 about you (age bands as buttons, the clarity pass)', () => {
+  const bands = () => [...screen.getByRole('radiogroup', { name: 'Age band' }).querySelectorAll<HTMLElement>('[role="radio"]')]
 
-  it('does not pick a band just because the wheel was placed', () => {
-    const spy = jest.fn()
-    render(<Harness id="about" spy={spy} />)
-    fireEvent.scroll(screen.getByRole('listbox'))
-    expect(spy).not.toHaveBeenCalled()
+  it('lists every band, none picked until tapped', () => {
+    render(<Harness id="about" />)
+    expect(bands().map((o) => o.textContent)).toEqual(['Under 18', '18–24', '25–34', '35–44', '45–54', '55–64', '65+'])
+    expect(bands().every((o) => o.getAttribute('aria-checked') === 'false')).toBe(true)
+    // No spinning drum: nothing that looks answered before it is.
+    expect(screen.queryByRole('listbox')).toBeNull()
   })
 
   it('picks a band on tap', () => {
     render(<Harness id="about" />)
-    fireEvent.click(screen.getByRole('option', { name: '45–54' }))
-    expect(screen.getByRole('option', { name: '45–54' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(screen.getByRole('radio', { name: '45–54' }))
+    expect(screen.getByRole('radio', { name: '45–54' })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('steps with the keyboard arrows, and stops at the ends', () => {
+  it('moves with the arrow keys, as a radio group does', () => {
     const spy = jest.fn()
     render(<Harness id="about" start={{ age: 'under-18' }} spy={spy} />)
-    const wheel = screen.getByRole('listbox', { name: 'Age band' })
-    fireEvent.keyDown(wheel, { key: 'ArrowUp' })
-    expect(spy).not.toHaveBeenCalled()
-    fireEvent.keyDown(wheel, { key: 'ArrowDown' })
+    const first = screen.getByRole('radio', { name: 'Under 18' })
+    first.focus()
+    fireEvent.keyDown(first, { key: 'ArrowRight' })
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '18-24' }))
-    fireEvent.keyDown(wheel, { key: 'End' })
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '65-plus' }))
   })
 
   it('asks sex as a three-way toggle that keeps the age', () => {
@@ -123,10 +116,10 @@ describe('C3 age wheel', () => {
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '35-44', sex: 'male' }))
   })
 
-  it('becomes plain large buttons in comfort mode', () => {
+  it('is two to a row in comfort mode', () => {
     render(<Harness id="about" comfort />)
-    expect(screen.queryByRole('listbox')).toBeNull()
-    expect(screen.getByRole('radiogroup', { name: 'Age band' }).querySelectorAll('[role="radio"]')).toHaveLength(AGE_BANDS.length)
+    expect(bands()).toHaveLength(AGE_BANDS.length)
+    expect(screen.getByRole('radiogroup', { name: 'Age band' }).className).toMatch(/grid-cols-2/)
   })
 })
 

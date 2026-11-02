@@ -33,6 +33,7 @@ import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
 import { CoreOfferCard } from './CoreOfferCard'
+import { OfferSummary } from './OfferSummary'
 import { BonusNote } from './BonusNote'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
@@ -1113,6 +1114,42 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     greeting and the stack's name only: the lists need the products. A mock
     stack is never named while the shop might turn out to be the real one.
   */
+  /*
+    The offer at a glance (the clarity pass): both choices, priced, before
+    any of the reasons. The full cards further down say it all again.
+  */
+  const canSubscribeStack = !claiming && founderKind == null && pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet
+  const toFullStack = () => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const target = document.getElementById('offer-full-stack') ?? stackRef.current
+    target?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+  }
+  const offerSummary =
+    starterStack || checkoutState.status === 'mock-complete' ? null : (
+      <OfferSummary
+        core={
+          core && !coreWithdrawn
+            ? { label: core.label, product: core.product, total: coreTotal, busy: coreBusy || checkoutState.status === 'loading' || leavingForStripe, onStart: startWithCore }
+            : null
+        }
+        stack={{ count: activeSlots.length, monthly: canSubscribeStack ? pricing.subscriptionTotal : null, oneOff: pricing.oneOffTotal, onSee: toFullStack }}
+        gift={
+          bonusLine
+            ? {
+                headline: bonusLine.kind === 'comes-with' ? OFFER_COPY.comesWith(titleOf(bonusLine.choice.product)) : OFFER_COPY.bonusFrom(bonusLine.title, bonusLine.minimum),
+                conditions: [
+                  OFFER_COPY.bonusConditions(offerSettings.bonus.minSubtotal, offerSettings.bonus.firstOrderOnly),
+                  planType === 'subscription' ? OFFER_COPY.bonusOnSubscription : null,
+                  OFFER_COPY.bonusNoCode,
+                ]
+                  .filter(Boolean)
+                  .join(' '),
+              }
+            : null
+        }
+      />
+    )
+
   const youScene = (withProducts: boolean) => (
     <YouScene
       name={answers.name}
@@ -1121,6 +1158,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       checks={withProducts ? checkLines : []}
       read={consultRead}
       reducedMotion={reducedMotion}
+      offer={withProducts ? offerSummary : null}
     />
   )
 
@@ -1508,7 +1546,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           >
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-                {barOnCore ? `${OFFER_COPY.stickyHero} · ${OFFER_COPY.delivered}` : starterStack ? 'To pay' : stickyIsSub ? 'Monthly' : 'One-off total'}
+                {barOnCore ? OFFER_COPY.stickyCore(titleOf(core.product)) : starterStack ? 'To pay' : stickyIsSub ? 'Full stack · monthly' : 'Full stack · one-off'}
               </p>
               <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(barOnCore ? coreTotal : stickyTotal)}

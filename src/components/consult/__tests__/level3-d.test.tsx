@@ -88,7 +88,7 @@ describe('H10 change my answers', () => {
 
     const onHandoff = jest.fn()
     render(<AmpConsult reopen loadProducts={async () => MOCK_CATALOGUE} onHandoff={onHandoff} />)
-    expect(heading()).toHaveTextContent("Here's what I've got")
+    expect(heading()).toHaveTextContent('Here’s what I’ve got')
     const cards = screen.getAllByRole('button', { name: /\. Change$/ })
     expect(cards).toHaveLength(13)
     expect(cards.every((c) => !/not answered/.test(c.getAttribute('aria-label') ?? ''))).toBe(true)

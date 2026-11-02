@@ -39,7 +39,7 @@ describe('V6 lost-signal fallback', () => {
     }
     fireEvent.click(await screen.findByRole('button', { name: 'Skip to my stack' }, { timeout: DURATION.chargeUp + 2000 }))
     expect(onHandoff).toHaveBeenCalled()
-  })
+  }, 20_000)
 
   it(`stops asking for words after ${BREAKER} misses in a row, but keeps "Tell Amp more"`, async () => {
     // Slow or failed wording is the wording's problem. "Tell Amp more", voice

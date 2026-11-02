@@ -71,18 +71,6 @@ export function ProteinScene({ answers, onAnswer, comfort }: SceneProps) {
 
   return (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
-      <p style={meta}>{PROTEIN_BASIS_LINE[proteinBasis(answers)]}</p>
-
-      <div role="group" aria-label={PROTEIN_COPY.weightAsk} className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
-        <p style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-meta)' }}>{PROTEIN_COPY.weightAsk}</p>
-        <div className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
-          {WEIGHTS.map(([band, label]) => (
-            <Chip key={band} label={label} selected={p?.weight === band} onToggle={() => write({ weight: p?.weight === band ? null : band })} />
-          ))}
-        </div>
-        <p style={meta}>{PROTEIN_COPY.weightWhy}</p>
-      </div>
-
       {!counting ? (
         <>
           <div role="radiogroup" aria-label="A normal day of eating" className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} onKeyDown={(e) => radioArrows(e)}>
@@ -144,6 +132,19 @@ export function ProteinScene({ answers, onAnswer, comfort }: SceneProps) {
           </div>
         </>
       )}
+
+      {/* Weight, optional, after the day: it only sharpens the number. */}
+      <div role="group" aria-label={PROTEIN_COPY.weightAsk} className="flex flex-col" style={{ gap: 'var(--amp-space-2)', paddingTop: 'var(--amp-space-2)', borderTop: 'var(--amp-hairline) solid var(--amp-edge)' }}>
+        <p style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-meta)' }}>{PROTEIN_COPY.weightAsk}</p>
+        <div className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
+          {WEIGHTS.map(([band, label]) => (
+            <Chip key={band} label={label} selected={p?.weight === band} onToggle={() => write({ weight: p?.weight === band ? null : band })} />
+          ))}
+        </div>
+        <p style={meta}>
+          <span>{PROTEIN_COPY.weightWhy}</span> <span>{PROTEIN_BASIS_LINE[proteinBasis(answers)]}</span>
+        </p>
+      </div>
 
       {/* Reserved from first paint: the verdict arrives without moving anything. */}
       <div ref={slot} aria-live="polite" data-protein-verdict style={{ minHeight: 'calc(var(--amp-space-10) + var(--amp-space-4))' }}>

@@ -55,7 +55,7 @@ describe('whose consult is it', () => {
     expect(q(builder)).toBe('What’s your training split?')
     expect(q(ager)).toBe('How active is a normal week?')
     expect(q(weight)).toBe('How much are you moving at the moment?')
-    expect(q({ ...EMPTY_ANSWERS, goals: ['energy'], age: '35-44' })).toBe('What does your training look like?')
+    expect(q({ ...EMPTY_ANSWERS, goals: ['energy'], age: '35-44' })).toBe('How do you train in a normal week?')
     expect(resolveSceneDef('body', builder).copy.question).toBe('Anything niggling from training?')
   })
 
@@ -109,7 +109,7 @@ describe('in the consult', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Nothing’s changed/ }))
     expect(screen.getByRole('button', { name: /^Staying sharp/ })).toHaveAttribute('aria-pressed', 'false')
     pressNext()
-    expect(heading()).toHaveTextContent('Already taking anything?')
+    expect(heading()).toHaveTextContent('Taking any supplements already?')
   })
 
   it('only uses the journey’s own answers while they still apply', () => {

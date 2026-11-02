@@ -49,7 +49,7 @@ export function answerCurrentScene(): void {
       fireEvent.click(screen.getByRole('button', { name: /^Performance/ }))
       return
     case 'age-wheel':
-      fireEvent.click(screen.getByRole('option', { name: '18–24' }))
+      fireEvent.click(screen.getByRole('radio', { name: '18–24' }))
       fireEvent.click(screen.getByRole('radio', { name: 'Prefer not to say' }))
       return
     case 'training-week':

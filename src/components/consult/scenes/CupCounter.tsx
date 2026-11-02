@@ -48,30 +48,7 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
   }
 
   return (
-    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)' }}>
-      <div className="flex flex-col items-center" aria-live="polite">
-        <span
-          style={{
-            fontFamily: 'var(--amp-font-display)',
-            fontWeight: 'var(--amp-weight-heavy)',
-            fontSize: 'var(--amp-text-hero)',
-            lineHeight: 1,
-            color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {total}
-        </span>
-        <span className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
-          {total === 1 ? 'drink a day' : 'drinks a day'}
-        </span>
-      </div>
-
-      {/* The stack, as cups (plan Phase 7.6): they drop in, settle, and wobble from four. */}
-      <div className="flex items-end justify-center" style={{ minHeight: 'var(--amp-space-10)', maxWidth: '100%' }}>
-        <CupStack value={value} drinks={DRINKS} reduced={reduced} />
-      </div>
-
+    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)' }}>
       <ul className="flex w-full flex-col" style={{ gap: 'var(--amp-space-2)' }}>
         {DRINKS.map((d) => (
           <li
@@ -95,6 +72,15 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
           </li>
         ))}
       </ul>
+
+      {/* The day's total, and the stack of cups (plan Phase 7.6): they drop in, settle, and wobble from four. */}
+      <div className="flex w-full items-end justify-center" style={{ gap: 'var(--amp-space-3)', minHeight: 'var(--amp-space-10)' }}>
+        <CupStack value={value} drinks={DRINKS} reduced={reduced} />
+        <p aria-live="polite" className="flex items-baseline" style={{ gap: 'var(--amp-space-1)', color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-2)' }}>
+          <span style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+          <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>{total === 1 ? 'drink a day' : 'drinks a day'}</span>
+        </p>
+      </div>
 
       <div aria-live="polite" className="flex flex-col items-center" style={{ gap: 'var(--amp-space-3)' }}>
         {total >= STIMULANT_LIMIT ? (

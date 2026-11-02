@@ -258,4 +258,8 @@ export const PERSONAS: Persona[] = [
 // (plan Phase 7.4), so its copy prompt's question and hints changed. No
 // system prompt or rule changed. Re-run: all 35 personas and the red-team
 // tests pass.
-export const APPROVED_FINGERPRINT = '7cdb8e77'
+// 2026-11-02: the clarity pass reworded the scenes' questions and hints in
+// plain words (scenes.json), and the energy and sleep copy and understand
+// prompts quote them. No system prompt, rule or model changed. Re-run: all 35
+// personas and the red-team tests pass.
+export const APPROVED_FINGERPRINT = '7d5af7da'

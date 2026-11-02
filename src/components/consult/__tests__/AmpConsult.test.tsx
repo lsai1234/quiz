@@ -56,7 +56,7 @@ describe('AmpConsult', () => {
   it('shows Amp reacting to the previous answer', () => {
     render(<AmpConsult />)
     pickFirstOptionAndNext()
-    expect(screen.getByText('Performance first. Got it.')).toBeInTheDocument()
+    expect(screen.getByText('Got it. Performance comes first.')).toBeInTheDocument()
   })
 
   it('slides forward, then back', () => {
@@ -99,7 +99,7 @@ describe('save & resume', () => {
     render(<AmpConsult />)
     expect(heading()).toHaveTextContent('What’s your training split?')
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.getByRole('option', { name: '18–24' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('radio', { name: '18–24' })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('offers to resume when coming back in a new tab', () => {

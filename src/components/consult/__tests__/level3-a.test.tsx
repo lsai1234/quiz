@@ -46,7 +46,7 @@ describe('C14 comfort mode', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Healthy ageing/ }))
     pressNext()
     expect(screen.queryByRole('button', { name: 'Bigger text' })).toBeNull()
-    fireEvent.click(screen.getByRole('option', { name: '55–64' }))
+    fireEvent.click(screen.getByRole('radio', { name: '55–64' }))
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-comfort', 'true')
     fireEvent.click(screen.getByRole('radio', { name: 'Female' }))
     pressNext()
@@ -60,7 +60,7 @@ describe('C14 comfort mode', () => {
     chooseRoute()
     fireEvent.click(screen.getByRole('button', { name: /^Performance/ }))
     pressNext()
-    fireEvent.click(screen.getByRole('option', { name: '25–34' }))
+    fireEvent.click(screen.getByRole('radio', { name: '25–34' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Male' }))
     pressNext()
     expect(screen.queryByRole('button', { name: /Bigger text|Standard size/ })).toBeNull()
@@ -112,12 +112,12 @@ describe('H1 review screen', () => {
     chooseRoute()
     // Ten scenes, then the circuit check, then the review (plan v4).
     for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
-    expect(heading()).toHaveTextContent("Here's what I've got")
+    expect(heading()).toHaveTextContent('Here’s what I’ve got')
   }
 
   it('shows every answer as a tappable card, before anything is decided', () => {
     toReview()
-    expect(screen.getByText("Tap anything to change it. Nothing's been decided yet.")).toBeInTheDocument()
+    expect(screen.getByText('Check it over. Tap Edit to change anything.')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /\. Change$/ })).toHaveLength(13)
     expect(screen.getByRole('button', { name: /^Goals: 1\. Performance\. Change$/ })).toBeInTheDocument()
     // The safety answers are on the review now it comes last.
@@ -128,10 +128,10 @@ describe('H1 review screen', () => {
     toReview()
     const before = screen.getAllByRole('button', { name: /\. Change$/ }).map((b) => b.getAttribute('aria-label'))
     fireEvent.click(screen.getByRole('button', { name: /^Energy:/ }))
-    expect(heading()).toHaveTextContent('How does your energy go through a day?')
+    expect(heading()).toHaveTextContent('How’s your energy through the day?')
     fireEvent.click(screen.getByRole('radio', { name: 'Steady all day' }))
     fireEvent.click(screen.getByRole('button', { name: 'Back to review' }))
-    expect(heading()).toHaveTextContent("Here's what I've got")
+    expect(heading()).toHaveTextContent('Here’s what I’ve got')
     const after = screen.getAllByRole('button', { name: /\. Change$/ }).map((b) => b.getAttribute('aria-label'))
     expect(after.filter((l) => !l!.startsWith('Energy'))).toEqual(before.filter((l) => !l!.startsWith('Energy')))
     expect(after.find((l) => l!.startsWith('Energy'))).toBe('Energy: Steady all day · 7 / 10 in the afternoon. Change')

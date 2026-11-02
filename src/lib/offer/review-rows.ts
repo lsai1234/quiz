@@ -92,8 +92,16 @@ export function offerCopyRows(bonus: BonusSettings): ReviewRow[] {
     ['Offer wording', where, c.worth(9.99), `Under the receipt line, only at its ordinary shop price. ${ex}`],
     ['Offer wording', where, c.codeBeatsBonus('Vitamin C & Zinc'), `Receipt, when a code is worth more. ${ex}`],
     ['Offer wording', where, c.bonusBeatsCode('Vitamin C & Zinc'), `Code box, when the gift is worth more. ${ex}`],
-    ['Offer wording', where, `${c.stickyHero} · ${c.delivered}`, 'Sticky bar, with "Start here" chosen'],
+    ['Offer wording', where, c.stickyCore('Magnesium'), `Sticky bar, with "Start here" chosen. ${ex}`],
     ['Offer wording', where, c.stickyHeroCta, 'Sticky bar button'],
+    ['Offer wording', where, c.summaryHeading, '"Your offer", at the top of the page: both options at a glance'],
+    ['Offer wording', where, c.summaryCoreLine, 'Under the single product in "Your offer"'],
+    ['Offer wording', where, c.summaryStackLine(5), `Under "Or get the full stack" in "Your offer". ${ex}`],
+    ['Offer wording', where, c.summaryMonthly(45.21, 47.81), `The full stack's price in "Your offer". ${ex}`],
+    ['Offer wording', where, c.summaryOnce(47.81), `The same, where it can't be a subscription. ${ex}`],
+    ['Offer wording', where, c.seeFullStack, 'Button in "Your offer", down to the depth picker'],
+    ['Offer wording', where, c.whyThese, 'Opens the reasons: the read, "Built from your answers", "Try this week", "What we checked"'],
+    ['Offer wording', where, c.hideWhy, 'Closes them again'],
   ]
 }
 

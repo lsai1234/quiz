@@ -25,7 +25,7 @@ export const STORY_COPY = {
   ruledOut: 'Ruled out',
   tryHeading: 'Small changes, worth a go',
   tryHint: 'Tap one to see it on your day.',
-  startHeading: 'Your stack, hero first',
+  startHeading: 'Your stack',
   shareHeading: 'Your read, to share',
   shareLine: 'A card with your result and your stack. Nothing about your answers.',
   shareButton: 'Share my read',

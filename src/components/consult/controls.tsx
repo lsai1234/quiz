@@ -455,7 +455,8 @@ export function QuietLink({ children, icon, ...rest }: ButtonHTMLAttributes<HTML
       {...rest}
     >
       {icon && <Glyph name={icon} size={16} />}
-      {children}
+      {/* Underlined, so a quiet link still reads as something to tap. */}
+      <span style={{ textDecorationLine: 'underline', textUnderlineOffset: '0.3em', textDecorationColor: 'var(--amp-edge-strong)' }}>{children}</span>
     </button>
   )
 }
@@ -464,12 +465,12 @@ export function QuietLink({ children, icon, ...rest }: ButtonHTMLAttributes<HTML
 export function Hint({ children, tone }: { children: ReactNode; tone?: Tone }) {
   return (
     <p
-      className="text-center uppercase"
+      className="text-center"
       style={{
-        fontFamily: 'var(--amp-font-label)',
-        fontSize: 'var(--amp-text-data)',
-        letterSpacing: 'var(--amp-tracking-data)',
-        color: tone ? TONE[tone].ink : 'var(--amp-ink-3)',
+        fontSize: 'var(--amp-text-meta)',
+        fontWeight: 'var(--amp-weight-medium)',
+        lineHeight: 'var(--amp-leading-body)',
+        color: tone ? TONE[tone].ink : 'var(--amp-ink-2)',
       }}
     >
       {children}

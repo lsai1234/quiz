@@ -25,6 +25,10 @@ import type { ConsultAnswers } from '@/lib/consult/types'
 
 const R = 44
 const INNER = 36
+/** The band the drawn energy curve sits in: clear of Amp's orb in the small ring. */
+const BAND = { sm: [31, 40], lg: [24, 38] } as const
+/** The small ring's size. */
+const RING_SLOT = 'calc(var(--amp-space-10) + var(--amp-space-4))'
 
 const SWATCH = {
   sleep: 'var(--amp-calm)',
@@ -44,12 +48,12 @@ export function DayRing({ answers, size = 'sm', change = null, children }: { ans
       className="relative inline-flex shrink-0 items-center justify-center"
       data-day-ring={size}
       style={{
-        width: lg ? 'calc(var(--amp-space-10) * 5)' : 'calc(var(--amp-space-10) + var(--amp-space-2))',
-        height: lg ? 'calc(var(--amp-space-10) * 5)' : 'calc(var(--amp-space-10) + var(--amp-space-2))',
+        width: lg ? 'calc(var(--amp-space-10) * 5)' : RING_SLOT,
+        height: lg ? 'calc(var(--amp-space-10) * 5)' : RING_SLOT,
       }}
     >
       <svg viewBox={lg ? '-8 -8 116 116' : '0 0 100 100'} role="img" aria-label={text} className="absolute inset-0 h-full w-full" style={{ overflow: 'visible' }}>
-        <circle cx="50" cy="50" r={R} fill="none" stroke="var(--amp-edge-strong)" strokeWidth="2" />
+        <circle cx="50" cy="50" r={R} fill="none" stroke="var(--amp-edge-strong)" strokeWidth={lg ? 2 : 1.5} />
         {/* The hours: 00 at the top, 06, 12, 18. */}
         {[0, 6, 12, 18].map((h) => {
           const a = pointAt(h * 60, R - 4)
@@ -57,7 +61,7 @@ export function DayRing({ answers, size = 'sm', change = null, children }: { ans
           const label = pointAt(h * 60, R + 11)
           return (
             <g key={h}>
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--amp-ink-3)" strokeWidth={lg ? 1 : 2} strokeLinecap="round" />
+              {lg && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--amp-ink-3)" strokeWidth={1} strokeLinecap="round" />}
               {lg && (
                 <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fill="var(--amp-ink-2)" style={{ fontFamily: 'var(--amp-font-label)', fontSize: '5px' }}>
                   {String(h).padStart(2, '0')}
@@ -67,7 +71,7 @@ export function DayRing({ answers, size = 'sm', change = null, children }: { ans
           )
         })}
         {d.daylight && (
-          <path data-flight-slot="daylight" className="amp-anim-fade" d={arcPath(DAYLIGHT_SPAN.from, DAYLIGHT_SPAN.to, R)} fill="none" stroke={SWATCH.daylight} strokeWidth="11" strokeLinecap="round" strokeOpacity={0.2 + d.daylight.level * 0.6} />
+          <path data-flight-slot="daylight" className="amp-anim-fade" d={arcPath(DAYLIGHT_SPAN.from, DAYLIGHT_SPAN.to, R)} fill="none" stroke={SWATCH.daylight} strokeWidth={lg ? 11 : 5} strokeLinecap="round" strokeOpacity={0.2 + d.daylight.level * 0.6} />
         )}
         {d.sleep && (
           // The arc's shape as a style too, so a fix that moves bedtime stretches it rather than jumping (where the browser animates `d`).
@@ -78,7 +82,7 @@ export function DayRing({ answers, size = 'sm', change = null, children }: { ans
             d={arcPath(d.sleep.bed, d.sleep.wake, R)}
             fill="none"
             stroke={SWATCH.sleep}
-            strokeWidth="6"
+            strokeWidth={lg ? 6 : 4.5}
             strokeLinecap="round"
             style={{ d: `path("${arcPath(d.sleep.bed, d.sleep.wake, R)}")`, transition: springTransition('d') } as React.CSSProperties}
           />
@@ -88,9 +92,9 @@ export function DayRing({ answers, size = 'sm', change = null, children }: { ans
         )}
         {d.energy && 'points' in d.energy && (
           <g data-flight-slot="energy" className="amp-anim-fade">
-            <path d={curveOnRing(d.energy.points)} fill="none" stroke={SWATCH.energy} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={curveOnRing(d.energy.points, ...BAND[size])} fill="none" stroke={SWATCH.energy} strokeWidth={lg ? 3 : 2.2} strokeLinecap="round" strokeLinejoin="round" />
             {d.energy.dip !== null && (
-              <circle data-ring-dip {...xy(pointAt(d.energy.dip, 24 + (14 * d.energy.points[CURVE_HOURS.indexOf((d.energy.dip / 60) as (typeof CURVE_HOURS)[number])]) / 10))} r="3.2" fill={SWATCH.daylight} stroke="var(--amp-ground)" strokeWidth="1" />
+              <circle data-ring-dip {...xy(pointAt(d.energy.dip, BAND[size][0] + ((BAND[size][1] - BAND[size][0]) * d.energy.points[CURVE_HOURS.indexOf((d.energy.dip / 60) as (typeof CURVE_HOURS)[number])]) / 10))} r={lg ? 3.2 : 2.8} fill={SWATCH.daylight} stroke="var(--amp-ground)" strokeWidth="1" />
             )}
           </g>
         )}

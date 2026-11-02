@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { OFFER_COPY } from '@/lib/offer/copy'
 import gsap from 'gsap'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productTypeLabel } from '@/lib/catalogue/product-type'
@@ -39,6 +40,12 @@ interface Props {
    */
   read?: ConsultRead | null
   reducedMotion?: boolean
+  /**
+   * The offer at a glance (`OfferSummary`), under the stack's name. With it,
+   * the reasons below fold away behind "Why these products?", so the first
+   * screen is the offer and the detail is one tap away.
+   */
+  offer?: ReactNode
 }
 
 /**
@@ -108,8 +115,12 @@ const DISPLAY = 'var(--font-display)'
  * goal-to-claim map. A product with no line is listed after them by name
  * and type only, and a section with nothing in it is left out.
  */
-export function YouScene({ name, stackName, items, checks, read = null, reducedMotion }: Props) {
+export function YouScene({ name, stackName, items, checks, read = null, reducedMotion, offer = null }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const whyId = useId()
+  // With the offer on top, the reasons start folded; without it, as before.
+  const [whyOpen, setWhyOpen] = useState(false)
+  const folded = Boolean(offer) && !whyOpen
   const headingId = useId()
   const builtId = useId()
   const checkedId = useId()
@@ -226,6 +237,26 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
           </div>
         )}
 
+        {offer}
+
+        {offer && (
+          <button
+            type="button"
+            aria-expanded={whyOpen}
+            aria-controls={whyId}
+            onClick={() => setWhyOpen((o) => !o)}
+            className="relative mt-5 flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-[15px] font-semibold"
+            style={{ color: P.ink, border: `1px solid ${P.hairline}`, fontFamily: DISPLAY }}
+            data-why-toggle
+          >
+            {whyOpen ? OFFER_COPY.hideWhy : OFFER_COPY.whyThese}
+            <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        )}
+
+        <div id={whyId} hidden={folded} data-why={folded ? 'folded' : 'open'}>
         {read && (read.patterns.length > 0 || read.words) && (
           <section data-reveal aria-labelledby={readId} className="relative mt-7 pt-6" style={{ borderTop: `1px solid ${P.hairline}` }} data-read>
             <SectionHeading id={readId}>{READ_COPY.heading}</SectionHeading>
@@ -373,6 +404,7 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
             </ul>
           </section>
         )}
+        </div>
       </div>
     </section>
   )

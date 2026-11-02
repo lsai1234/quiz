@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, type KeyboardEvent } from 'react'
-import { clock, QUALITY_LABEL } from '@/lib/consult/summary'
+import { clock, spokenTime, QUALITY_LABEL } from '@/lib/consult/summary'
 import { sleepHours } from '@/lib/consult/reactions'
 import type { SleepAnswer, SleepQuality } from '@/lib/consult/types'
 import { haptic, springTransition } from '@/lib/consult/motion'
@@ -110,7 +110,7 @@ export function SleepWindow({ answers, onAnswer, onInteract, comfort }: ScenePro
 
   const quality = (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)' }}>
-      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+      <p style={{ fontSize: 'var(--amp-text-meta)', fontWeight: 'var(--amp-weight-bold)', color: 'var(--amp-ink-2)' }}>
         How well do you sleep?
       </p>
       <Segmented
@@ -135,7 +135,7 @@ export function SleepWindow({ answers, onAnswer, onInteract, comfort }: ScenePro
           <span className="flex flex-1 items-center justify-end" style={{ gap: 'var(--amp-space-3)' }}>
             <BigStep label={`${label} earlier`} icon="minus" onClick={() => write(moveHandle(value, which, t - 30))} />
             <span style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-lead)', minWidth: 'calc(var(--amp-space-10) + var(--amp-space-6))', textAlign: 'center' }}>
-              {clock(which === 'bed' ? value.bed : value.wake)}
+              {spokenTime(which === 'bed' ? value.bed : value.wake)}
             </span>
             <BigStep label={`${label} later`} icon="plus" onClick={() => write(moveHandle(value, which, t + 30))} />
           </span>
@@ -144,7 +144,7 @@ export function SleepWindow({ answers, onAnswer, onInteract, comfort }: ScenePro
     }
     return (
       <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
-        <p aria-live="polite" className="text-center" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)' }}>
+        <p aria-live="polite" className="text-center" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', color: 'var(--amp-ink)' }}>
           {hours} hours
         </p>
         {row('bed', 'Bedtime')}
@@ -193,17 +193,17 @@ export function SleepWindow({ answers, onAnswer, onInteract, comfort }: ScenePro
               fontWeight: 'var(--amp-weight-heavy)',
               fontSize: 'var(--amp-text-hero)',
               lineHeight: 1,
-              color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
+              color: 'var(--amp-ink)',
             }}
           >
             {hours}
           </span>
-          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-title)', color: 'var(--amp-ink-3)' }}>
+          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-title)', color: 'var(--amp-ink-2)' }}>
             hours
           </span>
         </p>
-        <p style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-body)', color: 'var(--amp-calm)' }}>
-          {clock(value.bed)} → {clock(value.wake)}
+        <p style={{ fontSize: 'var(--amp-text-body)', fontWeight: 'var(--amp-weight-medium)', color: answered ? 'var(--amp-calm)' : 'var(--amp-ink-2)' }}>
+          {answered ? `${spokenTime(value.bed)} to ${spokenTime(value.wake)}` : `${spokenTime(value.bed)} to ${spokenTime(value.wake)}? Drag to change it.`}
         </p>
       </div>
 
@@ -256,7 +256,7 @@ export function SleepWindow({ answers, onAnswer, onInteract, comfort }: ScenePro
 
       <div aria-hidden className="flex justify-between" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}>
         {TICKS.map((h) => (
-          <span key={h}>{String(h).padStart(2, '0')}:00</span>
+          <span key={h}>{spokenTime(h * 60)}</span>
         ))}
       </div>
 

@@ -40,3 +40,12 @@ on a 390×664 phone. Battery **A**: kept in the top bar.
 
 Reticle: B, built 2026-10-29; Pinpoint's questions still fit both phone sizes
 without scrolling (`19-consult-a11y.spec.ts`). Battery: kept (A).
+
+## Superseded (clarity pass, 2026-11-02)
+
+On review, the ring and the reticle round Amp read as clutter at the top of a
+question ("weird lines and stuff around it"). So at the top of every scene Amp
+now sits on his own: no ring, no reticle arcs. An answer flies into him
+(`data-flight-slot="amp"`, the fallback `flight.ts` already had), and the day is
+drawn where it can be read: large and labelled, on "Your day" in the read's
+story. `Reticle.tsx` is no longer used.

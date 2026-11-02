@@ -162,6 +162,16 @@ export function clock(minutes: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 }
 
+/** A time as people say it: "11pm", "6:30am", "Noon", "Midnight". */
+export function spokenTime(minutes: number): string {
+  const m = ((Math.round(minutes) % 1440) + 1440) % 1440
+  if (m === 0) return 'Midnight'
+  if (m === 720) return 'Noon'
+  const h = Math.floor(m / 60)
+  const mm = m % 60
+  return `${h % 12 || 12}${mm ? `:${String(mm).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`
+}
+
 function list(items: string[]): string {
   return items.length === 0 ? '' : items.join(', ')
 }

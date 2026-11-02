@@ -8,10 +8,11 @@ const face = (c: HTMLElement) => c.querySelector('.amp-face')!
 const amp = (c: HTMLElement) => c.querySelector<HTMLElement>('[data-amp-state]')!
 
 describe('the face', () => {
-  it('draws Amp in SVG: his mark, two eyes with pupils, a mouth', () => {
+  it('draws Amp in SVG: two eyes with pupils, a mouth, and no outlines round him', () => {
     const { container } = render(<Amp state="idle" />)
     expect(amp(container).querySelector('svg.amp-face')).not.toBeNull()
-    expect(face(container).querySelector('.amp-mark')).not.toBeNull()
+    // The clarity pass: the glass is all gradients, so nothing on him is stroked but his mouth.
+    expect([...face(container).querySelectorAll('[stroke], [style*="stroke"]')].filter((el) => !el.classList.contains('amp-mouth'))).toHaveLength(0)
     expect(face(container).querySelectorAll('.amp-eye')).toHaveLength(2)
     expect(face(container).querySelectorAll('.amp-pupil')).toHaveLength(2)
     expect(face(container).querySelector('.amp-mouth')).not.toBeNull()

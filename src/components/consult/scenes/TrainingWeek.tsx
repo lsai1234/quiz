@@ -71,7 +71,8 @@ export function trainingSummary(t: TrainingAnswer, names: Record<Activity, strin
 
 const LOOK: Record<Activity | 'rest', { icon: GlyphName; style: CSSProperties; label: string }> = {
   rest: {
-    icon: 'minus',
+    // An empty day invites a tap: a plus, not a dash and a "Rest" label.
+    icon: 'plus',
     label: 'var(--amp-ink-3)',
     style: { background: 'var(--amp-glass-solid)', border: 'var(--amp-hairline) solid var(--amp-edge)', color: 'var(--amp-ink-3)' },
   },
@@ -182,7 +183,8 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
       </div>
     ) : null
 
-  const summary = (
+  // Once answered, the week in a line; before that, a quiet nudge rather than a headline.
+  const summary = answered ? (
     <p
       aria-live="polite"
       className="text-center uppercase"
@@ -191,10 +193,14 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
         fontWeight: 'var(--amp-weight-heavy)',
         fontSize: 'var(--amp-text-title)',
         lineHeight: 'var(--amp-leading-tight)',
-        color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
+        color: 'var(--amp-ink)',
       }}
     >
-      {answered ? trainingSummary(t, words.short) : mode === 'days' ? 'Tap a day to start' : 'Set a typical week'}
+      {trainingSummary(t, words.short)}
+    </p>
+  ) : (
+    <p aria-live="polite" className="text-center" style={{ fontSize: 'var(--amp-text-body)', color: 'var(--amp-ink-2)' }}>
+      {mode === 'days' ? 'Tap a day you train to start.' : 'Use + and − for a typical week.'}
     </p>
   )
 
@@ -335,7 +341,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
                   color: look.label,
                 }}
               >
-                {day.length > 1 ? `+${day.length - 1}` : day[0] ? words.short[day[0]] : DAY_LABEL.rest}
+                {day.length > 1 ? `+${day.length - 1}` : day[0] ? words.short[day[0]] : '\u00a0'}
               </span>
             </button>
           )

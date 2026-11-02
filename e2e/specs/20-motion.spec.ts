@@ -68,9 +68,7 @@ test('consult: an answered sleep window flies into Amp as the next scene arrives
   // Under way (the flight code loads after scene one), then on to sleep.
   await page.getByRole('button', { name: /^Energy/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('listbox', { name: 'Age band' }).focus()
-  await page.keyboard.press('Home')
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: '35–44', exact: true }).click()
   await page.getByRole('radio', { name: 'Prefer not to say' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('button', { name: /^Monday:/ }).click()
@@ -189,9 +187,7 @@ test('consult: Amp glows with the energy being set, and leans as it moves', asyn
   await page.goto('/quizv2')
   await page.getByRole('button', { name: /^Energy/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('listbox', { name: 'Age band' }).focus()
-  await page.keyboard.press('Home')
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: '35–44', exact: true }).click()
   await page.getByRole('radio', { name: 'Prefer not to say' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('button', { name: /^Monday:/ }).click()
@@ -207,14 +203,13 @@ test('consult: Amp glows with the energy being set, and leans as it moves', asyn
 /* ── The day ring (plan Phase 7.3) ─────────────────────────────────────── */
 
 for (const mode of ['standard', 'comfort', 'reduced'] as const) {
-  test(`workshop: the day ring, round Amp and for the read (${mode})`, async ({ page }) => {
+  test(`workshop: the day ring, for the read (${mode})`, async ({ page }) => {
     if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' })
     await openStory(page, 'Day ring')
     if (mode === 'comfort') await page.getByRole('button', { name: 'Comfort mode' }).click()
     const lg = page.locator('[data-ring-lg]')
     await expect(lg.getByRole('img', { name: /^Your day: sleep 23:30 to 06:00, last coffee about 16:00, trains around 18:30/ })).toBeVisible()
     await expect(page.getByRole('list', { name: 'Your day, in words' }).getByRole('listitem')).toHaveCount(5)
-    await expect(page.locator('[data-ring-sm]')).toHaveScreenshot(`day-ring-sm-${mode}.png`, STILL)
     await expect(lg).toHaveScreenshot(`day-ring-lg-${mode}.png`, STILL)
   })
 }
@@ -230,44 +225,43 @@ test('workshop: the ring fills in one answer at a time, and only with what was s
   }
 })
 
-test('consult: the answer lands on its own mark in the day ring', async ({ page }) => {
+test('consult: the answer flies into Amp, with nothing drawn round him', async ({ page }) => {
   await founderSessionViaApi(page)
   await page.goto('/quizv2')
   await page.getByRole('button', { name: /^Energy/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('listbox', { name: 'Age band' }).focus()
-  await page.keyboard.press('Home')
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: '35–44', exact: true }).click()
   await page.getByRole('radio', { name: 'Prefer not to say' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await expect(page.locator('[data-day-ring="sm"]')).toBeVisible()
+  // The clarity pass: Amp on his own at the top, no day ring or arcs round him.
+  await expect(page.locator('[data-flight-slot="amp"] [data-amp-state]')).toBeVisible()
+  await expect(page.locator('[data-day-ring]')).toHaveCount(0)
   await page.getByRole('button', { name: /^Monday:/ }).click()
   await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await expect(page.locator('[data-day-ring="sm"] [data-flight-slot="training"]')).toBeVisible()
   await page.getByRole('radio', { name: '3pm dip' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('radio', { name: 'OK' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  // In flight to the sleep arc, then there.
+  // In flight to Amp, then there.
   await expect(page.locator('.amp-flight')).toHaveCount(1)
   const token = await page.locator('.amp-flight').evaluate((el) => (el.getAnimations()[0]?.effect as KeyframeEffect | undefined)?.getKeyframes().at(-1)?.transform as string)
-  // Where the arc settles, once the scene has slid in: where the flight aimed.
   await expect(page.locator('.amp-flight')).toHaveCount(0)
   await page.waitForTimeout(300)
-  const arc = (await page.locator('[data-day-ring="sm"] [data-flight-slot="sleep"]').boundingBox())!
+  const amp = (await page.locator('[data-flight-slot="amp"]').boundingBox())!
   const [, x, y] = token.match(/translate\(([\d.]+)px, ([\d.]+)px\)/)!.map(Number)
-  expect(x).toBeGreaterThanOrEqual(arc.x - 24)
-  expect(x).toBeLessThanOrEqual(arc.x + arc.width + 24)
-  expect(y).toBeGreaterThanOrEqual(arc.y - 24)
-  expect(y).toBeLessThanOrEqual(arc.y + arc.height + 24)
-  await expect(page.getByRole('img', { name: /^Your day: sleep / })).toBeVisible()
+  expect(x).toBeGreaterThanOrEqual(amp.x - 24)
+  expect(x).toBeLessThanOrEqual(amp.x + amp.width + 24)
+  expect(y).toBeGreaterThanOrEqual(amp.y - 24)
+  expect(y).toBeLessThanOrEqual(amp.y + amp.height + 24)
 })
 
 /* ── Shape your day (plan Phase 7.4) ───────────────────────────────────── */
 
 /** Draws across the curve's box, left to right, through heights 0 (top) to 1 (bottom). */
 async function drawDay(page: Page, heights: number[]) {
+  // The pad sits under the shapes, so it may be below the fold: bring it up first.
+  await page.locator('[data-day-curve]').scrollIntoViewIfNeeded()
   // The scene slides in: measure the box once nothing round it is still moving.
   await page.waitForFunction(() => {
     for (let el = document.querySelector('[data-day-curve]'); el; el = el.parentElement) {
@@ -316,25 +310,22 @@ for (const mode of ['standard', 'comfort', 'reduced'] as const) {
   })
 }
 
-test('consult: the energy scene takes a drawn day, and the ring draws it', async ({ page }) => {
+test('consult: the energy scene takes a drawn day', async ({ page }) => {
   await founderSessionViaApi(page)
   await page.goto('/quizv2')
   await page.getByRole('button', { name: /^Energy/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await page.getByRole('listbox', { name: 'Age band' }).focus()
-  await page.keyboard.press('Home')
-  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+  await page.getByRole('radio', { name: '35–44', exact: true }).click()
   await page.getByRole('radio', { name: 'Prefer not to say' }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
   await page.getByRole('button', { name: /^Monday:/ }).click()
   await page.getByRole('group', { name: 'Monday: what you do' }).getByRole('button', { name: /^Gym/ }).click()
   await page.getByRole('button', { name: 'Next', exact: true }).click()
-  await expect(page.locator('h1')).toHaveText(/How does your energy go through a day/)
+  await expect(page.locator('h1')).toHaveText(/energy through the day/)
   await expect(page.locator('[data-day-curve]')).toBeVisible()
   await drawDay(page, [0.4, 0.25, 0.2, 0.3, 0.65, 0.72, 0.5, 0.35, 0.45, 0.6])
   await expect(page.getByRole('img', { name: /^Energy .*dips around 1[46]:00/ })).toBeVisible()
-  await expect(page.locator('[data-day-ring="sm"] [data-ring-dip]')).toHaveCount(1)
-  await expect(page.getByRole('img', { name: /^Your day: .*energy.*dips around 1[46]:00/ })).toBeVisible()
+  await expect(page.locator('[data-curve-point]')).toHaveCount(10)
 })
 
 /* ── Watch Amp think (plan Phase 7.5) ──────────────────────────────────── */
@@ -561,10 +552,8 @@ test('results page: Why this? on a consult product traces it back, in this tab o
   const has = async (l: ReturnType<typeof page.getByRole>) => (await l.count()) > 0
   for (let i = 0; i < 30; i++) {
     if (await has(page.getByRole('region', { name: 'Your read' }))) break
-    if (await has(page.getByRole('listbox', { name: 'Age band' }))) {
-      await page.getByRole('listbox', { name: 'Age band' }).focus()
-      await page.keyboard.press('Home')
-      for (let k = 0; k < 3; k++) await page.keyboard.press('ArrowDown')
+    if (await has(page.getByRole('radiogroup', { name: 'Age band' }))) {
+      await page.getByRole('radio', { name: '35–44', exact: true }).click()
       await page.getByRole('radio', { name: 'Prefer not to say' }).click()
     }
     if (await has(page.getByRole('button', { name: /^Monday:/ }))) {

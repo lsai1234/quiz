@@ -71,7 +71,7 @@ export function BodyMap({ scene, answers, onAnswer, comfort }: SceneProps) {
   return (
     <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)' }}>
       {!comfort && (
-        <div aria-hidden data-emphasis={scene.emphasis ? 'true' : undefined} className="relative" style={{ width: 'min(100%, calc(var(--amp-target) * 5))', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
+        <div aria-hidden data-emphasis={scene.emphasis ? 'true' : undefined} className="relative" style={{ width: 'min(100%, calc(var(--amp-target) * 2.8))', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
           <Figure />
           {SPOTS.flatMap((spot) =>
             MARKS[spot].map(([x, y], i) => {

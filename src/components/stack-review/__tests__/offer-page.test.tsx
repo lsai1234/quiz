@@ -88,11 +88,17 @@ it('starts with the hero, labelled, and the bar follows it until a depth is chos
 
   const heroTitle = within(core).getByRole('heading', { level: 3 }).textContent!
   expect(within(core).getByRole('button', { name: /Start with this/ })).toBeInTheDocument()
-  expect(screen.getByText('Or get the full stack', { selector: 'p' })).toBeInTheDocument()
+  expect(within(document.getElementById('offer-full-stack')!).getByText('Or get the full stack', { selector: 'p' })).toBeInTheDocument()
   expect(within(core).getByRole('button', { name: 'Or get the full stack' })).toBeInTheDocument()
+  // The offer at a glance, at the top (the clarity pass): both options, priced.
+  const summary = document.querySelector('[data-offer-summary]') as HTMLElement
+  expect(within(summary).getByText(heroTitle)).toBeInTheDocument()
+  expect(within(summary).getByText('Or get the full stack')).toBeInTheDocument()
+  expect(within(summary).getByRole('button', { name: /^See the full stack/ })).toBeInTheDocument()
 
   await waitFor(() => expect(stickyBar()).toHaveTextContent('Start with this →'))
-  expect(stickyBar()).toHaveTextContent(/Start here/)
+  // The bar names what "Start with this" buys.
+  expect(stickyBar()).toHaveTextContent(/· delivered/)
 
   await userEvent.click(screen.getByRole('button', { name: /^Complete/ }))
   await waitFor(() => expect(stickyBar()).toHaveTextContent('Checkout →'))
@@ -105,8 +111,12 @@ it('starts with the hero, labelled, and the bar follows it until a depth is chos
 it('never says "free" about the gift without its conditions and the terms beside it', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)
-  const note = await screen.findByText(/^Comes with a free /)
-  const box = note.closest('[data-bonus-note]') as HTMLElement
+  const notes = await screen.findAllByText(/^Comes with a free /)
+  const box = notes.map((n) => n.closest('[data-bonus-note]')).find(Boolean) as HTMLElement
+  // And at the top, in "Your offer": the same conditions and terms beside it.
+  const gift = notes.map((n) => n.closest('[data-offer-gift]')).find(Boolean) as HTMLElement
+  expect(gift).toHaveTextContent(/First order only, one per customer\. Stacks from £1\.00 before any discount\. While stocks last\./)
+  expect(within(gift).getByRole('link', { name: 'Free gift terms' })).toHaveAttribute('href', '/legal/free-gift')
   expect(box).toHaveTextContent(/First order only, one per customer\. Stacks from £1\.00 before any discount\. While stocks last\./)
   expect(within(box).getByRole('link', { name: 'Free gift terms' })).toHaveAttribute('href', '/legal/free-gift')
 
@@ -120,7 +130,7 @@ it('never says "free" about the gift without its conditions and the terms beside
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const text = n.textContent ?? ''
     if (!/\bfree\b/i.test(text) || /free (UK mainland )?delivery|delivery is free|Free$|free order|starter/i.test(text)) continue
-    if (n.parentElement?.closest('[data-bonus-note], [data-receipt-bonus]')) continue
+    if (n.parentElement?.closest('[data-bonus-note], [data-receipt-bonus], [data-offer-gift]')) continue
     loose.push(text)
   }
   expect(loose).toEqual([])
@@ -129,7 +139,7 @@ it('never says "free" about the gift without its conditions and the terms beside
 it('moves no price: the receipt is the same with the bonus on and off', async () => {
   offer = everything()
   const first = render(<StackReviewPage reducedMotion />)
-  await screen.findByText(/^Comes with a free /)
+  await screen.findAllByText(/^Comes with a free /)
   const withBonus = receiptTotal()
   first.unmount()
 
@@ -154,7 +164,7 @@ it('keeps the gift and takes off a code worth less, saying why', async () => {
   offer = everything()
   code = { discountPct: 0.01 }
   render(<StackReviewPage reducedMotion />)
-  await screen.findByText(/^Comes with a free /)
+  await screen.findAllByText(/^Comes with a free /)
   await userEvent.click(screen.getByRole('button', { name: /got a discount code/i }))
   await userEvent.type(screen.getByPlaceholderText('Discount code'), 'SMALL1')
   await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
@@ -166,7 +176,7 @@ it('gives the code when it is worth more, and the receipt says so', async () => 
   offer = everything()
   code = { discountPct: 0.25 }
   render(<StackReviewPage reducedMotion />)
-  await screen.findByText(/^Comes with a free /)
+  await screen.findAllByText(/^Comes with a free /)
   await userEvent.click(screen.getByRole('button', { name: /got a discount code/i }))
   await userEvent.type(screen.getByPlaceholderText('Discount code'), 'BIG25')
   await userEvent.click(screen.getByRole('button', { name: 'Apply' }))

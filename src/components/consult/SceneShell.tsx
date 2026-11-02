@@ -144,18 +144,10 @@ export function SceneShell({
         {/* Amp gets a line of his own only when he has something to say; on a
             scene with no reaction yet he sits beside the hint instead. */}
         {reaction && (
-          <div className="flex items-center" style={{ gap: 'var(--amp-space-2)', minHeight: 'var(--amp-space-6)', marginBottom: 'var(--amp-space-3)' }}>
+          <div className="flex items-center" style={{ gap: 'var(--amp-space-3)', minHeight: 'var(--amp-space-6)', marginBottom: 'var(--amp-space-4)' }}>
             <span data-flight-slot="amp" className="inline-flex shrink-0">{amp}</span>
-            <p
-              aria-live="polite"
-              className="uppercase"
-              style={{
-                fontFamily: 'var(--amp-font-label)',
-                fontSize: 'var(--amp-text-data)',
-                letterSpacing: 'var(--amp-tracking-data)',
-                color: 'var(--amp-accent)',
-              }}
-            >
+            {/* What he says, in a speech bubble pointing back at him. */}
+            <p aria-live="polite" className="amp-bubble">
               {reaction}
             </p>
           </div>
@@ -179,10 +171,12 @@ export function SceneShell({
           {question}
         </h1>
         {(hint || (!reaction && amp)) && (
-          <div className="flex items-start" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-3)' }}>
+          <div className={`flex ${!reaction && amp ? 'items-center' : 'items-start'}`} style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-3)' }}>
             {!reaction && amp && <span data-flight-slot="amp" className="inline-flex shrink-0">{amp}</span>}
             {hint && (
-              <p style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink-2)', paddingTop: 'var(--amp-hairline)' }}>{hint}</p>
+              <p className={!reaction && amp ? 'amp-bubble' : undefined} style={!reaction && amp ? undefined : { fontSize: 'var(--amp-text-body)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink-2)' }}>
+                {hint}
+              </p>
             )}
           </div>
         )}
@@ -213,18 +207,15 @@ export function SceneShell({
             <button
               type="button"
               onClick={() => window.scrollBy({ top: Math.round(window.innerHeight * 0.6), behavior: 'smooth' })}
-              className="amp-press amp-anim-fade inline-flex items-center self-center uppercase"
+              className="amp-press amp-anim-fade inline-flex items-center self-center"
               style={{
                 gap: 'var(--amp-space-1)',
-                minHeight: 'var(--amp-space-8)',
+                minHeight: 'var(--amp-space-6)',
                 padding: '0 var(--amp-space-3)',
                 borderRadius: 'var(--amp-radius-pill)',
-                border: 'var(--amp-hairline) solid var(--amp-accent-line)',
                 background: 'var(--amp-glass-solid)',
-                color: 'var(--amp-accent)',
-                fontFamily: 'var(--amp-font-label)',
-                fontSize: 'var(--amp-text-data)',
-                letterSpacing: 'var(--amp-tracking-data)',
+                color: 'var(--amp-ink-2)',
+                fontSize: 'var(--amp-text-meta)',
               }}
             >
               More below

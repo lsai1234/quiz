@@ -57,52 +57,60 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
   switch (scene) {
     case 'goals': {
       if (a.goals.length === 0) return ''
-      return `${capitalise(GOAL_WORDS[a.goals[0]])} first. Got it.`
+      return `Got it. ${capitalise(GOAL_WORDS[a.goals[0]])} comes first.`
     }
     case 'about':
-      return a.age ? `${AGE_WORDS[a.age]}. Noted.` : ''
+      return a.age ? `${AGE_WORDS[a.age]}. Thanks, that helps.` : ''
     case 'training': {
       if (!a.training) return ''
       const n = Math.round(sessionsPerWeek(a.training))
-      if (n === 0) return 'A rest-heavy week. Fair.'
-      const count = n === 1 ? 'one session' : n === 2 ? 'two sessions' : (WORDS[n] ?? String(n)).toLowerCase()
+      if (n === 0) return 'No training right now. That’s fine.'
+      const count = n === 1 ? 'one session' : n === 2 ? 'two sessions' : `${(WORDS[n] ?? String(n)).toLowerCase()} sessions`
       // "It varies" is an average, so Amp says "about".
       const said = a.training?.mode === 'average' ? `About ${count}` : capitalise(count)
-      if (n <= 2) return `${said} a week. Good start.`
-      if (n <= 4) return `${said} a week, solid.`
-      return `${said} a week. Serious.`
+      if (n <= 2) return `${said} a week. Nice.`
+      if (n <= 4) return `${said} a week. Solid.`
+      return `${said} a week. That’s a lot of work.`
     }
     case 'aim':
-      return a.aim === 'muscle' ? 'Building. Got it.' : a.aim === 'strength' ? 'Stronger it is.' : a.aim === 'sport' ? 'Match fit. Noted.' : a.aim ? 'Going the distance. Noted.' : ''
+      return a.aim === 'muscle' ? 'Building muscle. Got it.' : a.aim === 'strength' ? 'Getting stronger. Got it.' : a.aim === 'sport' ? 'Playing your sport. Got it.' : a.aim ? 'Going further. Got it.' : ''
     case 'changes':
-      return a.changes === null ? '' : a.changes.length === 0 ? 'Nothing’s changed. Great.' : 'Thanks. That helps a lot.'
-    case 'energy':
-      return a.energy === null ? '' : `Energy ${a.energy}/10. Noted.`
+      return a.changes === null ? '' : a.changes.length === 0 ? 'Nothing’s changed. Good to hear.' : 'Thanks. That helps a lot.'
+    case 'energy': {
+      if (a.energy === null) return ''
+      // Say back the shape they gave, not a number they never saw.
+      const preset = a.energyCurve?.how === 'preset' ? a.energyCurve.preset : null
+      if (preset === 'dip-3pm') return 'A 3pm dip. I hear that a lot.'
+      if (preset === 'slow-starter') return 'Slow mornings. Got it.'
+      if (preset === 'second-wind') return 'A second wind at night. Got it.'
+      if (preset === 'steady') return 'Steady all day. Nice.'
+      if (a.energyCurve?.how === 'drawn') return 'Thanks for drawing your day.'
+      return 'Got it, thanks.'
+    }
     case 'sleep': {
       if (!a.sleep) return ''
       const h = sleepHours(a.sleep)
-      return h < 7 ? `${formatHours(h)} hours. Short.` : `${formatHours(h)} hours. Decent.`
+      return h < 7 ? `About ${formatHours(h)} hours a night. A bit short.` : `About ${formatHours(h)} hours a night. Good.`
     }
     case 'daylight':
-      return a.daylight === 'hardly' ? 'Not much sun. Common.' : a.daylight ? 'Some sun. Good.' : ''
+      return a.daylight === 'hardly' ? 'Not much daylight. Lots of people are the same.' : a.daylight ? 'Some daylight most weeks. Good.' : ''
     case 'caffeine': {
       const n = caffeineCount(a.caffeine)
       if (!a.caffeine) return ''
-      if (n === 0) return 'No caffeine. Clean.'
-      if (n >= 4) return `${n} a day. Noted.`
-      return `${n} a day. Steady.`
+      if (n === 0) return 'No caffeine. Got it.'
+      return `${n} ${n === 1 ? 'drink' : 'drinks'} a day. Got it.`
     }
     case 'food':
-      return a.plate ? 'Plate noted.' : ''
+      return a.plate ? 'Thanks. That’s your food sorted.' : ''
     case 'protein': {
       if (!a.protein) return ''
       const intake = proteinIntake(a.protein)
-      return intake !== null ? `About ${intake}g a day. Noted.` : a.protein.door === 'ask' ? 'Rough is fine. Noted.' : ''
+      return intake !== null ? `Roughly ${intake}g of protein a day. Got it.` : a.protein.door === 'ask' ? 'A rough idea is fine. Got it.' : ''
     }
     case 'body':
-      return a.body === null ? '' : a.body.length === 0 ? 'All good. Great.' : 'Noted the sore spots.'
+      return a.body === null ? '' : a.body.length === 0 ? 'Nothing sore. Good to hear.' : 'Thanks. I’ll keep those spots in mind.'
     case 'shelf':
-      return a.shelf === null ? '' : a.shelf.length === 0 ? 'Fresh start.' : "I won't double up."
+      return a.shelf === null ? '' : a.shelf.length === 0 ? 'Nothing yet. A clean start.' : 'Got it. I won’t double up.'
     case 'review':
       return 'All checked.'
     case 'circuit':

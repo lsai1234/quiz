@@ -39,7 +39,7 @@
       "speedRun": true,
       "copy": {
         "question": "What are you after?",
-        "hint": "Pick up to three. The order you tap them sets the priority."
+        "hint": "Pick up to three. Your first pick counts most."
       },
       "placeholder": {
         "multi": true,
@@ -106,8 +106,8 @@
       "speedRun": true,
       "copy": {
         "question": "A bit about you",
-        "hint": "Spin to your age, then pick one below.",
-        "comfortHint": "Tap your age band, then pick one below."
+        "hint": "Your age and sex change what your body needs.",
+        "comfortHint": "Your age and sex change what your body needs."
       },
       "placeholder": {
         "options": [
@@ -163,9 +163,9 @@
       "interaction": "training-week",
       "speedRun": true,
       "copy": {
-        "question": "What does your training look like?",
-        "hint": "Tap a day, then what you do on it. Two things in a day is fine. Weeks all different? Choose “It varies”.",
-        "comfortHint": "For each day, tap what you do. Weeks all different? Choose “It varies”."
+        "question": "How do you train in a normal week?",
+        "hint": "Tap a day, then what you do. Weeks all different? Tap “It varies”.",
+        "comfortHint": "For each day, tap what you do. Weeks all different? Tap “It varies”."
       },
       "tell": {
         "lead": true,
@@ -371,7 +371,7 @@
       },
       "copy": {
         "question": "What are you training for?",
-        "hint": "Pick the main one. It decides what I put first."
+        "hint": "Pick the main one."
       },
       "tell": {
         "lead": false,
@@ -408,9 +408,9 @@
       "interaction": "day-curve",
       "speedRun": true,
       "copy": {
-        "question": "How does your energy go through a day?",
-        "hint": "Draw it from 6am to midnight, then drag any point to fine-tune it.",
-        "comfortHint": "Pick the shape most like your day."
+        "question": "How’s your energy through the day?",
+        "hint": "Pick the shape most like a normal day.",
+        "comfortHint": "Pick the shape most like a normal day."
       },
       "tell": {
         "lead": false,
@@ -561,9 +561,9 @@
       "interaction": "sleep-window",
       "speedRun": true,
       "copy": {
-        "question": "Set your sleep window",
-        "hint": "Drag bedtime and wake-up to a normal night.",
-        "comfortHint": "Use the buttons to set bedtime and wake-up for a normal night."
+        "question": "When do you usually sleep?",
+        "hint": "Set a normal night, then say how well you sleep.",
+        "comfortHint": "Use the buttons to set a normal night, then say how well you sleep."
       },
       "tell": {
         "lead": true,
@@ -656,8 +656,8 @@
       "speedRun": false,
       "copy": {
         "question": "How often are you outside in daylight?",
-        "hint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Drag the sun.",
-        "comfortHint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Pick the closest."
+        "hint": "Count days with 20 minutes or more outdoors: a walk, the school run, working outside.",
+        "comfortHint": "Count days with 20 minutes or more outdoors: a walk, the school run, working outside."
       },
       "tell": {
         "lead": false,
@@ -714,8 +714,8 @@
       "interaction": "cup-counter",
       "speedRun": true,
       "copy": {
-        "question": "Coffee, tea, energy drinks?",
-        "hint": "Tap to stack what you have on a normal day."
+        "question": "How much caffeine on a normal day?",
+        "hint": "Coffee, tea and energy drinks. Tap + for each one."
       },
       "tell": {
         "lead": false,
@@ -799,8 +799,8 @@
       "interaction": "plate-picker",
       "speedRun": false,
       "copy": {
-        "question": "What's on your plate most weeks?",
-        "hint": "Tap everything you eat at least once a week."
+        "question": "What do you eat most weeks?",
+        "hint": "Tap everything you have at least once a week."
       },
       "tell": {
         "lead": true,
@@ -910,7 +910,7 @@
       "speedRun": false,
       "copy": {
         "question": "What does a normal day of eating look like?",
-        "hint": "Roughly is fine. I only need the shape of a normal day."
+        "hint": "Pick the closest. Roughly is fine."
       },
       "placeholder": {
         "options": [
@@ -962,8 +962,8 @@
       "interaction": "body-map",
       "speedRun": false,
       "copy": {
-        "question": "Anywhere feel stiff or sore?",
-        "hint": "Tap the spots. Leave it blank if you're all good."
+        "question": "Anywhere stiff or sore?",
+        "hint": "Tap any sore spots. Nothing sore? Just tap Next."
       },
       "tell": {
         "lead": false,
@@ -1083,7 +1083,7 @@
       },
       "copy": {
         "question": "Anything harder than it used to be?",
-        "hint": "Tap any that apply. Leave it blank if nothing’s changed."
+        "hint": "Tap any that apply. Nothing’s changed? Just tap Next."
       },
       "tell": {
         "lead": false,
@@ -1125,8 +1125,8 @@
       "interaction": "shelf-check",
       "speedRun": true,
       "copy": {
-        "question": "Already taking anything?",
-        "hint": "So nothing gets doubled up."
+        "question": "Taking any supplements already?",
+        "hint": "Tap what you take now, so nothing gets doubled up."
       },
       "tell": {
         "lead": true,
@@ -1272,8 +1272,8 @@
       "interaction": "review",
       "speedRun": true,
       "copy": {
-        "question": "Here's what I've got",
-        "hint": "Tap anything to change it. Nothing's been decided yet.",
+        "question": "Here’s what I’ve got",
+        "hint": "Check it over. Tap Edit to change anything.",
         "next": "Looks right"
       }
     }

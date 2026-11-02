@@ -105,7 +105,7 @@ describe('Shape your day (plan Phase 7.4)', () => {
   it('offers five shapes for the keyboard, and takes "Not sure" as an answer', () => {
     const spy = jest.fn()
     render(<Harness id="energy" spy={spy} />)
-    const shapes = screen.getByRole('radiogroup', { name: 'Or pick the shape most like your day' })
+    const shapes = screen.getByRole('radiogroup', { name: 'The shape most like your day' })
     expect(Array.from(shapes.querySelectorAll('[role="radio"]')).map((r) => r.textContent)).toEqual(['Steady all day', 'Slow starter', '3pm dip', 'Second wind at night', 'Not sure'])
     fireEvent.click(screen.getByRole('radio', { name: 'Slow starter' }))
     screen.getByRole('radio', { name: 'Slow starter' }).focus()

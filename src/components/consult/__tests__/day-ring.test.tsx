@@ -40,15 +40,15 @@ it('in its larger size, labels the hours and lists the day beside it', () => {
   expect(screen.getByRole('list', { name: 'Your day, in words' })).toHaveTextContent('Hardly any daylight')
 })
 
-it('sits round Amp in the consult, filling in as they answer', async () => {
+it('is not drawn round Amp in the consult: he sits on his own, and answers fly into him', async () => {
   const state = { ...initialFlow('c_ring', 0, { goals: ['energy'], age: '35-44', comfortOffered: true }), sceneId: 'sleep' as const, history: ['goals' as const, 'about' as const] }
   render(<AmpConsult initial={state} />)
   await act(async () => new Promise((r) => setTimeout(r, 0)))
-  expect(document.querySelector('[data-day-ring="sm"]')).not.toBeNull()
+  expect(document.querySelector('[data-day-ring]')).toBeNull()
   answerCurrentScene()
-  expect(screen.getByRole('img', { name: /^Your day: sleep / })).toBeInTheDocument()
   pressNext()
-  expect(document.querySelector('[data-day-ring="sm"] [data-flight-slot="sleep"]')).not.toBeNull()
+  expect(document.querySelector('[data-flight-slot="amp"] [data-amp-state]')).not.toBeNull()
+  expect(document.querySelector('[data-day-ring]')).toBeNull()
 })
 
 it('keeps the circuit check calm: Amp on his own, no ring', async () => {

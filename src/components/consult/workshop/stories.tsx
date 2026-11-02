@@ -282,20 +282,19 @@ const RING_STEPS: { said: string; answers: Partial<ConsultAnswers> }[] = [
   },
 ]
 
-/** The ring in the consult (round Amp) and the larger one for the read, filling in. */
+/**
+ * The day ring for the read, filling in one answer at a time. (It no longer
+ * sits round Amp in the consult: the clarity pass took everything from round
+ * him, so the day is drawn here, large and labelled, where it can be read.)
+ */
 function DayRingStory() {
   const [step, setStep] = useState(RING_STEPS.length - 1)
   const answers = RING_STEPS.slice(0, step + 1).reduce<ConsultAnswers>((a, s) => ({ ...a, ...s.answers }), { ...EMPTY_ANSWERS })
   return (
     <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)', padding: 'var(--amp-space-8) var(--amp-gutter)' }}>
-      <div className="flex items-center" style={{ gap: 'var(--amp-space-3)' }} data-ring-sm>
-        <DayRing answers={answers}>
-          <Amp state="idle" />
-        </DayRing>
-        <span className="uppercase" style={{ ...label, color: 'var(--amp-accent)' }}>
-          {RING_STEPS[step].said}
-        </span>
-      </div>
+      <p className="amp-bubble" data-ring-said>
+        {RING_STEPS[step].said}
+      </p>
       <div data-ring-lg>
         <DayRing answers={answers} size="lg">
           <Amp state="idle" size="lg" />

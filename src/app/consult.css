@@ -91,6 +91,13 @@
   --amp-glow-strong: 0 0 48px -4px var(--amp-glow-tone);
   --amp-bloom-alpha: 0.16;
 
+  /* ══ Amp's body ═══════════════════════════════════════════════════════════
+     A lit glass orb: a deep teal core falling off to the ground, lit from
+     inside by the accent. Shapes only, never text, so no contrast pairs. */
+  --amp-orb-core: #12424d;
+  --amp-orb-deep: #071619;
+  --amp-orb-lit: #8bebff;
+
   /* ══ Roles ════════════════════════════════════════════════════════════════
      What components paint with. See the header. */
   --amp-accent: var(--amp-volt);
@@ -178,7 +185,6 @@
 .amp-consult {
   --amp-shell-gap: var(--amp-space-6);
   --amp-shell-lead: var(--amp-space-5);
-  --amp-wheel-rows: 5;
 }
 
 /* Shorter phones (and any phone with the browser's bars showing): tighter
@@ -189,7 +195,6 @@
     --amp-shell-gap: var(--amp-space-4);
     --amp-shell-lead: var(--amp-space-3);
     --amp-text-question: clamp(1.875rem, 8.5vw, 2.5rem);
-    --amp-wheel-rows: 3;
   }
 }
 
@@ -328,16 +333,16 @@
 }
 
 .amp-pupil {
-  transform: translate(calc(var(--amp-gx, var(--amp-lean, 0)) * 0.9px), calc(var(--amp-gy, 0) * 0.9px));
+  transform: translate(calc(var(--amp-gx, var(--amp-lean, 0)) * 2.4px), calc(var(--amp-gy, 0) * 2px));
   transition: transform var(--amp-duration-state) var(--amp-ease-out);
 }
 
 [data-amp-state='thinking'] .amp-pupil {
-  transform: translate(0.6px, -0.9px);
+  transform: translate(1.4px, -2px);
 }
 
 [data-amp-state='reading'] .amp-pupil {
-  transform: translate(0, 0.9px);
+  transform: translate(0, 2px);
 }
 
 /* Pinpoint's moods: a tilt and one eye wider while it's unsure; leaning in
@@ -352,6 +357,34 @@
 
 [data-amp-mood='leaning'] .amp-face {
   transform: scale(1.12);
+}
+
+/* What Amp says (the clarity pass): a speech bubble with its tail pointing
+   back at him, in plain sentence case. */
+.amp-bubble {
+  position: relative;
+  min-width: 0;
+  padding: var(--amp-space-2) var(--amp-space-3);
+  border: var(--amp-hairline) solid var(--amp-edge-strong);
+  border-radius: var(--amp-radius-tile);
+  background: var(--amp-glass-solid);
+  color: var(--amp-ink);
+  font-size: var(--amp-text-body);
+  font-weight: 500;
+  line-height: var(--amp-leading-body);
+}
+
+.amp-bubble::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(var(--amp-space-1) * -1 - var(--amp-hairline));
+  width: var(--amp-space-2);
+  height: var(--amp-space-2);
+  border-left: var(--amp-hairline) solid var(--amp-edge-strong);
+  border-bottom: var(--amp-hairline) solid var(--amp-edge-strong);
+  background: var(--amp-glass-solid);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .amp-spark {

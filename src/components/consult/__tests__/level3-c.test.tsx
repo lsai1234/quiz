@@ -104,7 +104,7 @@ describe('H6 analysis & charge-up', () => {
     expect(screen.getByRole('heading', { name: 'Your read' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     // Start here: the stack, and the safety notes before it.
-    expect(screen.getByRole('heading', { name: 'Your stack, hero first' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Your stack' })).toBeInTheDocument()
     expect(screen.getByRole('list', { name: 'Before you start' })).toHaveTextContent(/pharmacist/i)
     fireEvent.click(screen.getByRole('button', { name: 'See my stack' }))
     expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ consult_id: 'c_analysis0001' }) }))

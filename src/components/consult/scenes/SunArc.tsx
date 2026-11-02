@@ -25,11 +25,11 @@ export const DAYLIGHT_STEPS: Daylight[] = ['hardly', 'some', 'most', 'daily']
 
 /** The SVG's drawing box. The arc is a half-ellipse sitting on the horizon. */
 const W = 320
-const H = 180
+const H = 150
 const CX = W / 2
-const CY = H - 20
+const CY = H - 16
 const RX = 130
-const RY = 130
+const RY = 112
 
 /** Where on the arc each step sits: angle in degrees, 180 = left horizon, 90 = overhead. */
 const ANGLES = [168, 138, 112, 90]
@@ -155,52 +155,42 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
         </svg>
       </div>
 
-      <span className="self-end" style={{ marginTop: 'calc(var(--amp-space-3) * -1)' }}>
-        <WhatsThis term="daylight" questions={ai} />
-      </span>
-      <p
-        aria-hidden
-        className="uppercase"
-        style={{
-          fontFamily: 'var(--amp-font-display)',
-          fontWeight: 'var(--amp-weight-heavy)',
-          fontSize: 'var(--amp-text-question)',
-          lineHeight: 'var(--amp-leading-question)',
-          color: current ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
-        }}
-      >
-        {current ? DAYLIGHT_LABEL[current] : 'Drag the sun'}
-      </p>
-      <p aria-live="polite" style={{ marginTop: 'calc(var(--amp-space-2) * -1)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', minHeight: '1.3em' }}>
-        {current ? DAYLIGHT_EXAMPLE[current] : 'Twenty minutes or more outside counts. Through a window doesn’t.'}
-      </p>
-
-      <div role="radiogroup" aria-label="Daylight steps" onKeyDown={radioArrows} className="grid w-full grid-cols-4" style={{ gap: 'var(--amp-space-2)' }}>
+      {/* The four answers, in words: tap one, or drag the sun to it. */}
+      <div role="radiogroup" aria-label="Daylight steps" onKeyDown={radioArrows} className="grid w-full grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
         {DAYLIGHT_STEPS.map((d, i) => {
-          const lit = current !== null && i <= step
+          const on = d === current
           return (
             <button
               key={d}
               type="button"
               role="radio"
-              aria-checked={d === current}
+              aria-checked={on}
               aria-label={`${DAYLIGHT_LABEL[d]}: ${DAYLIGHT_EXAMPLE[d]}`}
               onClick={() => set(i)}
-              className="amp-press flex items-center"
-              style={{ minHeight: 'var(--amp-target)' }}
+              className="amp-press flex items-center justify-center text-center"
+              style={{
+                minHeight: 'var(--amp-target)',
+                padding: 'var(--amp-space-2) var(--amp-space-3)',
+                borderRadius: 'var(--amp-radius-chip)',
+                border: `var(--amp-hairline) solid ${on ? 'var(--amp-sun-line)' : 'var(--amp-edge-strong)'}`,
+                background: on ? 'var(--amp-sun-fill)' : 'var(--amp-glass-solid)',
+                color: on ? 'var(--amp-sun)' : 'var(--amp-ink)',
+                fontSize: 'var(--amp-text-body)',
+                fontWeight: 'var(--amp-weight-medium)',
+                lineHeight: 'var(--amp-leading-tight)',
+                transition: stateTransition('border-color', 'background-color', 'color'),
+              }}
             >
-              <span
-                className="block w-full"
-                style={{
-                  height: 'var(--amp-space-1)',
-                  borderRadius: 'var(--amp-radius-pill)',
-                  background: lit ? 'var(--amp-sun)' : 'var(--amp-edge-strong)',
-                  transition: stateTransition('background-color'),
-                }}
-              />
+              {DAYLIGHT_LABEL[d]}
             </button>
           )
         })}
+      </div>
+      <div className="flex w-full items-start justify-between" style={{ gap: 'var(--amp-space-2)', marginTop: 'calc(var(--amp-space-1) * -1)' }}>
+        <p aria-live="polite" style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', minHeight: '1.3em' }}>
+          {current ? DAYLIGHT_EXAMPLE[current] : 'Through a window doesn’t count.'}
+        </p>
+        <WhatsThis term="daylight" questions={ai} />
       </div>
     </div>
   )

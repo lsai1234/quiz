@@ -105,22 +105,15 @@ async function answerByKeyboard(page: Page) {
     await tabTo(page, /^Performance/)
     await page.keyboard.press('Space')
   } else if (/about you/i.test(h)) {
-    if (await page.getByRole('listbox', { name: 'Age band' }).count()) {
-      await tabTo(page, /^Age band/)
-      // Home is "Under 18"; two down is 25–34.
-      await page.keyboard.press('Home')
-      for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowDown')
-    } else {
-      // Comfort mode: the bands are a radio group.
-      await pickRadio(page, /^(Under 18|18–24|25–34)/, /^25–34/)
-    }
+    // The bands are a radio group: Tab in, arrow to 25–34.
+    await pickRadio(page, /^(Under 18|18–24|25–34)/, /^25–34/)
     await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
   } else if (/niggling|joints|harder than/i.test(h)) {
     // The body map and "what's got harder": blank is an answer.
   } else if (/training for/i.test(h)) {
     // Builders only: what the training is for.
     await pickRadio(page, /^(Build muscle|Get stronger|Play my sport|Go further)/, /^Build muscle/)
-  } else if (/training|active is a normal week|moving/i.test(h)) {
+  } else if (/training|train in a normal week|active is a normal week|moving/i.test(h)) {
     if (await page.getByRole('group', { name: 'Monday' }).count()) {
       // Comfort mode: each day is its own row of choices; Monday's come first.
       await tabTo(page, /^Gym/)
@@ -163,7 +156,7 @@ async function answerByKeyboard(page: Page) {
   } else if (/eat|plate|food/i.test(h)) {
     await tabTo(page, /^Eggs/)
     await page.keyboard.press('Space')
-  } else if (/already taking/i.test(h)) {
+  } else if (/already taking|supplements already/i.test(h)) {
     await tabTo(page, /^Nothing yet$/)
     await page.keyboard.press('Space')
   } else if (/safety|circuit|before i/i.test(h) || (await page.getByRole('radio', { name: 'None of these' }).count())) {
@@ -310,8 +303,9 @@ test.describe('consult accessibility (U7)', () => {
     // Comfort mode isn't offered: it switches itself on for 65 and over.
     await page.getByRole('button', { name: /^Healthy ageing/ }).click()
     await nextByKeyboard(page)
-    await page.getByRole('listbox', { name: 'Age band' }).focus()
-    await page.keyboard.press('End')
+    // 65+, by keyboard: from the first band, left wraps round to the last.
+    await page.getByRole('radio', { name: 'Under 18', exact: true }).focus()
+    await page.keyboard.press('ArrowLeft')
     await expect(page.locator('.amp-consult[data-comfort="true"]')).toHaveCount(1)
     await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
     await nextByKeyboard(page)
@@ -388,8 +382,9 @@ test.describe('consult accessibility (U7)', () => {
   test('Pinpoint in comfort mode passes axe too, and waits for Next', async ({ page }) => {
     await page.getByRole('button', { name: /^Healthy ageing/ }).click()
     await nextByKeyboard(page)
-    await page.getByRole('listbox', { name: 'Age band' }).focus()
-    await page.keyboard.press('End')
+    // 65+, by keyboard: from the first band, left wraps round to the last.
+    await page.getByRole('radio', { name: 'Under 18', exact: true }).focus()
+    await page.keyboard.press('ArrowLeft')
     await expect(page.locator('.amp-consult[data-comfort="true"]')).toHaveCount(1)
     await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
     await nextByKeyboard(page)
@@ -439,7 +434,7 @@ test.describe('consult accessibility (U7)', () => {
 
   test('after "Build my stack now", the review still offers Pinpoint, and the upgrade keeps every answer', async ({ page }) => {
     for (let i = 0; i < 16; i++) {
-      if (/what I've got/i.test((await heading(page).textContent()) ?? '')) break
+      if (/what I.ve got$/i.test((await heading(page).textContent()) ?? '')) break
       await answerByKeyboard(page)
       await nextByKeyboard(page)
     }
@@ -449,7 +444,7 @@ test.describe('consult accessibility (U7)', () => {
     await page.waitForTimeout(450)
     expect(PINPOINT).toContain(await sceneId(page))
     // Play it through: back at the review, every answer is still there and the offer has gone.
-    for (let i = 0; i < 40 && !/what I've got/i.test((await heading(page).textContent()) ?? ''); i++) {
+    for (let i = 0; i < 40 && !/what I.ve got$/i.test((await heading(page).textContent()) ?? ''); i++) {
       if (PINPOINT.includes((await sceneId(page)) ?? '')) await answerPinpointScreen(page)
       else await nextByKeyboard(page)
       await page.waitForTimeout(450)
@@ -481,7 +476,7 @@ test.describe('consult accessibility (U7)', () => {
     await page.getByRole('button', { name: /^Nausea/ }).click()
     await audit(page, 'circuit check with weight-loss medication')
     await page.getByRole('button', { name: 'Continue' }).click()
-    await expect(heading(page)).toHaveText(/what I've got/i)
+    await expect(heading(page)).toHaveText(/what I.ve got$/i)
     await expect(page.getByRole('button', { name: /^Circuit check: Weight-loss medication · since starting: nausea/ })).toBeVisible()
     await page.getByRole('button', { name: 'Looks right' }).click()
     // The safety notes are on Start here, before the stack.

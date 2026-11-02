@@ -4,14 +4,15 @@ import { useCallback, useRef } from 'react'
 import { CURVE_HOURS, CURVE_MAX, PRESET_LABEL, PRESET_POINTS, curvePatch, curveWords, pointsFromStroke, readCurve, type CurvePreset, type EnergyCurve } from '@/lib/consult/day-curve'
 import { haptic, springTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
-import { Tile, radioArrows } from '../controls'
+import { radioArrows } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
  * Shape your day (plan Phase 7.4): energy from 06:00 to midnight, replacing
- * the battery. Draw it with a finger; then drag any point up or down to
- * fine-tune it. Five shapes sit under it for the keyboard, and in comfort
- * mode they're the way in (the curve shows the one picked, still).
+ * the battery. Five shapes come first, each drawn small beside its name: one
+ * tap is the answer. Under them, the day itself: draw your own with a finger,
+ * or drag a point of the picked shape to fine-tune it. In comfort mode the
+ * shapes are the only way in (the curve shows the one picked, still).
  *
  * The afternoon level stays the 1–10 energy answer (`curvePatch`), so
  * everything that read the battery reads the curve the same way.
@@ -82,25 +83,23 @@ export function DayCurve({ answers, onAnswer, onInteract, comfort }: SceneProps)
   const dipIndex = shape?.dip ? CURVE_HOURS.indexOf((shape.dip.at / 60) as (typeof CURVE_HOURS)[number]) : -1
   const picked = curve?.how === 'preset' ? curve.preset : null
 
-  // In comfort mode the shapes are the way in, so they come first; the curve shows the one picked.
+  // The shapes are the way in for everyone: each one drawn small beside its name.
   const shapes = (
-    <div role="radiogroup" aria-label={comfort ? 'The shape most like your day' : 'Or pick the shape most like your day'} className={`grid ${comfort ? 'grid-cols-1' : 'grid-cols-2'}`} style={{ gap: 'var(--amp-space-2)' }} onKeyDown={(e) => radioArrows(e)}>
+    <div role="radiogroup" aria-label="The shape most like your day" className={`grid ${comfort ? 'grid-cols-1' : 'grid-cols-2'}`} style={{ gap: 'var(--amp-space-2)' }} onKeyDown={(e) => radioArrows(e)}>
       {PRESETS.map((id) => (
-        <Tile
-          key={id}
-          kind="radio"
-          layout={comfort ? 'row' : 'compact'}
-          label={PRESET_LABEL[id]}
-          selected={picked === id}
-          onSelect={() => write({ points: id === 'unsure' ? null : [...PRESET_POINTS[id]], how: 'preset', preset: id })}
-        />
+        <ShapeTile key={id} id={id} selected={picked === id} wide={comfort || id === 'unsure'} onSelect={() => write({ points: id === 'unsure' ? null : [...PRESET_POINTS[id]], how: 'preset', preset: id })} />
       ))}
     </div>
   )
 
   return (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
-      {comfort && shapes}
+      {shapes}
+      {!comfort && (
+        <p style={{ fontSize: 'var(--amp-text-meta)', fontWeight: 'var(--amp-weight-bold)', color: 'var(--amp-ink-2)', marginBottom: 'calc(var(--amp-space-2) * -1)' }}>
+          {points ? 'Your day. Drag a point to fine-tune it.' : 'Or draw your own, left to right'}
+        </p>
+      )}
       <div
         ref={comfort ? undefined : ref}
         {...(comfort ? {} : handlers)}
@@ -108,7 +107,7 @@ export function DayCurve({ answers, onAnswer, onInteract, comfort }: SceneProps)
         aria-label={points ? `${curveWords(points)}. Draw again, or drag a point, to change it.` : curve?.preset === 'unsure' ? 'Not sure. Draw your day, or pick a shape below.' : 'Draw your energy from 6am to midnight, or pick a shape below.'}
         data-day-curve={points ? 'set' : 'empty'}
         className={`relative w-full select-none ${comfort ? '' : 'cursor-crosshair touch-none'}`}
-        style={{ aspectRatio: '2 / 1', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-edge-strong)', background: 'var(--amp-glass-solid)' }}
+        style={{ aspectRatio: '3 / 1', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-edge-strong)', background: 'var(--amp-glass-solid)' }}
       >
         <svg viewBox="0 -2 100 56" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full" style={{ clipPath: 'inset(0 round var(--amp-radius-tile))' }}>
           {/* 06, 12, 18, 24 */}
@@ -154,7 +153,7 @@ export function DayCurve({ answers, onAnswer, onInteract, comfort }: SceneProps)
         )}
         {!points && !comfort && (
           <span aria-hidden className="absolute inset-0 flex items-center justify-center" style={{ color: 'var(--amp-ink-3)', fontSize: 'var(--amp-text-meta)' }}>
-            Draw with your finger, left to right
+            Draw here with your finger
           </span>
         )}
       </div>
@@ -164,7 +163,39 @@ export function DayCurve({ answers, onAnswer, onInteract, comfort }: SceneProps)
         <span>6pm</span>
         <span>Midnight</span>
       </div>
-      {!comfort && shapes}
     </div>
+  )
+}
+
+/** One shape to pick: its name, and the shape itself, small. */
+function ShapeTile({ id, selected, wide, onSelect }: { id: CurvePreset; selected: boolean; wide: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={() => {
+        haptic('select')
+        onSelect()
+      }}
+      className={`amp-press flex items-center justify-between text-left ${wide ? 'col-span-full' : ''}`}
+      style={{
+        gap: 'var(--amp-space-2)',
+        minHeight: 'calc(var(--amp-target) + var(--amp-space-2))',
+        padding: 'var(--amp-space-2) var(--amp-space-3)',
+        borderRadius: 'var(--amp-radius-tile)',
+        border: `var(--amp-hairline) solid ${selected ? 'var(--amp-accent-line)' : 'var(--amp-edge)'}`,
+        background: selected ? 'var(--amp-accent-fill)' : 'var(--amp-glass-solid)',
+        boxShadow: selected ? 'var(--amp-glow-soft)' : 'none',
+        color: 'var(--amp-ink)',
+      }}
+    >
+      <span style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-body)', lineHeight: 'var(--amp-leading-tight)' }}>{PRESET_LABEL[id]}</span>
+      {id !== 'unsure' && (
+        <svg viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden className="shrink-0" style={{ width: 'var(--amp-space-10)', height: 'var(--amp-space-5)' }}>
+          <path d={smooth(PRESET_POINTS[id])} fill="none" stroke={selected ? 'var(--amp-accent)' : 'var(--amp-ink-3)'} strokeWidth="2.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
+    </button>
   )
 }
