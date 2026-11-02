@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { ResultsBundle } from '@/lib/consult/results'
 import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
-import { startHere, type StartHereItem } from '@/lib/offer/start-here'
+import { startHere, type StartHere, type StartHereItem } from '@/lib/offer/start-here'
 import { FREE_GIFT_TERMS_PATH, OFFER_COPY } from '@/lib/offer/copy'
 import { titleOf } from '@/lib/offer/results'
 import { STORY_COPY } from '@/lib/consult/story-copy'
@@ -27,7 +27,7 @@ const mono = {
   letterSpacing: 'var(--amp-tracking-data)',
 } as const
 
-export function StoryStart({ bundle, reduced, offer }: { bundle: ResultsBundle; reduced: boolean; /** The workshop's own settings, in place of the shop's. */ offer?: OfferSettings }) {
+export function StoryStart({ bundle, reduced, offer, onReady }: { bundle: ResultsBundle; reduced: boolean; /** The workshop's own settings, in place of the shop's. */ offer?: OfferSettings; /** What it settled on, for sharing the card. */ onReady?: (start: StartHere) => void }) {
   const fetched = useOfferSettings()
   const settings = offer ?? fetched.settings
   const ready = Boolean(offer) || fetched.ready
@@ -54,6 +54,10 @@ export function StoryStart({ bundle, reduced, offer }: { bundle: ResultsBundle; 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- priced stands in for the module-level pricing config
     [ready, bundle, settings, priced],
   )
+
+  useEffect(() => {
+    if (start) onReady?.(start)
+  }, [start, onReady])
 
   if (!start) {
     return <p style={{ color: 'var(--amp-ink-2)' }}>Working out where to start…</p>

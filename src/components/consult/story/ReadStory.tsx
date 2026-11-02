@@ -18,6 +18,10 @@ import { ChargeProfileChart } from '../ChargeProfileChart'
 import { Constellation } from '../pinpoint/Constellation'
 import { NextButton, QuietLink, Segmented } from '../controls'
 import { StoryStart } from './StoryStart'
+import { StoryShareButton } from './StoryShareButton'
+import { canShare, dayShare, dotsShare, sharedPattern, startShare, type StoryShare } from '@/lib/share-card/story'
+import type { StartHere } from '@/lib/offer/start-here'
+import { titleOf } from '@/lib/offer/results'
 import type { OfferSettings } from '@/lib/offer/settings'
 
 const ShareSheet = dynamic(() => import('@/components/share-card/ShareSheet').then((m) => m.ShareSheet), { ssr: false })
@@ -92,6 +96,19 @@ export function ReadStory({ bundle, state, onDone, start = 0, offer }: { bundle:
   const first = useRef(true)
 
   const go = useCallback((to: number) => setAt(Math.max(0, Math.min(cards.length - 1, to))), [cards.length])
+  // Start here settles once the offer settings are in; sharing it waits for that.
+  const [settled, setSettled] = useState<StartHere | null>(null)
+  const share: StoryShare | null = !canShare(card, bundle.read.patterns)
+    ? null
+    : card === 'day'
+      ? dayShare(state.answers)
+      : card === 'spotted'
+        ? { v: 1, card: 'spotted', pattern: sharedPattern(bundle.read.patterns)! }
+        : card === 'dots'
+          ? dotsShare(state.answers, bundle.read.patterns)
+          : settled
+            ? startShare({ hero: settled.hero && { product: { title: titleOf(settled.hero.product) } }, classics: settled.classics.map((c) => ({ product: { title: titleOf(c.product) } })) })
+            : null
   const skip = useCallback(() => {
     consultFunnel.storySkip({ card, index: at })
     onDone()
@@ -173,10 +190,13 @@ export function ReadStory({ bundle, state, onDone, start = 0, offer }: { bundle:
       </div>
 
       <div key={card} className="amp-anim-rise flex flex-1 flex-col" style={{ gap: 'var(--amp-space-4)', cursor: 'pointer' }} onClick={onTap}>
-        <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
-          {KICKER[card]}
-        </p>
-        <Card card={card} bundle={bundle} state={state} reduced={reduced} heading={heading} onDone={onDone} offer={offer} />
+        <div className="flex items-center justify-between" style={{ gap: 'var(--amp-space-3)' }}>
+          <p className="uppercase" style={{ ...mono, color: 'var(--amp-accent)' }}>
+            {KICKER[card]}
+          </p>
+          {share && <StoryShareButton share={share} />}
+        </div>
+        <Card card={card} bundle={bundle} state={state} reduced={reduced} heading={heading} onDone={onDone} offer={offer} onStart={setSettled} />
       </div>
 
       <div className="flex items-center justify-between" style={{ gap: 'var(--amp-space-3)' }}>
@@ -208,7 +228,7 @@ function Heading({ heading, children }: { heading: React.Ref<HTMLHeadingElement>
   )
 }
 
-function Card({ card, bundle, state, reduced, heading, onDone, offer }: { card: StoryCard; bundle: ResultsBundle; state: FlowState; reduced: boolean; heading: React.Ref<HTMLHeadingElement>; onDone: () => void; offer?: OfferSettings }) {
+function Card({ card, bundle, state, reduced, heading, onDone, offer, onStart }: { card: StoryCard; bundle: ResultsBundle; state: FlowState; reduced: boolean; heading: React.Ref<HTMLHeadingElement>; onDone: () => void; offer?: OfferSettings; onStart: (start: StartHere) => void }) {
   const read = bundle.read
   switch (card) {
     case 'day':
@@ -253,7 +273,7 @@ function Card({ card, bundle, state, reduced, heading, onDone, offer }: { card: 
       return (
         <>
           <Heading heading={heading}>{STORY_COPY.startHeading}</Heading>
-          <StoryStart bundle={bundle} reduced={reduced} offer={offer} />
+          <StoryStart bundle={bundle} reduced={reduced} offer={offer} onReady={onStart} />
           {safety.length > 0 && (
             <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label={STORY_COPY.beforeYouStart}>
               {safety.map((n) => (

@@ -76,6 +76,10 @@ export const consultFunnel = {
   storySkip(p: { card: string; index: number }) {
     consultEvent('consult_story_skip', { card: p.card, index: p.index })
   },
+  /** A story card shared, and how far down the share ladder it got. Never what was on it. */
+  storyShare(p: { card: string; method: string }) {
+    consultEvent('consult_story_share', { card: p.card, method: p.method })
+  },
 }
 
 export type GotYou = 'spot-on' | 'mostly' | 'not-really'

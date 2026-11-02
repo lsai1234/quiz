@@ -8,8 +8,8 @@
  *   words      With nothing pinpointed (Speed and Deep runs), the charge
  *              profile in words, as before; the hexagon is drawn from it.
  *   identity   The top pinpointed pattern names the result and the share card
- *              ("Wired and tired"). Never the weight-loss pattern: a share
- *              card never carries weight-loss tailoring. None: the goal-based
+ *              ("Wired and tired"), when it may name a shared card
+ *              (`SHAREABLE_PATTERNS`, plan Phase 8). None: the goal-based
  *              stack name.
  *   habits     "Try this week" and "Worth a GP check": every line that applies,
  *              with ids, so only approved ones are shown when it is drawn.
@@ -25,6 +25,7 @@ import { NEUTRAL_REASON, type EngineResult } from './engine'
 import { pinpointed } from './pinpoint/effects'
 import { hunchEvidence } from './pinpoint/playback'
 import type { PatternId } from './pinpoint/types'
+import { isShareablePattern } from './shareable'
 import { gpChecksFor, type GpLine } from './gp-check'
 import { habitForGoal, habitsFor, type HabitLine } from './habits'
 import type { ConsultAnswers, ConsultGoal } from './types'
@@ -53,11 +54,12 @@ export interface ConsultRead {
   products: Record<string, { reason: string | null; claim: string | null }>
 }
 
-/** Patterns that never name a result or a share card. */
-const NEVER_NAMES: readonly PatternId[] = ['eating-less']
-
+/**
+ * The result's name: the first pattern found that may name a shared card
+ * (`SHAREABLE_PATTERNS`), since the name goes on the stack's share card too.
+ */
 export function readIdentity(patterns: readonly Pick<ReadPattern, 'id' | 'name'>[]): string | null {
-  return patterns.find((p) => !NEVER_NAMES.includes(p.id))?.name ?? null
+  return patterns.find((p) => isShareablePattern(p.id))?.name ?? null
 }
 
 export function buildRead(input: {

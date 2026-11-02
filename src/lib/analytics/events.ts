@@ -163,6 +163,7 @@ export const CONSULT_EVENTS = [
   // The read's story (plan Phase 8): which card, and skipping to the stack.
   'consult_story_card',
   'consult_story_skip',
+  'consult_story_share',
 ] as const
 
 export type ConsultEvent = (typeof CONSULT_EVENTS)[number]

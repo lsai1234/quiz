@@ -4,7 +4,7 @@
  * is already in the pack from Phase 5 and the offer.
  */
 import type { ReviewRow } from './review-pack'
-import { STORY_COPY } from './story-copy'
+import { STORY_CARD_COPY, STORY_COPY } from './story-copy'
 import { withChange, type DayRingData } from './day-ring'
 
 const WHERE = 'The read’s story, after the charge-up (story-copy.ts)'
@@ -14,6 +14,7 @@ const DAY: DayRingData = { sleep: { bed: 23 * 60 + 30, wake: 6 * 60 + 30 }, caff
 
 export function storyRows(): ReviewRow[] {
   const rows: ReviewRow[] = (Object.entries(STORY_COPY) as [string, string][]).map(([key, line]) => ['Your read, the story', WHERE, line, `story-copy.ts “${key}”`])
+  for (const [key, line] of Object.entries(STORY_CARD_COPY)) rows.push(['Your read, the story', 'A shared story card, and sharing it (story-copy.ts STORY_CARD_COPY)', line, `“${key}”: on the 1080×1920 image or the share button; never anything about the person`])
   const tries = [
     withChange(DAY, { kind: 'lights-out', at: 22 * 60 + 30 }),
     withChange(DAY, { kind: 'last-caffeine', at: 14 * 60, from: 16 * 60 }),

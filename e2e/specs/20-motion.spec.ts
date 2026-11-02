@@ -507,3 +507,30 @@ test('workshop: with nothing pinpointed, the story is their day, their profile i
   await page.waitForTimeout(900)
   await expect(story).toHaveScreenshot('read-story-profile-standard.png', STILL)
 })
+
+/* ── Share any card (plan Phase 8) ─────────────────────────────────────── */
+
+test('workshop: a story card shares as a 1080×1920 image (here, a download)', async ({ page }) => {
+  await openStory(page, 'Your read')
+  const story = page.getByRole('region', { name: 'Your read' })
+  const download = page.waitForEvent('download')
+  await story.getByRole('button', { name: 'Share this card' }).click()
+  const file = await download
+  expect(file.suggestedFilename()).toBe('chrgd-my-read-day.png')
+  const png = await (await import('fs')).promises.readFile((await file.path())!)
+  // The PNG header's width and height.
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1080, 1920])
+  // Try this week offers no share; Start here does.
+  for (let i = 0; i < 3; i++) await story.getByRole('button', { name: 'Next', exact: true }).click()
+  await expect(story).toHaveAttribute('data-story', 'try')
+  await expect(story.getByRole('button', { name: 'Share this card' })).toHaveCount(0)
+})
+
+test('the story card route refuses a crafted card', async ({ request }) => {
+  const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  expect((await request.get(`/api/share/story/image?d=${enc({ v: 1, card: 'spotted', pattern: 'eating-less' })}`)).status()).toBe(400)
+  expect((await request.get(`/api/share/story/image?d=${enc({ v: 1, card: 'start', hero: null, products: ['Cures anxiety!'] })}`)).status()).toBe(400)
+  const ok = await request.get(`/api/share/story/image?d=${enc({ v: 1, card: 'spotted', pattern: 'wired' })}`)
+  expect(ok.status()).toBe(200)
+  expect(ok.headers()['content-type']).toBe('image/png')
+})

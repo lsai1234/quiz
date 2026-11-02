@@ -37,3 +37,23 @@ export const STORY_COPY = {
   seeMyStack: 'See my stack',
   beforeYouStart: 'Before you start',
 } as const
+
+/**
+ * The words on a shared story card (plan Phase 8): its eyebrow, its titles and
+ * where to find the consult. Nothing about the person: a shared card carries
+ * no health information (`share-card/story.ts`).
+ */
+export const STORY_CARD_COPY = {
+  eyebrow: 'Amp Consult · my read',
+  day: 'My day',
+  spotted: 'Amp spotted',
+  dots: 'How Amp got there',
+  start: 'Where I’m starting',
+  hero: 'Not the obvious pick',
+  narrowing: 'Narrowing it down',
+  footer: 'Find yours: the Amp Consult at getchrgd.co.uk',
+  shareThis: 'Share this card',
+  saving: 'Making your card…',
+  holdToSave: 'Press and hold the card to save it, then add it to your story.',
+  close: 'Close',
+} as const
