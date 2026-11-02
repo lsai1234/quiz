@@ -800,7 +800,7 @@
       "speedRun": false,
       "copy": {
         "question": "What do you eat most weeks?",
-        "hint": "Tap everything you have at least once a week."
+        "hint": "Tap everything you have at least once a week. Oily fish means salmon, mackerel or sardines."
       },
       "tell": {
         "lead": true,

@@ -26,10 +26,11 @@ export const STIMULANT_LIMIT = 4
 /** Beyond this it stops adding cups: the count is the point, not the tally. */
 export const MAX_PER_DRINK = 8
 
-const DRINKS: { key: keyof CaffeineAnswer; label: string; icon: GlyphName; tone: string }[] = [
+const DRINKS: { key: keyof CaffeineAnswer; label: string; sub?: string; icon: GlyphName; tone: string }[] = [
   { key: 'coffee', label: 'Coffee', icon: 'cup', tone: 'var(--amp-accent)' },
   { key: 'tea', label: 'Tea', icon: 'tea', tone: 'var(--amp-calm)' },
-  { key: 'energy', label: 'Energy drink', icon: 'can', tone: 'var(--amp-caution)' },
+  // Pre-workout counts here too (the clarity pass): said under the name, so the row stays one line.
+  { key: 'energy', label: 'Energy drink', sub: 'or pre-workout', icon: 'can', tone: 'var(--amp-caution)' },
 ]
 
 const NONE: CaffeineAnswer = { coffee: 0, tea: 0, energy: 0 }
@@ -65,8 +66,9 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
             <span style={{ color: d.tone }}>
               <Glyph name={d.icon} size={22} />
             </span>
-            <span className="flex-1" style={{ fontWeight: 'var(--amp-weight-medium)' }}>
+            <span className="flex flex-1 flex-col" style={{ fontWeight: 'var(--amp-weight-medium)' }}>
               {d.label}
+              {d.sub && <span style={{ fontSize: 'var(--amp-text-meta)', fontWeight: 'var(--amp-weight-regular)', color: 'var(--amp-ink-2)' }}>{d.sub}</span>}
             </span>
             <Stepper label={d.label} count={value[d.key]} onMinus={() => change(d.key, -1)} onPlus={() => change(d.key, 1)} />
           </li>

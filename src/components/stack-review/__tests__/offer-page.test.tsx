@@ -112,7 +112,8 @@ it('never says "free" about the gift without its conditions and the terms beside
   offer = everything()
   render(<StackReviewPage reducedMotion />)
   const notes = await screen.findAllByText(/^Comes with a free /)
-  const box = notes.map((n) => n.closest('[data-bonus-note]')).find(Boolean) as HTMLElement
+  // On the ladder (Build your stack): the gift's line, its conditions and the terms beside it.
+  const box = document.querySelector('[data-rung="gift"]') as HTMLElement
   // And at the top, in "Your offer": the same conditions and terms beside it.
   const gift = notes.map((n) => n.closest('[data-offer-gift]')).find(Boolean) as HTMLElement
   expect(gift).toHaveTextContent(/First order only, one per customer\. Stacks from £1\.00 before any discount\. While stocks last\./)
@@ -131,6 +132,9 @@ it('never says "free" about the gift without its conditions and the terms beside
     const text = n.textContent ?? ''
     if (!/\bfree\b/i.test(text) || /free (UK mainland )?delivery|delivery is free|Free$|free order|starter/i.test(text)) continue
     if (n.parentElement?.closest('[data-bonus-note], [data-receipt-bonus], [data-offer-gift]')) continue
+    // Build your stack: its card carries the gift's conditions and terms whenever the gift is on it.
+    const ladder = n.parentElement?.closest('[data-ladder]')
+    if (ladder && /First order only, one per customer\./.test(ladder.textContent ?? '') && ladder.querySelector('a[href="/legal/free-gift"]')) continue
     loose.push(text)
   }
   expect(loose).toEqual([])
@@ -158,6 +162,7 @@ it('says "Free … on stacks from £…" on a depth under the minimum', async ()
   await screen.findByText('Not the obvious pick')
   // No depth reaches £1,000, so no bonus anywhere, and nothing to point at.
   expect(document.querySelector('[data-bonus-note]')).toBeNull()
+  expect(document.querySelector('[data-rung="gift"]')).toBeNull()
 })
 
 it('keeps the gift and takes off a code worth less, saying why', async () => {

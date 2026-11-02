@@ -157,6 +157,8 @@ export const SHELF_COVERS: Record<ShelfItem, SwapGroup[]> = {
   'pre-workout': ['pre-workout-stim', 'pre-workout-stim-free'],
   magnesium: ['magnesium', 'zma'],
   collagen: ['collagen'],
+  // Something not on the list: we can't tell what it covers, so it covers nothing.
+  other: [],
 }
 
 /** A stimulant on the shelf is the day's caffeine source already. */

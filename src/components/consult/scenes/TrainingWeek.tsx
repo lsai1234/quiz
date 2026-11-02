@@ -114,7 +114,8 @@ export function activityWords(journey: Journey): { short: Record<Activity, strin
     }
   if (journey === 'weight')
     return { short: DAY_LABEL, long: { gym: 'Gym or a class', cardio: 'Walk, run or cycle', sport: 'Sport' } }
-  return { short: DAY_LABEL, long: DAY_LABEL }
+  // Said with examples (the clarity pass), so "Cardio" isn't a word anyone has to know.
+  return { short: DAY_LABEL, long: { gym: 'Gym or a class', cardio: 'Cardio: run, cycle, swim', sport: 'Sport or a match' } }
 }
 
 export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai }: SceneProps) {

@@ -262,4 +262,10 @@ export const PERSONAS: Persona[] = [
 // plain words (scenes.json), and the energy and sleep copy and understand
 // prompts quote them. No system prompt, rule or model changed. Re-run: all 35
 // personas and the red-team tests pass.
-export const APPROVED_FINGERPRINT = '7d5af7da'
+// 2026-11-02 (later): answers that cover everyone. The food scene's hint now
+// says what oily fish means, and its copy prompt quotes it; a "Low all day"
+// energy shape, "Wrists, elbows or ankles" and "Something else" are new
+// answers on screen (the AI reader's own lists are unchanged). No system
+// prompt, rule or model changed. Re-run: all 35 personas and the red-team
+// tests pass.
+export const APPROVED_FINGERPRINT = '89c403d7'

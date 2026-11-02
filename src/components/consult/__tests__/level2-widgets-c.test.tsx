@@ -130,7 +130,7 @@ describe('C10 body map', () => {
   it('gives screen readers and keyboards a simple list, and hides the figure from them', () => {
     const { container } = render(<Harness id="body" />)
     const list = screen.getByRole('group', { name: 'Stiff or sore spots' })
-    expect(list.querySelectorAll('button')).toHaveLength(5)
+    expect(list.querySelectorAll('button')).toHaveLength(6)
     for (const b of container.querySelectorAll('[data-spot]')) {
       expect(b.closest('[aria-hidden="true"]')).not.toBeNull()
       expect(b).toHaveAttribute('tabindex', '-1')

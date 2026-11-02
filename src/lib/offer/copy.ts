@@ -56,11 +56,18 @@ export const OFFER_COPY = {
   summaryHeading: 'Your offer',
   summaryCoreLine: 'One product, delivered. No subscription.',
   summaryStackLine: (n: number) => `${n} products, picked from your answers.`,
-  summaryMonthly: (monthly: number, oneOff: number) => `${formatGBP(monthly)} a month, or ${formatGBP(oneOff)} once`,
   summaryOnce: (oneOff: number) => `${formatGBP(oneOff)} once`,
   seeFullStack: 'See the full stack',
   whyThese: 'Why these products?',
   hideWhy: 'Hide the reasons',
+
+  /* Build your stack: what a bigger stack unlocks, every line one checkout already applies. */
+  ladderHeading: 'Build your stack',
+  ladderNext: (toGo: number, reward: string) => `${formatGBP(toGo)} more for ${reward.charAt(0).toLowerCase()}${reward.slice(1)}`,
+  ladderAll: 'You’ve unlocked everything on this stack.',
+  ladderUnlocked: 'Unlocked',
+  ladderToGo: (toGo: number) => `${formatGBP(toGo)} to go`,
+  ladderAdd: 'Add one of these to get there:',
 } as const
 
 /** Where the terms live. */

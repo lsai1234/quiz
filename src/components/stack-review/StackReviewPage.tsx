@@ -12,7 +12,7 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig, planComparison } from '@/lib/stack-blueprint/pricing'
 import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -34,7 +34,9 @@ import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } f
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
 import { CoreOfferCard } from './CoreOfferCard'
 import { OfferSummary } from './OfferSummary'
-import { BonusNote } from './BonusNote'
+import { PlanSwitch } from './PlanSwitch'
+import { RewardLadder } from './RewardLadder'
+import { rewardLadder } from '@/lib/offer/ladder'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
 import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
@@ -83,8 +85,10 @@ import { TIER_META } from '@/lib/quiz-core'
  * folds the rest rather than showing the same stack twice.
  */
 function StackTierSelector({
-  tiers, current, chosen = true, gifts = {}, labels, minMonthly, oneOffOnly = false, onChange,
+  tiers, current, chosen = true, gifts = {}, labels, minMonthly, oneOffOnly = false, monthlyBasis = false, onChange,
 }: {
+  /** The plan switch above says "Keep me stocked": every depth shows a month's price. */
+  monthlyBasis?: boolean
   /** The depths' names, when not the quiz's own (a consult stack: Essentials, Standard, Complete). */
   labels?: Partial<Record<StackLevel, string>>
   tiers: TierPlan[]
@@ -112,7 +116,7 @@ function StackTierSelector({
   return (
     <div className="px-5 max-w-lg mx-auto">
       <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>
-        Choose your depth
+        Choose your stack
       </p>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tiers.length}, minmax(0, 1fr))` }}>
         {tiers.map(({ level, slots, oneOff, monthly }) => {
@@ -154,78 +158,40 @@ function StackTierSelector({
                 </div>
               )}
               {/*
-                Both prices, always, in a fixed order: the monthly subscription
-                leads and the one-off sits under it.
+                One price, on the basis chosen above (the clarity pass): the
+                plan switch sits over this row, so every depth shows a month's
+                price, or every depth shows one of each. A monthly price set
+                beside a one-off one read as two prices for one thing, and the
+                gap between them (sometimes up, sometimes down) had no
+                explanation on the card. The switch says why they differ.
 
-                Deliberately NOT driven by which plan is currently selected. The
-                card's job is choosing a DEPTH, and a headline that jumped
-                between two numbers every time the plan tab moved made the three
-                depths hard to compare — which is the one thing this row exists
-                for. So the position is stable and both numbers are labelled,
-                and the plan tab below decides what is actually charged.
-
-                Leading with the subscription price is a pricing decision, not a
-                layout one: it is the lower number and the one the business
-                wants chosen, and it is the anchor the depths should be compared
-                at. It is labelled `subscription` precisely because it is NOT
-                what a customer pays by default — one-off is still the selected
-                plan until they flip it.
+                A depth that can't be a subscription says so in words when
+                monthly is chosen, and shows its one-off price.
               */}
-              {canSub ? (
+              {monthlyBasis && canSub ? (
                 <>
-                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                    {formatGBP(monthly)}<span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>
+                  <div className="mt-1.5 text-sm font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(monthly)}
                   </div>
-                  <div className="text-[9px] font-bold uppercase tracking-wide leading-tight mt-0.5" style={{ color: 'var(--color-accent)' }}>
-                    Subscription
-                  </div>
-                  <div className="text-[9px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
-                    or {formatGBP(oneOff)} one-off
+                  <div className="text-[10px] font-semibold mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
+                    a month
                   </div>
                 </>
               ) : (
                 <>
-                  {/*
-                    No subscription at this depth — a monthly plan has to clear
-                    the order minimum and the shallowest tier routinely does not.
-                    So this slot says so, in words, instead of a number.
-
-                    It used to put the ONE-OFF price here at full size, and the
-                    row read £49.97 / £31.57 / £38.78 — the cheapest, shallowest
-                    depth showing the largest figure, because it was the only
-                    one quoting a whole box against two monthly instalments.
-                    Three numbers in a row invite comparison whether or not they
-                    are comparable, and these were not. The one-off price still
-                    appears, on the line where every card keeps its one-off, at
-                    the size every card keeps it.
-                  */}
-                  {/*
-                    "Monthly unavailable" is a REFUSAL, and it only makes sense
-                    where a subscription was on the table and this depth cannot
-                    reach it. Where no subscription is on offer at all — a
-                    partner's free stack — it announces the absence of something
-                    never offered, on the one screen where the only decision is
-                    which of two boxes to take. There, the price is simply the
-                    price.
-                  */}
+                  <div className="mt-1.5 text-sm font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(oneOff)}
+                  </div>
                   {!oneOffOnly && (
-                    <div
-                      className="text-[11px] font-bold uppercase tracking-wide mt-1.5 leading-tight"
-                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
-                    >
-                      Monthly unavailable
+                    <div className="text-[10px] font-semibold mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
+                      one of each
                     </div>
                   )}
-                  <div
-                    className={oneOffOnly ? 'text-sm font-black mt-1.5 leading-none' : 'text-[10px] mt-1 leading-tight'}
-                    style={{
-                      color: 'var(--color-text)',
-                      ...(oneOffOnly ? { fontFamily: 'var(--font-display)' } : {}),
-                    }}
-                  >
-                    {formatGBP(oneOff)}
-                    {oneOffOnly ? '' : ' one-off'}
-                  </div>
+                  {monthlyBasis && !oneOffOnly && (
+                    <div className="text-[10px] font-bold uppercase tracking-wide mt-1 leading-tight" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+                      One-off only
+                    </div>
+                  )}
                 </>
               )}
             </button>
@@ -1119,11 +1085,42 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     any of the reasons. The full cards further down say it all again.
   */
   const canSubscribeStack = !claiming && founderKind == null && pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet
+  // A month against one of each, on the same figures the receipt's table uses.
+  const planCompare = canSubscribeStack
+    ? planComparison(subscriptionPlan, {
+        oneOffTotal: pricing.oneOffTotal,
+        subscriptionTotal: pricing.subscriptionTotal,
+        subscriptionFirstMonth:
+          pricing.subscriptionIntroDiscountPct > 0 && pricing.subscriptionFirstMonth < pricing.subscriptionTotal ? pricing.subscriptionFirstMonth : pricing.subscriptionTotal,
+        oneOffDiscountRate: pricing.bundleDiscountPct / 100,
+      })
+    : null
   const toFullStack = () => {
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     const target = document.getElementById('offer-full-stack') ?? stackRef.current
     target?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
   }
+  // Build your stack: what this depth has unlocked, and the next line, on checkout's own rules.
+  const giftConditions = [
+    OFFER_COPY.bonusConditions(offerSettings.bonus.minSubtotal, offerSettings.bonus.firstOrderOnly),
+    planType === 'subscription' ? OFFER_COPY.bonusOnSubscription : null,
+    OFFER_COPY.bonusNoCode,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const ladder = rewardLadder({
+    plan: canSubscribeStack && planType === 'subscription' ? 'subscription' : 'oneoff',
+    listSubtotal: pricing.oneOffSubtotal,
+    monthly: pricing.subscriptionTotal,
+    gift: bonusLine
+      ? {
+          title: bonusLine.kind === 'comes-with' ? titleOf(bonusLine.choice.product) : bonusLine.title,
+          minimum: offerSettings.bonus.minSubtotal,
+          has: bonusLine.kind === 'comes-with',
+        }
+      : null,
+  })
+
   const offerSummary =
     starterStack || checkoutState.status === 'mock-complete' ? null : (
       <OfferSummary
@@ -1132,18 +1129,13 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
             ? { label: core.label, product: core.product, total: coreTotal, busy: coreBusy || checkoutState.status === 'loading' || leavingForStripe, onStart: startWithCore }
             : null
         }
-        stack={{ count: activeSlots.length, monthly: canSubscribeStack ? pricing.subscriptionTotal : null, oneOff: pricing.oneOffTotal, onSee: toFullStack }}
+        stack={{ count: activeSlots.length, monthly: canSubscribeStack ? pricing.subscriptionTotal : null, monthlyPct: pricing.subscriptionDiscountPct, oneOff: pricing.oneOffTotal, onSee: toFullStack }}
         gift={
           bonusLine
             ? {
                 headline: bonusLine.kind === 'comes-with' ? OFFER_COPY.comesWith(titleOf(bonusLine.choice.product)) : OFFER_COPY.bonusFrom(bonusLine.title, bonusLine.minimum),
-                conditions: [
-                  OFFER_COPY.bonusConditions(offerSettings.bonus.minSubtotal, offerSettings.bonus.firstOrderOnly),
-                  planType === 'subscription' ? OFFER_COPY.bonusOnSubscription : null,
-                  OFFER_COPY.bonusNoCode,
-                ]
-                  .filter(Boolean)
-                  .join(' '),
+                moreFor: bonusLine.kind === 'comes-with' ? moreFor : null,
+                conditions: giftConditions,
               }
             : null
         }
@@ -1276,7 +1268,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
             productCount={activeSlots.length}
             totalPrice={pricing.oneOffTotal}
             monthlyPrice={pricing.subscriptionTotal}
-            canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
+            // The pill follows "How do you want it?": a month's price only when that's what's chosen.
+            canSubscribe={planType === 'subscription' && canSubscribeStack}
           />
 
           <div className="h-px bg-[var(--color-border)] mx-5" />
@@ -1288,9 +1281,25 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
 
           {/* Value-first depth selector — choose Essentials / Balanced / Complete,
               each filled to its own monthly price band, so value comes first. */}
+          {/* How do you want it? Before the depths, so they all show one kind of price. */}
+          {!starterStack && (
+            <div className="pt-6">
+              <PlanSwitch
+                planType={planType}
+                onChange={setPlanType}
+                canSubscribe={canSubscribeStack}
+                monthly={pricing.subscriptionTotal}
+                oneOff={pricing.oneOffTotal}
+                monthlyPct={pricing.subscriptionDiscountPct}
+                comparison={planCompare}
+              />
+            </div>
+          )}
+
           {showTiers && (
             <div className="pt-6">
               <StackTierSelector
+                monthlyBasis={planType === 'subscription' && !claiming && founderKind == null}
                 tiers={tierPlans}
                 current={activeLevel}
                 chosen={chosen === 'stack'}
@@ -1302,15 +1311,13 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               />
             </div>
           )}
-          {bonusLine && (
-            <div className="px-5 max-w-lg mx-auto">
-              <BonusNote
-                line={bonusLine}
-                minimum={offerSettings.bonus.minSubtotal}
-                firstOrderOnly={offerSettings.bonus.firstOrderOnly}
-                subscription={planType === 'subscription'}
-                moreFor={moreFor}
-              />
+          {/* The free gift is on the ladder below, its conditions beside it, and "Your offer"
+              says what more the full stack costs; a separate note here said it all a third time. */}
+
+          {/* Build your stack: unlocked so far, the next line, and products to add to reach it. */}
+          {!starterStack && !founderKind && (
+            <div className="pt-6">
+              <RewardLadder ladder={ladder} addOns={boosters} onAdd={handleAddBooster} giftConditions={bonusLine ? giftConditions : null} />
             </div>
           )}
 

@@ -21,7 +21,7 @@ import type { ConsultAnswers } from './types'
 export const CURVE_HOURS = [6, 8, 10, 12, 14, 16, 18, 20, 22, 24] as const
 export const CURVE_MAX = 10
 
-export type CurvePreset = 'steady' | 'slow-starter' | 'dip-3pm' | 'second-wind' | 'unsure'
+export type CurvePreset = 'steady' | 'slow-starter' | 'dip-3pm' | 'second-wind' | 'low' | 'unsure'
 
 export interface EnergyCurve {
   /** Ten levels, 06:00 to 24:00. Null for "Not sure". */
@@ -35,6 +35,9 @@ export const PRESET_POINTS: Record<Exclude<CurvePreset, 'unsure'>, number[]> = {
   'slow-starter': [2, 3, 5, 7, 7, 7, 7, 6, 5, 4],
   'dip-3pm': [6, 7, 8, 7, 4, 3, 5, 6, 5, 4],
   'second-wind': [5, 6, 6, 5, 4, 4, 5, 7, 8, 7],
+  // Flat and low from morning to night (the clarity pass): the day nobody could
+  // pick before, when "Steady" read as fine and "Not sure" as unsure.
+  low: [3, 3, 3, 3, 3, 3, 3, 3, 2, 2],
 }
 
 export const PRESET_LABEL: Record<CurvePreset, string> = {
@@ -42,6 +45,7 @@ export const PRESET_LABEL: Record<CurvePreset, string> = {
   'slow-starter': 'Slow starter',
   'dip-3pm': '3pm dip',
   'second-wind': 'Second wind at night',
+  low: 'Low all day',
   unsure: 'Not sure',
 }
 

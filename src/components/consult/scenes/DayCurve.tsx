@@ -22,7 +22,7 @@ import type { SceneProps } from './registry'
 const GRAB = 0.06
 const GRAB_LEVELS = 1.5
 
-const PRESETS: CurvePreset[] = ['steady', 'slow-starter', 'dip-3pm', 'second-wind', 'unsure']
+const PRESETS: CurvePreset[] = ['steady', 'slow-starter', 'dip-3pm', 'second-wind', 'low', 'unsure']
 
 /** x 0–100 across the hours, y 0–50 with full at the top. */
 const px = (i: number) => (i / (CURVE_HOURS.length - 1)) * 100
@@ -87,7 +87,7 @@ export function DayCurve({ answers, onAnswer, onInteract, comfort }: SceneProps)
   const shapes = (
     <div role="radiogroup" aria-label="The shape most like your day" className={`grid ${comfort ? 'grid-cols-1' : 'grid-cols-2'}`} style={{ gap: 'var(--amp-space-2)' }} onKeyDown={(e) => radioArrows(e)}>
       {PRESETS.map((id) => (
-        <ShapeTile key={id} id={id} selected={picked === id} wide={comfort || id === 'unsure'} onSelect={() => write({ points: id === 'unsure' ? null : [...PRESET_POINTS[id]], how: 'preset', preset: id })} />
+        <ShapeTile key={id} id={id} selected={picked === id} wide={comfort} onSelect={() => write({ points: id === 'unsure' ? null : [...PRESET_POINTS[id]], how: 'preset', preset: id })} />
       ))}
     </div>
   )

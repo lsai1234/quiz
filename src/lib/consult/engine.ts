@@ -236,6 +236,8 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
     } else if (a.aim === 'sport') {
       add('recovery', 2, 'You’re training for your sport')
       add('hydration', 1, 'You’re training for your sport')
+    } else if (a.aim === 'fitness') {
+      // Staying fit (the clarity pass): nothing on top of what their week already says.
     } else {
       add('hydration', 2, 'You’re training to go further')
       add('recovery', 1, 'You’re training to go further')

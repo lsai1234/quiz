@@ -111,6 +111,7 @@ export const AIM_LABEL: Record<TrainingAim, string> = {
   strength: 'Get stronger',
   sport: 'Play my sport better',
   endurance: 'Go further',
+  fitness: 'Stay fit',
 }
 
 export const CHANGE_LABEL: Record<AgeingChange, string> = {
@@ -127,6 +128,7 @@ export const BODY_LABEL: Record<BodySpot, string> = {
   'lower-back': 'Lower back',
   hips: 'Hips',
   knees: 'Knees',
+  'other-joints': 'Wrists, elbows or ankles',
 }
 
 export const SHELF_LABEL: Record<ShelfItem, string> = {
@@ -138,6 +140,7 @@ export const SHELF_LABEL: Record<ShelfItem, string> = {
   'pre-workout': 'Pre-workout',
   magnesium: 'Magnesium',
   collagen: 'Collagen',
+  other: 'Something else',
 }
 
 export const CIRCUIT_LABEL: Record<CircuitFlag, string> = {

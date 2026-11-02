@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { FREE_GIFT_TERMS_PATH, OFFER_COPY } from '@/lib/offer/copy'
+import { PLAN_COPY } from '@/lib/offer/plan-copy'
 import { ProductTile } from './ProductTile'
 import { YOU_PALETTE as P } from './you-palette'
 
@@ -34,11 +35,13 @@ export interface OfferSummaryProps {
     count: number
     /** Null when this depth can't be a subscription. */
     monthly: number | null
+    /** Its subscribe-and-save rate, as a whole percent. */
+    monthlyPct: number
     oneOff: number
     onSee: () => void
   }
   /** The free gift on this depth, or what would qualify; with its conditions. */
-  gift: { headline: string; conditions: string } | null
+  gift: { headline: string; moreFor?: string | null; conditions: string } | null
 }
 
 const DISPLAY = 'var(--font-display)'
@@ -95,15 +98,32 @@ export function OfferSummary({ core, stack, gift }: OfferSummaryProps) {
         <p className="mt-1 text-[14px] leading-snug" style={{ color: P.ink2 }}>
           {OFFER_COPY.summaryStackLine(stack.count)}
         </p>
-        <p className="mt-1 text-[16px] font-bold leading-snug" style={{ color: P.ink, fontFamily: DISPLAY }}>
-          {stack.monthly !== null ? OFFER_COPY.summaryMonthly(stack.monthly, stack.oneOff) : OFFER_COPY.summaryOnce(stack.oneOff)}
-        </p>
+        {/* Each price says what it buys, so "a month" and "once" never read as two prices for one thing. */}
+        {stack.monthly !== null ? (
+          <>
+            <p className="mt-1 text-[16px] font-bold leading-snug" style={{ color: P.ink, fontFamily: DISPLAY }}>
+              {PLAN_COPY.summaryMonthly(stack.monthly, stack.monthlyPct)}
+            </p>
+            <p className="text-[14px] leading-snug" style={{ color: P.ink2 }}>
+              {PLAN_COPY.summaryOnce(stack.oneOff)}
+            </p>
+          </>
+        ) : (
+          <p className="mt-1 text-[16px] font-bold leading-snug" style={{ color: P.ink, fontFamily: DISPLAY }}>
+            {OFFER_COPY.summaryOnce(stack.oneOff)}
+          </p>
+        )}
         {gift && (
           <div className="mt-2.5 rounded-xl px-3 py-2.5" style={{ background: P.card, border: `1px solid ${P.hairline}` }} data-offer-gift>
             <p className="flex items-center gap-1.5 text-[13px] font-bold" style={{ color: P.ink, fontFamily: DISPLAY }}>
               <span aria-hidden style={{ color: P.accentInk }}>✦</span>
               {gift.headline}
             </p>
+            {gift.moreFor && (
+              <p className="mt-1 text-[12px] font-semibold leading-snug" style={{ color: P.ink2 }}>
+                {gift.moreFor}
+              </p>
+            )}
             <p className="mt-1 text-[12px] leading-snug" style={{ color: P.ink3 }}>
               {gift.conditions}{' '}
               <Link href={FREE_GIFT_TERMS_PATH} className="underline underline-offset-2 font-semibold" style={{ color: P.ink2 }}>

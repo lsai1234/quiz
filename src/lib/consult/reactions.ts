@@ -73,7 +73,7 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
       return `${said} a week. That’s a lot of work.`
     }
     case 'aim':
-      return a.aim === 'muscle' ? 'Building muscle. Got it.' : a.aim === 'strength' ? 'Getting stronger. Got it.' : a.aim === 'sport' ? 'Playing your sport. Got it.' : a.aim ? 'Going further. Got it.' : ''
+      return a.aim === 'muscle' ? 'Building muscle. Got it.' : a.aim === 'strength' ? 'Getting stronger. Got it.' : a.aim === 'sport' ? 'Playing your sport. Got it.' : a.aim === 'fitness' ? 'Staying fit. Got it.' : a.aim ? 'Going further. Got it.' : ''
     case 'changes':
       return a.changes === null ? '' : a.changes.length === 0 ? 'Nothing’s changed. Good to hear.' : 'Thanks. That helps a lot.'
     case 'energy': {
@@ -84,6 +84,7 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
       if (preset === 'slow-starter') return 'Slow mornings. Got it.'
       if (preset === 'second-wind') return 'A second wind at night. Got it.'
       if (preset === 'steady') return 'Steady all day. Nice.'
+      if (preset === 'low') return 'Low all day. Thanks for saying so.'
       if (a.energyCurve?.how === 'drawn') return 'Thanks for drawing your day.'
       return 'Got it, thanks.'
     }

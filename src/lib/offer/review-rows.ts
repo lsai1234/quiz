@@ -17,6 +17,7 @@ import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings } from './settings'
 import { LEVEL_NAME } from './bonus-economics'
 import type { HeroRow } from './view'
 import { OFFER_COPY } from './copy'
+import { PLAN_COPY, whyPricesDiffer } from './plan-copy'
 import { freeGiftTerms } from './terms'
 
 export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
@@ -97,11 +98,45 @@ export function offerCopyRows(bonus: BonusSettings): ReviewRow[] {
     ['Offer wording', where, c.summaryHeading, '"Your offer", at the top of the page: both options at a glance'],
     ['Offer wording', where, c.summaryCoreLine, 'Under the single product in "Your offer"'],
     ['Offer wording', where, c.summaryStackLine(5), `Under "Or get the full stack" in "Your offer". ${ex}`],
-    ['Offer wording', where, c.summaryMonthly(45.21, 47.81), `The full stack's price in "Your offer". ${ex}`],
     ['Offer wording', where, c.summaryOnce(47.81), `The same, where it can't be a subscription. ${ex}`],
     ['Offer wording', where, c.seeFullStack, 'Button in "Your offer", down to the depth picker'],
     ['Offer wording', where, c.whyThese, 'Opens the reasons: the read, "Built from your answers", "Try this week", "What we checked"'],
     ['Offer wording', where, c.hideWhy, 'Closes them again'],
+    ['Offer wording', where, c.ladderHeading, '"Build your stack": what a bigger stack unlocks, each line one checkout already applies'],
+    ['Offer wording', where, c.ladderNext(5.05, 'Free delivery'), `Its headline, towards the next line. ${ex}`],
+    ['Offer wording', where, c.ladderNext(10, 'Free Vitamin C & Zinc'), `When the gift is next; its conditions are in the same card. ${ex}`],
+    ['Offer wording', where, c.ladderAll, 'Its headline when every line is reached'],
+    ['Offer wording', where, 'Delivery £2.95, not £4.95 · from £40.00', `A line. ${ex}`],
+    ['Offer wording', where, '8% off · on stacks from £50.00', `A line, one-off only. ${ex}`],
+    ['Offer wording', where, 'Free delivery · from £100.00 a month', `A line, subscribed. ${ex}`],
+    ['Offer wording', where, c.ladderUnlocked, 'Beside a line reached'],
+    ['Offer wording', where, c.ladderToGo(5.05), `Beside a line not yet reached. ${ex}`],
+    ['Offer wording', where, c.ladderAdd, 'Over up to three products to add in one tap (name, type and price only)'],
+  ]
+}
+
+/** The two ways to buy a stack, and why their prices differ (the clarity pass). */
+export function planCopyRows(): ReviewRow[] {
+  const where = 'Results page: "How do you want it?", over the depths, and "Your offer" (both quizzes)'
+  const ex = 'Example figures; the live ones come from the stack'
+  const c = PLAN_COPY
+  const example = {
+    runsOutMonths: 1, firstToRunOut: 'Sport Multivitamin', lastsMonths: 3, longestLasting: 'Omega-3', firstDeliveryIdentical: false,
+    oneOffPerMonth: 78.16, subscriptionPerMonth: 72.21, perMonthSaving: 5.95, oneOffToday: 87.35, subscriptionToday: 72.21, firstDeliverySaving: 15.14,
+  }
+  return [
+    ['Plan wording', where, c.heading, 'The switch’s heading'],
+    ['Plan wording', where, c.once, 'Option'],
+    ['Plan wording', where, c.monthly, 'Option'],
+    ['Plan wording', where, `£87.35 · ${c.oneOfEach}`, `Under "${c.once}". ${ex}`],
+    ['Plan wording', where, `£72.21 ${c.aMonth}`, `Under "${c.monthly}". ${ex}`],
+    ['Plan wording', where, c.onceLine, `Under the switch, "${c.once}" chosen`],
+    ['Plan wording', where, c.monthlyLine(15), `Under the switch, "${c.monthly}" chosen. ${ex}`],
+    ['Plan wording', where, c.onceOnly, 'On a depth that can’t be a subscription'],
+    ['Plan wording', where, c.why, 'Opens the explanation below'],
+    ...whyPricesDiffer(example, 15).map((line): ReviewRow => ['Plan wording', where, line, `"${c.why}", each line only when this stack’s figures make it true. ${ex}`]),
+    ['Plan wording', where, c.summaryMonthly(72.21, 15), `"Your offer". ${ex}`],
+    ['Plan wording', where, c.summaryOnce(87.35), `"Your offer". ${ex}`],
   ]
 }
 

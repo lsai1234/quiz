@@ -102,11 +102,11 @@ describe('Shape your day (plan Phase 7.4)', () => {
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ energy: 7, energyCurve: expect.objectContaining({ preset: 'slow-starter' }) }))
   })
 
-  it('offers five shapes for the keyboard, and takes "Not sure" as an answer', () => {
+  it('offers six shapes for the keyboard, and takes "Not sure" as an answer', () => {
     const spy = jest.fn()
     render(<Harness id="energy" spy={spy} />)
     const shapes = screen.getByRole('radiogroup', { name: 'The shape most like your day' })
-    expect(Array.from(shapes.querySelectorAll('[role="radio"]')).map((r) => r.textContent)).toEqual(['Steady all day', 'Slow starter', '3pm dip', 'Second wind at night', 'Not sure'])
+    expect(Array.from(shapes.querySelectorAll('[role="radio"]')).map((r) => r.textContent)).toEqual(['Steady all day', 'Slow starter', '3pm dip', 'Second wind at night', 'Low all day', 'Not sure'])
     fireEvent.click(screen.getByRole('radio', { name: 'Slow starter' }))
     screen.getByRole('radio', { name: 'Slow starter' }).focus()
     fireEvent.keyDown(screen.getByRole('radio', { name: 'Slow starter' }), { key: 'ArrowRight' })

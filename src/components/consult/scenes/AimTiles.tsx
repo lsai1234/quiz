@@ -15,10 +15,11 @@ import type { SceneProps } from './registry'
  */
 
 export const AIMS: { key: TrainingAim; icon: GlyphName; sub: string }[] = [
-  { key: 'muscle', icon: 'gym', sub: 'Size, and a split to match' },
+  { key: 'muscle', icon: 'gym', sub: 'Bigger muscles' },
   { key: 'strength', icon: 'bolt', sub: 'Heavier lifts, more reps' },
   { key: 'sport', icon: 'sport', sub: 'Faster, sharper, lasting the game' },
   { key: 'endurance', icon: 'cardio', sub: 'Runs, rides, swims, races' },
+  { key: 'fitness', icon: 'allround', sub: 'Feel good and keep in shape' },
 ]
 
 export function AimTiles({ answers, onAnswer, comfort }: SceneProps) {

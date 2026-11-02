@@ -65,7 +65,7 @@ export type Food =
   | 'nuts'
   | 'wholegrains'
 
-export type BodySpot = 'neck' | 'shoulders' | 'lower-back' | 'hips' | 'knees'
+export type BodySpot = 'neck' | 'shoulders' | 'lower-back' | 'hips' | 'knees' | 'other-joints'
 
 export type ShelfItem =
   | 'multivitamin'
@@ -76,6 +76,8 @@ export type ShelfItem =
   | 'pre-workout'
   | 'magnesium'
   | 'collagen'
+  /** Anything not listed (the clarity pass): recorded, and covers nothing, so it never takes a product out. */
+  | 'other'
 
 /**
  * The circuit check's questions. `shellfish` isn't in the build plan's list; it
@@ -97,7 +99,7 @@ export type WeightSymptom = 'low-appetite' | 'nausea' | 'constipation' | 'tiredn
 export type Route = 'speed' | 'deep' | 'pinpoint'
 
 /** What a builder is training for (the builder journey's own question). */
-export type TrainingAim = 'muscle' | 'strength' | 'sport' | 'endurance'
+export type TrainingAim = 'muscle' | 'strength' | 'sport' | 'endurance' | 'fitness'
 
 /** What's got harder lately (the active-ager journey's own question). `[]` is "Nothing's changed". */
 export type AgeingChange = 'getting-about' | 'strength' | 'staying-sharp' | 'energy' | 'sleeping-through'

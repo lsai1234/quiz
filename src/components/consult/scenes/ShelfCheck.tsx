@@ -39,6 +39,7 @@ export const SHELF: ShelfItem[] = [
   'pre-workout',
   'magnesium',
   'collagen',
+  'other',
 ]
 
 export function toggleShelf(shelf: ShelfItem[] | null, item: ShelfItem): ShelfItem[] | null {

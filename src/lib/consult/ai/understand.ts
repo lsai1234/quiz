@@ -58,10 +58,12 @@ const AGES = Object.keys(AGE_LABEL) as AgeBand[]
 const QUALITIES = Object.keys(QUALITY_LABEL) as SleepQuality[]
 const DAYLIGHTS = Object.keys(DAYLIGHT_LABEL) as Daylight[]
 const FOODS = Object.keys(FOOD_LABEL) as Food[]
-const SPOTS = Object.keys(BODY_LABEL) as BodySpot[]
-const SHELF = Object.keys(SHELF_LABEL) as ShelfItem[]
+// The clarity pass added "Wrists, elbows or ankles" and "Something else" as answers on screen; the
+// reader's lists stay as they were, so its prompt and its strict schema don't move.
+const SPOTS: BodySpot[] = (Object.keys(BODY_LABEL) as BodySpot[]).filter((s) => s !== 'other-joints')
+const SHELF: ShelfItem[] = (Object.keys(SHELF_LABEL) as ShelfItem[]).filter((s) => s !== 'other')
 const INTENSITIES = Object.keys(INTENSITY_LABEL) as Intensity[]
-const AIMS = Object.keys(AIM_LABEL) as TrainingAim[]
+const AIMS: TrainingAim[] = (Object.keys(AIM_LABEL) as TrainingAim[]).filter((a) => a !== 'fitness')
 const CHANGES = Object.keys(CHANGE_LABEL) as AgeingChange[]
 
 const count = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 8 ? Number(v) : null)

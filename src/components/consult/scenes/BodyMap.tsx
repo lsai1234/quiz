@@ -24,7 +24,7 @@ import type { SceneProps } from './registry'
  * In comfort mode the figure goes and the list becomes large buttons.
  */
 
-export const SPOTS: BodySpot[] = ['neck', 'shoulders', 'lower-back', 'hips', 'knees']
+export const SPOTS: BodySpot[] = ['neck', 'shoulders', 'lower-back', 'hips', 'knees', 'other-joints']
 
 /** Where each spot sits on the figure, in the SVG's 200 × 320 box. Paired joints list both sides. */
 const MARKS: Record<BodySpot, [number, number][]> = {
@@ -33,6 +33,8 @@ const MARKS: Record<BodySpot, [number, number][]> = {
   'lower-back': [[100, 138]],
   hips: [[78, 182], [122, 182]],
   knees: [[86, 244], [114, 244]],
+  // Wrists and ankles on the figure; elbows are in the chip's name.
+  'other-joints': [[54, 160], [146, 160], [85, 298], [115, 298]],
 }
 
 const VIEW_W = 200
