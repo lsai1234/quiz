@@ -176,7 +176,7 @@ function Results({ view }: { view: CheckInView }) {
                       </a>
                     )}
                     {s.action.kind === 'guide' && (
-                      <a href={`/guide/${view.token}`} className={guide.className} style={guide.style}>
+                      <a href={`/stack-guide/${view.token}`} className={guide.className} style={guide.style}>
                         {C.openGuide}
                       </a>
                     )}

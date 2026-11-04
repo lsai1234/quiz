@@ -17,6 +17,18 @@ describe('your box: a selection, not three sizes', () => {
     expect(startingBox([{ id: 'big', price: 62 }, { id: 'next', price: 38 }])).toEqual(['big'])
   })
 
+  it('pairs a dear first product with the next one that keeps the box at or under £60', () => {
+    // Protein at £36.99: nothing fits under £50, so the next in order under £60 (creatine) joins it.
+    const items = [
+      { id: 'protein', price: 36.99 },
+      { id: 'pre', price: 29.99 },
+      { id: 'bcaa', price: 24.99 },
+      { id: 'creatine', price: 19.99 },
+      { id: 'multi', price: 16.99 },
+    ]
+    expect(startingBox(items)).toEqual(['protein', 'creatine'])
+  })
+
   it('sets the monthly rate by how many products are on', () => {
     expect([1, 3, 4, 5, 6, 8].map(levelForCount)).toEqual(['essentials', 'essentials', 'performance', 'performance', 'complete', 'complete'])
     expect(nextLevel(3)).toEqual({ level: 'performance', more: 1 })

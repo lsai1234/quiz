@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { Card, Ground, buttonSurface } from '@/components/system'
+import { Card, Ground } from '@/components/system'
+import { GuideActions } from '@/components/guide/GuideActions'
 import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { getGuide } from '@/lib/guide/store'
 import { longDate } from '@/lib/guide/build'
@@ -57,8 +58,6 @@ export default async function GuidePage({ params }: Props) {
 
 function GuideBody({ guide }: { guide: NonNullable<Awaited<ReturnType<typeof getGuide>>> }) {
   const timed = guide.routine.moments.filter((m) => m.minutes !== null)
-  const reminders = buttonSurface('primary', 'lg')
-  const image = buttonSurface('secondary', 'md')
   return (
     <article style={{ display: 'flex', flexDirection: 'column', gap: 'var(--stack)' }} data-guide>
       <header>
@@ -76,14 +75,7 @@ function GuideBody({ guide }: { guide: NonNullable<Awaited<ReturnType<typeof get
         <p style={{ marginTop: 'var(--space-3)', color: 'var(--ink-2)', fontSize: 'var(--text-body)', lineHeight: 'var(--leading-body)' }}>{GUIDE_COPY.intro}</p>
       </header>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <a href={`/api/guide/${guide.token}/calendar`} className={reminders.className} style={reminders.style} data-guide-calendar>
-          {GUIDE_COPY.reminders}
-        </a>
-        <a href={`/api/guide/${guide.token}/image`} download="chrgd-stack-guide.png" className={image.className} style={image.style}>
-          {GUIDE_COPY.saveImage}
-        </a>
-      </div>
+      <GuideActions token={guide.token} />
       <p style={{ color: 'var(--ink-3)', fontSize: 'var(--text-meta)', marginTop: 'calc(var(--space-2) * -1)' }}>{GUIDE_COPY.remindersNote}</p>
 
       <Card padding="roomy" glow="accent">
@@ -122,7 +114,7 @@ function GuideBody({ guide }: { guide: NonNullable<Awaited<ReturnType<typeof get
         {guide.products.map((p) => (
           <Card key={p.id} padding="roomy" solid>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)', lineHeight: 'var(--leading-tight)' }}>{p.short}</h3>
-            <p style={{ color: 'var(--ink-3)', fontSize: 'var(--text-meta)', marginTop: 'var(--space-1)' }}>{p.type}</p>
+            {p.type.toLowerCase() !== p.short.toLowerCase() && <p style={{ color: 'var(--ink-3)', fontSize: 'var(--text-meta)', marginTop: 'var(--space-1)' }}>{p.type}</p>}
             <dl style={{ marginTop: 'var(--space-3)', display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 'var(--space-3)', rowGap: 'var(--space-2)', fontSize: 'var(--text-body-sm)' }}>
               <dt style={{ color: 'var(--ink-3)' }}>{GUIDE_COPY.when}</dt>
               <dd style={{ color: 'var(--ink-1)' }}>{[p.time, p.moment, p.daysLabel].filter(Boolean).join(' · ')}</dd>

@@ -227,7 +227,7 @@ export function toConfirmationOrder(order: Order): ConfirmationOrder {
     refunded: order.status === 'refunded' ? true : undefined,
     status: order.status,
     ...(order.lastChance ? { lastChanceDeal: true as const } : {}),
-    ...(order.guideToken ? { guidePath: `/guide/${order.guideToken}` } : {}),
+    ...(order.guideToken ? { guidePath: `/stack-guide/${order.guideToken}` } : {}),
   }
 }
 
@@ -280,7 +280,7 @@ export function toConfirmationSubscription(
     nextDispatchDate: sub.nextDispatchOverride ?? next,
     trial: null,
     manageUrl: opts.manageUrl ?? null,
-    ...(sub.guideToken ? { guidePath: `/guide/${sub.guideToken}` } : {}),
+    ...(sub.guideToken ? { guidePath: `/stack-guide/${sub.guideToken}` } : {}),
     cadenceGroups: [...groups.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([months, items]) => ({ label: cadenceLabel(months), items })),

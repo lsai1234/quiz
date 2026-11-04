@@ -25,7 +25,7 @@ const SERVICE_EVENT: Record<'pharmacistCheck' | 'vitaminDTest' | 'guarantee', st
 
 export function guideLinks(token: string, base = appBaseUrl()) {
   return {
-    page: `${base}/guide/${token}`,
+    page: `${base}/stack-guide/${token}`,
     image: `${base}/api/guide/${token}/image`,
     calendar: `${base}/api/guide/${token}/calendar`,
   }

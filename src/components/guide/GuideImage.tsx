@@ -46,7 +46,7 @@ function whenLine(p: StackGuide['products'][number]): string {
 function productHeight(p: StackGuide['products'][number]): number {
   let h = CARD_PAD * 2
   h += tall(p.short, 60, CARD_INNER, 'display', 1.0) + 8
-  h += 34 + 20 // type
+  if (p.type.toLowerCase() !== p.short.toLowerCase()) h += 34 + 20 // type
   h += tall(whenLine(p), 24, CARD_INNER, 'mono', 1.4) + 14
   if (p.serving) h += tall(`${GUIDE_COPY.eachServing}: ${p.serving}`.toUpperCase(), 21, CARD_INNER, 'mono', 1.4) + 14
   if (p.claims.length) {
@@ -77,7 +77,7 @@ export function guideImageHeight(guide: StackGuide): number {
   h += tall(GUIDE_COPY.scienceNote, 20, INNER, 'mono', 1.45) + 60
   if (guide.services.length) h += 50 + guide.services.reduce((n, s) => n + tall(s, 25, INNER - 50, 'mono', 1.45) + 14, 0) + 40
   h += 50 + tall(GUIDE_COPY.checkIn(longDate(guide.checkInOn)), 25, INNER, 'mono', 1.5) + 60
-  h += 120 + PAD // footer
+  h += 80 + PAD // footer
   return Math.ceil(h)
 }
 
@@ -96,7 +96,7 @@ function DayRing({ guide }: { guide: StackGuide }) {
     <div style={{ display: 'flex', position: 'relative', width: RING, height: RING, alignSelf: 'center', marginBottom: 40 }}>
       <svg width={RING} height={RING} viewBox="0 0 100 100" style={{ position: 'absolute', left: 0, top: 0 }}>
         <circle cx="50" cy="50" r={R} fill="none" stroke={withAlpha(P.bloomAccent, 0.32)} strokeWidth="7" />
-        <path d={ringArc(day.bed, day.wake, R)} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="7" />
+        <path d={ringArc(day.bed, day.wake, R)} fill="none" stroke={withAlpha(P.groundBase, 0.7)} strokeWidth="7" />
         {[0, 6, 12, 18].map((h) => {
           const a = ringPoint(h * 60, R - 7.5)
           return <circle key={h} cx={a.x} cy={a.y} r="0.8" fill="rgba(255,255,255,0.4)" />
@@ -177,7 +177,7 @@ export function GuideImage({ guide }: { guide: StackGuide }) {
       {guide.products.map((p) => (
         <div key={p.id} style={{ display: 'flex', flexDirection: 'column', width: INNER, padding: CARD_PAD, marginBottom: 28, borderRadius: 32, background: P.surface2, border: `1.5px solid ${P.edge}` }}>
           <div style={{ display: 'flex', width: CARD_INNER, ...display(60, 800, P.ink1, -0.005), lineHeight: 1.0, marginBottom: 8 }}>{p.short}</div>
-          <div style={{ display: 'flex', ...mono(21, 500, P.ink3, 0.12), textTransform: 'uppercase', marginBottom: 20 }}>{p.type}</div>
+          {p.type.toLowerCase() !== p.short.toLowerCase() && <div style={{ display: 'flex', ...mono(21, 500, P.ink3, 0.12), textTransform: 'uppercase', marginBottom: 20 }}>{p.type}</div>}
           <div style={{ display: 'flex', width: CARD_INNER, ...mono(24, 600, P.ink1, 0.04), lineHeight: 1.4, marginBottom: 14 }}>{whenLine(p)}</div>
           {p.serving && (
             <div style={{ display: 'flex', width: CARD_INNER, ...mono(21, 500, P.ink2, 0.04), lineHeight: 1.4, marginBottom: 14, textTransform: 'uppercase' }}>
@@ -185,7 +185,7 @@ export function GuideImage({ guide }: { guide: StackGuide }) {
             </div>
           )}
           {p.claims.length > 0 ? (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', width: CARD_INNER }}>
               <div style={{ display: 'flex', ...mono(20, 600, P.bloomAccent, 0.14), textTransform: 'uppercase', marginBottom: 14, marginTop: 6 }}>{GUIDE_COPY.scienceHeading}</div>
               {p.claims.map((c) => (
                 <div key={c.id} style={{ display: 'flex', flexDirection: 'column', width: CARD_INNER, paddingLeft: 22, borderLeft: `6px solid ${P.bloomAccent}`, marginBottom: 20 }}>
@@ -193,7 +193,7 @@ export function GuideImage({ guide }: { guide: StackGuide }) {
                   <div style={{ display: 'flex', width: CARD_INNER - 28, ...mono(20, 400, P.ink3, 0), lineHeight: 1.4, marginTop: 8 }}>{GUIDE_COPY.conditionOfUse(c.condition)}</div>
                 </div>
               ))}
-            </>
+            </div>
           ) : (
             <div style={{ display: 'flex', width: CARD_INNER, ...mono(20, 400, P.ink3, 0), lineHeight: 1.45, marginBottom: 14 }}>{GUIDE_COPY.noClaim}</div>
           )}
@@ -209,7 +209,11 @@ export function GuideImage({ guide }: { guide: StackGuide }) {
           <Eyebrow>{GUIDE_COPY.servicesHeading}</Eyebrow>
           {guide.services.map((s) => (
             <div key={s} style={{ display: 'flex', alignItems: 'flex-start', gap: 18, marginBottom: 14 }}>
-              <div style={{ display: 'flex', width: 32, height: 32, borderRadius: 32, background: P.bloomAccent, alignItems: 'center', justifyContent: 'center', ...display(22, 800, P.groundBase, 0), marginTop: 2 }}>✓</div>
+              <div style={{ display: 'flex', width: 32, height: 32, borderRadius: 32, background: P.bloomAccent, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={P.groundBase} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+                </svg>
+              </div>
               <div style={{ display: 'flex', width: INNER - 50, ...mono(25, 500, P.ink1, 0), lineHeight: 1.45 }}>{s}</div>
             </div>
           ))}

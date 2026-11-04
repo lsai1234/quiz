@@ -3,7 +3,7 @@ import type { ReviewRow } from '@/lib/consult/review-pack'
 import { GUIDE_COPY } from './copy'
 
 export function guideCopyRows(): ReviewRow[] {
-  const where = 'The stack guide: emailed with every order (one-off and monthly), its page (/guide/…) and its image'
+  const where = 'The stack guide: emailed with every order (one-off and monthly), its page (/stack-guide/…) and its image'
   const ex = 'Example'
   const c = GUIDE_COPY
   return [

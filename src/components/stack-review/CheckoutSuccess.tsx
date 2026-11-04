@@ -74,7 +74,7 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
 
       {guideToken && (
         <a
-          href={`/guide/${guideToken}`}
+          href={`/stack-guide/${guideToken}`}
           data-guide-link
           className="w-full mt-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-4 text-left"
           style={{ borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}

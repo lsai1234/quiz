@@ -109,11 +109,11 @@ it('opens on the box: the hero first, under £50, one button with the receipt’
   // Every row says why it's there.
   for (const row of rows) expect(row.querySelector('button')!.textContent).toMatch(/\S+.*·\s*£/)
 
-  // The box nobody chose opens at or under £50 at list price, never empty.
+  // The box nobody chose opens at or under £50 at list price (£60 for a pair), never empty.
   const on = rows.filter((r) => r.dataset.on === 'true')
   expect(on.length).toBeGreaterThan(0)
   const list = on.reduce((sum, r) => sum + pounds(r.textContent!.split('·').pop()!), 0)
-  expect(on.length === 1 || list <= 50.005).toBe(true)
+  expect(on.length === 1 || list <= (on.length === 2 ? 60.005 : 50.005)).toBe(true)
   expect(within(box).getByText(`${on.length} of ${rows.length} on`)).toBeInTheDocument()
 
   // One button, the receipt's total.

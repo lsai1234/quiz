@@ -9,7 +9,8 @@
  *                  under `BOX_START_MAX` at list price, always at least one:
  *                  a box nobody chose should never open at £100. £50 is
  *                  about what the old Essentials cost and, on the shop's
- *                  prices, two or three products.
+ *                  prices, two or three products. When only the first fits,
+ *                  the next that keeps it under £60 joins it (`BOX_PAIR_MAX`).
  *   Level          the existing three subscribe-and-save rates, now set by how
  *                  many products are on (`levelForCount`), so a bigger box
  *                  earns a better monthly rate. The rates themselves, the
@@ -23,6 +24,13 @@ import type { StackLevel } from '@/lib/types'
 
 /** The starting box, at most this at list price (£), unless its first product alone costs more. */
 export const BOX_START_MAX = 50
+/**
+ * A box of one is not a box: when only the first product fits under
+ * `BOX_START_MAX`, the next one in order that keeps it at or under this goes
+ * in too. A first product dear enough to leave no such room stays alone, so a
+ * box nobody chose still never opens near £100.
+ */
+export const BOX_PAIR_MAX = 60
 
 /** From this many products on, the box takes the next monthly rate. */
 export const LEVEL_FROM: readonly { level: StackLevel; count: number }[] = [
@@ -49,7 +57,7 @@ export function nextLevel(n: number): { level: StackLevel; more: number } | null
  * stays at or under `max`. The first always goes in, so there is a box; after
  * that a product that would break the ceiling is left off and the next tried.
  */
-export function startingBox(items: readonly { id: string; price: number }[], max = BOX_START_MAX): string[] {
+export function startingBox(items: readonly { id: string; price: number }[], max = BOX_START_MAX, pairMax = BOX_PAIR_MAX): string[] {
   const on: string[] = []
   let total = 0
   for (const item of items) {
@@ -57,7 +65,12 @@ export function startingBox(items: readonly { id: string; price: number }[], max
     on.push(item.id)
     total += item.price
   }
-  return on
+  if (on.length === 1) {
+    const second = items.find((i) => i.id !== on[0] && total + i.price <= pairMax + 0.005)
+    if (second) on.push(second.id)
+  }
+  // Back in the list's own order.
+  return items.filter((i) => on.includes(i.id)).map((i) => i.id)
 }
 
 /**

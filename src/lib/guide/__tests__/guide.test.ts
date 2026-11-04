@@ -53,7 +53,7 @@ describe('the stack guide: their products on their day, and only approved words'
   })
 
   it('emails the image, then the same content as text, with no marketing', () => {
-    const email = stackGuideEmail(guide, { page: 'https://x.test/guide/t', image: 'https://x.test/api/guide/t/image', calendar: 'https://x.test/api/guide/t/calendar' }, { baseUrl: 'https://x.test' })
+    const email = stackGuideEmail(guide, { page: 'https://x.test/stack-guide/t', image: 'https://x.test/api/guide/t/image', calendar: 'https://x.test/api/guide/t/calendar' }, { baseUrl: 'https://x.test' })
     expect(email.subject).toBe(GUIDE_COPY.emailSubject('Alex'))
     expect(email.html).toContain('src="https://x.test/api/guide/t/image"')
     expect(email.html).toContain(`alt="${GUIDE_COPY.imageAlt(guide.products.length)}"`)
