@@ -16,6 +16,13 @@ import { appBaseUrl } from '@/lib/notify'
 import { buildGuide, normaliseGuideSeed, type GuideLine, type StackGuide } from './build'
 import { newGuideToken, saveGuide } from './store'
 
+/** What the founders see on the order's audit trail. */
+const SERVICE_EVENT: Record<'pharmacistCheck' | 'vitaminDTest' | 'guarantee', string> = {
+  pharmacistCheck: 'Pharmacist check: review this box against the safety answers before it ships',
+  vitaminDTest: 'Vitamin D test: send the kit with this order',
+  guarantee: 'First-box guarantee applies to this order',
+}
+
 export function guideLinks(token: string, base = appBaseUrl()) {
   return {
     page: `${base}/guide/${token}`,
@@ -69,8 +76,14 @@ export async function issueGuideForOrder(order: Order): Promise<string | null> {
     const guide = await makeGuide('oneoff', lines, order.guideSeed)
     if (!guide) return null
     const { updateOrder } = await import('@/lib/orders/repo')
+    const { partnerServices } = await import('./services')
+    const services = await partnerServices('oneoff', guide.products.length)
     await updateOrder(order.id, (o) => {
       o.guideToken = guide.token
+      if (services.length) {
+        o.services = services
+        o.events = [...(o.events ?? []), ...services.map((s) => ({ at: new Date().toISOString(), type: 'service', detail: SERVICE_EVENT[s] }))]
+      }
     })
     if (order.email) await sendGuide(guide, order.email, order.userId)
     return guide.token
@@ -88,8 +101,10 @@ export async function issueGuideForSubscription(userId: string, sub: MemberSubsc
     const guide = await makeGuide('subscription', lines, sub.guideSeed)
     if (!guide) return null
     const { getSubscription, saveSubscription } = await import('@/lib/db/hub-data')
+    const { partnerServices } = await import('./services')
+    const services = await partnerServices('subscription', guide.products.length)
     const current = await getSubscription(userId)
-    if (current) await saveSubscription(userId, { ...current, guideToken: guide.token })
+    if (current) await saveSubscription(userId, { ...current, guideToken: guide.token, ...(services.length ? { services } : {}) })
     const to = sub.customerEmail || email
     if (to) await sendGuide(guide, to, userId)
     return guide.token

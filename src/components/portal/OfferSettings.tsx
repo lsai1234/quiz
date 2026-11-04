@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Note, Segmented } from '@/components/system'
 import { ProductPicker } from './ProductPicker'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus } from '@/lib/offer/settings'
+import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus, type ServiceSettings } from '@/lib/offer/settings'
 import { LEVEL_NAME } from '@/lib/offer/bonus-economics'
 import type { OfferView } from '@/lib/offer/view'
 import { productHref } from '@/lib/portal/product-links'
@@ -54,7 +54,7 @@ export function OfferSettings() {
       .catch(() => setError('Could not load the offer settings. Reload the page to try again.'))
   }, [])
 
-  const save = useCallback(async (body: { heroEnabled?: boolean; bonus?: Partial<BonusSettings> }) => {
+  const save = useCallback(async (body: { heroEnabled?: boolean; bonus?: Partial<BonusSettings>; services?: Partial<ServiceSettings> }) => {
     setSaving(true)
     try {
       const res = await fetch('/api/portal/offer', {
@@ -85,7 +85,49 @@ export function OfferSettings() {
       )}
       <HeroCard view={view} saving={saving} onSwitch={(on) => save({ heroEnabled: on })} />
       <BonusCard view={view} saving={saving} onSave={(bonus) => save({ bonus })} />
+      <ServicesCard view={view} saving={saving} onSwitch={(services) => save({ services })} />
     </div>
+  )
+}
+
+/* ── Box services (Option 1) ────────────────────────────────────────────── */
+
+const SERVICE_ROWS: { key: keyof ServiceSettings; title: string; level: string; note: string }[] = [
+  { key: 'checkIns', title: 'Amp check-ins', level: 'Every box', note: 'An email every two weeks after an order: 30 seconds on their days, training and what they use, and one-tap changes to the box.' },
+  { key: 'guarantee', title: 'First-box guarantee', level: 'Every box', note: 'Money back on the first box if it isn’t right. Turn on once the terms at /legal/guarantee are agreed; refunds are made by hand from the order.' },
+  { key: 'pharmacistCheck', title: 'Pharmacist check', level: 'Supercharged (4+ products)', note: 'A UK pharmacist reviews the box against their safety answers before it ships. Turn on once a partner pharmacy is signed: each qualifying order is flagged for review.' },
+  { key: 'vitaminDTest', title: 'Vitamin D test', level: 'Fully charged (6+ products)', note: 'An at-home kit through an accredited lab. Turn on once a lab partner is signed and the kit cost fits the margin floor: each qualifying order is flagged to send one.' },
+]
+
+function ServicesCard({ view, saving, onSwitch }: { view: OfferView; saving: boolean; onSwitch: (s: Partial<ServiceSettings>) => void }) {
+  const { services } = view.settings
+  return (
+    <Card elevation={1}>
+      <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+        <div>
+          <h2 style={HEADING}>Box services</h2>
+          <p style={{ ...META, marginTop: 'var(--space-1)' }}>
+            What a box comes with beyond its products, shown in &ldquo;Your box comes with&rdquo; and in each order&apos;s stack guide. The stack guide and
+            calendar reminders come with every box. Off, a service is never mentioned anywhere.
+          </p>
+        </div>
+        {SERVICE_ROWS.map((row) => (
+          <div key={row.key} style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <Segmented
+              label={`${row.title} · ${row.level}`}
+              columns={2}
+              value={services[row.key] ? 'on' : 'off'}
+              onChange={(v) => !saving && onSwitch({ [row.key]: v === 'on' })}
+              options={[
+                { value: 'off', label: 'Off', sub: 'Not offered' },
+                { value: 'on', label: 'On', sub: row.level },
+              ]}
+            />
+            <p style={META}>{row.note}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }
 

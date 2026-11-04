@@ -69,3 +69,48 @@ export function freeGiftTerms(bonus: BonusSettings): TermsSection[] {
     },
   ]
 }
+
+/**
+ * The first-box guarantee's terms (Option 1), for sign-off before the switch
+ * goes on. A satisfaction promise about the order, never a health promise:
+ * nothing here says what the products will do. Refunds are made by hand, from
+ * the order, to the card that paid.
+ */
+export function guaranteeTerms(): TermsSection[] {
+  return [
+    {
+      heading: 'What it is',
+      lines: [
+        'If your first CHRGD box isn’t right for you, tell us and we’ll refund what you paid for it.',
+        'It’s about whether the box suits you. It is not a promise about any result from the products.',
+      ],
+    },
+    {
+      heading: 'Who it’s for',
+      lines: [
+        'Your first order only, one-off or the first box of a monthly plan. One per customer: one household, one address, one card.',
+      ],
+    },
+    {
+      heading: 'How to ask',
+      lines: [
+        'Reply to your order confirmation email, or email us, within 30 days of your box being delivered. Tell us your order reference; you don’t have to give a reason.',
+        'You don’t need to send anything back. If you have unopened products, we may ask you to return them, at our cost.',
+      ],
+    },
+    {
+      heading: 'What you get back',
+      lines: [
+        'What you paid for the first box, including delivery, to the card you paid with, within 14 days of us agreeing it. A free gift and any discount stay with the order and aren’t refunded as cash.',
+        'On a monthly plan, the refund covers the first box only. Your plan carries on unless you cancel it, which you can do at any time in your account.',
+      ],
+    },
+    {
+      heading: 'Your other rights',
+      lines: [
+        'This guarantee is on top of your legal rights, including your right to cancel an online order, not instead of them.',
+      ],
+    },
+  ]
+}
+

@@ -20,7 +20,7 @@ import { OFFER_COPY } from './copy'
 import { PLAN_COPY, whyPricesDiffer } from './plan-copy'
 import { BOX_COPY } from './box-copy'
 import { LEVEL_COPY } from './levels-copy'
-import { freeGiftTerms } from './terms'
+import { freeGiftTerms, guaranteeTerms } from './terms'
 
 export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
   const where = 'Free bonus terms (Settings → Offer; customer wording below, "Free gift terms")'
@@ -207,3 +207,11 @@ export function freeGiftTermRows(bonus: BonusSettings): ReviewRow[] {
     section.lines.map((line): ReviewRow => ['Free gift terms', `/legal/free-gift: ${section.heading}`, line, 'Customer wording, for sign-off']),
   )
 }
+
+/** The first-box guarantee's terms page, for sign-off before the switch goes on. */
+export function guaranteeTermRows(): ReviewRow[] {
+  return guaranteeTerms().flatMap((section) =>
+    section.lines.map((line): ReviewRow => ['Guarantee terms', `/legal/guarantee: ${section.heading}`, line, 'Customer wording, for sign-off before the guarantee is switched on']),
+  )
+}
+

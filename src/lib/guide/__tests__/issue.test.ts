@@ -7,6 +7,7 @@ import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
 import { createUser } from '@/lib/db/users'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import { saveServiceSettings } from '@/lib/offer/store'
 
 process.env.NOTIFY_TEST_ALLOWLIST = '@example.com'
 
@@ -61,5 +62,20 @@ describe('every order gets a stack guide', () => {
     expect(token).toMatch(/^[A-Za-z0-9_-]{24}$/)
     expect((await getSubscription(userId))?.guideToken).toBe(token)
     expect((await getGuide(token!))?.plan).toBe('subscription')
+  })
+
+  it('flags a Supercharged box for the pharmacist check only while the switch is on', async () => {
+    const make = (n: number) =>
+      createOrderFromCheckout({
+        channel: 'quiz', email: null, status: 'paid',
+        lines: MOCK_CATALOGUE.slice(0, n).map((p) => ({ sku: null, productId: p.id, title: p.id, quantity: 1, unitPrice: 10 })),
+      }).then((o) => getOrder(o.id))
+    expect((await make(4))?.services).toBeUndefined()
+    await saveServiceSettings({ pharmacistCheck: true })
+    const big = await make(4)
+    expect(big?.services).toEqual(['pharmacistCheck'])
+    expect(big?.events.some((e) => e.type === 'service' && /Pharmacist check/.test(e.detail ?? ''))).toBe(true)
+    expect((await make(2))?.services).toBeUndefined()
+    await saveServiceSettings({ pharmacistCheck: false })
   })
 })

@@ -17,9 +17,11 @@ import {
   normaliseBonus,
   normaliseHeroApproval,
   normaliseOffer,
+  normaliseServices,
   type BonusSettings,
   type HeroApproval,
   type OfferSettings,
+  type ServiceSettings,
 } from './settings'
 
 const FILE = 'offer'
@@ -58,6 +60,14 @@ export async function saveHeroApproval(
     const next = normaliseHeroApproval(productId, { ...current, ...patch, updatedBy: by, updatedAt: now.toISOString() })
     state.heroes[productId] = next
     return next
+  })
+}
+
+/** Settings → Offer → "Box services": the switches, merged and checked. */
+export async function saveServiceSettings(patch: Partial<ServiceSettings>): Promise<OfferSettings> {
+  return mutate((state) => {
+    state.services = normaliseServices({ ...state.services, ...patch })
+    return state
   })
 }
 
