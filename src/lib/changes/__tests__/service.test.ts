@@ -17,6 +17,10 @@ import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { line, product, subscriptionWith } from './fixtures'
 
+// These test the send mechanics: their members are on the test allowlist,
+// which holds every other address outside live payments (`lib/notify/allowlist`).
+process.env.NOTIFY_TEST_ALLOWLIST = '@example.com'
+
 afterEach(() => resetPricingOverrides())
 
 const NOW = new Date('2026-07-29T09:00:00.000Z')
