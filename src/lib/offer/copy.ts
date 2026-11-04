@@ -64,7 +64,7 @@ export const OFFER_COPY = {
   /* Build your stack: what a bigger stack unlocks, every line one checkout already applies. */
   ladderHeading: 'Build your stack',
   ladderNext: (toGo: number, reward: string) => `${formatGBP(toGo)} more for ${reward.charAt(0).toLowerCase()}${reward.slice(1)}`,
-  ladderAll: 'You’ve unlocked everything on this stack.',
+  ladderAll: 'Your box has unlocked everything.',
   ladderUnlocked: 'Unlocked',
   ladderToGo: (toGo: number) => `${formatGBP(toGo)} to go`,
   ladderAdd: 'Add one of these to get there:',

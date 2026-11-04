@@ -41,11 +41,14 @@ interface Props {
   read?: ConsultRead | null
   reducedMotion?: boolean
   /**
-   * The offer at a glance (`OfferSummary`), under the stack's name. With it,
-   * the reasons below fold away behind "Why these products?", so the first
-   * screen is the offer and the detail is one tap away.
+   * The offer (`BoxBuilder`: every product with its reason and a switch),
+   * under the stack's name. With it, the rest of the read folds away behind
+   * `foldLabels`, so the first screen is the offer and the detail is one tap
+   * away. Pass no `items` with it: the box lists the products itself.
    */
   offer?: ReactNode
+  /** The fold's button, closed and open. Default "Why these products?" / "Hide the reasons". */
+  foldLabels?: { open: string; close: string }
 }
 
 /**
@@ -115,7 +118,7 @@ const DISPLAY = 'var(--font-display)'
  * goal-to-claim map. A product with no line is listed after them by name
  * and type only, and a section with nothing in it is left out.
  */
-export function YouScene({ name, stackName, items, checks, read = null, reducedMotion, offer = null }: Props) {
+export function YouScene({ name, stackName, items, checks, read = null, reducedMotion, offer = null, foldLabels }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const whyId = useId()
   // With the offer on top, the reasons start folded; without it, as before.
@@ -137,6 +140,9 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
   const alsoId = useId()
   const shown = items.slice(0, items.length > STRIP_MAX ? STRIP_MAX - 1 : STRIP_MAX)
   const extra = items.length - shown.length
+  // Nothing to fold, no button: a quiz stack with no checks has only the box.
+  const hasFold = Boolean(read && (read.patterns.length > 0 || read.words)) || groups.length > 0 || quiet.length > 0
+    || habits.length > 0 || unmet.length > 0 || gp.length > 0 || checks.length > 0
 
   // A short rise as the scene arrives. Mount only: rows that change later (a
   // swap, a different depth) just appear.
@@ -239,7 +245,7 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
 
         {offer}
 
-        {offer && (
+        {offer && hasFold && (
           <button
             type="button"
             aria-expanded={whyOpen}
@@ -249,7 +255,7 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
             style={{ color: P.ink, border: `1px solid ${P.hairline}`, fontFamily: DISPLAY }}
             data-why-toggle
           >
-            {whyOpen ? OFFER_COPY.hideWhy : OFFER_COPY.whyThese}
+            {whyOpen ? foldLabels?.close ?? OFFER_COPY.hideWhy : foldLabels?.open ?? OFFER_COPY.whyThese}
             <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: whyOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
               <path d="m6 9 6 6 6-6" />
             </svg>

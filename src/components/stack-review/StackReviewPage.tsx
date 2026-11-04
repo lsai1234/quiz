@@ -12,8 +12,12 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig, planComparison } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig, getSubscriptionProduct, levelSubscriptionRate, planComparison } from '@/lib/stack-blueprint/pricing'
 import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
+import { boxOn, levelForCount, rateAhead, startingBox } from '@/lib/offer/box'
+import { BOX_COPY } from '@/lib/offer/box-copy'
+import { BoxBuilder, type BoxRow } from './BoxBuilder'
+import { ProductDetailSheet } from './ProductDetailSheet'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -25,23 +29,19 @@ import { StackDeck } from './StackDeck'
 import { YouScene, type YouSceneItem } from './YouScene'
 import { explainProductSafe, whatWeChecked, type ProductExplanation } from '@/lib/results'
 import { CLAIMS } from '@/lib/consult/claims'
-import { CONSULT_TIER_LABEL, consultTierPlans } from '@/lib/consult/tiers'
+import { consultTierPlans } from '@/lib/consult/tiers'
 import type { SlotType } from '@/lib/stack-blueprint/factory'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, checkDiscountCode, forgetReferral, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { CheckoutPromo, type Promo } from './CheckoutPromo'
-import { CoreOfferCard } from './CoreOfferCard'
-import { OfferSummary } from './OfferSummary'
-import { PlanSwitch } from './PlanSwitch'
-import { RewardLadder } from './RewardLadder'
 import { rewardLadder } from '@/lib/offer/ladder'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { useOfferCheckout } from '@/hooks/useOfferCheckout'
 import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
 import { chooseHero, heroReason, personFromSnapshot, type OfferInputs, type PersonFit } from '@/lib/offer/select'
-import { bonusLineFor, bonusWorth, codeOrBonus, coreOffer, dealPerson, tierBonuses, tierDelivered, titleOf } from '@/lib/offer/results'
+import { bonusWorth, codeOrBonus, coreOffer, dealPerson, tierBonuses, titleOf, type BonusLine } from '@/lib/offer/results'
 import { OFFER_COPY } from '@/lib/offer/copy'
 import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
@@ -59,6 +59,7 @@ import {
 import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { ProductSwapModal } from './ProductSwapModal'
 import { ConsultNote } from './ConsultNote'
 import { withoutExcluded } from '@/lib/consult/exclusions'
@@ -412,6 +413,16 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     return m
   }, [blueprint])
 
+  // Your box: the products they switched on or off themselves, by slot id.
+  // The rest follow the starting box (see "Your box" below).
+  const [boxChoice, setBoxChoice] = useState<{ on: string[]; off: string[] }>({ on: [], off: [] })
+  const setBoxOn = useCallback((slotId: string, on: boolean) => {
+    setBoxChoice((c) => ({
+      on: on ? [...c.on.filter((x) => x !== slotId), slotId] : c.on.filter((x) => x !== slotId),
+      off: on ? c.off.filter((x) => x !== slotId) : [...c.off.filter((x) => x !== slotId), slotId],
+    }))
+  }, [])
+
   // Swap modal state
   const [swapSlot, setSwapSlot] = useState<StackSlotEntry | null>(null)
 
@@ -446,6 +457,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
 
   const handleRemove = useCallback(
     (slotId: string) => {
+      // In the box, "Remove" is the switch: off, and still listed to put back.
+      if (!claiming) {
+        setBoxOn(slotId, false)
+        funnel.stackRemove({ slotId })
+        return
+      }
       try {
         setStackBlueprint(removeOptionalSlot(blueprint, slotId))
         funnel.stackRemove({ slotId })
@@ -453,7 +470,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         // required slot — silently ignore (button shouldn't appear for these)
       }
     },
-    [blueprint, setStackBlueprint],
+    [blueprint, setStackBlueprint, claiming, setBoxOn],
   )
 
   const handleAddBooster = useCallback(
@@ -477,8 +494,10 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         confidenceScore: product.recommendationPriority * 10,
       })
       setStackBlueprint(updated)
+      // Added is switched on.
+      setBoxOn(slotId, true)
     },
-    [blueprint, setStackBlueprint],
+    [blueprint, setStackBlueprint, setBoxOn],
   )
 
   const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
@@ -555,25 +574,112 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
             STARTER_MIN_STEP,
             { basis: 'oneOffList', levels: STARTER_TIERS, hardCeiling: STARTER_GOODS_CAP },
           )
-        : consultTiers
-        ? consultTierPlans({ blueprint, tiers: consultTiers, heroId: hero?.choice.product.id ?? null, sameKind: heroSameKind, catalogue: products, answers, priceOpts })
-        : planTiers(blueprint, products, answers, undefined, priceOpts),
-    [claiming, blueprint, products, answers, priceOpts, consultTiers, hero, heroSameKind],
+        : [],
+    [claiming, blueprint, products, answers, priceOpts],
   )
-  const tierLabels = consultTiers && !claiming ? CONSULT_TIER_LABEL : undefined
-  // The depth actually on offer for the member's choice: `planTiers` folds
-  // depths a small stack can't tell apart, so the stored level may no longer be
-  // one of them. Everything downstream — pricing, the receipt, checkout — uses
-  // THIS level rather than the stored one, so the card is charged what the
-  // selector showed.
-  const activePlan = tierPlanFor(tierPlans, stackLevel)
-  const activeLevel = activePlan.level
-  const activeSlots = activePlan.slots
+
+  /*
+   * ── Start here ────────────────────────────────────────────────────────────
+   *
+   * The core offer: the hero, or their top pick (`coreOffer`), priced as the
+   * hero offer prices one product: "Just want one?" under the box, and the
+   * box's first product. Not on a partner's claim.
+   */
+  const [dealUsed, setDealUsed] = useState(false)
+  useEffect(() => {
+    try { setDealUsed(window.localStorage.getItem(LAST_CHANCE_USED_KEY) === '1') } catch { /* no storage: the deal stands */ }
+  }, [])
+  const core = useMemo(
+    () =>
+      claiming || products.length === 0
+        ? null
+        : coreOffer({
+            hero,
+            slots: blueprint.slots,
+            catalogue: products,
+            answers,
+            primaryGoal: blueprint.primaryGoal,
+            usage: subscriptionUsage,
+            dealUsed,
+            config: offerInputs.config,
+          }),
+    [claiming, products, hero, blueprint.slots, blueprint.primaryGoal, answers, subscriptionUsage, dealUsed, offerInputs.config],
+  )
+
+  /*
+   * ── Your box (the clarity pass, part 2) ───────────────────────────────────
+   *
+   * Essentials / Standard / Complete are gone for everybody but a partner
+   * claiming their free starter (whose sizes keep it under the goods cap).
+   * Every product Amp recommends is listed, each switched on or off, and the
+   * box is whatever is on (`@/lib/offer/box`).
+   *
+   *   The list    the consult's deepest stack, hero first and swaps followed
+   *               (`consultTierPlans`); or the quiz's stack in its own order,
+   *               as many as its deepest depth ever held. Then anything they
+   *               added themselves.
+   *   On          the starting box (at or under £50 at list price, never
+   *               empty), then their own switches over it.
+   *   Level       set by how many are on (`levelForCount`), so a bigger box
+   *               earns a better monthly rate. Sent with the order and
+   *               re-checked at the server, as the depth was.
+   */
+  const boxList = useMemo<StackSlotEntry[]>(() => {
+    if (claiming) return []
+    const own = blueprint.slots.filter((s) => s.addedByUser === true)
+    const picked = consultTiers
+      ? consultTierPlans({ blueprint, tiers: consultTiers, heroId: hero?.choice.product.id ?? null, sameKind: heroSameKind, catalogue: products, answers, priceOpts }).at(-1)?.slots ?? []
+      : [...blueprint.slots]
+          .filter((s) => s.addedByUser !== true)
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .slice(0, getPricingConfig().tierSizes.complete.max)
+    const list = [...picked]
+    for (const slot of own) if (!list.includes(slot)) list.push(slot)
+    // What "Just want one?" names leads the box (the hero already does).
+    const lead = list.findIndex((slot) => slot.selectedProductId === core?.product.id)
+    if (lead > 0) list.unshift(...list.splice(lead, 1))
+    return list.filter((slot) => products.some((p) => p.id === slot.selectedProductId))
+  }, [claiming, blueprint, consultTiers, hero, heroSameKind, products, answers, priceOpts, core])
+  // Priced on what Amp recommended in each place, so a swap or a flavour never
+  // switches a product off behind their back.
+  const computedStart = useMemo(
+    () =>
+      startingBox(
+        boxList.map((slot) => {
+          const p = products.find((x) => x.id === (slot.recommendedProductId || slot.selectedProductId))
+          return { id: slot.slotId, price: p?.variants.find((v) => v.available)?.price ?? p?.basePrice ?? 0 }
+        }),
+      ),
+    [boxList, products],
+  )
+  /*
+    The starting box is fixed at their first change. Until then it follows the
+    list (the hero, the deal, the catalogue all settle as the page loads);
+    after it, adding a product or swapping the one "Just want one?" names can
+    reorder the list, and a re-worked start would switch off products they
+    never touched.
+  */
+  const [frozenStart, setFrozenStart] = useState<string[] | null>(null)
+  const boxStart = frozenStart ?? computedStart
+  const freezeStart = useCallback(() => setFrozenStart((f) => f ?? computedStart), [computedStart])
+  const boxSelected = useMemo(
+    () => new Set(boxOn(boxList.map((s) => s.slotId), boxStart, boxChoice)),
+    [boxList, boxStart, boxChoice],
+  )
+  const boxSlots = useMemo(() => boxList.filter((s) => boxSelected.has(s.slotId)), [boxList, boxSelected])
+
+  // A partner's starter keeps its sizes: the depth actually on offer for the
+  // stored level (`planTiers` folds depths a small stack can't tell apart).
+  // Everything downstream — pricing, the receipt, checkout — uses THIS level
+  // rather than the stored one, so the card is charged what the screen showed.
+  const starterPlan = claiming && tierPlans.length > 0 ? tierPlanFor(tierPlans, stackLevel) : null
+  const activeLevel: StackLevel = starterPlan ? starterPlan.level : levelForCount(boxSlots.length)
+  const activeSlots = starterPlan ? starterPlan.slots : boxSlots
   const activeBlueprint = useMemo(
     () => ({ ...blueprint, slots: activeSlots, level: activeLevel }),
     [blueprint, activeSlots, activeLevel],
   )
-  const showTiers = tierPlans.length > 1
+  const showTiers = claiming && tierPlans.length > 1
 
   const subOpts = useMemo(() => ({ ...priceOpts, level: activeLevel }), [priceOpts, activeLevel])
 
@@ -591,9 +697,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   }, [products.length, activeLevel, stackLevel, setStackLevel])
 
   /*
-   * ── The free bonus, per depth ─────────────────────────────────────────────
+   * ── The free bonus, for the box ───────────────────────────────────────────
    *
-   * Chosen for each depth as it stands (`tierBonuses`), never priced in: the
+   * Chosen for the box as it stands (`tierBonuses`), never priced in: the
    * stack's price, its saving and its delivery are what they would be without
    * it. Not on a partner's claim or a founder code, which are already the deal
    * this order is about.
@@ -604,7 +710,17 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
    * more takes the code off again and the code box says why.
    */
   const bonusPerson = claiming || founderKind ? null : offerPerson
-  const bonuses = useMemo(() => tierBonuses(offerInputs, bonusPerson, tierPlans), [offerInputs, bonusPerson, tierPlans])
+  const bonuses = useMemo(
+    () => tierBonuses(offerInputs, bonusPerson, [{ level: activeLevel, slots: activeSlots, monthly: 0, oneOff: 0 }]),
+    [offerInputs, bonusPerson, activeLevel, activeSlots],
+  )
+  // The gift the whole list would come with: what "Free gift from £…" names
+  // while the box is under the minimum.
+  const fullBoxBonus = useMemo(() => {
+    if (boxList.length === 0) return null
+    const level = levelForCount(boxList.length)
+    return tierBonuses(offerInputs, bonusPerson, [{ level, slots: boxList, monthly: 0, oneOff: 0 }])[level]?.choice ?? null
+  }, [offerInputs, bonusPerson, boxList])
   /** A gift the checkout turned down (it said why): not offered again on this visit. */
   const [bonusRefused, setBonusRefused] = useState<string | null>(null)
   const tierBonus = bonuses[activeLevel]?.choice ?? null
@@ -635,34 +751,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on the refusal itself
   }, [checkoutState])
 
-  /*
-   * ── Start here ────────────────────────────────────────────────────────────
-   *
-   * The core offer: the hero, or their top pick (`coreOffer`), priced as the
-   * hero offer prices one product. It is the option the sticky bar follows
-   * until they choose a depth of the full stack. Not on a partner's claim.
-   */
-  const [dealUsed, setDealUsed] = useState(false)
-  useEffect(() => {
-    try { setDealUsed(window.localStorage.getItem(LAST_CHANCE_USED_KEY) === '1') } catch { /* no storage: the deal stands */ }
-  }, [])
-  const core = useMemo(
-    () =>
-      claiming || products.length === 0
-        ? null
-        : coreOffer({
-            hero,
-            slots: blueprint.slots,
-            catalogue: products,
-            answers,
-            primaryGoal: blueprint.primaryGoal,
-            usage: subscriptionUsage,
-            dealUsed,
-            config: offerInputs.config,
-          }),
-    [claiming, products, hero, blueprint.slots, blueprint.primaryGoal, answers, subscriptionUsage, dealUsed, offerInputs.config],
-  )
-  const [option, setOption] = useState<'core' | 'stack'>('core')
+  // The box is the offer; "Just want one?" is the quiet way out of it, and the
+  // bar follows it only once they have tapped it.
+  const [option, setOption] = useState<'core' | 'stack'>('stack')
   // A founder code is for the stack (it sets the stack's price), so with one
   // applied the bar follows the stack.
   const chosen: 'core' | 'stack' = core && !founderKind ? option : 'stack'
@@ -685,25 +776,16 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   const coreTotal = core ? (coreOverride ?? core.quote).total : 0
   const coreBusy = coreState.status === 'loading' || coreState.status === 'redirecting'
 
-  // The bonus as the depth picker shows it: a "Gift" mark on each depth that
-  // comes with one, and under the row what this depth comes with or what
-  // would qualify, its conditions beside it.
-  const giftLevels = useMemo(() => {
-    const out: Partial<Record<StackLevel, boolean>> = {}
-    for (const t of tierPlans) {
-      const c = bonuses[t.level]?.choice
-      out[t.level] = Boolean(c) && c!.product.id !== bonusRefused && winner !== 'code'
-    }
-    return out
-  }, [tierPlans, bonuses, bonusRefused, winner])
-  const bonusLine = claiming || founderKind || winner === 'code' || (tierBonus && !offeredBonus)
+  // The bonus as the box shows it: what this box comes with, or what would
+  // qualify, its conditions beside it.
+  const bonusHere = bonuses[activeLevel]
+  const bonusLine: BonusLine = claiming || founderKind || winner === 'code' || (tierBonus && !offeredBonus)
     ? null
-    : bonusLineFor(activeLevel, bonuses, offerSettings.bonus)
-  const moreFor = useMemo(() => {
-    if (!core || !bonus) return null
-    const difference = Math.round((tierDelivered(activePlan, products, offerInputs.config) - coreTotal) * 100) / 100
-    return difference > 0 ? OFFER_COPY.moreFor(difference, titleOf(bonus.product)) : null
-  }, [core, bonus, activePlan, products, offerInputs.config, coreTotal])
+    : bonusHere?.choice
+      ? { kind: 'comes-with', choice: bonusHere.choice }
+      : (bonusHere?.blocked === 'minimum' || bonusHere?.blocked === 'tier') && fullBoxBonus
+        ? { kind: 'from', title: titleOf(fullBoxBonus.product), minimum: offerSettings.bonus.minSubtotal }
+        : null
 
   /*
     A starter buys one box, never a plan — so it forces the ONE-OFF path here
@@ -744,13 +826,17 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     address to Stripe on the next screen.
   */
   const handleCheckout = useCallback(() => {
+    // An empty box is not an order (its button says to switch one on).
+    if (activeSlots.length === 0) return
     setOption('stack')
     if (claiming || freeCode) {
       setAddressOpen(true)
+      // The form is by the receipt; the box's button can be a long way up.
+      window.setTimeout(() => document.getElementById('scene-plan')?.scrollIntoView({ block: 'start' }), 0)
       return
     }
     void placeOrder()
-  }, [claiming, freeCode, placeOrder])
+  }, [activeSlots.length, claiming, freeCode, placeOrder])
 
   const pricing = calculatePricing(activeBlueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
@@ -981,6 +1067,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   }, [offerCtaEl])
 
   const showStickyBar = !swapSlot && !journeyOpen && !shareOpen && !ctaOnScreen && !offerCtaOnScreen
+    && (activeSlots.length > 0 || option === 'core')
     && checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
@@ -1081,8 +1168,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     stack is never named while the shop might turn out to be the real one.
   */
   /*
-    The offer at a glance (the clarity pass): both choices, priced, before
-    any of the reasons. The full cards further down say it all again.
+    Your box: the offer, on the first screen. Every product with its reason
+    and a switch, the plan, what the box has unlocked, one button.
   */
   const canSubscribeStack = !claiming && founderKind == null && pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet
   // A month against one of each, on the same figures the receipt's table uses.
@@ -1095,12 +1182,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         oneOffDiscountRate: pricing.bundleDiscountPct / 100,
       })
     : null
-  const toFullStack = () => {
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const target = document.getElementById('offer-full-stack') ?? stackRef.current
-    target?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
-  }
-  // Build your stack: what this depth has unlocked, and the next line, on checkout's own rules.
+  // What the box has unlocked, and the next line, on checkout's own rules.
   const giftConditions = [
     OFFER_COPY.bonusConditions(offerSettings.bonus.minSubtotal, offerSettings.bonus.firstOrderOnly),
     planType === 'subscription' ? OFFER_COPY.bonusOnSubscription : null,
@@ -1121,23 +1203,103 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
       : null,
   })
 
-  const offerSummary =
-    starterStack || checkoutState.status === 'mock-complete' ? null : (
-      <OfferSummary
+  /*
+    A row's reason: the consult's claims-aware reason, or the quiz's "Built
+    from your answers" line. Where the claims maps let neither be said, only
+    that their answers picked it; the Details sheet has the rest.
+  */
+  const boxRows = useMemo<BoxRow[]>(
+    () =>
+      boxList.flatMap((slot) => {
+        const product = products.find((p) => p.id === slot.selectedProductId)
+        if (!product) return []
+        const consult = consultRead?.products[product.id]
+        const sentence = consult
+          ? consult.reason
+          : explainProductSafe({ product, slotType: slot.slotType as SlotType, answers })?.sentence ?? null
+        // The core offer's own line (the hero's approved reason, or the top pick's) where there's no other.
+        const coreLine = core && product.id === core.product.id ? core.reason : null
+        const reason = sentence ?? coreLine ?? (slot.addedByUser ? BOX_COPY.added : BOX_COPY.picked)
+        const price = product.variants.find((v) => v.id === slot.selectedVariantId)?.price ?? product.basePrice
+        return [{ id: slot.slotId, product, reason, on: boxSelected.has(slot.slotId), price }]
+      }),
+    [boxList, products, consultRead, answers, boxSelected, core],
+  )
+  const toggleBox = useCallback(
+    (slotId: string) => {
+      const on = !boxSelected.has(slotId)
+      freezeStart()
+      // Back to the box: the bar follows it again after "Just want one?".
+      setOption('stack')
+      setBoxOn(slotId, on)
+      if (on) funnel.stackAdd({ productId: boxList.find((s) => s.slotId === slotId)?.selectedProductId ?? slotId })
+      else funnel.stackRemove({ slotId })
+    },
+    [boxSelected, setBoxOn, boxList, freezeStart],
+  )
+  // Products to add to reach the next line: the ones switched off first, then new ones.
+  const boxAddOns = useMemo(
+    () => [...boxRows.filter((r) => !r.on).map((r) => r.product), ...boosters].filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i),
+    [boxRows, boosters],
+  )
+  const addToBox = useCallback(
+    (product: CatalogueProduct) => {
+      const row = boxRows.find((r) => r.product.id === product.id)
+      if (row) toggleBox(row.id)
+      else {
+        freezeStart()
+        setOption('stack')
+        handleAddBooster(product)
+      }
+    },
+    [boxRows, toggleBox, handleAddBooster, freezeStart],
+  )
+  const [detailSlotId, setDetailSlotId] = useState<string | null>(null)
+  const detailSlot = detailSlotId ? blueprint.slots.find((s) => s.slotId === detailSlotId) ?? null : null
+  const detailProduct = detailSlot ? products.find((p) => p.id === detailSlot.selectedProductId) : undefined
+
+  const box =
+    claiming || checkoutState.status === 'mock-complete' || boxRows.length === 0 ? null : (
+      <BoxBuilder
+        rows={boxRows}
+        onToggle={toggleBox}
+        onOpen={setDetailSlotId}
+        isSub={canSubscribeStack && planType === 'subscription'}
+        canSubscribe={canSubscribeStack}
+        onPlanChange={setPlanType}
+        monthlyPct={pricing.subscriptionDiscountPct}
+        comparison={planCompare}
+        oneOff={starterStack ? 0 : pricing.oneOffTotal}
+        monthly={pricing.subscriptionTotal}
+        ladder={ladder}
+        rate={canSubscribeStack ? rateAhead(activeSlots.length, pricing.subscriptionDiscountPct, (l) => Math.round(levelSubscriptionRate(l) * 100)) : null}
+        addOns={founderKind ? [] : boxAddOns}
+        onAdd={addToBox}
+        giftConditions={bonusLine ? giftConditions : null}
         core={
-          core && !coreWithdrawn
-            ? { label: core.label, product: core.product, total: coreTotal, busy: coreBusy || checkoutState.status === 'loading' || leavingForStripe, onStart: startWithCore }
-            : null
-        }
-        stack={{ count: activeSlots.length, monthly: canSubscribeStack ? pricing.subscriptionTotal : null, monthlyPct: pricing.subscriptionDiscountPct, oneOff: pricing.oneOffTotal, onSee: toFullStack }}
-        gift={
-          bonusLine
+          core && !coreWithdrawn && !founderKind
             ? {
-                headline: bonusLine.kind === 'comes-with' ? OFFER_COPY.comesWith(titleOf(bonusLine.choice.product)) : OFFER_COPY.bonusFrom(bonusLine.title, bonusLine.minimum),
-                moreFor: bonusLine.kind === 'comes-with' ? moreFor : null,
-                conditions: giftConditions,
+                title: titleOf(core.product),
+                total: coreTotal,
+                onStart: startWithCore,
+                disabled: coreBusy || checkoutState.status === 'loading' || leavingForStripe,
+                message: coreState.status === 'error' || coreState.status === 'changed' ? coreState.message ?? null : null,
               }
             : null
+        }
+        onCheckout={handleCheckout}
+        busy={checkoutState.status === 'loading' || leavingForStripe}
+        messages={checkoutState.status === 'error' ? checkoutState.messages : []}
+        onCtaRef={setOfferCtaEl}
+        monthlyMin={
+          !canSubscribeStack && founderKind == null && pricing.subscriptionItemCount > 0 && !pricing.subscriptionMinOrderMet
+            ? { min: getPricingConfig().minSubscriptionMonthly, now: pricing.subscriptionTotal }
+            : null
+        }
+        delivery={
+          starterStack
+            ? null
+            : customerDeliveryCharge(canSubscribeStack && planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal, 'uk-1', getPricingConfig())
         }
       />
     )
@@ -1146,11 +1308,13 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     <YouScene
       name={answers.name}
       stackName={stackBlueprint || (!catalogueLoading && !isLive) ? activeBlueprint.stackName : null}
-      items={withProducts ? youItems : []}
+      // With the box, the box lists the products (and why); without it, the scene does.
+      items={withProducts && !box ? youItems : []}
       checks={withProducts ? checkLines : []}
       read={consultRead}
       reducedMotion={reducedMotion}
-      offer={withProducts ? offerSummary : null}
+      offer={withProducts ? box : null}
+      foldLabels={{ open: BOX_COPY.more, close: BOX_COPY.less }}
     />
   )
 
@@ -1234,94 +1398,36 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           {/* What the circuit check ruled out, before anything is offered. */}
           {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
 
-          {/* Start here: the core offer, one product, one tap. */}
-          {core && (
-            <CoreOfferCard
-              offer={core}
-              override={coreOverride}
-              status={coreState.status}
-              message={coreState.status === 'error' || coreState.status === 'changed' ? coreState.message : null}
-              blocked={checkoutState.status === 'loading' || leavingForStripe || coreWithdrawn}
-              note={partnerCode && !founderKind ? OFFER_COPY.codeNotOnHero : null}
-              onBuy={startWithCore}
-              onBackToStack={() => {
-                const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-                document.getElementById('offer-full-stack')?.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' })
-              }}
-              onCtaRef={setOfferCtaEl}
-            />
-          )}
-
-          {core && (
-            <div id="offer-full-stack" className="px-5 pt-10 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]">
-              <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}>
-                {OFFER_COPY.fullStack}
-              </p>
-              <p className="mt-1.5 text-[13px] leading-snug" style={{ color: 'var(--color-text-2)' }}>
-                {OFFER_COPY.fullStackLine(titleOf(core.product))}
-              </p>
-            </div>
-          )}
-
-          <StackHero
-            blueprint={activeBlueprint}
-            productCount={activeSlots.length}
-            totalPrice={pricing.oneOffTotal}
-            monthlyPrice={pricing.subscriptionTotal}
-            // The pill follows "How do you want it?": a month's price only when that's what's chosen.
-            canSubscribe={planType === 'subscription' && canSubscribeStack}
-          />
-
-          <div className="h-px bg-[var(--color-border)] mx-5" />
-
-          {/* No "One thing we couldn't match" note. Naming the goals the stack
-              does not serve says it serves the others, which links a goal to
-              a product outside the goal-to-claim map. The products are listed
-              in the You scene, and the GP disclaimer is at the foot of the page. */}
-
-          {/* Value-first depth selector — choose Essentials / Balanced / Complete,
-              each filled to its own monthly price band, so value comes first. */}
-          {/* How do you want it? Before the depths, so they all show one kind of price. */}
-          {!starterStack && (
-            <div className="pt-6">
-              <PlanSwitch
-                planType={planType}
-                onChange={setPlanType}
-                canSubscribe={canSubscribeStack}
-                monthly={pricing.subscriptionTotal}
-                oneOff={pricing.oneOffTotal}
-                monthlyPct={pricing.subscriptionDiscountPct}
-                comparison={planCompare}
+          {/* A partner's free starter keeps its sizes (the goods cap); everybody
+              else's box, plan and rewards are in the You scene above. */}
+          {claiming && (
+            <>
+              <StackHero
+                blueprint={activeBlueprint}
+                productCount={activeSlots.length}
+                totalPrice={pricing.oneOffTotal}
+                monthlyPrice={pricing.subscriptionTotal}
+                canSubscribe={false}
               />
-            </div>
+              <div className="h-px bg-[var(--color-border)] mx-5" />
+            </>
           )}
 
           {showTiers && (
             <div className="pt-6">
               <StackTierSelector
-                monthlyBasis={planType === 'subscription' && !claiming && founderKind == null}
                 tiers={tierPlans}
                 current={activeLevel}
                 chosen={chosen === 'stack'}
-                gifts={giftLevels}
                 minMonthly={getPricingConfig().minSubscriptionMonthly}
-                oneOffOnly={claiming || founderKind != null}
-                labels={tierLabels}
+                oneOffOnly
                 onChange={chooseDepth}
               />
             </div>
           )}
-          {/* The free gift is on the ladder below, its conditions beside it, and "Your offer"
-              says what more the full stack costs; a separate note here said it all a third time. */}
 
-          {/* Build your stack: unlocked so far, the next line, and products to add to reach it. */}
-          {!starterStack && !founderKind && (
-            <div className="pt-6">
-              <RewardLadder ladder={ladder} addOns={boosters} onAdd={handleAddBooster} giftConditions={bonusLine ? giftConditions : null} />
-            </div>
-          )}
-
-          {/* Core + added booster product cards — a swipeable top-trumps deck */}
+          {/* What's in the box, one card each: flavours, swaps and the numbers. */}
+          {activeSlots.length > 0 && (
           <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
             <p
               className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
@@ -1337,7 +1443,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               usage={subscriptionUsage}
               onChangeProduct={handleOpenSwap}
               onChangeVariant={handleChangeVariant}
-              onRemove={handleRemove}
+              onRemove={claiming ? handleRemove : (slotId: string) => boxSelected.has(slotId) && toggleBox(slotId)}
               /*
                * Only when there is something to add.
                *
@@ -1349,11 +1455,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
                */
               trailing={
                 boosters.length > 0
-                  ? <UpgradesCard boosters={boosters} onAdd={handleAddBooster} />
+                  ? <UpgradesCard boosters={boosters} onAdd={claiming ? handleAddBooster : addToBox} />
                   : undefined
               }
             />
           </div>
+          )}
 
           {/* Divider before pricing */}
           <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
@@ -1433,7 +1540,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               onCtaRef={setCtaEl}
               bonus={bonus ? { title: bonus.product.title, worth: bonusWorth(bonus), firstBoxOnly: planType === 'subscription' } : null}
               bonusNote={codeBeatsBonus}
-              tierLabels={tierLabels}
+              saveLabel={claiming ? undefined : BOX_COPY.receiptSave(activeSlots.length)}
             />
 
             {/* The one form in the journey: a claim, or a free founder code. */}
@@ -1553,7 +1660,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           >
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-                {barOnCore ? OFFER_COPY.stickyCore(titleOf(core.product)) : starterStack ? 'To pay' : stickyIsSub ? 'Full stack · monthly' : 'Full stack · one-off'}
+                {barOnCore ? OFFER_COPY.stickyCore(titleOf(core.product)) : starterStack ? 'To pay' : stickyIsSub ? BOX_COPY.stickyMonthly : BOX_COPY.stickyOnce}
               </p>
               <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(barOnCore ? coreTotal : stickyTotal)}
@@ -1589,12 +1696,40 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         <ShareSheet payload={sharePayload} onClose={() => setShareOpen(false)} />
       )}
 
+      {detailSlot && (
+        <ProductDetailSheet
+          slot={detailSlot}
+          product={detailProduct}
+          planType={planType}
+          subscriptionProduct={detailProduct ? getSubscriptionProduct(detailProduct, products) : undefined}
+          answers={answers}
+          usage={subscriptionUsage}
+          onChangeVariant={handleChangeVariant}
+          onSwap={() => {
+            setDetailSlotId(null)
+            handleOpenSwap(detailSlot.slotId)
+          }}
+          onRemove={
+            boxSelected.has(detailSlot.slotId)
+              ? () => {
+                  setDetailSlotId(null)
+                  toggleBox(detailSlot.slotId)
+                }
+              : undefined
+          }
+          onClose={() => setDetailSlotId(null)}
+        />
+      )}
+
       {swapSlot && (
         <ProductSwapModal
           slot={swapSlot}
           currentProduct={swapCurrentProduct}
           alternatives={swapAlternatives}
-          onSelect={handleSelectSwap}
+          onSelect={(slotId, productId) => {
+            if (!claiming) freezeStart()
+            handleSelectSwap(slotId, productId)
+          }}
           onClose={() => setSwapSlot(null)}
         />
       )}

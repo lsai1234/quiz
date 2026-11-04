@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { YouScene, YOU_SCENE_COPY, firstNameOf, greetingFor, type YouSceneItem } from '../YouScene'
 import { YOU_PALETTE } from '../you-palette'
 import { StackReviewPage, deckHeading } from '../StackReviewPage'
@@ -177,7 +177,7 @@ describe('YouScene', () => {
 describe('the You scene’s colours', () => {
   // The panel is light and every word on it is small, so each ink has to
   // clear AA on both the card and the page behind it.
-  it.each(['ink', 'ink2', 'ink3', 'accentInk'] as const)('%s clears AA on the card and the page', (key) => {
+  it.each(['ink', 'ink2', 'ink3', 'accentInk', 'danger'] as const)('%s clears AA on the card and the page', (key) => {
     expect(contrast(YOU_PALETTE[key], YOU_PALETTE.card)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(YOU_PALETTE[key], YOU_PALETTE.page)).toBeGreaterThanOrEqual(4.5)
   })
@@ -249,13 +249,24 @@ describe('the results page', () => {
     const { stackName } = useQuizStore.getState().stackBlueprint!
     expect(heading).toHaveTextContent(stackName)
 
-    // The top-pick offer at the foot of the page may carry the same line, so
-    // the You scene's own copy is checked inside the scene.
+    // Each product in the box says why it's there, in one of their own answers.
     await screen.findAllByText(GOAL_LINES.muscle!)
     const you = within(document.getElementById('scene-you')!)
-    expect(you.getByText(GOAL_LINES.muscle!)).toBeInTheDocument()
-    expect(you.getByText(`“${CLAIMS['protein-muscle-growth'].wording}”`)).toBeInTheDocument()
+    const rows = you.getAllByText(GOAL_LINES.muscle!).map((el) => el.closest<HTMLElement>('[data-box-row]')!)
+    expect(rows.length).toBeGreaterThan(0)
     expect(you.getByText(CHECK_LINES.alreadyTaking.creatine)).toBeInTheDocument()
+
+    // The approved claim is one tap away, in the product's Details, verbatim.
+    const wording = CLAIMS['protein-muscle-growth'].wording
+    let found = false
+    for (const row of rows) {
+      fireEvent.click(within(row).getByRole('button', { name: /: Details$/ }))
+      await screen.findByRole('button', { name: 'Close' })
+      found = document.body.textContent!.includes(wording)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      if (found) break
+    }
+    expect(found).toBe(true)
   })
 
   it('never names a goal the stack does not serve: that would say it serves the rest', async () => {
@@ -281,12 +292,16 @@ describe('the results page', () => {
     expect(els[1]).toHaveClass('pb-[calc(2.5rem+env(safe-area-inset-bottom))]')
   })
 
-  it('lists the products on screen in the You scene, and the deck says how many', async () => {
+  it('lists every product in the box, and the deck holds the ones switched on', async () => {
     render(<StackReviewPage reducedMotion />)
     await screen.findAllByText(GOAL_LINES.muscle!)
-    const strip = screen.getByRole('list', { name: 'In your stack' })
-    const n = within(strip).getAllByRole('listitem').length
-    expect(screen.getByText(deckHeading(n))).toBeInTheDocument()
+    const box = screen.getByRole('region', { name: 'Your box' })
+    const all = box.querySelectorAll('[data-box-row]').length
+    const on = box.querySelectorAll('[data-box-row][data-on="true"]').length
+    expect(within(box).getByText(`${on} of ${all} on`)).toBeInTheDocument()
+    expect(screen.getByText(deckHeading(on))).toBeInTheDocument()
+    // The box is the list: no second strip of the same products.
+    expect(screen.queryByRole('list', { name: 'In your stack' })).not.toBeInTheDocument()
   })
 
   it('carries no stack summary and no goal chip in the Stack scene', async () => {

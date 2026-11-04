@@ -27,7 +27,7 @@ import type { CircuitFlag, WeightSymptom } from './types'
 import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { DEFAULT_BONUS } from '@/lib/offer/settings'
-import { bonusTermRows, freeGiftTermRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
+import { bonusTermRows, boxCopyRows, freeGiftTermRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
 import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
 import { proteinRows } from './protein-review-rows'
@@ -276,6 +276,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...bonusTermRows(DEFAULT_BONUS),
     ...offerCopyRows(DEFAULT_BONUS),
     ...planCopyRows(),
+    ...boxCopyRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
   ]
 }

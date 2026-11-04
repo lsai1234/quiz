@@ -15,10 +15,11 @@ import { allOn } from '@/lib/offer/__tests__/fixtures'
 jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
 
 /**
- * The results page's offer (plan Phase 4), wired into the page: "Start here"
- * first with the hero, the full stack under it with the hero leading every
- * depth, the sticky bar following whichever was chosen, the free bonus never
- * said without its conditions, and switching it on or off moving no price.
+ * The results page's offer (plan Phase 4, then the clarity pass): "Your box",
+ * every product Amp recommends with a switch, the hero first; the box opening
+ * at or under £50; one button with the price the receipt charges; "Just want
+ * one?" for the hero alone; the free bonus never said without its conditions,
+ * and switching it on or off moving no price.
  */
 
 const answers = {
@@ -69,55 +70,147 @@ const shown = (o: OfferSettings) => publicOffer(o, MOCK_CATALOGUE, { bonusShown:
 // Every depth over the minimum, so the bonus is on whichever one is chosen.
 const everything = () => shown(allOn({ minSubtotal: 1 }))
 
+/** The free gift's line on the box's ladder, once the box comes with it. */
+function giftRung(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const el = document.querySelector<HTMLElement>('[data-rung="gift"][data-reached="true"]')
+    expect(el).not.toBeNull()
+    return el!
+  })
+}
+
 function stickyBar(): HTMLElement {
   return document.querySelector<HTMLElement>('div.fixed.inset-x-0.bottom-0')!
 }
+
+function theBox(): HTMLElement {
+  return document.querySelector<HTMLElement>('[data-box]')!
+}
+
+const pounds = (text: string) => Number(/£([\d,]+\.\d\d)/.exec(text)?.[1].replace(',', ''))
 
 function receiptTotal(): string {
   const label = screen.getByText('Total', { selector: 'span' })
   return label.closest('div.flex')?.parentElement?.textContent ?? ''
 }
 
-it('starts with the hero, labelled, and the bar follows it until a depth is chosen', async () => {
+it('opens on the box: the hero first, under £50, one button with the receipt’s price', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)
-  // The single-product offer's own card, moved up and led by "Start here".
-  const core = await screen.findByRole('region', { name: /Start here.*Not the obvious pick/ })
-  // The last-chance card at the foot is gone: its offer is now the first thing.
-  expect(screen.queryByText(/Not ready for the whole stack/)).not.toBeInTheDocument()
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  // No depths to choose between any more: the box is whatever is switched on.
+  expect(screen.queryByRole('button', { name: /^(Essentials|Standard|Balanced|Complete)\b/ })).not.toBeInTheDocument()
 
-  const heroTitle = within(core).getByRole('heading', { level: 3 }).textContent!
-  expect(within(core).getByRole('button', { name: /Start with this/ })).toBeInTheDocument()
-  expect(within(document.getElementById('offer-full-stack')!).getByText('Or get the full stack', { selector: 'p' })).toBeInTheDocument()
-  expect(within(core).getByRole('button', { name: 'Or get the full stack' })).toBeInTheDocument()
-  // The offer at a glance, at the top (the clarity pass): both options, priced.
-  const summary = document.querySelector('[data-offer-summary]') as HTMLElement
-  expect(within(summary).getByText(heroTitle)).toBeInTheDocument()
-  expect(within(summary).getByText('Or get the full stack')).toBeInTheDocument()
-  expect(within(summary).getByRole('button', { name: /^See the full stack/ })).toBeInTheDocument()
+  // The hero leads the list, and "Just want one?" buys it alone.
+  const justOne = within(box).getByRole('button', { name: /^Just want one\? Start with the .* delivered$/ })
+  const heroTitle = /Start with the (.+) · £/.exec(justOne.textContent!)![1]
+  const rows = [...box.querySelectorAll<HTMLElement>('[data-box-row]')]
+  expect(rows[0]).toHaveTextContent(heroTitle)
+  // Every row says why it's there.
+  for (const row of rows) expect(row.querySelector('button')!.textContent).toMatch(/\S+.*·\s*£/)
 
-  await waitFor(() => expect(stickyBar()).toHaveTextContent('Start with this →'))
-  // The bar names what "Start with this" buys.
-  expect(stickyBar()).toHaveTextContent(/· delivered/)
+  // The box nobody chose opens at or under £50 at list price, never empty.
+  const on = rows.filter((r) => r.dataset.on === 'true')
+  expect(on.length).toBeGreaterThan(0)
+  const list = on.reduce((sum, r) => sum + pounds(r.textContent!.split('·').pop()!), 0)
+  expect(on.length === 1 || list <= 50.005).toBe(true)
+  expect(within(box).getByText(`${on.length} of ${rows.length} on`)).toBeInTheDocument()
 
-  await userEvent.click(screen.getByRole('button', { name: /^Complete/ }))
-  await waitFor(() => expect(stickyBar()).toHaveTextContent('Checkout →'))
-  expect(screen.getByRole('button', { name: /^Complete/ })).toHaveAttribute('aria-pressed', 'true')
-  // The receipt lists the chosen depth in order: the hero first.
+  // One button, the receipt's total.
+  const cta = box.querySelector<HTMLElement>('[data-box-cta]')!
+  expect(cta).toHaveTextContent(/^Get my box · £/)
+  expect(receiptTotal()).toContain(cta.textContent!.split('· ')[1])
+  await waitFor(() => expect(stickyBar()).toHaveTextContent('Your box · one-off'))
+  expect(stickyBar()).toHaveTextContent('Checkout →')
+
+  // The receipt lists the box in order: the hero first.
   const order = screen.getByText(/^Your order ·/).nextElementSibling as HTMLElement
   expect(order.querySelector('.line-clamp-2')).toHaveTextContent(heroTitle)
+})
+
+it('switches a product off and back on, and every price follows at once', async () => {
+  offer = everything()
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const cta = () => box.querySelector<HTMLElement>('[data-box-cta]')!.textContent!
+  const before = cta()
+  const onRows = [...box.querySelectorAll<HTMLElement>('[data-box-row][data-on="true"]')]
+  const all = box.querySelectorAll('[data-box-row]').length
+  const row = onRows[onRows.length - 1]
+  const toggle = within(row).getByRole('switch')
+  expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+  await userEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-checked', 'false')
+  expect(within(box).getByText(`${onRows.length - 1} of ${all} on`)).toBeInTheDocument()
+  if (onRows.length > 1) {
+    expect(pounds(cta())).toBeLessThan(pounds(before))
+    expect(receiptTotal()).toContain(cta().split('· ')[1])
+  }
+
+  await userEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-checked', 'true')
+  expect(cta()).toBe(before)
+})
+
+it('adds a product switched on, and leaves every other switch where it was', async () => {
+  offer = everything()
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const state = () => Object.fromEntries([...box.querySelectorAll<HTMLElement>('[data-box-row]')].map((r) => [r.dataset.boxRow, r.dataset.on]))
+  const before = state()
+  // "+ Add" on the deck's last card: a product that isn't in the box yet.
+  await userEvent.click(screen.getAllByRole('button', { name: /\+ Add/ })[0])
+  const after = state()
+  const added = Object.keys(after).filter((id) => !(id in before))
+  expect(added).toHaveLength(1)
+  expect(after[added[0]]).toBe('true')
+  for (const [id, on] of Object.entries(before)) expect(after[id]).toBe(on)
+})
+
+it('keeps the box honest when everything is switched off: no order, and it says so', async () => {
+  offer = everything()
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  for (const s of within(box).getAllByRole('switch')) if (s.getAttribute('aria-checked') === 'true') await userEvent.click(s)
+  expect(box.querySelector('[data-box-cta]')).toBeDisabled()
+  expect(within(box).getByText('Switch on at least one product to make your box.')).toBeInTheDocument()
+})
+
+it('says why monthly is off on a small box, and what turns it on', async () => {
+  offer = everything()
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  for (const s of within(box).getAllByRole('switch')) if (s.getAttribute('aria-checked') === 'true') await userEvent.click(s)
+  // The cheapest product alone: well under £25 a month.
+  const rows = [...box.querySelectorAll<HTMLElement>('[data-box-row]')]
+  const cheapest = rows.reduce((a, r) => (pounds(r.textContent!.split('·').pop()!) < pounds(a.textContent!.split('·').pop()!) ? r : a))
+  await userEvent.click(within(cheapest).getByRole('switch'))
+  const monthly = within(box).getByRole('radio', { name: /^Keep me stocked/ })
+  expect(monthly).toBeDisabled()
+  expect(monthly).toHaveTextContent('From £25.00 a month')
+  expect(box.querySelector('[data-monthly-min]')).toHaveTextContent(/^Monthly starts at £25\.00 a month, and this box comes to £\d+\.\d\d\. Switch on another product to choose it\.$/)
+})
+
+it('names the next monthly rate by how many products are on', async () => {
+  offer = everything()
+  act(() => useQuizStore.setState({ planType: 'subscription' }))
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const rate = await waitFor(() => {
+    const el = box.querySelector<HTMLElement>('[data-rung="rate"]')
+    expect(el).not.toBeNull()
+    return el!
+  })
+  expect(rate).toHaveTextContent(/^\d+ more products? for \d+% off every month$|^\d+% off every month: the best rate$/)
+  expect(box.querySelector('[data-box-cta]')).toHaveTextContent(/^Start monthly · £.* a month$/)
 })
 
 it('never says "free" about the gift without its conditions and the terms beside it', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)
-  const notes = await screen.findAllByText(/^Comes with a free /)
-  // On the ladder (Build your stack): the gift's line, its conditions and the terms beside it.
-  const box = document.querySelector('[data-rung="gift"]') as HTMLElement
-  // And at the top, in "Your offer": the same conditions and terms beside it.
-  const gift = notes.map((n) => n.closest('[data-offer-gift]')).find(Boolean) as HTMLElement
-  expect(gift).toHaveTextContent(/First order only, one per customer\. Stacks from £1\.00 before any discount\. While stocks last\./)
-  expect(within(gift).getByRole('link', { name: 'Free gift terms' })).toHaveAttribute('href', '/legal/free-gift')
+  // On the box's ladder: the gift's line, its conditions and the terms beside it.
+  const box = await giftRung()
   expect(box).toHaveTextContent(/First order only, one per customer\. Stacks from £1\.00 before any discount\. While stocks last\./)
   expect(within(box).getByRole('link', { name: 'Free gift terms' })).toHaveAttribute('href', '/legal/free-gift')
 
@@ -143,24 +236,24 @@ it('never says "free" about the gift without its conditions and the terms beside
 it('moves no price: the receipt is the same with the bonus on and off', async () => {
   offer = everything()
   const first = render(<StackReviewPage reducedMotion />)
-  await screen.findAllByText(/^Comes with a free /)
+  await giftRung()
   const withBonus = receiptTotal()
   first.unmount()
 
   resetOfferSettings()
   offer = shown({ ...allOn({ minSubtotal: 1 }), bonus: { ...allOn().bonus, enabled: false } })
   render(<StackReviewPage reducedMotion />)
-  await screen.findByText('Not the obvious pick')
-  expect(screen.queryByText(/^Comes with a free /)).not.toBeInTheDocument()
+  await screen.findByRole('region', { name: 'Your box' })
+  expect(document.querySelector('[data-rung="gift"]')).toBeNull()
   expect(document.querySelector('[data-receipt-bonus]')).toBeNull()
   expect(receiptTotal()).toBe(withBonus)
 })
 
-it('says "Free … on stacks from £…" on a depth under the minimum', async () => {
+it('says nothing about a gift no box could reach', async () => {
   offer = shown(allOn({ minSubtotal: 1_000 }))
   render(<StackReviewPage reducedMotion />)
-  await screen.findByText('Not the obvious pick')
-  // No depth reaches £1,000, so no bonus anywhere, and nothing to point at.
+  await screen.findByRole('region', { name: 'Your box' })
+  // Not even every product on reaches £1,000, so no bonus anywhere, and nothing to point at.
   expect(document.querySelector('[data-bonus-note]')).toBeNull()
   expect(document.querySelector('[data-rung="gift"]')).toBeNull()
 })
@@ -169,7 +262,7 @@ it('keeps the gift and takes off a code worth less, saying why', async () => {
   offer = everything()
   code = { discountPct: 0.01 }
   render(<StackReviewPage reducedMotion />)
-  await screen.findAllByText(/^Comes with a free /)
+  await giftRung()
   await userEvent.click(screen.getByRole('button', { name: /got a discount code/i }))
   await userEvent.type(screen.getByPlaceholderText('Discount code'), 'SMALL1')
   await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
@@ -181,7 +274,9 @@ it('gives the code when it is worth more, and the receipt says so', async () => 
   offer = everything()
   code = { discountPct: 0.25 }
   render(<StackReviewPage reducedMotion />)
-  await screen.findAllByText(/^Comes with a free /)
+  await giftRung()
+  // A bigger box, so a quarter off is worth more than the gift.
+  for (const s of within(theBox()).getAllByRole('switch')) if (s.getAttribute('aria-checked') === 'false') await userEvent.click(s)
   await userEvent.click(screen.getByRole('button', { name: /got a discount code/i }))
   await userEvent.type(screen.getByPlaceholderText('Discount code'), 'BIG25')
   await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
@@ -192,7 +287,11 @@ it('gives the code when it is worth more, and the receipt says so', async () => 
 it('is their top pick with the hero switch off, and no bonus with it off', async () => {
   offer = DEFAULT_OFFER
   render(<StackReviewPage reducedMotion />)
-  expect(await screen.findByText('Your top pick')).toBeInTheDocument()
-  expect(screen.queryByText('Not the obvious pick')).not.toBeInTheDocument()
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const justOne = within(box).getByRole('button', { name: /^Just want one\?/ })
+  // Their top pick: the first product in the box.
+  const first = box.querySelector<HTMLElement>('[data-box-row]')!
+  expect(first).toHaveTextContent(/Start with the (.+) · £/.exec(justOne.textContent!)![1])
+  expect(document.querySelector('[data-rung="gift"]')).toBeNull()
   expect(document.querySelector('[data-bonus-note]')).toBeNull()
 })

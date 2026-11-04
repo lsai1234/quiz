@@ -23,5 +23,7 @@ export const YOU_PALETTE = {
   ink3: '#5E5E66',
   accent: '#00D4FF',
   accentInk: '#006E8A',
+  /** A checkout that stopped: about 6:1 on the card and the page. */
+  danger: '#B42318',
   hairline: 'rgba(10,10,10,0.08)',
 } as const

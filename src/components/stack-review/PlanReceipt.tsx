@@ -82,6 +82,8 @@ interface Props {
   bonusNote?: string | null
   /** The depths' names, when not the quiz's own (a consult stack: Standard, not Balanced). */
   tierLabels?: Partial<Record<StackLevel, string>>
+  /** The subscribe-and-save row's own words, where the stack is a box rather than a named depth. */
+  saveLabel?: string
 }
 
 /** Months, said the way a person would say them. */
@@ -205,7 +207,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null, tierLabels,
+  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null, tierLabels, saveLabel,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -424,7 +426,7 @@ export function PlanReceipt({
                   two cannot drift apart — this line once said "Performance"
                   for the depth the picker calls "Balanced". */}
               {subscriptionDiscountPct > 0 && (
-                <Row label={`${tierLabels?.[bundleLevel] ?? TIER_META[bundleLevel].label} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
+                <Row label={saveLabel ?? `${tierLabels?.[bundleLevel] ?? TIER_META[bundleLevel].label} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
               )}
               {hasIntro && (
                 <Row

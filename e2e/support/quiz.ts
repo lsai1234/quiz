@@ -187,6 +187,19 @@ export async function choosePlan(page: Page, plan: 'oneoff' | 'subscription'): P
   await control.click()
 }
 
+/**
+ * "Your box" opens on a starting box (at most £50); this switches every product
+ * Amp listed on, so the stack is the full one.
+ */
+export async function fillBox(page: Page): Promise<void> {
+  const off = page.locator('[data-box] [data-box-row][data-on="false"] [role="switch"]')
+  while (await off.count()) {
+    const before = await off.count()
+    await off.first().click()
+    await expect(off).toHaveCount(before - 1)
+  }
+}
+
 /** Press whatever the receipt's buy button currently is, and wait for an answer. */
 export async function checkoutFromStack(page: Page): Promise<void> {
   // The receipt's own button, by attribute rather than by label: the sticky bar
@@ -212,6 +225,9 @@ export async function subscribeFromQuiz(
   who: { email: string; password: string },
 ): Promise<void> {
   await completeQuiz(page)
+  // The whole box, not the starting one: a plan with every kind of line in it
+  // (and over the subscription minimum, which a two-product box can be under).
+  await fillBox(page)
   await choosePlan(page, 'subscription')
   await checkoutFromStack(page)
 

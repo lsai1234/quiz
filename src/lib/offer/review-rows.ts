@@ -18,6 +18,7 @@ import { LEVEL_NAME } from './bonus-economics'
 import type { HeroRow } from './view'
 import { OFFER_COPY } from './copy'
 import { PLAN_COPY, whyPricesDiffer } from './plan-copy'
+import { BOX_COPY } from './box-copy'
 import { freeGiftTerms } from './terms'
 
 export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
@@ -117,7 +118,7 @@ export function offerCopyRows(bonus: BonusSettings): ReviewRow[] {
 
 /** The two ways to buy a stack, and why their prices differ (the clarity pass). */
 export function planCopyRows(): ReviewRow[] {
-  const where = 'Results page: "How do you want it?", over the depths, and "Your offer" (both quizzes)'
+  const where = 'Results page: "Your box", once or monthly (both quizzes)'
   const ex = 'Example figures; the live ones come from the stack'
   const c = PLAN_COPY
   const example = {
@@ -137,6 +138,41 @@ export function planCopyRows(): ReviewRow[] {
     ...whyPricesDiffer(example, 15).map((line): ReviewRow => ['Plan wording', where, line, `"${c.why}", each line only when this stack’s figures make it true. ${ex}`]),
     ['Plan wording', where, c.summaryMonthly(72.21, 15), `"Your offer". ${ex}`],
     ['Plan wording', where, c.summaryOnce(87.35), `"Your offer". ${ex}`],
+  ]
+}
+
+/**
+ * "Your box" (the clarity pass, part 2): the selection that replaced
+ * Essentials / Standard / Complete, on the results page of both quizzes.
+ */
+export function boxCopyRows(): ReviewRow[] {
+  const where = 'Results page: "Your box" (both quizzes)'
+  const ex = 'Example figures; the live ones come from the box'
+  const c = BOX_COPY
+  return [
+    ['Box wording', where, c.heading, 'Heading'],
+    ['Box wording', where, c.sub, 'Under the heading'],
+    ['Box wording', where, c.countOn(3, 6), `The count beside the heading. ${ex}`],
+    ['Box wording', where, c.picked, 'A product’s line when no approved reason may be said beside it (the claims maps decide)'],
+    ['Box wording', where, c.added, 'A product they added themselves'],
+    ['Box wording', where, c.switchLabel('Creatine Monohydrate'), 'The switch’s name, read out by a screen reader. Example product'],
+    ['Box wording', where, c.details, 'Opens the product’s details (screen reader)'],
+    ['Box wording', where, c.empty, 'Under the button, with every product switched off'],
+    ['Box wording', where, c.ctaOnce(42.5), `The button, one-off. ${ex}`],
+    ['Box wording', where, c.ctaMonthly(36.98), `The button, monthly. ${ex}`],
+    ['Box wording', where, c.going, 'The button, on the way to Stripe'],
+    ['Box wording', where, c.delivery(4.95), `Under the button, delivery not free yet. ${ex}`],
+    ['Box wording', where, c.delivery(0), 'Under the button, delivery free'],
+    ['Box wording', where, c.justOne('Creatine Monohydrate', 19.99), `Under the button: the hero (or their top pick) alone. ${ex}`],
+    ['Box wording', where, c.monthlyFrom(25), 'The monthly option, while the box is under the subscription minimum'],
+    ['Box wording', where, c.monthlyMin(25, 18.4), `Under the plan, while the box is under the subscription minimum. ${ex}`],
+    ['Box wording', where, c.rateNext(1, 15), `Monthly only, on the rewards card. ${ex}`],
+    ['Box wording', where, c.rateTop(20), `Monthly only, with the best rate reached. ${ex}`],
+    ['Box wording', where, c.receiptSave(4), `The receipt's subscribe-and-save line. ${ex}`],
+    ['Box wording', where, c.stickyOnce, 'The sticky bar'],
+    ['Box wording', where, c.stickyMonthly, 'The sticky bar'],
+    ['Box wording', where, c.more, 'Opens the rest of their read, under the box'],
+    ['Box wording', where, c.less, 'Folds it again'],
   ]
 }
 
