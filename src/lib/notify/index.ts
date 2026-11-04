@@ -135,8 +135,9 @@ export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
  * call, and leaves behind an audit row with the link taken out. See the note on
  * `recordDirectSend`.
  */
-// The stack guide goes with the confirmation: part of the order, nothing to judge.
-const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation', 'stack-guide']
+// The stack guide goes with the confirmation, and the check-ins follow it:
+// part of the order, nothing to judge, and every check-in carries its way out.
+const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation', 'stack-guide', 'check-in']
 
 export function getAutoSendPolicy(): AutoSendPolicy {
   const raw = (process.env.NOTIFY_AUTO_SEND ?? '').trim().toLowerCase()

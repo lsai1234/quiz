@@ -50,6 +50,8 @@ export interface AccountExport {
    * member cannot see is not much of an answer.
    */
   staffAccess: unknown[]
+  /** Amp's check-ins: their answers, box by box. */
+  checkIns: unknown[]
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -134,6 +136,10 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
     emails: emails.map((e) => ({ template: e.template, queuedAt: e.created_at, sentAt: e.sent_at })),
     identities: identities.map((i) => ({ provider: i.provider, linkedAt: i.created_at })),
     staffAccess: accesses.map((a) => ({ at: a.at, what: a.kind })),
+    // Amp's check-ins: their answers, box by box.
+    checkIns: (await (await import('@/lib/checkin/store')).listCheckIns())
+      .filter((r) => r.userId === userId)
+      .map((r) => ({ plan: r.plan, startedAt: r.createdAt, stopped: r.stopped, answers: r.answers })),
   }
 }
 
@@ -180,6 +186,10 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   // but the payload — their stack, sometimes their first name — stays on disk,
   // and an erasure that leaves the shareable artefact behind is not one.
   await drop('share_cards', 'DELETE FROM share_cards WHERE user_id = ?')
+
+  // Amp's check-ins: their answers and the address the emails went to.
+  const { deleteCheckInsFor } = await import('@/lib/checkin/store')
+  if ((await deleteCheckInsFor(userId)) > 0) deleted.push('check-ins (answers and address)')
 
   // Emails keep their audit trail (that a receipt was sent, and when) but lose
   // the recipient and the rendered body.

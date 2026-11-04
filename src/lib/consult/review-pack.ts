@@ -29,6 +29,7 @@ import type { SwapGroup } from '@/lib/catalogue/types'
 import { DEFAULT_BONUS } from '@/lib/offer/settings'
 import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelCopyRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
 import { guideCopyRows } from '@/lib/guide/review-rows'
+import { checkInCopyRows } from '@/lib/checkin/review-rows'
 import { routineCopyRows } from '@/lib/routine/review-rows'
 import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
@@ -282,6 +283,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...routineCopyRows(),
     ...levelCopyRows(),
     ...guideCopyRows(),
+    ...checkInCopyRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
     ...guaranteeTermRows(),
   ]

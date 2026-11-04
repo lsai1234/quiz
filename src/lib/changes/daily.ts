@@ -39,6 +39,8 @@ export interface DailyRunResult {
   supplierCheckFailed?: number
   /** Anonymous share cards swept past their retention window. */
   shareCardsSwept?: number
+  /** Amp's check-in emails queued today. */
+  checkInsSent?: number
   /** Imported products whose stock/cost was refreshed from the supplier. */
   productsRefreshed?: number
   /** Imported products whose SKU is no longer in the supplier feed. */
@@ -184,6 +186,17 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] snooze resume failed:', err)
   }
 
+  // Amp's check-ins (Option 2): the ones due today, a plan's stopped once it
+  // has ended, and records a year past their last activity deleted. Never
+  // allowed to fail the rest of the job.
+  let checkIns = { sent: 0, stopped: 0, deleted: 0 }
+  try {
+    const { sweepCheckIns } = await import('@/lib/checkin/sweep')
+    checkIns = await sweepCheckIns()
+  } catch (err) {
+    console.error('[daily] check-in sweep failed:', err)
+  }
+
   // Anonymous share cards past their year. Only cards with no account behind
   // them — a card attached to a customer is theirs, and deleting it because a
   // year passed is deleting something of theirs on a schedule they never agreed
@@ -225,6 +238,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     dryRun: false,
     baselineOnly: detection.baselineOnly,
     shareCardsSwept,
+    checkInsSent: checkIns.sent,
     ...base,
     cancelled: detection.cancelled.length,
     // Applied during detection, plus anything whose own clock came due.

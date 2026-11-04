@@ -25,6 +25,8 @@ export type TemplateId =
   | 'order-confirmation'
   /** Every order, one-off or plan: their products on their day (the stack guide). */
   | 'stack-guide'
+  /** Every two weeks after an order: Amp's check-in (Option 2). */
+  | 'check-in'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
   /** A one-off order item sold out after payment: removed, swapped or back-ordered. */

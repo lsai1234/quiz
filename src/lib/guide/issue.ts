@@ -86,6 +86,9 @@ export async function issueGuideForOrder(order: Order): Promise<string | null> {
       }
     })
     if (order.email) await sendGuide(guide, order.email, order.userId)
+    // Amp's check-ins (Option 2) start from the guide's first check-in date.
+    const { registerCheckIns } = await import('@/lib/checkin/register')
+    await registerCheckIns(guide, { email: order.email, userId: order.userId, orderId: order.id })
     return guide.token
   } catch (err) {
     console.error('[guide] could not issue the guide for an order:', err)
@@ -107,6 +110,8 @@ export async function issueGuideForSubscription(userId: string, sub: MemberSubsc
     if (current) await saveSubscription(userId, { ...current, guideToken: guide.token, ...(services.length ? { services } : {}) })
     const to = sub.customerEmail || email
     if (to) await sendGuide(guide, to, userId)
+    const { registerCheckIns } = await import('@/lib/checkin/register')
+    await registerCheckIns(guide, { email: to || null, userId, orderId: null })
     return guide.token
   } catch (err) {
     console.error('[guide] could not issue the guide for a plan:', err)
