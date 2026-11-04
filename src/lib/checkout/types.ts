@@ -29,4 +29,9 @@ export interface CheckoutPayload {
    * server-side in `finalizeCheckout`; ships in the first box only.
    */
   bonus?: { productId: string; level: StackLevel } | null
+  /**
+   * The stack guide's seed: their day, goals and first name. Checked
+   * server-side (`normaliseGuideSeed`); nothing else is taken from it.
+   */
+  guide?: unknown
 }

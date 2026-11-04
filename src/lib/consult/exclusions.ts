@@ -7,6 +7,7 @@
  * ingredient check the engine used, so the two can never disagree.
  */
 
+import type { RoutineDay } from '@/lib/routine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { HealthDataConsent, QuizAnswers } from '@/lib/types'
 import type { Ingredient } from './circuit'
@@ -33,6 +34,12 @@ export interface ConsultExclusions {
    * first, rather than re-tiering the stack by price band.
    */
   tiers?: { essentials: string[]; standard: string[]; complete: string[] }
+  /**
+   * Their day, for "Your day" (Option 3): wake and bed times, when and on
+   * which days they train (`dayFromConsult`). Nothing else from the answers.
+   * Absent in a new tab, when the page falls back to the stated 7am–11pm day.
+   */
+  day?: RoutineDay
 }
 
 export function isExcluded(product: Pick<CatalogueProduct, 'swapGroup' | 'title' | 'contraindications'>, excluded: readonly Ingredient[]): boolean {

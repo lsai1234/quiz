@@ -135,7 +135,8 @@ export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
  * call, and leaves behind an audit row with the link taken out. See the note on
  * `recordDirectSend`.
  */
-const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation']
+// The stack guide goes with the confirmation: part of the order, nothing to judge.
+const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation', 'stack-guide']
 
 export function getAutoSendPolicy(): AutoSendPolicy {
   const raw = (process.env.NOTIFY_AUTO_SEND ?? '').trim().toLowerCase()
@@ -173,14 +174,26 @@ export async function getNotifier(): Promise<NotificationProvider> {
   const source = getNotificationSource()
   if (source === 'resend') {
     const { createResendProvider } = await import('./providers/resend')
-    return createResendProvider()
+    return guardForTesting(createResendProvider())
   }
   if (source === 'gmail') {
     const { createGmailProvider } = await import('./providers/gmail')
-    return createGmailProvider()
+    return guardForTesting(createGmailProvider())
   }
   const { createMockProvider } = await import('./providers/mock')
   return createMockProvider()
+}
+
+/**
+ * A real provider, held to the test allowlist until payments are live (see
+ * `./allowlist`). Asked at send time, from the same switch the checkout reads.
+ */
+async function guardForTesting(provider: NotificationProvider): Promise<NotificationProvider> {
+  const { guardedForTesting } = await import('./allowlist')
+  return guardedForTesting(provider, async () => {
+    const { currentStripeWorld } = await import('@/lib/payments')
+    return currentStripeWorld() === 'live'
+  })
 }
 
 /**

@@ -451,6 +451,7 @@ const DEMO_OFFER: OfferSettings = {
     }),
   ),
   bonus: { ...DEFAULT_OFFER.bonus, enabled: true, pool: ['chrgd-vitamin-d3-k2', 'chrgd-electrolytes', 'chrgd-vitamin-c-zinc'], minSubtotal: 40, floorPounds: 1, floorPct: 0.02 },
+  services: { checkIns: true, guarantee: false, pharmacistCheck: false, vitaminDTest: false },
 }
 
 /** The story as it opens after the charge-up, for someone with patterns found and someone without. */

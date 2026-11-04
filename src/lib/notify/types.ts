@@ -23,6 +23,8 @@ export type { MailStream }
 export type TemplateId =
   /** A one-off order is paid: here is your receipt. */
   | 'order-confirmation'
+  /** Every order, one-off or plan: their products on their day (the stack guide). */
+  | 'stack-guide'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
   /** A one-off order item sold out after payment: removed, swapped or back-ordered. */

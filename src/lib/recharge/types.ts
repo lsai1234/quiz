@@ -1,3 +1,4 @@
+import type { GuideSeed } from '@/lib/guide/build'
 import type { SwapGroup, StackSlot, DietaryTag, SafetyFlag } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { SupplierAddress } from '@/lib/supplier/types'
@@ -207,6 +208,12 @@ export interface MemberSubscription {
   id: string
   status: SubscriptionStatus
   customerEmail: string
+  /**
+   * The stack guide (every order): what the checkout carried for it, and the
+   * guide's token once it has been issued. See `lib/guide`.
+   */
+  guideSeed?: GuideSeed | null
+  guideToken?: string | null
   /** Flat amount billed every month. */
   flatMonthly: number
   /**

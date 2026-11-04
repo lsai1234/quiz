@@ -31,9 +31,6 @@ export const BOX_COPY = {
   monthlyFrom: (min: number) => `From ${formatGBP(min)} a month`,
   monthlyMin: (min: number, now: number) =>
     `Monthly starts at ${formatGBP(min)} a month, and this box comes to ${formatGBP(now)}. Switch on another product to choose it.`,
-  /** Monthly only: the next subscribe-and-save rate, by how many products are on. */
-  rateNext: (more: number, pct: number) => `${more} more product${more === 1 ? '' : 's'} for ${pct}% off every month`,
-  rateTop: (pct: number) => `${pct}% off every month: the best rate`,
   /** The receipt's subscribe-and-save row. */
   receiptSave: (n: number) => `Your box · ${n} product${n === 1 ? '' : 's'} · Subscribe & Save`,
   /** The sticky bar, following the box. */

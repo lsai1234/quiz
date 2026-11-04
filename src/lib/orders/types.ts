@@ -8,6 +8,7 @@
  * supplier_confirmed → shipped → delivered, with cancelled / refunded / failed
  * as terminal side-exits.
  */
+import type { GuideSeed } from '@/lib/guide/build'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import type { SafetyConstraints } from '@/lib/recharge/types'
 import type { HealthDataConsent } from '@/lib/types'
@@ -382,6 +383,13 @@ export interface Order {
    * before sending, because a webhook can arrive twice. See `lib/push`.
    */
   foundersAlertedAt?: string
+  /**
+   * The stack guide (every order): what the checkout carried for it (their day,
+   * goals, first name; checked by `normaliseGuideSeed`), and once the order is
+   * paid, the guide's token. See `lib/guide`.
+   */
+  guideSeed?: GuideSeed | null
+  guideToken?: string | null
 }
 
 /** What `createOrderFromCheckout` needs to raise a paid order. */
@@ -406,6 +414,8 @@ export interface CreateOrderInput {
   /** The partner starter it was bought on — see `Order.starterCode`. */
   starterCode?: string | null
   starterPartnerId?: string | null
+  /** For the stack guide — see `Order.guideSeed`. */
+  guideSeed?: GuideSeed | null
   /** What the cycle was billed at — see `Order.billedAmount`. */
   billedAmount?: number | null
   /** The plan behind this delivery — see `Order.subscription`. */

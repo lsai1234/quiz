@@ -1,4 +1,4 @@
-import { BOX_START_MAX, boxOn, levelForCount, nextLevel, rateAhead, startingBox } from '../box'
+import { BOX_START_MAX, boxOn, levelForCount, nextLevel, startingBox } from '../box'
 
 describe('your box: a selection, not three sizes', () => {
   it('starts with products in order while the box stays under the ceiling, never empty', () => {
@@ -29,15 +29,5 @@ describe('your box: a selection, not three sizes', () => {
     expect(boxOn(listed, ['a', 'c'], { on: [], off: [] })).toEqual(['a', 'c'])
     expect(boxOn(listed, ['a', 'c'], { on: ['b'], off: ['a'] })).toEqual(['b', 'c'])
     expect(boxOn(['a', 'b'], ['a', 'c'], { on: ['gone'], off: [] })).toEqual(['a'])
-  })
-
-  it('only advertises a bigger box when its rate beats the one applied now', () => {
-    const pct = { essentials: 13, performance: 15, complete: 20 } as const
-    const pctFor = (l: keyof typeof pct) => pct[l]
-    expect(rateAhead(2, 13, pctFor)).toEqual({ more: 2, pct: 15 })
-    expect(rateAhead(4, 15, pctFor)).toEqual({ more: 2, pct: 20 })
-    // A monthly-total tier already gives 15%: the next step is the 20% one.
-    expect(rateAhead(2, 15, pctFor)).toEqual({ more: 4, pct: 20 })
-    expect(rateAhead(6, 20, pctFor)).toEqual({ top: 20 })
   })
 })

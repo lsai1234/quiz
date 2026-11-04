@@ -12,10 +12,12 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig, getSubscriptionProduct, levelSubscriptionRate, planComparison } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig, getSubscriptionProduct, levelSubscriptionRate, planComparison, USAGE_SERVINGS_PER_OCCASION } from '@/lib/stack-blueprint/pricing'
 import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
-import { boxOn, levelForCount, rateAhead, startingBox } from '@/lib/offer/box'
+import { boxOn, levelForCount, startingBox } from '@/lib/offer/box'
+import { chargeView } from '@/lib/offer/levels'
 import { BOX_COPY } from '@/lib/offer/box-copy'
+import { dayFromQuiz, routineFor } from '@/lib/routine'
 import { BoxBuilder, type BoxRow } from './BoxBuilder'
 import { ProductDetailSheet } from './ProductDetailSheet'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
@@ -405,6 +407,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
    */
   const consultRead = consultExclusions?.read ?? null
   const consultTiers = consultExclusions?.tiers ?? null
+  // Their day (Option 3): the consult's, or the original quiz's training answers on a stated day.
+  const routineDay = useMemo(
+    () => consultExclusions?.day ?? dayFromQuiz(answers),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the two answers the day reads
+    [consultExclusions?.day, answers.trainingTime, answers.trainingFrequency],
+  )
 
   // productId → currently selected flavour variant, for the Pour Plan flavour picker.
   const selectedVariantByProductId = useMemo(() => {
@@ -816,8 +824,15 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         deliveryAddress: deliveryAddress ?? null,
         claimingStarter: claiming,
         bonus: bonus ? { productId: bonus.product.id, level: activeLevel } : null,
+        // The stack guide's seed: their day, goals and first name. Checked on the server.
+        guide: {
+          day: routineDay,
+          goals: [answers.primaryGoal, ...(answers.goals ?? [])].filter(Boolean),
+          firstName: answers.name ?? null,
+          stackName: activeBlueprint.stackName ?? null,
+        },
       }),
-    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel],
+    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel, routineDay],
   )
 
   /*
@@ -1254,6 +1269,11 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
     },
     [boxRows, toggleBox, handleAddBooster, freezeStart],
   )
+  const routine = useMemo(() => {
+    const onProducts = activeSlots.flatMap((s) => products.filter((p) => p.id === s.selectedProductId))
+    const servings = Object.fromEntries(Object.entries(subscriptionUsage ?? {}).map(([id, level]) => [id, USAGE_SERVINGS_PER_OCCASION[level] ?? 1]))
+    return routineFor(onProducts, routineDay, servings)
+  }, [activeSlots, products, routineDay, subscriptionUsage])
   const [detailSlotId, setDetailSlotId] = useState<string | null>(null)
   const detailSlot = detailSlotId ? blueprint.slots.find((s) => s.slotId === detailSlotId) ?? null : null
   const detailProduct = detailSlot ? products.find((p) => p.id === detailSlot.selectedProductId) : undefined
@@ -1272,7 +1292,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         oneOff={starterStack ? 0 : pricing.oneOffTotal}
         monthly={pricing.subscriptionTotal}
         ladder={ladder}
-        rate={canSubscribeStack ? rateAhead(activeSlots.length, pricing.subscriptionDiscountPct, (l) => Math.round(levelSubscriptionRate(l) * 100)) : null}
+        charge={chargeView({
+          count: activeSlots.length,
+          plan: canSubscribeStack && planType === 'subscription' ? 'subscription' : 'oneoff',
+          services: offerSettings.services,
+          ratePct: (l) => Math.round(levelSubscriptionRate(l) * 100),
+        })}
         addOns={founderKind ? [] : boxAddOns}
         onAdd={addToBox}
         giftConditions={bonusLine ? giftConditions : null}
@@ -1291,6 +1316,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         busy={checkoutState.status === 'loading' || leavingForStripe}
         messages={checkoutState.status === 'error' ? checkoutState.messages : []}
         onCtaRef={setOfferCtaEl}
+        routine={routine}
         monthlyMin={
           !canSubscribeStack && founderKind == null && pricing.subscriptionItemCount > 0 && !pricing.subscriptionMinOrderMet
             ? { min: getPricingConfig().minSubscriptionMonthly, now: pricing.subscriptionTotal }
@@ -1384,6 +1410,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               total: pricing.oneOffTotal,
             }}
             onBack={resetCheckout}
+            guideToken={checkoutState.guide ?? null}
           />
         </StackPanel>
       </>

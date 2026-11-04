@@ -14,6 +14,10 @@ import {
 import { createUser } from '@/lib/db/users'
 import type { QueueInput, RenderedEmail } from '@/lib/notify/types'
 
+// These test the send mechanics: their customers are on the test allowlist,
+// which holds every other address outside live payments (`../allowlist`).
+process.env.NOTIFY_TEST_ALLOWLIST = '@example.com'
+
 const rendered: RenderedEmail = { subject: 'Subject', text: 'Body', html: '<p>Body</p>' }
 
 function input(over: Partial<QueueInput> = {}): QueueInput {

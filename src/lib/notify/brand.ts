@@ -40,6 +40,15 @@ const PAPER = '#ffffff'
 const PAGE = '#eef0f2'
 const TEXT = '#18181b'
 const TEXT_SOFT = '#52525b'
+/** The shell's own fonts and inks, for a block an email builds itself (`ShellInput.blocks`). */
+export const SHELL_STYLE = {
+  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  text: TEXT,
+  soft: TEXT_SOFT,
+  hairline: '#e4e4e7',
+  tint: '#f4fbfd',
+  accentInk: '#006e8a',
+} as const
 const TEXT_FAINT = '#a1a1aa'
 const HAIRLINE = '#e4e4e7'
 
@@ -68,6 +77,12 @@ export interface ShellInput {
   paragraphs: string[]
   /** The printed receipt, when this email has one. */
   receipt?: ReceiptData | null
+  /**
+   * Blocks an email lays out itself (the stack guide's image, day and
+   * products), after the paragraphs. Each carries its plain-text twin, so the
+   * text part says everything the HTML does. The caller escapes what it puts in.
+   */
+  blocks?: { html: string; text: string }[]
   cta?: { label: string; url: string }
   /** Small print under the button. */
   footnote?: string
@@ -243,6 +258,7 @@ export function emailShell(input: ShellInput): { text: string; html: string } {
     '',
     ...(input.intro ? [input.intro, ''] : []),
     ...input.paragraphs,
+    ...(input.blocks ?? []).flatMap((b) => ['', b.text]),
     ...(input.receipt ? ['', receiptText(input.receipt)] : []),
     ...(input.cta ? ['', `${input.cta.label}: ${input.cta.url}`] : []),
     ...(input.secondaryCta ? [`${input.secondaryCta.label}: ${input.secondaryCta.url}`] : []),
@@ -267,6 +283,7 @@ export function emailShell(input: ShellInput): { text: string; html: string } {
     ...input.paragraphs.map(
       (p) => `<div style="font-family:${SANS};font-size:14px;line-height:1.65;color:${TEXT};padding-bottom:12px">${escapeHtml(p)}</div>`,
     ),
+    ...(input.blocks ?? []).map((b) => b.html),
     input.receipt ? `<div style="padding:12px 0 4px">${receiptEmailHtml(input.receipt)}</div>` : '',
     input.cta ? `<div style="padding:16px 0 0">${button(input.cta.label, input.cta.url)}</div>` : '',
     input.secondaryCta

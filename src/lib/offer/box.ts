@@ -70,23 +70,3 @@ export function boxOn(listed: readonly string[], start: readonly string[], chose
   const on = new Set(chosen.on)
   return listed.filter((id) => on.has(id) || (start.includes(id) && !off.has(id)))
 }
-
-/**
- * Monthly only: the next better subscribe-and-save rate a bigger box would
- * earn, as "n more products for p% off", or `{ top }` when no bigger box does
- * better than the rate it has now. `currentPct` is the rate actually applied
- * (a monthly-total tier can already beat the box's own level), so a step that
- * would not beat it is never advertised.
- */
-export function rateAhead(
-  n: number,
-  currentPct: number,
-  pctFor: (level: StackLevel) => number,
-): { more: number; pct: number } | { top: number } {
-  for (const step of LEVEL_FROM) {
-    if (step.count <= n) continue
-    const pct = pctFor(step.level)
-    if (pct > currentPct) return { more: step.count - n, pct }
-  }
-  return { top: currentPct }
-}

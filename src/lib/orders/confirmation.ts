@@ -70,9 +70,13 @@ export interface ConfirmationOrder {
   status: Order['status']
   /** Bought on the last-chance deal — so this browser is not offered it again. */
   lastChanceDeal?: true
+  /** The stack guide's page, once it has been made (`lib/guide`). */
+  guidePath?: string
 }
 
 export interface ConfirmationSubscription {
+  /** The stack guide's page, once it has been made (`lib/guide`). */
+  guidePath?: string
   cadenceLabel: string
   /** Minor units. */
   recurringAmount: number
@@ -223,6 +227,7 @@ export function toConfirmationOrder(order: Order): ConfirmationOrder {
     refunded: order.status === 'refunded' ? true : undefined,
     status: order.status,
     ...(order.lastChance ? { lastChanceDeal: true as const } : {}),
+    ...(order.guideToken ? { guidePath: `/guide/${order.guideToken}` } : {}),
   }
 }
 
@@ -275,6 +280,7 @@ export function toConfirmationSubscription(
     nextDispatchDate: sub.nextDispatchOverride ?? next,
     trial: null,
     manageUrl: opts.manageUrl ?? null,
+    ...(sub.guideToken ? { guidePath: `/guide/${sub.guideToken}` } : {}),
     cadenceGroups: [...groups.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([months, items]) => ({ label: cadenceLabel(months), items })),

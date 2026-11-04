@@ -19,6 +19,7 @@ import type { HeroRow } from './view'
 import { OFFER_COPY } from './copy'
 import { PLAN_COPY, whyPricesDiffer } from './plan-copy'
 import { BOX_COPY } from './box-copy'
+import { LEVEL_COPY } from './levels-copy'
 import { freeGiftTerms } from './terms'
 
 export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
@@ -166,13 +167,37 @@ export function boxCopyRows(): ReviewRow[] {
     ['Box wording', where, c.justOne('Creatine Monohydrate', 19.99), `Under the button: the hero (or their top pick) alone. ${ex}`],
     ['Box wording', where, c.monthlyFrom(25), 'The monthly option, while the box is under the subscription minimum'],
     ['Box wording', where, c.monthlyMin(25, 18.4), `Under the plan, while the box is under the subscription minimum. ${ex}`],
-    ['Box wording', where, c.rateNext(1, 15), `Monthly only, on the rewards card. ${ex}`],
-    ['Box wording', where, c.rateTop(20), `Monthly only, with the best rate reached. ${ex}`],
     ['Box wording', where, c.receiptSave(4), `The receipt's subscribe-and-save line. ${ex}`],
     ['Box wording', where, c.stickyOnce, 'The sticky bar'],
     ['Box wording', where, c.stickyMonthly, 'The sticky bar'],
     ['Box wording', where, c.more, 'Opens the rest of their read, under the box'],
     ['Box wording', where, c.less, 'Folds it again'],
+  ]
+}
+
+/**
+ * Charge levels and box services (Option 1). A service is shown only while its
+ * switch is on in Settings → Offer → Box services.
+ */
+export function levelCopyRows(): ReviewRow[] {
+  const where = 'Results page: "Your box comes with" (both quizzes); the stack guide'
+  const c = LEVEL_COPY
+  return [
+    ['Level wording', where, c.heading, 'Heading'],
+    ...Object.values(c.level).map((name): ReviewRow => ['Level wording', where, name, 'A charge level: by how many products are on (1–3, 4–5, 6+)']),
+    ['Level wording', where, c.nextLevel(2, c.level.supercharged), 'The next level. Example'],
+    ['Level wording', where, c.topLevel, 'At the top level'],
+    ['Level wording', where, c.at(c.level.fully), 'Beside a locked service. Example'],
+    ['Level wording', where, c.service.guide, 'Every box'],
+    ['Level wording', where, c.service.reminders, 'Every box'],
+    ['Level wording', where, c.service.checkIns, 'Every box, while check-ins are on'],
+    ['Level wording', where, c.service.swaps, 'Monthly boxes'],
+    ['Level wording', where, c.service.guarantee, 'Every box, only while the guarantee is switched on'],
+    ['Level wording', where, c.guaranteeConditions, 'Beside the guarantee, wherever it is said'],
+    ['Level wording', where, c.guaranteeTerms, 'Link to /legal/guarantee'],
+    ['Level wording', where, c.service.pharmacistCheck, 'Supercharged, only while a partner pharmacy is switched on. A safety review, never advice'],
+    ['Level wording', where, c.service.vitaminDTest, 'Fully charged, only while a lab partner is switched on'],
+    ['Level wording', where, c.service.rate(15), 'Monthly: a level’s rate. Example'],
   ]
 }
 

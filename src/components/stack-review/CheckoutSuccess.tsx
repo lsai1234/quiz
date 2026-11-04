@@ -1,5 +1,6 @@
 'use client'
 
+import { GUIDE_COPY } from '@/lib/guide/copy'
 import { useMemo, useRef } from 'react'
 import type { SubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
 import type { ChangePolicy } from '@/lib/recharge/types'
@@ -22,6 +23,8 @@ interface Props {
    */
   oneOff?: { items: ReceiptItem[]; subtotal: number; total: number }
   onBack?: () => void
+  /** The stack guide, made with the order (`lib/guide`). */
+  guideToken?: string | null
 }
 
 /**
@@ -36,7 +39,7 @@ interface Props {
  * payment route today, and the receipt says `DEMO — NOT CHARGED` rather than
  * approving a payment nobody took.
  */
-export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto-swap', oneOff, onBack }: Props) {
+export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto-swap', oneOff, onBack, guideToken = null }: Props) {
   const isSub = plan === 'subscription' && !!subscription
 
   // Held in refs, not derived on each render: the parent rebuilds `oneOff`
@@ -68,6 +71,23 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
           ? 'Your first box ships now. After that, each item arrives on its own schedule — all on one flat monthly payment.'
           : 'Check your inbox for your order confirmation.'}
       </p>
+
+      {guideToken && (
+        <a
+          href={`/guide/${guideToken}`}
+          data-guide-link
+          className="w-full mt-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-4 text-left"
+          style={{ borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}
+        >
+          <span>
+            <span className="block text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              {GUIDE_COPY.ready}
+            </span>
+            <span className="block text-xs mt-0.5 text-[var(--color-text-2)]">{GUIDE_COPY.readyLine}</span>
+          </span>
+          <span aria-hidden className="text-lg font-black" style={{ color: 'var(--color-accent)' }}>→</span>
+        </a>
+      )}
 
       <ReceiptPrinter receipt={receipt} className="w-full mt-7" />
 

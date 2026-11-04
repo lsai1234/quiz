@@ -180,14 +180,42 @@ export const DEFAULT_BONUS: BonusSettings = {
 
 /* ── The whole document ─────────────────────────────────────────────────── */
 
+/**
+ * Settings → Offer → "Box services" (Option 1): what a box comes with beyond its
+ * products. Check-ins run for every box unless switched off. The other three
+ * are promises to customers with a partner or terms behind them, so they are
+ * off until the founders turn them on: a pharmacy signed for the box check, a
+ * lab for the vitamin D test, and the guarantee's terms agreed
+ * (`/legal/guarantee`). Off, nothing anywhere mentions them.
+ */
+export interface ServiceSettings {
+  checkIns: boolean
+  guarantee: boolean
+  pharmacistCheck: boolean
+  vitaminDTest: boolean
+}
+
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, pharmacistCheck: false, vitaminDTest: false }
+
+export function normaliseServices(raw: unknown): ServiceSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
+  return {
+    checkIns: r.checkIns !== false,
+    guarantee: r.guarantee === true,
+    pharmacistCheck: r.pharmacistCheck === true,
+    vitaminDTest: r.vitaminDTest === true,
+  }
+}
+
 export interface OfferSettings {
   /** Settings → Offer → "Hero products". Off: the core offer is today's top pick. */
   heroEnabled: boolean
   heroes: Record<string, HeroApproval>
   bonus: BonusSettings
+  services: ServiceSettings
 }
 
-export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS }
+export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES }
 
 const NOVEL: readonly NovelFoodStatus[] = ['not-novel', 'authorised', 'unauthorised', 'unknown']
 const num = (v: unknown, fallback: number, min = 0, max = Number.POSITIVE_INFINITY) =>
@@ -233,7 +261,7 @@ export function normaliseOffer(raw: unknown): OfferSettings {
   if (r.heroes && typeof r.heroes === 'object') {
     for (const [id, a] of Object.entries(r.heroes)) heroes[id] = normaliseHeroApproval(id, a)
   }
-  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus) }
+  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services) }
 }
 
 /* ── What Phase 3 reads ─────────────────────────────────────────────────── */

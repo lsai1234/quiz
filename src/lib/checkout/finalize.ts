@@ -14,9 +14,10 @@
  *
  * Server-only.
  */
+import { normaliseGuideSeed } from '@/lib/guide/build'
 import type { CheckoutPayload } from './types'
 import type { MemberSubscription } from '@/lib/recharge/types'
-import { saveSubscription, saveQuiz } from '@/lib/db/hub-data'
+import { getSubscription, saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
@@ -42,6 +43,8 @@ export const PENDING_KEY_PREFIX = 'pending:'
 export interface FinalizeResult {
   checkoutUrl: string
   mock: boolean
+  /** Mock only: the stack guide's token, made with the confirmation. */
+  guide?: string | null
 }
 
 /**
@@ -326,6 +329,9 @@ export async function finalizeCheckout(
         ? safetyConstraintsFrom(quizAnswers)
         : payload.subscription.safetyConstraints ?? safetyConstraintsFrom(quizAnswers),
       bonus: gift,
+      // The stack guide's seed, checked here; the guide is issued when the plan is confirmed.
+      guideSeed: normaliseGuideSeed(payload.guide),
+      guideToken: null,
     },
     getPricingConfig(),
     codePct,
@@ -450,7 +456,9 @@ export async function finalizeCheckout(
     console.error('[finalizeCheckout] subscription confirmation email failed:', err)
   }
 
-  return { checkoutUrl: '#mock-subscription', mock: true }
+  // The stack guide was made with the confirmation; the in-page receipt links to it.
+  const guide = (await getSubscription(userId).catch(() => null))?.guideToken ?? null
+  return { checkoutUrl: '#mock-subscription', mock: true, guide }
 }
 
 /**

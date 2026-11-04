@@ -12,6 +12,10 @@ import { PLAN_COPY, whyPricesDiffer } from '@/lib/offer/plan-copy'
 import { formatGBP, type PlanComparison } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 import { ProductTile } from './ProductTile'
+import { YourDay } from './YourDay'
+import { BoxServices } from './BoxServices'
+import type { ChargeView } from '@/lib/offer/levels'
+import type { Routine } from '@/lib/routine'
 import { YOU_PALETTE as P } from './you-palette'
 
 /**
@@ -51,7 +55,7 @@ export function BoxBuilder({
   oneOff,
   monthly,
   ladder,
-  rate,
+  charge = null,
   addOns,
   onAdd,
   giftConditions,
@@ -62,6 +66,7 @@ export function BoxBuilder({
   onCtaRef,
   delivery = null,
   monthlyMin = null,
+  routine = null,
 }: {
   rows: readonly BoxRow[]
   onToggle: (id: string) => void
@@ -74,8 +79,8 @@ export function BoxBuilder({
   oneOff: number
   monthly: number
   ladder: Ladder
-  /** Monthly only: the next rate by box size, or the top one. */
-  rate: { more: number; pct: number } | { top: number } | null
+  /** What the box comes with, and its charge level (Option 1). */
+  charge?: ChargeView | null
   addOns: readonly CatalogueProduct[]
   onAdd: (product: CatalogueProduct) => void
   giftConditions: string | null
@@ -90,6 +95,8 @@ export function BoxBuilder({
   delivery?: number | null
   /** Monthly is off only because the box is under the subscription minimum: that minimum, and the box's month now. */
   monthlyMin?: { min: number; now: number } | null
+  /** The products switched on, on their day (Option 3). */
+  routine?: Routine | null
 }) {
   const headingId = useId()
   const [why, setWhy] = useState(false)
@@ -151,6 +158,9 @@ export function BoxBuilder({
         ))}
       </ul>
 
+      {/* Their day: what's switched on, and when to take it. */}
+      {routine && onCount > 0 && <YourDay routine={routine} />}
+
       {/* Once or monthly: every price on the card follows it. */}
       <div role="radiogroup" aria-label={PLAN_COPY.heading} className="mt-5 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: P.page }}>
         <PlanOption on={!isSub} label={PLAN_COPY.once} sub={formatGBP(oneOff)} onClick={() => onPlanChange('oneoff')} />
@@ -187,6 +197,9 @@ export function BoxBuilder({
         </>
       )}
 
+      {/* What the box comes with: services, and the level that unlocks more. */}
+      {charge && onCount > 0 && <BoxServices view={charge} />}
+
       {/* What the box has unlocked, the next line, and products to add to reach it. */}
       {ladder.rungs.length > 0 && (
         <div className="mt-5 rounded-2xl px-4 py-3.5" style={{ background: P.page }} data-ladder={next ? next.kind : 'all'}>
@@ -220,14 +233,6 @@ export function BoxBuilder({
                 )}
               </li>
             ))}
-            {isSub && rate && (
-              <li className="flex items-start gap-2" data-rung="rate" data-reached={'top' in rate}>
-                <Tick on={'top' in rate} />
-                <span className="text-[13px] font-semibold leading-snug" style={{ color: P.ink }}>
-                  {'top' in rate ? BOX_COPY.rateTop(rate.top) : BOX_COPY.rateNext(rate.more, rate.pct)}
-                </span>
-              </li>
-            )}
           </ul>
           {next && addOns.length > 0 && (
             <>

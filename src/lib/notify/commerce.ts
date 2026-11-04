@@ -191,6 +191,9 @@ export async function queueSubscriptionConfirmation(
   } catch (err) {
     console.error('[notify] subscription confirmation could not be queued:', err)
   }
+  // The stack guide, after the confirmation: once per plan. Never throws.
+  const { issueGuideForSubscription } = await import('@/lib/guide/issue')
+  await issueGuideForSubscription(userId, sub, email)
 }
 
 /**

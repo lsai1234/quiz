@@ -13,6 +13,10 @@ import type { Order } from '@/lib/orders/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { createUser } from '@/lib/db/users'
 
+// These test the send mechanics: their customers are on the test allowlist,
+// which holds every other address outside live payments (`../allowlist`).
+process.env.NOTIFY_TEST_ALLOWLIST = '@example.com'
+
 function order(over: Partial<Order> = {}): Order {
   return {
     id: `ord_${Math.random().toString(36).slice(2, 10)}`,

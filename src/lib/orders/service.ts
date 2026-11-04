@@ -108,6 +108,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     founderCodeKind: input.founderCodeKind ?? null,
     starterCode: input.starterCode ?? null,
     starterPartnerId: input.starterPartnerId ?? null,
+    guideSeed: input.guideSeed ?? null,
     billedAmount: input.billedAmount ?? null,
     subscription: input.subscription ?? null,
     ...(input.deliveryDue ? { deliveryDue: input.deliveryDue } : {}),
@@ -193,6 +194,10 @@ async function confirmByEmail(order: Order): Promise<void> {
   } catch (err) {
     console.error('[orders] order confirmation email could not be queued:', err)
   }
+  // The stack guide, after the receipt: made once, emailed when there is an
+  // address, linked from the confirmation page either way. Never throws.
+  const { issueGuideForOrder } = await import('@/lib/guide/issue')
+  await issueGuideForOrder(order)
 }
 
 /**

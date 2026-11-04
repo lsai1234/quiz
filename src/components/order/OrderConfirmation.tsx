@@ -1,5 +1,6 @@
 'use client'
 
+import { GUIDE_COPY } from '@/lib/guide/copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { track } from '@/lib/analytics/events'
@@ -296,6 +297,26 @@ function Processing({ data, timedOut }: { data: ConfirmationResponse; timedOut: 
   )
 }
 
+/** The stack guide, ready: their products on their day. Emailed too, when there is an address. */
+function GuideLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      data-guide-link
+      className="mt-4 flex items-center justify-between gap-3 rounded-2xl border px-4 py-4"
+      style={{ borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}
+    >
+      <span>
+        <span className="block text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          {GUIDE_COPY.ready}
+        </span>
+        <span className="block text-xs mt-0.5 text-[var(--color-text-2)]">{GUIDE_COPY.readyLine}</span>
+      </span>
+      <span aria-hidden className="text-lg font-black" style={{ color: 'var(--color-accent)' }}>→</span>
+    </a>
+  )
+}
+
 // ─── V1–V5 Confirmed ─────────────────────────────────────────────────────────
 
 /**
@@ -332,6 +353,8 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
       )}
 
       {receipt && <ReceiptPrinter receipt={receipt} className="mt-6 mb-1" />}
+
+      {(order?.guidePath || subscription?.guidePath) && <GuideLink href={(order?.guidePath || subscription?.guidePath)!} />}
 
       {order?.refunded && (
         <Card>

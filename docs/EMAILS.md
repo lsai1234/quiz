@@ -320,6 +320,15 @@ their receipt.
 
 ---
 
+## Before payments are live: the test allowlist
+
+Until the Stripe keys are live ones (`sk_live_…`), Resend and Gmail only deliver
+to the addresses on `NOTIFY_TEST_ALLOWLIST`, for example
+`lewis@example.com, @getchrgd.co.uk` (an `@domain` entry covers everyone at it).
+Any other email is held, not sent: it stays on the Emails page marked failed,
+with the reason, and **Send a test copy** works to any address on the list. With the list empty,
+nothing leaves a test or preview deployment. Live keys lift the hold.
+
 ## Step 6 — Check it, before a customer does
 
 Both routes end here.

@@ -65,5 +65,7 @@ export function publicOffer(
     heroEnabled: settings.heroEnabled && Object.keys(heroes).length > 0,
     heroes,
     bonus: { ...settings.bonus, enabled: shown && settings.bonus.enabled && pool.length > 0, pool },
+    // Which services a box comes with: switches only, nothing private.
+    services: { ...settings.services },
   }
 }

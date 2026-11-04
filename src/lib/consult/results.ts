@@ -28,6 +28,8 @@ import type { FlowState } from './flow'
 import type { PersonSnapshot } from '@/lib/offer/select'
 import { buildRead, type ConsultRead } from './read'
 import { buildTraces, saveTraces, type Trace } from './trace'
+import { dayFromConsult } from './routine-day'
+import type { RoutineDay } from '@/lib/routine'
 
 export interface ResultsBundle {
   payload: HandoffPayload
@@ -49,6 +51,8 @@ export interface ResultsBundle {
    * Kept in this tab only (`saveTraces`), never in `payload`.
    */
   traces: Record<string, Trace>
+  /** Their day, for "Your day": wake, bed, when and on which days they train. */
+  day: RoutineDay
 }
 
 type OfferFitFor = (answers: FlowState['answers'], engine: Pick<EngineResult, 'tiers'>, catalogue: readonly CatalogueProduct[]) => PersonSnapshot
@@ -94,6 +98,7 @@ export function prepareResults(
     identity: identityFor(payload),
     catalogue,
     offerFit: offerFitFor?.(state.answers, engine, catalogue),
+    day: dayFromConsult(state.answers),
   }
 }
 
@@ -116,7 +121,7 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setStackBlueprint(bundle.blueprint)
   store.setStackLevel('performance')
   store.setAiStackMeta(bundle.payload.reasons, false)
-  store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit, read: bundle.read })
+  store.setConsultExclusions({ ...exclusionsOf(bundle.payload), offerFit: bundle.offerFit, read: bundle.read, day: bundle.day })
   store.setStackReady(true)
   if (bundle.offerFit) saveOfferFit(bundle.payload.consult_id, bundle.offerFit)
   saveRead(bundle.read)

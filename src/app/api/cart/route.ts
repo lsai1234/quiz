@@ -1,3 +1,5 @@
+import { getOrder } from '@/lib/orders/repo'
+import { normaliseGuideSeed } from '@/lib/guide/build'
 import { NextResponse } from 'next/server'
 import { runAfterResponse } from '@/lib/after-response'
 import { getPaymentSource } from '@/lib/payments'
@@ -200,6 +202,7 @@ export async function POST(req: Request) {
     safety?: unknown
     bonus?: unknown
     constraints?: unknown
+    guide?: unknown
   }
   try {
     body = await req.json()
@@ -276,6 +279,9 @@ export async function POST(req: Request) {
 
   const user = await getHubUser().catch(() => null)
   const safety = orderSafetyFrom(body.safety)
+  // The stack guide's seed (their day, goals, first name), checked; the guide
+  // itself is made when the order is paid (`lib/guide/issue`).
+  const guideSeed = normaliseGuideSeed(body.guide)
   // A signed-in buyer's circuit-check consent gets its own record, the same
   // `health-data` row a subscription writes (finalize.ts). A guest has no
   // account to hang one on; their order keeps the consent next to the
@@ -816,6 +822,7 @@ export async function POST(req: Request) {
     let order
     try {
       order = await createOrderFromCheckout({
+        guideSeed,
         channel,
         lines: orderLines,
         userId: user?.id ?? null,
@@ -861,6 +868,7 @@ export async function POST(req: Request) {
     const orderId = newOrderId()
     try {
       await createOrderFromCheckout({
+        guideSeed,
         id: orderId,
         status: 'pending_payment',
         channel,
@@ -931,6 +939,7 @@ export async function POST(req: Request) {
   let order
   try {
     order = await createOrderFromCheckout({
+        guideSeed,
       channel,
       lines: orderLines,
       userId: user?.id ?? null,
@@ -954,5 +963,7 @@ export async function POST(req: Request) {
   }
   if (redemption?.ok) await recordCodeUse(redemption.code.code)
   if (founder) await markFounderCodeUsed(founder.code.code, founder.token, order.id)
-  return NextResponse.json({ checkoutUrl: '#mock-checkout', mock: true, orderId: order.id })
+  // The stack guide was made as the order was paid; the in-page receipt links to it.
+  const guide = (await getOrder(order.id))?.guideToken ?? null
+  return NextResponse.json({ checkoutUrl: '#mock-checkout', mock: true, orderId: order.id, guide })
 }

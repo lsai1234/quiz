@@ -48,7 +48,7 @@ export type CheckoutState =
    * Mock payments only: no Stripe to go to, so the demo order is complete. Real
    * payments end at `redirecting` and confirm on `/order/confirmation`.
    */
-  | { status: 'mock-complete'; plan: PlanType; subscription?: SubscriptionCheckout }
+  | { status: 'mock-complete'; plan: PlanType; subscription?: SubscriptionCheckout; guide?: string | null }
 
 /** Transport failure — the request never got an answer. The ONLY case where
  *  telling someone to check their connection is honest. */
@@ -128,6 +128,8 @@ export function useStackCheckout() {
         detail?: string
         /** The free bonus was refused before anything was stored or charged. */
         bonusChanged?: boolean
+        /** Mock only: the stack guide, made with the confirmation. */
+        guide?: string | null
       } | null = await res.json().catch(() => null)
       if (res.status === 409 && data?.bonusChanged) {
         setState({ status: 'error', messages: [data.error ?? 'The free gift can’t come with this plan. Nothing has been charged.'], bonusRefused: true })
@@ -159,7 +161,7 @@ export function useStackCheckout() {
         return
       }
       if (data.checkoutUrl.startsWith('#')) {
-        setState({ status: 'mock-complete', plan: 'subscription', subscription: checkout })
+        setState({ status: 'mock-complete', plan: 'subscription', subscription: checkout, guide: data.guide ?? null })
         return
       }
       setState({ status: 'redirecting', plan: 'subscription' })
@@ -216,6 +218,8 @@ export function useStackCheckout() {
          * box only.
          */
         bonus?: { productId: string; level: StackLevel } | null
+        /** The stack guide's seed: their day, goals, first name. Checked server-side. */
+        guide?: unknown
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -255,6 +259,7 @@ export function useStackCheckout() {
           partnerCode: subOpts.partnerCode ?? null,
           // The free bonus, for the first box. Re-checked server-side.
           ...(subOpts.bonus ? { bonus: subOpts.bonus } : {}),
+          ...(subOpts.guide ? { guide: subOpts.guide } : {}),
         }
         await runFinalize(payload, result.checkout)
         return
@@ -294,9 +299,11 @@ export function useStackCheckout() {
             ...(subOpts.bonus
               ? { bonus: subOpts.bonus, constraints: safetyConstraintsFrom(answers) }
               : {}),
+            // The stack guide's seed. Checked server-side; kept with the order.
+            ...(subOpts.guide ? { guide: subOpts.guide } : {}),
           }),
         })
-        const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string; bonusChanged?: boolean } | null =
+        const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string; bonusChanged?: boolean; guide?: string | null } | null =
           await res.json().catch(() => null)
         if (res.status === 409 && data?.bonusChanged) {
           setState({ status: 'error', messages: [data.error ?? 'The free gift can’t come with this order. Nothing has been charged.'], bonusRefused: true })
@@ -320,7 +327,7 @@ export function useStackCheckout() {
           return
         }
         if (data.checkoutUrl.startsWith('#')) {
-          setState({ status: 'mock-complete', plan: 'oneoff' })
+          setState({ status: 'mock-complete', plan: 'oneoff', guide: data.guide ?? null })
           return
         }
         setState({ status: 'redirecting', plan: 'oneoff' })

@@ -168,6 +168,22 @@ it('adds a product switched on, and leaves every other switch where it was', asy
   for (const [id, on] of Object.entries(before)) expect(after[id]).toBe(on)
 })
 
+it('puts what is switched on onto their day, and follows the switches', async () => {
+  offer = everything()
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const day = within(box).getByRole('region', { name: 'Your day' })
+  // The original quiz has no sleep times: the stated day, said so.
+  expect(day).toHaveTextContent('placed around a 7am start and an 11pm bedtime')
+  const onTitles = [...box.querySelectorAll<HTMLElement>('[data-box-row][data-on="true"]')].map((r) => r.querySelector('.font-semibold')!.textContent!)
+  for (const t of onTitles) expect(day).toHaveTextContent(t)
+  const off = box.querySelector<HTMLElement>('[data-box-row][data-on="false"]')!
+  const offTitle = off.querySelector('.font-semibold')!.textContent!
+  expect(day).not.toHaveTextContent(offTitle)
+  await userEvent.click(within(off).getByRole('switch'))
+  expect(within(box).getByRole('region', { name: 'Your day' })).toHaveTextContent(offTitle)
+})
+
 it('keeps the box honest when everything is switched off: no order, and it says so', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)
@@ -192,18 +208,40 @@ it('says why monthly is off on a small box, and what turns it on', async () => {
   expect(box.querySelector('[data-monthly-min]')).toHaveTextContent(/^Monthly starts at £25\.00 a month, and this box comes to £\d+\.\d\d\. Switch on another product to choose it\.$/)
 })
 
-it('names the next monthly rate by how many products are on', async () => {
+it('says what the box comes with, and the monthly rate its size earns', async () => {
   offer = everything()
   act(() => useQuizStore.setState({ planType: 'subscription' }))
   render(<StackReviewPage reducedMotion />)
   const box = await screen.findByRole('region', { name: 'Your box' })
-  const rate = await waitFor(() => {
-    const el = box.querySelector<HTMLElement>('[data-rung="rate"]')
+  // Fill it: a monthly box over the minimum.
+  for (const s of within(box).getAllByRole('switch')) if (s.getAttribute('aria-checked') === 'false') await userEvent.click(s)
+  const services = await waitFor(() => {
+    const el = box.querySelector<HTMLElement>('[data-box-services]')
     expect(el).not.toBeNull()
     return el!
   })
-  expect(rate).toHaveTextContent(/^\d+ more products? for \d+% off every month$|^\d+% off every month: the best rate$/)
+  // Every box: the guide, reminders, check-ins; monthly: free swaps and its rate.
+  for (const id of ['guide', 'reminders', 'checkIns', 'swaps']) expect(services.querySelector(`[data-service="${id}"][data-unlocked="true"]`)).not.toBeNull()
+  expect(services.querySelector('[data-service="rate"][data-unlocked="true"]')).toHaveTextContent(/^\d+% off every month$/)
+  expect(services.querySelector('[data-charge-level]')).toHaveTextContent(/^(Charged|Supercharged|Fully charged)$/)
+  // Switched off in the hub, so never said.
+  expect(services.textContent).not.toMatch(/pharmacist|vitamin D|guarantee/i)
   expect(box.querySelector('[data-box-cta]')).toHaveTextContent(/^Start monthly · £.* a month$/)
+})
+
+it('names a partner service, and the level it comes with, once the hub switches it on', async () => {
+  offer = { ...everything(), services: { checkIns: true, guarantee: true, pharmacistCheck: true, vitaminDTest: false } }
+  render(<StackReviewPage reducedMotion />)
+  const box = await screen.findByRole('region', { name: 'Your box' })
+  const services = box.querySelector<HTMLElement>('[data-box-services]')!
+  const pharmacist = services.querySelector<HTMLElement>('[data-service="pharmacistCheck"]')!
+  expect(pharmacist).toHaveTextContent('A UK pharmacist checks your box')
+  // The guarantee carries its conditions and terms beside it.
+  const guarantee = services.querySelector<HTMLElement>('[data-service="guarantee"]')!
+  expect(guarantee).toHaveTextContent('First box only, one per customer.')
+  expect(within(guarantee).getByRole('link', { name: 'Guarantee terms' })).toHaveAttribute('href', '/legal/guarantee')
+  // A two-product starting box is under Supercharged: the check is locked, and it says how far.
+  if (pharmacist.dataset.unlocked === 'false') expect(services.querySelector('[data-next-level]')).toHaveTextContent(/more products? for Supercharged/)
 })
 
 it('never says "free" about the gift without its conditions and the terms beside it', async () => {
