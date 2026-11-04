@@ -95,8 +95,6 @@ export function OfferSettings() {
 const SERVICE_ROWS: { key: keyof ServiceSettings; title: string; level: string; note: string }[] = [
   { key: 'checkIns', title: 'Amp check-ins', level: 'Every box', note: 'An email every two weeks after an order: 30 seconds on their days, training and what they use, and one-tap changes to the box.' },
   { key: 'guarantee', title: 'First-box guarantee', level: 'Every box', note: 'Money back on the first box if it isn’t right. Turn on once the terms at /legal/guarantee are agreed; refunds are made by hand from the order.' },
-  { key: 'pharmacistCheck', title: 'Pharmacist check', level: 'Supercharged (4+ products)', note: 'A UK pharmacist reviews the box against their safety answers before it ships. Turn on once a partner pharmacy is signed: each qualifying order is flagged for review.' },
-  { key: 'vitaminDTest', title: 'Vitamin D test', level: 'Fully charged (6+ products)', note: 'An at-home kit through an accredited lab. Turn on once a lab partner is signed and the kit cost fits the margin floor: each qualifying order is flagged to send one.' },
 ]
 
 function ServicesCard({ view, saving, onSwitch }: { view: OfferView; saving: boolean; onSwitch: (s: Partial<ServiceSettings>) => void }) {

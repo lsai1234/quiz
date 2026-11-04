@@ -17,11 +17,10 @@ describe('charge levels: a bigger box comes with more', () => {
     expect(v.next).toBeNull()
   })
 
-  it('climbs on a one-off box too once a partner service is on', () => {
-    const v = chargeView({ count: 2, plan: 'oneoff', services: { ...DEFAULT_SERVICES, pharmacistCheck: true, vitaminDTest: true }, ratePct })
-    expect(v.levels.map((l) => l.id)).toEqual(['charged', 'supercharged', 'fully'])
-    expect(v.next).toEqual({ id: 'supercharged', name: 'Supercharged', more: 2 })
-    expect(ids(v, false)).toEqual(['pharmacistCheck', 'vitaminDTest'])
+  it('adds the guarantee to every box once it is switched on, with no levels to climb on a one-off', () => {
+    const v = chargeView({ count: 6, plan: 'oneoff', services: { ...DEFAULT_SERVICES, guarantee: true }, ratePct })
+    expect(ids(v, true)).toEqual(['guide', 'reminders', 'checkIns', 'guarantee'])
+    expect(v.levels).toEqual([])
   })
 
   it('names the monthly rate it is on and the next one', () => {
@@ -36,8 +35,8 @@ describe('charge levels: a bigger box comes with more', () => {
   })
 
   it('never mentions a service that is switched off', () => {
-    const v = chargeView({ count: 9, plan: 'subscription', services: { checkIns: false, guarantee: false, pharmacistCheck: false, vitaminDTest: false }, ratePct })
+    const v = chargeView({ count: 9, plan: 'subscription', services: { checkIns: false, guarantee: false }, ratePct })
     expect(v.services.map((s) => s.id)).not.toEqual(expect.arrayContaining(['checkIns']))
-    expect(JSON.stringify(v)).not.toMatch(/pharmacist|vitamin D|guarantee/i)
+    expect(JSON.stringify(v)).not.toMatch(/guarantee/i)
   })
 })

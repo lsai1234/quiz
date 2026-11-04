@@ -64,18 +64,17 @@ describe('every order gets a stack guide', () => {
     expect((await getGuide(token!))?.plan).toBe('subscription')
   })
 
-  it('flags a Supercharged box for the pharmacist check only while the switch is on', async () => {
-    const make = (n: number) =>
+  it('flags an order for the first-box guarantee only while the switch is on', async () => {
+    const make = () =>
       createOrderFromCheckout({
         channel: 'quiz', email: null, status: 'paid',
-        lines: MOCK_CATALOGUE.slice(0, n).map((p) => ({ sku: null, productId: p.id, title: p.id, quantity: 1, unitPrice: 10 })),
+        lines: MOCK_CATALOGUE.slice(0, 2).map((p) => ({ sku: null, productId: p.id, title: p.id, quantity: 1, unitPrice: 10 })),
       }).then((o) => getOrder(o.id))
-    expect((await make(4))?.services).toBeUndefined()
-    await saveServiceSettings({ pharmacistCheck: true })
-    const big = await make(4)
-    expect(big?.services).toEqual(['pharmacistCheck'])
-    expect(big?.events.some((e) => e.type === 'service' && /Pharmacist check/.test(e.detail ?? ''))).toBe(true)
-    expect((await make(2))?.services).toBeUndefined()
-    await saveServiceSettings({ pharmacistCheck: false })
+    expect((await make())?.services).toBeUndefined()
+    await saveServiceSettings({ guarantee: true })
+    const flagged = await make()
+    expect(flagged?.services).toEqual(['guarantee'])
+    expect(flagged?.events.some((e) => e.type === 'service' && /guarantee/.test(e.detail ?? ''))).toBe(true)
+    await saveServiceSettings({ guarantee: false })
   })
 })

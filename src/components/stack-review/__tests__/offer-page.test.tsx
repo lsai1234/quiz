@@ -225,23 +225,17 @@ it('says what the box comes with, and the monthly rate its size earns', async ()
   expect(services.querySelector('[data-service="rate"][data-unlocked="true"]')).toHaveTextContent(/^\d+% off every month$/)
   expect(services.querySelector('[data-charge-level]')).toHaveTextContent(/^(Charged|Supercharged|Fully charged)$/)
   // Switched off in the hub, so never said.
-  expect(services.textContent).not.toMatch(/pharmacist|vitamin D|guarantee/i)
+  expect(services.textContent).not.toMatch(/guarantee/i)
   expect(box.querySelector('[data-box-cta]')).toHaveTextContent(/^Start monthly · £.* a month$/)
 })
 
-it('names a partner service, and the level it comes with, once the hub switches it on', async () => {
-  offer = { ...everything(), services: { checkIns: true, guarantee: true, pharmacistCheck: true, vitaminDTest: false } }
+it('names the guarantee, with its conditions and terms beside it, once the hub switches it on', async () => {
+  offer = { ...everything(), services: { checkIns: true, guarantee: true } }
   render(<StackReviewPage reducedMotion />)
   const box = await screen.findByRole('region', { name: 'Your box' })
-  const services = box.querySelector<HTMLElement>('[data-box-services]')!
-  const pharmacist = services.querySelector<HTMLElement>('[data-service="pharmacistCheck"]')!
-  expect(pharmacist).toHaveTextContent('A UK pharmacist checks your box')
-  // The guarantee carries its conditions and terms beside it.
-  const guarantee = services.querySelector<HTMLElement>('[data-service="guarantee"]')!
+  const guarantee = box.querySelector<HTMLElement>('[data-box-services] [data-service="guarantee"]')!
   expect(guarantee).toHaveTextContent('First box only, one per customer.')
   expect(within(guarantee).getByRole('link', { name: 'Guarantee terms' })).toHaveAttribute('href', '/legal/guarantee')
-  // A two-product starting box is under Supercharged: the check is locked, and it says how far.
-  if (pharmacist.dataset.unlocked === 'false') expect(services.querySelector('[data-next-level]')).toHaveTextContent(/more products? for Supercharged/)
 })
 
 it('never says "free" about the gift without its conditions and the terms beside it', async () => {

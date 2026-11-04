@@ -4,9 +4,7 @@
  *
  * A service is named only while it is switched on in the Founders Hub
  * (`ServiceSettings`), and says what the customer gets, never what it does for
- * their health. The pharmacist check is a safety review of the box against
- * what they told us, not advice on what to take; the vitamin D test returns a
- * number from an accredited lab, not a diagnosis.
+ * their health.
  */
 import type { ChargeLevelId } from './levels'
 
@@ -25,8 +23,6 @@ export const LEVEL_COPY = {
     checkIns: 'Amp checks in every two weeks, and your box changes in one tap',
     swaps: 'Swap any product, any time',
     guarantee: 'First-box guarantee: not right for you? Your money back on the first box',
-    pharmacistCheck: 'A UK pharmacist checks your box against what you told us',
-    vitaminDTest: 'An at-home vitamin D test, through an accredited lab',
     rate: (pct: number) => `${pct}% off every month`,
   },
   /** Beside the guarantee, wherever it is said. */

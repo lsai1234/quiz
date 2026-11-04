@@ -392,13 +392,13 @@ export interface Order {
   guideToken?: string | null
   /**
    * The box services this order qualified for when it was paid (Option 1),
-   * for the founders to action: a pharmacist check before it ships, a vitamin
-   * D kit to send, the first-box guarantee. Each also on the audit trail.
+   * for the founders to know about: the first-box guarantee. Also on the
+   * audit trail.
    */
   services?: PartnerService[]
 }
 
-export type PartnerService = 'pharmacistCheck' | 'vitaminDTest' | 'guarantee'
+export type PartnerService = 'guarantee'
 
 /** What `createOrderFromCheckout` needs to raise a paid order. */
 export interface CreateOrderInput {

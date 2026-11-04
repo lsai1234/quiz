@@ -195,8 +195,6 @@ export function levelCopyRows(): ReviewRow[] {
     ['Level wording', where, c.service.guarantee, 'Every box, only while the guarantee is switched on'],
     ['Level wording', where, c.guaranteeConditions, 'Beside the guarantee, wherever it is said'],
     ['Level wording', where, c.guaranteeTerms, 'Link to /legal/guarantee'],
-    ['Level wording', where, c.service.pharmacistCheck, 'Supercharged, only while a partner pharmacy is switched on. A safety review, never advice'],
-    ['Level wording', where, c.service.vitaminDTest, 'Fully charged, only while a lab partner is switched on'],
     ['Level wording', where, c.service.rate(15), 'Monthly: a level’s rate. Example'],
   ]
 }

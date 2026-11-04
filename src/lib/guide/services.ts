@@ -24,19 +24,19 @@ export async function guideServices(plan: 'oneoff' | 'subscription', products: r
   }
 }
 
-const PARTNER: readonly string[] = ['pharmacistCheck', 'vitaminDTest', 'guarantee']
+const PARTNER: readonly string[] = ['guarantee']
 
 /** The partner services a paid box qualified for, for the founders to action. */
 export async function partnerServices(
   plan: 'oneoff' | 'subscription',
   count: number,
-): Promise<('pharmacistCheck' | 'vitaminDTest' | 'guarantee')[]> {
+): Promise<'guarantee'[]> {
   try {
     const { getOfferSettings } = await import('@/lib/offer/store')
     const settings = await getOfferSettings()
     return chargeView({ count, plan, services: settings.services, ratePct: () => 0 })
       .services.filter((s) => s.unlocked && PARTNER.includes(s.id))
-      .map((s) => s.id as 'pharmacistCheck' | 'vitaminDTest' | 'guarantee')
+      .map((s) => s.id as 'guarantee')
   } catch {
     return []
   }

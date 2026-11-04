@@ -215,7 +215,7 @@ export interface MemberSubscription {
   guideSeed?: GuideSeed | null
   guideToken?: string | null
   /** Box services the plan qualified for when it started — see `Order.services`. */
-  services?: ('pharmacistCheck' | 'vitaminDTest' | 'guarantee')[]
+  services?: 'guarantee'[]
   /** Flat amount billed every month. */
   flatMonthly: number
   /**

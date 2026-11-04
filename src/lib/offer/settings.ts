@@ -182,28 +182,22 @@ export const DEFAULT_BONUS: BonusSettings = {
 
 /**
  * Settings → Offer → "Box services" (Option 1): what a box comes with beyond its
- * products. Check-ins run for every box unless switched off. The other three
- * are promises to customers with a partner or terms behind them, so they are
- * off until the founders turn them on: a pharmacy signed for the box check, a
- * lab for the vitamin D test, and the guarantee's terms agreed
- * (`/legal/guarantee`). Off, nothing anywhere mentions them.
+ * products. Check-ins run for every box unless switched off. The first-box
+ * guarantee is a promise about money, so it is off until the founders agree
+ * its terms (`/legal/guarantee`). Off, nothing anywhere mentions it.
  */
 export interface ServiceSettings {
   checkIns: boolean
   guarantee: boolean
-  pharmacistCheck: boolean
-  vitaminDTest: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, pharmacistCheck: false, vitaminDTest: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
   return {
     checkIns: r.checkIns !== false,
     guarantee: r.guarantee === true,
-    pharmacistCheck: r.pharmacistCheck === true,
-    vitaminDTest: r.vitaminDTest === true,
   }
 }
 

@@ -17,9 +17,7 @@ import { buildGuide, normaliseGuideSeed, type GuideLine, type StackGuide } from 
 import { newGuideToken, saveGuide } from './store'
 
 /** What the founders see on the order's audit trail. */
-const SERVICE_EVENT: Record<'pharmacistCheck' | 'vitaminDTest' | 'guarantee', string> = {
-  pharmacistCheck: 'Pharmacist check: review this box against the safety answers before it ships',
-  vitaminDTest: 'Vitamin D test: send the kit with this order',
+const SERVICE_EVENT: Record<'guarantee', string> = {
   guarantee: 'First-box guarantee applies to this order',
 }
 

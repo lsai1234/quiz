@@ -1,16 +1,15 @@
 /**
- * Charge levels (Option 1, levels that unlock a service): the box's size,
- * named, and what each size comes with.
+ * Charge levels (Option 1): the box's size, named, and what it comes with.
  *
- *   Charged        any box             the services every box gets
- *   Supercharged   4 or more products  + the pharmacist check, the 15% rate
- *   Fully charged  6 or more           + the vitamin D test, the 20% rate
+ *   Charged        any box             the services every box gets, 13% monthly
+ *   Supercharged   4 or more products  15% monthly
+ *   Fully charged  6 or more           20% monthly
  *
  * The steps are the box's own (`LEVEL_FROM` in `./box`), which already set the
  * monthly rate, so a level and its rate always agree. One-off and monthly get
- * the same services; the rate is monthly only. A service shows only while its
- * switch is on (`ServiceSettings`): with the partner services off, a one-off box
- * has no levels to climb, and says only what it comes with.
+ * the same services; the levels only add the monthly rate, so a one-off box
+ * has no levels to climb and says only what it comes with. A service shows
+ * only while its switch is on (`ServiceSettings`).
  *
  * Pure. Nothing here prices anything: the rates are read, not set.
  */
@@ -20,7 +19,7 @@ import { LEVEL_COPY } from './levels-copy'
 import type { ServiceSettings } from './settings'
 
 export type ChargeLevelId = 'charged' | 'supercharged' | 'fully'
-export type ServiceId = 'guide' | 'reminders' | 'checkIns' | 'swaps' | 'guarantee' | 'pharmacistCheck' | 'vitaminDTest' | 'rate'
+export type ServiceId = 'guide' | 'reminders' | 'checkIns' | 'swaps' | 'guarantee' | 'rate'
 
 const LEVEL_OF: Record<StackLevel, ChargeLevelId> = { essentials: 'charged', performance: 'supercharged', complete: 'fully' }
 const ORDER: ChargeLevelId[] = ['charged', 'supercharged', 'fully']
@@ -68,8 +67,6 @@ export function chargeView(input: {
     ...(on.checkIns ? [{ id: 'checkIns' as const, label: c.checkIns, level: 'charged' as const }] : []),
     ...(sub ? [{ id: 'swaps' as const, label: c.swaps, level: 'charged' as const }] : []),
     ...(on.guarantee ? [{ id: 'guarantee' as const, label: c.guarantee, level: 'charged' as const }] : []),
-    ...(on.pharmacistCheck ? [{ id: 'pharmacistCheck' as const, label: c.pharmacistCheck, level: 'supercharged' as const }] : []),
-    ...(on.vitaminDTest ? [{ id: 'vitaminDTest' as const, label: c.vitaminDTest, level: 'fully' as const }] : []),
   ]
   // Monthly: each level's rate, as a service of that level.
   if (sub) {
