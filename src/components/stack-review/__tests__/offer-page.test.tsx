@@ -230,7 +230,7 @@ it('says what the box comes with, and the monthly rate its size earns', async ()
 })
 
 it('names the guarantee, with its conditions and terms beside it, once the hub switches it on', async () => {
-  offer = { ...everything(), services: { checkIns: true, guarantee: true } }
+  offer = { ...everything(), services: { checkIns: true, guarantee: true, training: false } }
   render(<StackReviewPage reducedMotion />)
   const box = await screen.findByRole('region', { name: 'Your box' })
   const guarantee = box.querySelector<HTMLElement>('[data-box-services] [data-service="guarantee"]')!

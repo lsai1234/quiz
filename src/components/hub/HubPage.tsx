@@ -7,6 +7,7 @@ import { HubShell } from './HubShell'
 import { HubSkeleton } from './HubSkeleton'
 import { NoSubscription } from './NoSubscription'
 import { SubscriptionDashboard } from './SubscriptionDashboard'
+import { TrainingCard } from './TrainingCard'
 import { YourData } from './YourData'
 
 export function HubPage() {
@@ -66,6 +67,10 @@ export function HubPage() {
   if (!subscription) {
     return (
       <HubShell onSignOut={logout}>
+        {/* A one-off order opens the training plan too: first, when it's there. */}
+        <div className="empty:hidden mb-6">
+          <TrainingCard />
+        </div>
         <NoSubscription name={session.name} email={session.email} onSignOut={logout} />
         <div className="mt-10">
           <YourData />
@@ -77,6 +82,9 @@ export function HubPage() {
   return (
     <HubShell onSignOut={logout}>
       <SubscriptionDashboard />
+      <div className="empty:hidden mt-8">
+        <TrainingCard />
+      </div>
       <div className="mt-10">
         <YourData />
       </div>

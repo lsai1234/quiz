@@ -189,15 +189,21 @@ export const DEFAULT_BONUS: BonusSettings = {
 export interface ServiceSettings {
   checkIns: boolean
   guarantee: boolean
+  /**
+   * The training plan in the hub. Off until a qualified coach has reviewed the
+   * exercise library (`lib/training/library`); off, nothing mentions it.
+   */
+  training: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
   return {
     checkIns: r.checkIns !== false,
     guarantee: r.guarantee === true,
+    training: r.training === true,
   }
 }
 

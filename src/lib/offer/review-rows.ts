@@ -190,6 +190,7 @@ export function levelCopyRows(): ReviewRow[] {
     ['Level wording', where, c.at(c.level.fully), 'Beside a locked service. Example'],
     ['Level wording', where, c.service.guide, 'Every box'],
     ['Level wording', where, c.service.reminders, 'Every box'],
+    ['Level wording', where, c.service.training, 'Every box, only while the training plan is switched on'],
     ['Level wording', where, c.service.checkIns, 'Every box, while check-ins are on'],
     ['Level wording', where, c.service.swaps, 'Monthly boxes'],
     ['Level wording', where, c.service.guarantee, 'Every box, only while the guarantee is switched on'],

@@ -160,6 +160,32 @@ export async function hasOtherOrder(who: { userId?: string | null; email?: strin
 }
 
 /**
+ * A customer's most recent order past payment, by account or by email: what
+ * opens their hub for 90 days (the training plan reads it). Cancelled,
+ * refunded and failed orders open nothing.
+ */
+export async function latestPaidOrderFor(who: { userId?: string | null; email?: string | null }): Promise<Order | null> {
+  const email = who.email?.trim().toLowerCase() || null
+  if (!email && !who.userId) return null
+  const db = await getEngine()
+  const clauses: string[] = []
+  const args: string[] = []
+  if (email) {
+    clauses.push('LOWER(email) = ?')
+    args.push(email)
+  }
+  if (who.userId) {
+    clauses.push('user_id = ?')
+    args.push(who.userId)
+  }
+  const row = await db.get<Row>(
+    `SELECT data FROM orders WHERE (${clauses.join(' OR ')}) AND status NOT IN ('pending_payment', 'cancelled', 'failed', 'refunded') ORDER BY created_at DESC LIMIT 1`,
+    args,
+  )
+  return parse(row)
+}
+
+/**
  * Whether this member had a subscription order before the given moment.
  *
  * Decides whether an attributed subscription order earns the first-order rate

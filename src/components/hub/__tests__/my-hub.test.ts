@@ -32,6 +32,7 @@ const FILES = [
   ...walk('src/components/partner'),
   ...walk('src/components/auth'),
   ...walk('src/components/subscription'),
+  ...walk('src/components/training'),
 ]
 const SYSTEM_CSS = readFileSync('src/app/system.css', 'utf8')
 

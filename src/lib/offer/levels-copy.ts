@@ -20,6 +20,7 @@ export const LEVEL_COPY = {
   service: {
     guide: 'Your stack guide: when to take each one, on your day',
     reminders: 'Reminders at your times, in your calendar',
+    training: 'A weekly training plan in your hub, built from your answers and yours to change',
     checkIns: 'Amp checks in every two weeks, and your box changes in one tap',
     swaps: 'Swap any product, any time',
     guarantee: 'First-box guarantee: not right for you? Your money back on the first box',

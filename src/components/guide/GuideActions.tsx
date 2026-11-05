@@ -2,6 +2,7 @@
 
 import { buttonSurface } from '@/components/system'
 import { GUIDE_COPY } from '@/lib/guide/copy'
+import { TRAINING_COPY } from '@/lib/training/copy'
 
 /** The guide page's two actions: the calendar file, and the image to keep. */
 export function GuideActions({ token }: { token: string }) {
@@ -16,5 +17,15 @@ export function GuideActions({ token }: { token: string }) {
         {GUIDE_COPY.saveImage}
       </a>
     </div>
+  )
+}
+
+/** Into the training plan in their hub, when it's switched on. */
+export function GuideTrainingLink() {
+  const link = buttonSurface('secondary', 'md')
+  return (
+    <a href="/myhub/training" className={link.className} style={link.style} data-guide-training>
+      {TRAINING_COPY.guideLink}
+    </a>
   )
 }

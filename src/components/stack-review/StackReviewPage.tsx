@@ -830,6 +830,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           goals: [answers.primaryGoal, ...(answers.goals ?? [])].filter(Boolean),
           firstName: answers.name ?? null,
           stackName: activeBlueprint.stackName ?? null,
+          // For the training plan's first setup: how they train, not anything about their health.
+          training: { types: answers.trainingType ?? [], experience: answers.trainingExperience ?? null, focus: answers.trainingFocus ?? null },
         },
       }),
     [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel, routineDay],

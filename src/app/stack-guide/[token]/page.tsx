@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Card, Ground } from '@/components/system'
-import { GuideActions } from '@/components/guide/GuideActions'
+import { GuideActions, GuideTrainingLink } from '@/components/guide/GuideActions'
+import { getOfferSettings } from '@/lib/offer/store'
 import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { getGuide } from '@/lib/guide/store'
 import { longDate } from '@/lib/guide/build'
@@ -35,6 +36,7 @@ const eyebrow = {
 export default async function GuidePage({ params }: Props) {
   const { token } = await params
   const guide = await getGuide(token)
+  const training = guide ? (await getOfferSettings()).services.training : false
 
   return (
     <Ground className="my-hub">
@@ -49,14 +51,14 @@ export default async function GuidePage({ params }: Props) {
             <p style={{ color: 'var(--ink-2)', fontSize: 'var(--text-body)' }}>{GUIDE_COPY.notFound}</p>
           </Card>
         ) : (
-          <GuideBody guide={guide} />
+          <GuideBody guide={guide} training={training} />
         )}
       </main>
     </Ground>
   )
 }
 
-function GuideBody({ guide }: { guide: NonNullable<Awaited<ReturnType<typeof getGuide>>> }) {
+function GuideBody({ guide, training }: { guide: NonNullable<Awaited<ReturnType<typeof getGuide>>>; training: boolean }) {
   const timed = guide.routine.moments.filter((m) => m.minutes !== null)
   return (
     <article style={{ display: 'flex', flexDirection: 'column', gap: 'var(--stack)' }} data-guide>
@@ -163,6 +165,11 @@ function GuideBody({ guide }: { guide: NonNullable<Awaited<ReturnType<typeof get
               <li key={s} style={{ color: 'var(--ink-1)', fontSize: 'var(--text-body-sm)' }}>✓ {s}</li>
             ))}
           </ul>
+          {training && (
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <GuideTrainingLink />
+            </div>
+          )}
         </Card>
       )}
 

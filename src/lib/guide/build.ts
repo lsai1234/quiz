@@ -19,6 +19,7 @@ import { productClaim } from '@/lib/results/goal-claims'
 import { normaliseDay, routineFor, type Routine, type RoutineDay } from '@/lib/routine'
 import { spokenClock } from '@/lib/routine/ring'
 import { USAGE_SERVINGS_PER_OCCASION, type UsageLevel } from '@/lib/stack-blueprint/pricing'
+import { normaliseTrainingSeed, type TrainingSeed } from '@/lib/training/seed'
 
 /** What the checkout carries for the guide. Checked before use. */
 export interface GuideSeed {
@@ -26,6 +27,8 @@ export interface GuideSeed {
   goals: Goal[]
   firstName: string | null
   stackName: string | null
+  /** Their training answers, for the training plan's first setup (`lib/training/prefs`). */
+  training?: TrainingSeed | null
 }
 
 export interface GuideProduct {
@@ -79,11 +82,13 @@ export function normaliseGuideSeed(raw: unknown): GuideSeed {
     return t ? t.slice(0, max) : null
   }
   const first = text(s.firstName, 40)?.split(/\s+/)[0] ?? null
+  const training = normaliseTrainingSeed(s.training)
   return {
     day: normaliseDay(s.day),
     goals: Array.isArray(s.goals) ? s.goals.filter((g): g is Goal => (ALL_GOALS as readonly string[]).includes(g as string)).slice(0, 6) : [],
     firstName: first ? first.charAt(0).toUpperCase() + first.slice(1) : null,
     stackName: text(s.stackName, 60),
+    ...(training ? { training } : {}),
   }
 }
 
