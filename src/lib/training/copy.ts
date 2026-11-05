@@ -106,6 +106,38 @@ export const TRAINING_COPY = {
   removeSession: 'Remove',
   progressionTip: 'When the top of the range feels easy for every set, add a little weight or a rep next time.',
 
+  /* ── Logging and the next step ── */
+  logKg: 'kg',
+  logReps: 'Reps',
+  logSeconds: 'Seconds',
+  logSave: 'Save',
+  logSaved: 'Saved',
+  logLabel: (name: string) => `What you did on ${name}: your best set`,
+  lastTime: (weightKg: number | null, reps: number | null, seconds: boolean) =>
+    `Last time: ${[weightKg ? `${weightKg} kg` : null, reps ? (seconds ? `${reps} s` : `${reps} reps`) : null].filter(Boolean).join(' × ')}`,
+  todayLogged: (weightKg: number | null, reps: number | null, seconds: boolean) =>
+    `Today: ${[weightKg ? `${weightKg} kg` : null, reps ? (seconds ? `${reps} s` : `${reps} reps`) : null].filter(Boolean).join(' × ')}`,
+  nextWeight: (kg: number) => `Next time, try ${kg} kg`,
+  nextReps: (reps: number) => `Next time, try ${reps} reps`,
+  nextSeconds: (s: number) => `Next time, try ${s} s`,
+  nextHarder: (name: string) => `Ready for the harder version: ${name}`,
+  nextSame: 'Next time, aim for the top of the range',
+
+  /* ── Rest timer ── */
+  restFor: (clock: string) => `Rest ${clock}`,
+  restSkip: 'Skip rest',
+  restDone: 'Rest done. Next set when you’re ready.',
+
+  /* ── Today, and the calendar ── */
+  todayTitle: 'Today',
+  nextTitle: (day: string) => `Next: ${day}`,
+  start: 'Start',
+  allDone: 'Everything’s done this week. Nice work.',
+  calendar: 'Add my week to my calendar',
+  calendarNote: 'Your sessions as calendar events at your usual time. Download it again after you change your plan.',
+  calendarEvent: (name: string, minutes: number) => `Training: ${name} (${minutes} min)`,
+  calendarBody: 'Open your plan for the exercises, sets and how to do each one.',
+
   /* ── An exercise ── */
   how: 'How to do it',
   cues: 'Think about',

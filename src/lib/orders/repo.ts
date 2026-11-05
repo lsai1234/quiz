@@ -186,6 +186,31 @@ export async function latestPaidOrderFor(who: { userId?: string | null; email?: 
 }
 
 /**
+ * A customer's orders past payment since a moment, newest first, by account
+ * or by email: what their hub's member deals are worked out from.
+ */
+export async function listPaidOrdersFor(who: { userId?: string | null; email?: string | null }, sinceIso: string, limit = 50): Promise<Order[]> {
+  const email = who.email?.trim().toLowerCase() || null
+  if (!email && !who.userId) return []
+  const db = await getEngine()
+  const clauses: string[] = []
+  const args: string[] = []
+  if (email) {
+    clauses.push('LOWER(email) = ?')
+    args.push(email)
+  }
+  if (who.userId) {
+    clauses.push('user_id = ?')
+    args.push(who.userId)
+  }
+  const rows = await db.all<Row>(
+    `SELECT data FROM orders WHERE (${clauses.join(' OR ')}) AND status NOT IN ('pending_payment', 'cancelled', 'failed', 'refunded') AND created_at >= ? ORDER BY created_at DESC LIMIT ${Math.max(1, Math.min(limit, 200))}`,
+    [...args, sinceIso],
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
+}
+
+/**
  * Whether this member had a subscription order before the given moment.
  *
  * Decides whether an attributed subscription order earns the first-order rate

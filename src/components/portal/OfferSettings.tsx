@@ -95,6 +95,7 @@ export function OfferSettings() {
 const SERVICE_ROWS: { key: keyof ServiceSettings; title: string; level: string; note: string }[] = [
   { key: 'checkIns', title: 'Amp check-ins', level: 'Every box', note: 'An email every two weeks after an order: 30 seconds on their days, training and what they use, and one-tap changes to the box.' },
   { key: 'training', title: 'Training plan', level: 'Every box', note: 'A weekly training plan in the hub, built from their answers and theirs to change, open for 90 days after any order or while on a monthly plan. Turn on once a qualified coach has reviewed the exercise library (review pack, Training).' },
+  { key: 'deals', title: 'Member deals', level: 'Every box', note: 'A price in the hub on each product a member has bought, opening a week before it is due to run out and ending with their hub. Priced like the one-product deal (Pricing → Last-chance offer): free delivery first, then the deepest percent off that still keeps your floor. No profitable deal, no deal.' },
   { key: 'guarantee', title: 'First-box guarantee', level: 'Every box', note: 'Money back on the first box if it isn’t right. Turn on once the terms at /legal/guarantee are agreed; refunds are made by hand from the order.' },
 ]
 

@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge, Button, Card, ChargeMeter, Note } from '@/components/system'
+import { Badge, Button, Card, ChargeMeter, Note, buttonSurface } from '@/components/system'
 import { FOCUS_COPY, SPLIT_COPY, TRAINING_COPY as C, WEEKDAY_LONG, areasPhrase } from '@/lib/training/copy'
 import { weekdayOf } from '@/lib/training/generate'
 import type { TrainingAction, TrainingState } from '@/lib/training/state'
 import { WEEKDAYS, type Session, type TrainingPlan } from '@/lib/training/types'
-import { longDay, progressOf, sessionSummary, sessionTitle } from '@/lib/training/view'
+import { longDay, nextSession, progressOf, sessionSummary, sessionTitle } from '@/lib/training/view'
 import { ChangePlanSheet } from './ChangePlanSheet'
 import { SessionSheet } from './SessionSheet'
 import { body, display, eyebrow, meta, stack, strong } from './styles'
@@ -52,6 +52,8 @@ export function Week({ state, plan, act, busy, error }: { state: TrainingState; 
           </div>
         </div>
       </Card>
+
+      <Up plan={plan} today={today} onOpen={setOpenId} />
 
       {error && (
         <Note tone="critical" live="assertive">
@@ -100,13 +102,22 @@ export function Week({ state, plan, act, busy, error }: { state: TrainingState; 
         })}
       </ol>
 
+      <div style={stack('var(--space-1)')}>
+        <div>
+          <a href="/api/hub/training/calendar" className={buttonSurface('secondary', 'sm').className} style={buttonSurface('secondary', 'sm').style} data-training-calendar>
+            {C.calendar}
+          </a>
+        </div>
+        <p style={meta}>{C.calendarNote}</p>
+      </div>
+
       <footer style={stack('var(--space-2)')}>
         {plan.prefs.avoid.length > 0 && <p style={meta}>{C.workingAround(areasPhrase(plan.prefs.avoid))}</p>}
         <p style={meta}>{C.notMedical}</p>
         <p style={meta}>{state.access.via === 'order' && state.access.until ? C.openUntil(longDay(state.access.until)) : C.openMonthly}</p>
       </footer>
 
-      {open && <SessionSheet session={open} prefs={plan.prefs} tutorials={state.tutorials} act={act} busy={busy} onClose={() => setOpenId(null)} />}
+      {open && <SessionSheet session={open} plan={plan} prefs={plan.prefs} tutorials={state.tutorials} act={act} busy={busy} onClose={() => setOpenId(null)} />}
       {changing && <ChangePlanSheet plan={plan} act={act} busy={busy} error={error} onClose={() => setChanging(false)} />}
     </div>
   )
@@ -147,6 +158,29 @@ function SessionCard({ session, act, busy, onOpen }: { session: Session; act: Ac
               {C.open}
             </Button>
           </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+/** The one next thing: today's session, or the next one, a tap from starting. */
+function Up({ plan, today, onOpen }: { plan: TrainingPlan; today: number; onOpen: (id: string) => void }) {
+  const next = nextSession(plan, today as Session['day'])
+  if (!next) return <Note tone="positive">{C.allDone}</Note>
+  const isToday = next.day === today
+  return (
+    <div data-up={next.id}>
+      <Card padding="normal" tone={isToday ? 'accent' : undefined}>
+        <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }}>
+          <div className="min-w-0">
+            <p style={eyebrow}>{isToday ? C.todayTitle : C.nextTitle(WEEKDAY_LONG[next.day])}</p>
+            <p style={{ ...strong, marginTop: 'var(--space-1)' }}>{sessionTitle(next)}</p>
+            <p style={meta}>{sessionSummary(next)}</p>
+          </div>
+          <Button variant="primary" iconRight="chevron-right" onClick={() => onOpen(next.id)} data-start>
+            {C.start}
+          </Button>
         </div>
       </Card>
     </div>

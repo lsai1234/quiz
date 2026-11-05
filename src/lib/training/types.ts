@@ -201,4 +201,18 @@ export interface TrainingPlan {
   seed: number
   /** Sessions done in weeks gone by, newest first, at most 12. */
   history: { weekOf: string; done: number; planned: number }[]
+  /**
+   * What they lifted, by exercise: newest first, at most `LOG_KEEP` each. Kept
+   * across weeks, rebuilds and swaps, so "last time" is always there.
+   */
+  log?: Record<string, LogEntry[]>
+}
+
+export interface LogEntry {
+  /** YYYY-MM-DD. */
+  on: string
+  /** Kilograms used, or null for bodyweight. */
+  weightKg: number | null
+  /** Reps (or seconds, for a timed exercise) in their best set. */
+  reps: number | null
 }

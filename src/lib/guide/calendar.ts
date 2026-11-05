@@ -14,7 +14,7 @@ const BYDAY = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
 
 /** RFC 5545 text: escape, then fold at 75 octets. */
 function esc(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
+  return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
 }
 function fold(line: string): string {
   const out: string[] = []

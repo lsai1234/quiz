@@ -23,6 +23,8 @@ import { normalisePrefs, prefillPrefs } from '@/lib/training/prefs'
 import type { TrainingState } from '@/lib/training/state'
 import { getTraining, saveTraining, type TrainingRecord } from '@/lib/training/store'
 import { getTutorials } from '@/lib/training/tutorials'
+import { isExerciseId } from '@/lib/training/library'
+import { normaliseLog, withLog } from '@/lib/training/progress'
 import { ACTIVITY_KINDS, type ActivityKind, type StrengthSession, type TrainingPlan, type Weekday } from '@/lib/training/types'
 
 /**
@@ -189,6 +191,14 @@ export async function POST(req: Request) {
       const ex = text(body.exerciseId)
       if (!id || !ex || typeof body.doneSets !== 'number' || !Number.isFinite(body.doneSets)) return bad('Which exercise?')
       plan = setSets(current, id, ex, body.doneSets, now)
+      break
+    }
+    case 'log': {
+      const ex = text(body.exerciseId)
+      if (!ex || !isExerciseId(ex)) return bad('Which exercise?')
+      const entry = normaliseLog({ weightKg: body.weightKg, reps: body.reps })
+      if (!entry) return bad('Add a weight or a number of reps')
+      plan = { ...withLog(current, ex, { on: now.toISOString().slice(0, 10), ...entry }), updatedAt: now.toISOString() }
       break
     }
     default:

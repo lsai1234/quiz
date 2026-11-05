@@ -29,4 +29,5 @@ export type TrainingAction =
   | { action: 'rebuild-week' }
   | { action: 'done'; sessionId: string; done: boolean }
   | { action: 'sets'; sessionId: string; exerciseId: string; doneSets: number }
+  | { action: 'log'; exerciseId: string; weightKg: number | null; reps: number | null }
   | { action: 'reset' }

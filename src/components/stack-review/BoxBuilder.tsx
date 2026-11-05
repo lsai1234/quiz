@@ -14,6 +14,7 @@ import type { PlanType } from '@/lib/store'
 import { ProductTile } from './ProductTile'
 import { YourDay } from './YourDay'
 import { BoxServices } from './BoxServices'
+import { HubPreview, type HubPreviewInput } from './HubPreview'
 import type { ChargeView } from '@/lib/offer/levels'
 import type { Routine } from '@/lib/routine'
 import { YOU_PALETTE as P } from './you-palette'
@@ -56,6 +57,7 @@ export function BoxBuilder({
   monthly,
   ladder,
   charge = null,
+  hub = null,
   addOns,
   onAdd,
   giftConditions,
@@ -97,6 +99,8 @@ export function BoxBuilder({
   monthlyMin?: { min: number; now: number } | null
   /** The products switched on, on their day (Option 3). */
   routine?: Routine | null
+  /** What the hub preview needs (`HubPreview`); null for none. */
+  hub?: HubPreviewInput | null
 }) {
   const headingId = useId()
   const [why, setWhy] = useState(false)
@@ -199,6 +203,9 @@ export function BoxBuilder({
 
       {/* What the box comes with: services, and the level that unlocks more. */}
       {charge && onCount > 0 && <BoxServices view={charge} />}
+
+      {/* The hub the order opens, shown: a first training week and member prices. */}
+      {hub && onCount > 0 && <HubPreview input={hub} />}
 
       {/* What the box has unlocked, the next line, and products to add to reach it. */}
       {ladder.rungs.length > 0 && (

@@ -109,6 +109,19 @@ test('a founder switches it on; an order opens it; the member builds and changes
   const exerciseId = (await firstExercise.getAttribute('data-exercise'))!
   await sheet.getByRole('button', { name: /^Tick set 1 of/ }).first().click()
   await expect(sheet.getByText(/^1 of \d sets$/).first()).toBeVisible()
+  // Ticking a set starts the rest timer; it can be skipped.
+  await expect(sheet.locator('[data-rest-timer]')).toBeVisible()
+  await sheet.getByRole('button', { name: 'Skip rest' }).click()
+  await expect(sheet.locator('[data-rest-timer]')).toBeHidden()
+  // Log today's best set, and it's kept.
+  const log = sheet.locator(`[data-log="${exerciseId}"]`)
+  const kg = log.getByLabel('kg')
+  if (await kg.count()) await kg.fill('20')
+  await log.getByLabel(/^(Reps|Seconds)$/).fill('10')
+  await log.locator('[data-log-save]').click()
+  await expect(log.getByText(/^Today: /)).toBeVisible()
+  await expect(log.locator('[data-log-save]')).toHaveText('Saved')
+  if (SHOTS) await sheet.locator(`[data-exercise="${exerciseId}"]`).screenshot({ path: path.join(SHOTS, '5b-log.png') })
   await audit(page, 'session')
   await shot(page, '5-session')
 
@@ -140,6 +153,13 @@ test('a founder switches it on; an order opens it; the member builds and changes
   await page.keyboard.press('Escape')
   await expect(sheet).toBeHidden()
   await expect(week.getByText(/^1 of \d+ done this week$/).first()).toBeVisible()
+
+  // The week as a calendar file, and the next session a tap away.
+  const ics = await page.request.get('/api/hub/training/calendar')
+  expect(ics.status()).toBe(200)
+  expect(await ics.text()).toContain('RRULE:FREQ=WEEKLY')
+  await expect(page.locator('[data-up] [data-start]')).toBeVisible()
+  if (SHOTS) await page.locator('[data-up]').screenshot({ path: path.join(SHOTS, '4b-up.png') })
 
   // Change the plan: one more day.
   await page.locator('[data-change]').click()

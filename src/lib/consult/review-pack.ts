@@ -31,6 +31,7 @@ import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelC
 import { guideCopyRows } from '@/lib/guide/review-rows'
 import { checkInCopyRows } from '@/lib/checkin/review-rows'
 import { trainingCopyRows, trainingLibraryRows } from '@/lib/training/review-rows'
+import { dealCopyRows } from '@/lib/deals/review-rows'
 import { routineCopyRows } from '@/lib/routine/review-rows'
 import { gpCheckRows, habitRows, readCopyRows } from './read-review-rows'
 import { comboRows, hunchRows } from './hunch-review-rows'
@@ -287,6 +288,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...checkInCopyRows(),
     ...trainingCopyRows(),
     ...trainingLibraryRows(),
+    ...dealCopyRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
     ...guaranteeTermRows(),
   ]

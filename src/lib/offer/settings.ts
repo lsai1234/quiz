@@ -194,9 +194,15 @@ export interface ServiceSettings {
    * exercise library (`lib/training/library`); off, nothing mentions it.
    */
   training: boolean
+  /**
+   * Member deals in the hub (`lib/deals`): a profit-floored price on each
+   * product they've bought, opening as it's due to run out. Off until the
+   * founders turn it on; off, nothing mentions it.
+   */
+  deals: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
@@ -204,6 +210,7 @@ export function normaliseServices(raw: unknown): ServiceSettings {
     checkIns: r.checkIns !== false,
     guarantee: r.guarantee === true,
     training: r.training === true,
+    deals: r.deals === true,
   }
 }
 

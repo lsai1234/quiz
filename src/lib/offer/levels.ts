@@ -19,7 +19,7 @@ import { LEVEL_COPY } from './levels-copy'
 import type { ServiceSettings } from './settings'
 
 export type ChargeLevelId = 'charged' | 'supercharged' | 'fully'
-export type ServiceId = 'guide' | 'reminders' | 'training' | 'checkIns' | 'swaps' | 'guarantee' | 'rate'
+export type ServiceId = 'guide' | 'reminders' | 'training' | 'deals' | 'checkIns' | 'swaps' | 'guarantee' | 'rate'
 
 const LEVEL_OF: Record<StackLevel, ChargeLevelId> = { essentials: 'charged', performance: 'supercharged', complete: 'fully' }
 const ORDER: ChargeLevelId[] = ['charged', 'supercharged', 'fully']
@@ -65,6 +65,7 @@ export function chargeView(input: {
     { id: 'guide', label: c.guide, level: 'charged' },
     { id: 'reminders', label: c.reminders, level: 'charged' },
     ...(on.training ? [{ id: 'training' as const, label: c.training, level: 'charged' as const }] : []),
+    ...(on.deals ? [{ id: 'deals' as const, label: c.deals, level: 'charged' as const }] : []),
     ...(on.checkIns ? [{ id: 'checkIns' as const, label: c.checkIns, level: 'charged' as const }] : []),
     ...(sub ? [{ id: 'swaps' as const, label: c.swaps, level: 'charged' as const }] : []),
     ...(on.guarantee ? [{ id: 'guarantee' as const, label: c.guarantee, level: 'charged' as const }] : []),

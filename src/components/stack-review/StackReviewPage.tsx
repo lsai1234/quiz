@@ -817,6 +817,19 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
   */
   const [addressOpen, setAddressOpen] = useState(false)
 
+  /** The guide seed the order carries, and the hub preview reads: their day, goals, name and training answers. */
+  const guideSeed = useMemo(
+    () => ({
+      day: routineDay,
+      goals: [answers.primaryGoal, ...(answers.goals ?? [])].filter(Boolean),
+      firstName: answers.name ?? null,
+      stackName: activeBlueprint.stackName ?? null,
+      // For the training plan's first setup: how they train, not anything about their health.
+      training: { types: answers.trainingType ?? [], experience: answers.trainingExperience ?? null, focus: answers.trainingFocus ?? null },
+    }),
+    [routineDay, answers.primaryGoal, answers.goals, answers.name, answers.trainingType, answers.trainingExperience, answers.trainingFocus, activeBlueprint.stackName],
+  )
+
   const placeOrder = useCallback(
     (deliveryAddress?: SupplierAddress | null) =>
       checkout(activeBlueprint, products, starterPlanType ?? planType, answers, {
@@ -825,16 +838,9 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         claimingStarter: claiming,
         bonus: bonus ? { productId: bonus.product.id, level: activeLevel } : null,
         // The stack guide's seed: their day, goals and first name. Checked on the server.
-        guide: {
-          day: routineDay,
-          goals: [answers.primaryGoal, ...(answers.goals ?? [])].filter(Boolean),
-          firstName: answers.name ?? null,
-          stackName: activeBlueprint.stackName ?? null,
-          // For the training plan's first setup: how they train, not anything about their health.
-          training: { types: answers.trainingType ?? [], experience: answers.trainingExperience ?? null, focus: answers.trainingFocus ?? null },
-        },
+        guide: guideSeed,
       }),
-    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel, routineDay],
+    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming, bonus, activeLevel, guideSeed],
   )
 
   /*
@@ -1319,6 +1325,13 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         messages={checkoutState.status === 'error' ? checkoutState.messages : []}
         onCtaRef={setOfferCtaEl}
         routine={routine}
+        hub={{
+          productIds: activeSlots.map((sl) => sl.selectedProductId).filter((id): id is string => Boolean(id)),
+          plan: canSubscribeStack && planType === 'subscription' ? 'subscription' : 'oneoff',
+          guide: guideSeed,
+          training: offerSettings.services.training,
+          deals: offerSettings.services.deals,
+        }}
         monthlyMin={
           !canSubscribeStack && founderKind == null && pricing.subscriptionItemCount > 0 && !pricing.subscriptionMinOrderMet
             ? { min: getPricingConfig().minSubscriptionMonthly, now: pricing.subscriptionTotal }

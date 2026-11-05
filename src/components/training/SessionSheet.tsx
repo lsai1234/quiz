@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Button, Modal, ModalBody, ModalFooter, ModalHeader, Note, OptionRow, Select, buttonSurface } from '@/components/system'
+import { Badge, Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Note, OptionRow, Select, buttonSurface } from '@/components/system'
 import { INTENSITY_COPY, MUSCLE_COPY, TRAINING_COPY as C, WEEKDAY_LONG, areasPhrase } from '@/lib/training/copy'
 import { activityConflicts, alternativesFor } from '@/lib/training/generate'
 import { ACTIVITIES, exerciseById } from '@/lib/training/library'
 import type { TrainingAction } from '@/lib/training/state'
-import { WEEKDAYS, type ActivitySession, type Session, type StrengthSession, type TrainingPrefs, type Weekday } from '@/lib/training/types'
+import { WEEKDAYS, type ActivitySession, type PlannedExercise, type Session, type StrengthSession, type TrainingPlan, type TrainingPrefs, type Weekday } from '@/lib/training/types'
+import { lastTime, nextStep, todays, type NextStep } from '@/lib/training/progress'
 import { doseLine, sessionSummary, sessionTitle } from '@/lib/training/view'
 import { body, eyebrow, meta, stack, strong } from './styles'
 
@@ -19,6 +20,7 @@ type Act = (a: TrainingAction) => Promise<boolean>
  */
 export function SessionSheet({
   session,
+  plan,
   prefs,
   tutorials,
   act,
@@ -26,6 +28,7 @@ export function SessionSheet({
   onClose,
 }: {
   session: Session
+  plan: TrainingPlan
   prefs: TrainingPrefs
   tutorials: Record<string, string>
   act: Act
@@ -53,7 +56,7 @@ export function SessionSheet({
             }}
           />
         ) : session.type === 'strength' ? (
-          <StrengthBody session={session} prefs={prefs} act={act} busy={busy} onOpen={(id, main) => setDetail({ id, main })} />
+          <StrengthBody session={session} plan={plan} prefs={prefs} act={act} busy={busy} onOpen={(id, main) => setDetail({ id, main })} />
         ) : (
           <ActivityBody session={session} prefs={prefs} tutorial={tutorials[session.activity] ?? null} />
         )}
@@ -88,19 +91,24 @@ function Safety({ prefs }: { prefs: TrainingPrefs }) {
 
 function StrengthBody({
   session,
+  plan,
   prefs,
   act,
   busy,
   onOpen,
 }: {
   session: StrengthSession
+  plan: TrainingPlan
   prefs: TrainingPrefs
   act: Act
   busy: string | null
   onOpen: (id: string, main: boolean) => void
 }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const timer = useRestTimer()
   return (
     <div style={stack('var(--space-5)')}>
+      {timer.view}
       {session.warmup.length > 0 && (
         <section>
           <h3 style={eyebrow}>{C.warmupTitle}</h3>
@@ -114,7 +122,7 @@ function StrengthBody({
       )}
       <section>
         <h3 style={{ ...eyebrow, marginBottom: 'var(--space-2)' }}>{C.mainTitle}</h3>
-        <ol style={stack('var(--space-4)')}>
+        <ol style={stack('var(--space-5)')}>
           {session.exercises.map((p) => {
             const ex = exerciseById(p.id)
             if (!ex) return null
@@ -133,7 +141,14 @@ function StrengthBody({
                         aria-pressed={on}
                         aria-label={C.tickSet(n, ex.name)}
                         disabled={busy !== null && busy.startsWith('sets:')}
-                        onClick={() => void act({ action: 'sets', sessionId: session.id, exerciseId: p.id, doneSets: on && p.doneSets === n ? n - 1 : n })}
+                        onClick={async () => {
+                          const ticking = !(on && p.doneSets === n)
+                          if (await act({ action: 'sets', sessionId: session.id, exerciseId: p.id, doneSets: ticking ? n : n - 1 })) {
+                            // Rest between sets, not after the last one.
+                            if (ticking && n < p.sets) timer.start(p.restSec)
+                            else timer.stop()
+                          }
+                        }}
                       >
                         {on ? '✓' : n}
                       </Button>
@@ -141,6 +156,7 @@ function StrengthBody({
                   })}
                   <span style={meta}>{C.setTicks(p.doneSets, p.sets)}</span>
                 </div>
+                <LogRow planned={p} name={ex.name} seconds={ex.unit === 'seconds'} plan={plan} today={today} act={act} busy={busy} />
               </li>
             )
           })}
@@ -148,6 +164,115 @@ function StrengthBody({
       </section>
       {prefs.focus !== 'mobility' && <Note tone="info">{C.progressionTip}</Note>}
       <Safety prefs={prefs} />
+    </div>
+  )
+}
+
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+
+/** A rest countdown between sets: started by ticking a set, skippable, quiet until it ends. */
+function useRestTimer() {
+  const [until, setUntil] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (until === null) return
+    const t = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(t)
+  }, [until])
+  const left = until === null ? null : Math.max(0, Math.ceil((until - now) / 1000))
+  const start = (sec: number) => {
+    setNow(Date.now())
+    setUntil(Date.now() + sec * 1000)
+  }
+  const stop = () => setUntil(null)
+  const view =
+    left === null ? null : left > 0 ? (
+      <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }} data-rest-timer>
+        <p role="timer" aria-live="off" style={{ ...strong, fontSize: 'var(--text-title)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums' }}>
+          {C.restFor(clock(left))}
+        </p>
+        <Button variant="secondary" size="sm" onClick={stop}>
+          {C.restSkip}
+        </Button>
+      </div>
+    ) : (
+      <Note tone="positive" live="polite">
+        {C.restDone}
+      </Note>
+    )
+  return { start, stop, view }
+}
+
+function nextLine(step: NextStep): string {
+  switch (step.kind) {
+    case 'weight':
+      return C.nextWeight(step.kg)
+    case 'reps':
+      return C.nextReps(step.reps)
+    case 'seconds':
+      return C.nextSeconds(step.seconds)
+    case 'harder':
+      return C.nextHarder(step.name)
+    case 'same':
+      return C.nextSame
+  }
+}
+
+/** What they did last time, what to try, and a place to note today's best set. */
+function LogRow({
+  planned,
+  name,
+  seconds,
+  plan,
+  today,
+  act,
+  busy,
+}: {
+  planned: PlannedExercise
+  name: string
+  seconds: boolean
+  plan: TrainingPlan
+  today: string
+  act: Act
+  busy: string | null
+}) {
+  const last = lastTime(plan, planned.id, today)
+  const now = todays(plan, planned.id, today)
+  const step = nextStep(planned, last)
+  const [kg, setKg] = useState(now?.weightKg != null ? String(now.weightKg) : last?.weightKg != null ? String(last.weightKg) : '')
+  const [reps, setReps] = useState(now?.reps != null ? String(now.reps) : '')
+  const num = (v: string) => (v.trim() === '' ? null : Number(v))
+  const canSave = (num(kg) ?? 0) > 0 || (num(reps) ?? 0) > 0
+  const dirty = !now || (seconds ? null : num(kg)) !== now.weightKg || num(reps) !== now.reps
+  return (
+    <div style={{ ...stack('var(--space-2)'), marginTop: 'var(--space-3)' }} data-log={planned.id}>
+      {(last || now || step) && (
+        <div>
+          {last && <p style={meta}>{C.lastTime(last.weightKg, last.reps, seconds)}</p>}
+          {step && <p style={{ ...meta, color: 'var(--ink-2)', fontWeight: 'var(--weight-strong)' }}>{nextLine(step)}</p>}
+          {now && <p style={meta}>{C.todayLogged(now.weightKg, now.reps, seconds)}</p>}
+        </div>
+      )}
+      <div className="flex items-end" style={{ gap: 'var(--space-2)' }} role="group" aria-label={C.logLabel(name)}>
+        {!seconds && (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Input label={C.logKg} compact suffix={C.logKg} type="number" inputMode="decimal" min={0} step={0.5} value={kg} onChange={(e) => setKg(e.target.value)} />
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Input label={seconds ? C.logSeconds : C.logReps} compact suffix={seconds ? 's' : 'reps'} type="number" inputMode="numeric" min={0} step={1} value={reps} onChange={(e) => setReps(e.target.value)} />
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!canSave || !dirty || busy !== null}
+          loading={busy === 'log:'}
+          onClick={() => void act({ action: 'log', exerciseId: planned.id, weightKg: seconds ? null : num(kg), reps: num(reps) })}
+          data-log-save
+        >
+          {dirty ? C.logSave : C.logSaved}
+        </Button>
+      </div>
     </div>
   )
 }

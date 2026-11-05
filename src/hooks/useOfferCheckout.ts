@@ -53,12 +53,15 @@ export function useOfferCheckout() {
     claimId?: string | null
     /** Sold as the approved hero ("Not the obvious pick"): the server checks it still is one. */
     hero?: boolean
+    /** Where it was bought from, for analytics only: the checkout prices it the same either way. */
+    from?: 'results' | 'hub_deal'
   }) => {
     if (inFlight.current) return
     inFlight.current = true
     setState({ status: 'loading' })
-    track('last_chance_buy', { discountPct: offer.quote.discountPct, delivery: offer.quote.deliveryDeal, value: offer.quote.total })
-    track('checkout_start', { source: 'last_chance', items: 1, value: offer.quote.total })
+    const source = offer.from === 'hub_deal' ? 'hub_deal' : 'last_chance'
+    track('last_chance_buy', { discountPct: offer.quote.discountPct, delivery: offer.quote.deliveryDeal, value: offer.quote.total, from: source })
+    track('checkout_start', { source, items: 1, value: offer.quote.total })
 
     const controller = new AbortController()
     const timer = window.setTimeout(() => controller.abort(), INITIATION_TIMEOUT_MS)
