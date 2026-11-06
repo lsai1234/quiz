@@ -5,8 +5,17 @@ import { Badge, Card, Modal, ModalBody, ModalHeader, buttonSurface } from '@/com
 import { HUB_COPY as C } from '@/lib/hub/copy'
 import type { GuideProductLite, HubHome } from '@/lib/hub/home-types'
 import { careTipsFor, faqsFor } from '@/lib/tips/pick'
+import { Icon, type IconName } from '@/components/ui/Icon'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { body, col, eyebrow, meta, SectionHead, strong } from './ui'
+
+/** A glyph for a product with no photo, from its type and kind. */
+function glyphFor(type: string, kind: string | null): IconName {
+  const of = `${type} ${kind ?? ''}`
+  if (/capsule|tablet|softgel|gumm|vitamin|omega|fish oil|magnesium|zinc|mineral|iron|zma|adaptogen|probiotic|joint|sleep|menopause/i.test(of)) return 'capsule'
+  if (/powder|drink|shot|liquid|gel|protein|creatine|workout|electrolyte|hydration|bcaa|amino|greens|collagen|fibre/i.test(of)) return 'shaker'
+  return 'hexagon'
+}
 
 /**
  * Their stack: a row of their products, each with its moment on their day,
@@ -46,7 +55,7 @@ export function StackSection({ guide }: { guide: NonNullable<HubHome['guide']> }
                 <div
                   className="relative flex items-center justify-center"
                   style={{
-                    height: 'calc(var(--space-8) * 3)',
+                    height: 'calc(var(--space-8) * 2.75)',
                     borderRadius: 'var(--radius-row)',
                     background: 'radial-gradient(120% 90% at 30% 20%, var(--accent-fill), var(--surface-2) 70%)',
                     border: '1px solid var(--edge)',
@@ -58,13 +67,13 @@ export function StackSection({ guide }: { guide: NonNullable<HubHome['guide']> }
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.imageUrl} alt="" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
                   ) : (
-                    <span className="hub-figure" style={{ fontSize: 'var(--text-hero)', color: 'var(--accent)', opacity: 0.9 }} aria-hidden>
-                      {p.short.charAt(0)}
+                    <span aria-hidden style={{ color: 'var(--accent)', filter: 'drop-shadow(0 0 var(--space-3) var(--accent-glow))' }}>
+                      <Icon name={glyphFor(p.type, p.kind)} size={40} />
                     </span>
                   )}
                 </div>
                 <p style={{ ...strong, fontSize: 'var(--text-body-sm)' }}>{p.short}</p>
-                <p style={meta}>{[p.time, p.moment].filter(Boolean).join(' · ')}</p>
+                <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{[p.time, p.moment].filter(Boolean).join(' · ')}</p>
                 <p style={{ ...meta, color: 'var(--accent)', marginTop: 'var(--space-2)', fontWeight: 'var(--weight-strong)' }}>{C.productMore} →</p>
               </a>
             </Card>

@@ -27,7 +27,9 @@ import type { CircuitFlag, WeightSymptom } from './types'
 import { parseRosterCsv, type RosterRow } from '@/lib/supplier/roster-csv'
 import type { SwapGroup } from '@/lib/catalogue/types'
 import { DEFAULT_BONUS } from '@/lib/offer/settings'
-import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelCopyRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
+import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelCopyRows, memberHubTermRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
+import { hubCopyRows } from '@/lib/hub/review-rows'
+import { tipRows } from '@/lib/tips/review-rows'
 import { guideCopyRows } from '@/lib/guide/review-rows'
 import { checkInCopyRows } from '@/lib/checkin/review-rows'
 import { trainingCopyRows, trainingLibraryRows } from '@/lib/training/review-rows'
@@ -289,8 +291,12 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     ...trainingCopyRows(),
     ...trainingLibraryRows(),
     ...dealCopyRows(),
+    // The member hub for every buyer: its own words, tips and questions, and its terms.
+    ...hubCopyRows(),
+    ...tipRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
     ...guaranteeTermRows(),
+    ...memberHubTermRows(),
   ]
 }
 

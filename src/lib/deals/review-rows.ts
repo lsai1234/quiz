@@ -1,5 +1,6 @@
 /** Member deals and the hub's preview on the reveal: rows for the review pack. */
 import type { ReviewRow } from '@/lib/consult/review-pack'
+import { copyRows } from '@/lib/consult/copy-rows'
 import { DEALS_COPY as D, HUB_PREVIEW_COPY as H } from './copy'
 
 export function dealCopyRows(): ReviewRow[] {
@@ -34,5 +35,35 @@ export function dealCopyRows(): ReviewRow[] {
     [s, reveal, H.dealsBody, 'Above the list'],
     [s, reveal, H.dealRow('Creatine', D.dealLine(free), 29.74, 39.94, 7), `A product's deal. ${ex}`],
     [s, reveal, H.dealsMonthly, 'Monthly box, while member deals are on'],
+    // The rest: the top-up box, the email when a price opens, stopping it, and the preview drawn as the hub.
+    ...copyRows(
+      s,
+      'My Hub: the top-up box; the email when a member price opens; /myhub/emails',
+      D,
+      {
+        boxTitle: [2],
+        boxSaving: [6.4, 44.93],
+        boxDelivery: [3.99, 40],
+        boxFreeOver: [40],
+        emailSubject: ['Creatine'],
+        emailPreheader: ['Creatine'],
+        emailHeading: ['Creatine'],
+        emailIntro: ['Alex'],
+      },
+      {},
+      ['heading', 'intro', 'dealLine', 'freeDeliveryCondition', 'price', 'openUntil', 'opensIn', 'runsOut', 'runsOutEstimated', 'buy', 'terms', 'hubOpen', 'changed'],
+    ),
+    ...copyRows(s, reveal, H, { sessionsCount: [4], fromWeek: [3] }, { underCta: 'Under the box’s button, with the member hub terms link' }, [
+      'eyebrow',
+      'heading',
+      'sub',
+      'trainingTitle',
+      'trainingBody',
+      'trainingMore',
+      'dealsTitle',
+      'dealsBody',
+      'dealRow',
+      'dealsMonthly',
+    ]),
   ]
 }

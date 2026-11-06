@@ -1,6 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useId, useState } from 'react'
+import { Icon } from '@/components/ui/Icon'
 import { DEALS_COPY, HUB_PREVIEW_COPY as C } from '@/lib/deals/copy'
 import type { HubPreview as Preview } from '@/lib/hub-preview/build'
 import { YOU_PALETTE as P } from './you-palette'
@@ -11,9 +13,15 @@ import { YOU_PALETTE as P } from './you-palette'
  * product in the box would get, from `/api/hub-preview` (rules only, the same
  * answers the order carries). Only what the founders have switched on;
  * nothing at all when neither is.
+ *
+ * It is drawn as the hub's own dark screen on the light panel, so what they
+ * see here is what they open after the order. The conditions and the terms
+ * sit under it, on the panel.
  */
 const DISPLAY = 'var(--font-display)'
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+export const MEMBER_HUB_TERMS_PATH = '/legal/member-hub'
+const gbp = (n: number) => `£${n.toFixed(2)}`
 
 export interface HubPreviewInput {
   productIds: string[]
@@ -58,77 +66,188 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
   if (!training && !deals && !(input.deals && input.plan === 'subscription')) return null
 
   return (
-    <section aria-labelledby={headingId} className="mt-5 rounded-2xl px-4 py-4" style={{ background: P.page }} data-hub-preview>
+    <section aria-labelledby={headingId} className="mt-6" data-hub-preview>
       <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accentInk, fontFamily: DISPLAY }}>
         {C.eyebrow}
       </p>
-      <h4 id={headingId} className="mt-1 text-[17px] font-black leading-tight tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }}>
+      <h4 id={headingId} className="mt-1 text-[22px] font-black leading-[1.05] tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }}>
         {C.heading}
       </h4>
       <p className="mt-1.5 text-[13px] leading-snug" style={{ color: P.ink2 }}>
         {C.sub}
       </p>
 
-      {training && (
-        <div className="mt-4 rounded-xl px-3.5 py-3" style={{ background: P.card }} data-hub-preview-training>
-          <p className="text-[14.5px] font-bold" style={{ color: P.ink, fontFamily: DISPLAY }}>
-            {C.trainingTitle}
-          </p>
-          <p className="mt-1 text-[12.5px] leading-snug" style={{ color: P.ink2 }}>
-            {C.trainingBody}
-          </p>
-          <ol className="mt-2.5 space-y-1.5">
-            {training.sessions.map((s) => (
-              <li key={`${s.day}-${s.title}`} className="flex items-baseline gap-2.5 text-[13px] leading-snug">
-                <span className="w-9 flex-shrink-0 font-bold" style={{ color: P.accentInk, fontFamily: DISPLAY }}>
-                  {DAYS[s.day]}
-                </span>
-                <span className="min-w-0 flex-1" style={{ color: P.ink }}>
-                  <span className="font-semibold">{s.title}</span>
-                  <span style={{ color: P.ink3 }}>{` · ${s.minutes} min`}</span>
-                  {s.moves.length > 0 && (
-                    <span className="block text-[12px]" style={{ color: P.ink3 }}>
-                      {s.moves.join(', ')}
-                    </span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-2.5 text-[12px] leading-snug" style={{ color: P.ink3 }}>
-            {C.trainingMore}
-          </p>
-        </div>
-      )}
-
-      {deals && (
-        <div className="mt-3 rounded-xl px-3.5 py-3" style={{ background: P.card }} data-hub-preview-deals>
-          <p className="text-[14.5px] font-bold" style={{ color: P.ink, fontFamily: DISPLAY }}>
-            {C.dealsTitle}
-          </p>
-          <p className="mt-1 text-[12.5px] leading-snug" style={{ color: P.ink2 }}>
-            {C.dealsBody}
-          </p>
-          <ul className="mt-2.5 space-y-1.5">
-            {deals.slice(0, 5).map((d) => (
-              <li key={d.productId} className="text-[13px] leading-snug" style={{ color: P.ink }} data-hub-preview-deal={d.productId}>
-                {C.dealRow(d.short, d.line, d.total, d.normal, d.weeks)}
-              </li>
-            ))}
-          </ul>
-          {deals.some((d) => d.free) && (
-            <p className="mt-2 text-[11.5px] leading-snug" style={{ color: P.ink3 }}>
-              {DEALS_COPY.freeDeliveryCondition}
+      {(training || deals) && (
+        <div
+          className="relative mt-4 overflow-hidden rounded-[26px] p-3"
+          style={{
+            background: `radial-gradient(120% 60% at 85% 0%, rgba(0,212,255,0.20), rgba(0,212,255,0) 60%), ${P.night}`,
+            boxShadow: '0 24px 48px -24px rgba(10,15,20,0.75), inset 0 1px 0 rgba(255,255,255,0.08)',
+          }}
+          data-hub-screen
+        >
+          {/* The screen's own header: whose hub, and its 90 days as a ring. */}
+          <div className="flex items-center justify-between gap-3 px-1.5 pb-2.5 pt-1">
+            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.nightInk2, fontFamily: DISPLAY }}>
+              <span aria-hidden className="inline-flex h-5 w-5 items-center justify-center rounded-md" style={{ background: P.accent, color: P.night }}>
+                <Icon name="bolt" size={12} />
+              </span>
+              {C.screenTitle}
             </p>
+            <DaysRing />
+          </div>
+
+          {training && (
+            <div className="rounded-[18px] px-3.5 py-3" style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }} data-hub-preview-training>
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accent, fontFamily: DISPLAY }}>
+                  {C.trainingTitle}
+                </p>
+                <p className="text-[11.5px] font-semibold" style={{ color: P.nightInk3 }}>
+                  {C.sessionsCount(training.sessions.length)}
+                </p>
+              </div>
+              <p className="mt-1.5 text-[12.5px] leading-snug" style={{ color: P.nightInk2 }}>
+                {C.trainingBody}
+              </p>
+
+              {/* The week at a glance: a block on each day with a session. The list says it in words. */}
+              <div className="mt-3 grid grid-cols-7 gap-1.5" aria-hidden>
+                {DAYS.map((d, i) => {
+                  const on = training.sessions.find((s) => s.day === i)
+                  return (
+                    <div key={d} className="flex flex-col items-center gap-1">
+                      <span className="text-[10px] font-bold" style={{ color: on ? P.nightInk : P.nightInk3, fontFamily: DISPLAY }}>
+                        {d.charAt(0)}
+                      </span>
+                      <span
+                        className="flex h-8 w-full items-center justify-center rounded-lg"
+                        style={
+                          on?.kind === 'strength'
+                            ? {
+                                background: `linear-gradient(160deg, ${P.accentBright}, ${P.accent} 55%, ${P.accentDeep})`,
+                                color: P.night,
+                                boxShadow: '0 6px 14px -8px rgba(0,212,255,0.9)',
+                              }
+                            : on
+                              ? { border: `1.5px solid ${P.accent}`, color: P.accent }
+                              : { background: 'rgba(255,255,255,0.05)' }
+                        }
+                      >
+                        {on && <Icon name={on.kind === 'strength' ? 'dumbbell' : 'activity'} size={13} />}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <ol className="mt-3 space-y-2">
+                {training.sessions.map((s) => (
+                  <li key={`${s.day}-${s.title}`} className="flex items-start gap-2.5">
+                    <span className="mt-px w-9 flex-shrink-0 text-[12px] font-bold" style={{ color: P.accent, fontFamily: DISPLAY }}>
+                      {DAYS[s.day]}
+                    </span>
+                    <span className="min-w-0 flex-1 text-[13px] leading-snug">
+                      <span className="font-semibold" style={{ color: P.nightInk }}>
+                        {s.title}
+                      </span>
+                      <span style={{ color: P.nightInk3 }}>{` · ${s.minutes} min`}</span>
+                      {s.moves.length > 0 && (
+                        <span className="block text-[12px]" style={{ color: P.nightInk3 }}>
+                          {s.moves.join(', ')}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {deals && (
+            <div
+              className={`${training ? 'mt-2.5' : ''} rounded-[18px] px-3.5 py-3`}
+              style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }}
+              data-hub-preview-deals
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accent, fontFamily: DISPLAY }}>
+                {C.dealsTitle}
+              </p>
+              <p className="mt-1.5 text-[12.5px] leading-snug" style={{ color: P.nightInk2 }}>
+                {C.dealsBody}
+              </p>
+              <ul className="mt-2.5 space-y-2">
+                {deals.slice(0, 5).map((d) => (
+                  <li
+                    key={d.productId}
+                    className="flex items-start justify-between gap-3 rounded-xl px-3 py-2.5"
+                    style={{ background: 'rgba(255,255,255,0.04)' }}
+                    data-hub-preview-deal={d.productId}
+                  >
+                    <span className="min-w-0 text-[13px] leading-snug">
+                      <span className="block font-semibold" style={{ color: P.nightInk }}>
+                        {d.short}
+                      </span>
+                      <span className="block text-[12px]" style={{ color: P.nightInk2 }}>
+                        {d.line}
+                      </span>
+                      <span className="mt-0.5 block text-[11.5px]" style={{ color: P.nightInk3 }}>
+                        {C.fromWeek(d.weeks)}
+                      </span>
+                    </span>
+                    <span className="flex-shrink-0 text-right">
+                      <span className="block text-[15px] font-black tabular-nums" style={{ color: P.accent, fontFamily: DISPLAY }}>
+                        {gbp(d.total)}
+                      </span>
+                      <span className="block text-[11.5px] tabular-nums" style={{ color: P.nightInk3 }}>
+                        <span className="sr-only">{`${C.insteadOf} `}</span>
+                        <s>{gbp(d.normal)}</s>
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
 
-      {input.deals && input.plan === 'subscription' && (
-        <p className="mt-3 text-[12.5px] leading-snug" style={{ color: P.ink2 }}>
-          {C.dealsMonthly}
+      <div className="mt-2.5 space-y-1 px-1">
+        {training && (
+          <p className="text-[12px] leading-snug" style={{ color: P.ink3 }}>
+            {C.trainingMore}
+          </p>
+        )}
+        {deals?.some((d) => d.free) && (
+          <p className="text-[12px] leading-snug" style={{ color: P.ink3 }}>
+            {DEALS_COPY.freeDeliveryCondition}
+          </p>
+        )}
+        {input.deals && input.plan === 'subscription' && (
+          <p className="text-[12.5px] leading-snug" style={{ color: P.ink2 }}>
+            {C.dealsMonthly}
+          </p>
+        )}
+        <p className="text-[12px] leading-snug">
+          <Link href={MEMBER_HUB_TERMS_PATH} className="font-semibold underline underline-offset-2" style={{ color: P.ink2 }} data-hub-terms>
+            {DEALS_COPY.termsLink}
+          </Link>
         </p>
-      )}
+      </div>
     </section>
+  )
+}
+
+/** The hub's 90 days, as the hub draws them: a full ring with the count in it. */
+function DaysRing() {
+  return (
+    <span className="relative inline-flex h-10 w-10 items-center justify-center" role="img" aria-label={C.screenDays}>
+      <svg aria-hidden width={40} height={40} viewBox="0 0 40 40" className="absolute inset-0" style={{ filter: 'drop-shadow(0 0 4px rgba(0,212,255,0.6))' }}>
+        <circle cx={20} cy={20} r={16.5} fill="none" stroke={P.accent} strokeWidth={3.5} />
+      </svg>
+      <span aria-hidden className="relative text-[12px] font-black leading-none" style={{ color: P.nightInk, fontFamily: DISPLAY }}>
+        90
+      </span>
+    </span>
   )
 }

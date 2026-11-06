@@ -27,6 +27,8 @@ export const BOX_COPY = {
   /** Under the button: the button's price is the goods, as the receipt's total is. */
   delivery: (charge: number) => (charge > 0 ? `+${formatGBP(charge)} delivery` : 'Free delivery included'),
   justOne: (product: string, total: number) => `Just want one? Start with the ${product} · ${formatGBP(total)} delivered`,
+  /** The monthly option's badge: the same rate the line under the choice says. */
+  monthlyBadge: (pct: number) => `${pct}% off`,
   /** Monthly, while the box is under the subscription minimum (the option, then the line under it). */
   monthlyFrom: (min: number) => `From ${formatGBP(min)} a month`,
   monthlyMin: (min: number, now: number) =>

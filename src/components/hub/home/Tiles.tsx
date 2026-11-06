@@ -23,6 +23,7 @@ function Tile({
   icon,
   label,
   figure,
+  unit,
   line,
   sub,
   href,
@@ -34,6 +35,8 @@ function Tile({
   icon: IconName
   label: string
   figure?: ReactNode
+  /** A small word after the figure: "days". */
+  unit?: string
   line: ReactNode
   sub?: ReactNode
   href?: string
@@ -44,15 +47,16 @@ function Tile({
 }) {
   return (
     <div className="relative h-full" data-tile={data}>
-      <Card padding="normal" glow={glow} interactive={Boolean(href)}>
+      <Card padding="normal" glow={glow} interactive={Boolean(href)} className="h-full">
         <div className="flex h-full flex-col" style={{ gap: 'var(--space-2)' }}>
           <div className="flex items-center" style={{ gap: 'var(--space-2)', color: glow === 'positive' ? 'var(--tone-positive)' : 'var(--accent)' }}>
             <Icon name={icon} size={14} />
             <p style={{ ...eyebrow, color: 'inherit' }}>{label}</p>
           </div>
           {figure !== undefined && (
-            <p className="hub-figure" style={{ fontSize: 'var(--text-display)', color: 'var(--ink-1)' }}>
+            <p className="hub-figure flex items-baseline" style={{ fontSize: 'var(--text-display)', color: 'var(--ink-1)', gap: 'var(--space-1)' }}>
               {figure}
+              {unit && <span style={{ ...meta, fontFamily: 'var(--font-display)', fontWeight: 'var(--weight-strong)', letterSpacing: 0 }}>{unit}</span>}
             </p>
           )}
           <p style={{ ...strong, fontSize: 'var(--text-body-sm)' }}>{line}</p>
@@ -75,7 +79,6 @@ export function DealsTile({ deals }: { deals: NonNullable<HubHome['deals']> }) {
         data="deals"
         icon="star"
         label={C.dealsTitle}
-        glow="positive"
         figure={`£${deals.best.total.toFixed(2)}`}
         line={`${deals.best.short} · ${deals.best.line}`}
         sub={deals.open > 1 ? C.dealsOpen(deals.open) : deals.next ? C.dealsNext(deals.next.short, deals.next.line, deals.next.opensInDays) : undefined}
@@ -89,7 +92,8 @@ export function DealsTile({ deals }: { deals: NonNullable<HubHome['deals']> }) {
         data="deals"
         icon="star"
         label={C.dealsTitle}
-        figure={C.dealsDays(deals.next.opensInDays)}
+        figure={deals.next.opensInDays}
+        unit={deals.next.opensInDays === 1 ? C.dayWord : C.daysWord}
         line={C.dealsOpensIn(deals.next.short, deals.next.opensInDays)}
         sub={deals.next.line}
         href="#deals"
@@ -102,7 +106,32 @@ export function DealsTile({ deals }: { deals: NonNullable<HubHome['deals']> }) {
 export function WeekTile({ training }: { training: NonNullable<HubHome['training']> }) {
   const today = (new Date().getDay() + 6) % 7
   if (!training.hasPlan) {
-    return <Tile data="week" icon="dumbbell" label={C.trainingTitle} figure="+" line={C.trainingStart} sub={C.trainingNew} href="/myhub/training" glow="accent" />
+    return (
+      <Tile
+        data="week"
+        icon="dumbbell"
+        label={C.trainingTitle}
+        figure={
+          <span
+            aria-hidden
+            className="inline-flex items-center justify-center"
+            style={{
+              width: 'var(--space-8)',
+              height: 'var(--space-8)',
+              borderRadius: 'var(--radius-pill)',
+              background: 'var(--fill-accent)',
+              color: 'var(--ink-on-accent)',
+              boxShadow: '0 0 var(--space-4) var(--accent-glow)',
+            }}
+          >
+            <Icon name="plus" size={16} />
+          </span>
+        }
+        line={C.trainingStart}
+        sub={C.trainingNew}
+        href="/myhub/training"
+      />
+    )
   }
   return (
     <Tile
@@ -161,7 +190,14 @@ export function TipsTile({ tips }: { tips: HubHome['tips'] }) {
             <div className="flex items-center" style={{ gap: 'var(--space-1)' }}>
               <Button variant="ghost" size="sm" icon="chevron-left" aria-label="Previous tip" disabled={i === 0} onClick={() => setI((x) => Math.max(0, x - 1))} />
               <span style={{ ...meta, fontVariantNumeric: 'tabular-nums' }}>{`${i + 1}/${tips.length}`}</span>
-              <Button variant="ghost" size="sm" icon="chevron-right" aria-label="Next tip" disabled={i === tips.length - 1} onClick={() => setI((x) => Math.min(tips.length - 1, x + 1))} />
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="chevron-right"
+                aria-label="Next tip"
+                disabled={i === tips.length - 1}
+                onClick={() => setI((x) => Math.min(tips.length - 1, x + 1))}
+              />
             </div>
           </div>
           <p style={{ ...strong, fontSize: 'var(--text-lead)', fontFamily: 'var(--font-display)' }} aria-live="polite">

@@ -24,7 +24,17 @@ export function HubHero({ home, name }: { home: HubHome; name: string | null }) 
       <Card padding="roomy" glow={open ? 'accent' : undefined}>
         <div className="flex items-center justify-between" style={{ gap: 'var(--space-4)' }}>
           <div className="min-w-0">
-            <p style={{ ...meta, color: 'var(--accent)', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', fontFamily: 'var(--font-display)', fontSize: 'var(--text-micro)' }}>
+            <p
+              style={{
+                ...meta,
+                color: 'var(--accent)',
+                fontWeight: 'var(--weight-strong)',
+                letterSpacing: 'var(--tracking-eyebrow)',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--text-micro)',
+              }}
+            >
               {C.hubName}
             </p>
             <h1
@@ -42,8 +52,16 @@ export function HubHero({ home, name }: { home: HubHome; name: string | null }) 
             </h1>
             {home.guide?.stackName && <p style={{ ...body, marginTop: 'var(--space-1)' }}>{home.guide.stackName}</p>}
             <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-              {a.state === 'subscriber' && <Badge tone="accent" dot>{a.plan === 'paused' ? C.memberPaused : C.memberMonthly}</Badge>}
-              {a.state === 'member' && a.daysLeft != null && <Badge tone="positive" dot>{C.memberFor(a.daysLeft)}</Badge>}
+              {a.state === 'subscriber' && (
+                <Badge tone="accent" dot>
+                  {a.plan === 'paused' ? C.memberPaused : C.memberMonthly}
+                </Badge>
+              )}
+              {a.state === 'member' && a.daysLeft != null && (
+                <Badge tone="positive" dot>
+                  {C.memberFor(a.daysLeft)}
+                </Badge>
+              )}
               {a.state === 'ended' && <Badge tone="attention">{C.endedTitle}</Badge>}
             </div>
             {open && <p style={{ ...meta, marginTop: 'var(--space-2)' }}>{a.state === 'subscriber' ? C.monthlyKeeps : C.anyOrderAdds}</p>}

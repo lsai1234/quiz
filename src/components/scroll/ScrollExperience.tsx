@@ -202,8 +202,11 @@ export function ScrollExperience() {
   return (
     /* The measured window height, not `min-h-screen` (`100vh`, the LARGE
        viewport): in the browsers ViewportHeight exists for, `100vh` overshoots
-       the window and leaves a strip of empty page to scroll past the hero. */
-    <div className="overflow-x-hidden" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
+       the window and leaves a strip of empty page to scroll past the hero.
+       `clip`, where the browser has it, rather than `hidden`: the same sideways
+       clipping without making this a scroll container, which would stop every
+       `position: sticky` inside it (the box's checkout column on a wide screen). */
+    <div className="overflow-x-hidden supports-[overflow:clip]:overflow-x-clip" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
       {canResume && (
         <div className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-3">
           <div

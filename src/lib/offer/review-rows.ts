@@ -13,14 +13,14 @@
  */
 import type { ReviewRow } from '@/lib/consult/review-pack'
 import { CLAIMS } from '@/lib/consult/claims'
-import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings } from './settings'
+import { DEFAULT_MEMBER_DEALS, HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings } from './settings'
 import { LEVEL_NAME } from './bonus-economics'
 import type { HeroRow } from './view'
 import { OFFER_COPY } from './copy'
 import { PLAN_COPY, whyPricesDiffer } from './plan-copy'
 import { BOX_COPY } from './box-copy'
 import { LEVEL_COPY } from './levels-copy'
-import { freeGiftTerms, guaranteeTerms } from './terms'
+import { freeGiftTerms, guaranteeTerms, memberHubTerms } from './terms'
 
 export function bonusTermRows(bonus: BonusSettings): ReviewRow[] {
   const where = 'Free bonus terms (Settings → Offer; customer wording below, "Free gift terms")'
@@ -165,6 +165,7 @@ export function boxCopyRows(): ReviewRow[] {
     ['Box wording', where, c.delivery(4.95), `Under the button, delivery not free yet. ${ex}`],
     ['Box wording', where, c.delivery(0), 'Under the button, delivery free'],
     ['Box wording', where, c.justOne('Creatine Monohydrate', 19.99), `Under the button: the hero (or their top pick) alone. ${ex}`],
+    ['Box wording', where, c.monthlyBadge(15), `The monthly option’s badge: the rate the line under the choice says. ${ex}`],
     ['Box wording', where, c.monthlyFrom(25), 'The monthly option, while the box is under the subscription minimum'],
     ['Box wording', where, c.monthlyMin(25, 18.4), `Under the plan, while the box is under the subscription minimum. ${ex}`],
     ['Box wording', where, c.receiptSave(4), `The receipt's subscribe-and-save line. ${ex}`],
@@ -198,7 +199,18 @@ export function levelCopyRows(): ReviewRow[] {
     ['Level wording', where, c.guaranteeConditions, 'Beside the guarantee, wherever it is said'],
     ['Level wording', where, c.guaranteeTerms, 'Link to /legal/guarantee'],
     ['Level wording', where, c.service.rate(15), 'Monthly: a level’s rate. Example'],
+    ...(Object.keys(c.title) as (keyof typeof c.title)[]).flatMap((k): ReviewRow[] => [
+      ['Level wording', where, c.title[k], `The box’s list: the ${k} service’s name`],
+      ['Level wording', where, c.line[k], `The box’s list: under the ${k} service’s name`],
+    ]),
   ]
+}
+
+/** The member hub's terms page, at the default free-delivery threshold. */
+export function memberHubTermRows(): ReviewRow[] {
+  return memberHubTerms({ freeOver: DEFAULT_MEMBER_DEALS.topUpFreeOver }).flatMap((section) =>
+    section.lines.map((line): ReviewRow => ['Member hub terms', `/legal/member-hub: ${section.heading}`, line, 'Customer wording, for sign-off']),
+  )
 }
 
 /** The free gift terms page, at the default settings. */

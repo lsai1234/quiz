@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Disclosure, Note, Skeleton } from '@/components/system'
 import { HUB_COPY as C } from '@/lib/hub/copy'
 import type { HubHome } from '@/lib/hub/home-types'
@@ -42,7 +42,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
 
   if (failed && !home) {
     return (
-      <div style={col('var(--stack)')}>
+      <div className="mx-auto max-w-2xl" style={col('var(--stack)')}>
         <Note tone="critical">We couldn’t load your hub. Pull to refresh, or try again in a moment.</Note>
         {plan}
         {data}
@@ -51,7 +51,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   }
   if (!home) {
     return (
-      <div style={col('var(--stack)')}>
+      <div className="mx-auto max-w-2xl" style={col('var(--stack)')}>
         <div style={col('var(--stack)')} aria-busy="true" data-hub-loading>
           <Skeleton width="100%" height="calc(var(--space-8) * 4)" radius="var(--radius-card)" />
           <Skeleton width="100%" height="calc(var(--space-8) * 6)" radius="var(--radius-card)" />
@@ -70,7 +70,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   // Never ordered: the hub hasn't opened yet, and the no-plan screen says why and what to do.
   if (home.access.state === 'none' && none) {
     return (
-      <div style={col('var(--stack)')} data-member-home data-hub-state="none">
+      <div className="mx-auto max-w-2xl" style={col('var(--stack)')} data-member-home data-hub-state="none">
         {none}
         <LinkOrder onLinked={load} />
         {data}
@@ -101,64 +101,71 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
       </div>
     ) : null,
   ].filter(Boolean)
-  let i = 0
+  // Reading order on a phone; on a wide screen the day and the money on the
+  // left, the glance tiles and the account on the right.
+  const ORDER = { hero: 0, today: 1, tiles: 2, deals: 3, stack: 4, plan: 5, account: 6 } as const
+  const at = (k: keyof typeof ORDER): CSSProperties => ({ order: ORDER[k] })
 
   return (
-    <div style={col('var(--stack)')} data-member-home data-hub-state={home.access.state}>
-      <Rise i={i++}>
+    <div className="hub-home" data-member-home data-hub-state={home.access.state}>
+      <Rise i={0} className="hub-home-wide" style={at('hero')}>
         <HubHero home={home} name={name} />
       </Rise>
 
-      {open && home.today && (
-        <Rise i={i++}>
-          <TodayCard items={home.today.items} />
-        </Rise>
-      )}
+      <div className="hub-home-col">
+        {open && home.today && (
+          <Rise i={1} style={at('today')}>
+            <TodayCard items={home.today.items} />
+          </Rise>
+        )}
 
-      {tiles.length > 0 && (
-        <Rise i={i++}>
-          <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)' }} data-bento>
-            {tiles}
-          </div>
-        </Rise>
-      )}
+        {open && home.services.deals && (
+          <Rise i={3} style={at('deals')}>
+            <DealsCard />
+          </Rise>
+        )}
 
-      {open && home.services.deals && (
-        <Rise i={i++}>
-          <DealsCard />
-        </Rise>
-      )}
+        {home.guide && (
+          <Rise i={4} style={at('stack')}>
+            <StackSection guide={home.guide} />
+          </Rise>
+        )}
 
-      {home.guide && (
-        <Rise i={i++}>
-          <StackSection guide={home.guide} />
-        </Rise>
-      )}
+        {plan && (
+          <Rise i={5} style={at('plan')}>
+            <section data-plan>
+              <SectionHead eyebrowText={C.planEyebrow} title={C.planTitle} />
+              {plan}
+            </section>
+          </Rise>
+        )}
+      </div>
 
-      {plan && (
-        <Rise i={i++}>
-          <section data-plan>
-            <SectionHead eyebrowText={C.planEyebrow} title={C.planTitle} />
-            {plan}
+      <div className="hub-home-col">
+        {tiles.length > 0 && (
+          <Rise i={2} style={at('tiles')}>
+            <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)' }} data-bento>
+              {tiles}
+            </div>
+          </Rise>
+        )}
+
+        <Rise i={6} style={at('account')}>
+          <section style={col('var(--space-3)')} data-account>
+            <OrdersSection orders={home.orders} />
+            <Disclosure summary={C.linkTitle}>
+              <div style={{ paddingTop: 'var(--space-3)' }}>
+                <LinkOrder onLinked={load} />
+              </div>
+            </Disclosure>
+            {data && (
+              <Disclosure summary={C.dataTitle}>
+                <div style={{ paddingTop: 'var(--space-3)' }}>{data}</div>
+              </Disclosure>
+            )}
           </section>
         </Rise>
-      )}
-
-      <Rise i={i++}>
-        <section style={col('var(--space-3)')} data-account>
-          <OrdersSection orders={home.orders} />
-          <Disclosure summary={C.linkTitle}>
-            <div style={{ paddingTop: 'var(--space-3)' }}>
-              <LinkOrder onLinked={load} />
-            </div>
-          </Disclosure>
-          {data && (
-            <Disclosure summary={C.dataTitle}>
-              <div style={{ paddingTop: 'var(--space-3)' }}>{data}</div>
-            </Disclosure>
-          )}
-        </section>
-      </Rise>
+      </div>
     </div>
   )
 }

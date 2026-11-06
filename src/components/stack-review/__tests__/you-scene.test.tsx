@@ -182,7 +182,15 @@ describe('the You scene’s colours', () => {
     expect(contrast(YOU_PALETTE[key], YOU_PALETTE.page)).toBeGreaterThanOrEqual(4.5)
   })
 
+  // The hub preview is drawn as the dark screen the hub is, with its own inks.
+  it.each(['nightInk', 'nightInk2', 'nightInk3', 'accent'] as const)('%s clears AA on the dark screen and its cards', (key) => {
+    expect(contrast(YOU_PALETTE[key], YOU_PALETTE.night)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(YOU_PALETTE[key], YOU_PALETTE.nightCard)).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('keeps the tiers in order', () => {
+    expect(luminance(YOU_PALETTE.nightInk)).toBeGreaterThan(luminance(YOU_PALETTE.nightInk2))
+    expect(luminance(YOU_PALETTE.nightInk2)).toBeGreaterThan(luminance(YOU_PALETTE.nightInk3))
     expect(luminance(YOU_PALETTE.ink)).toBeLessThan(luminance(YOU_PALETTE.ink2))
     expect(luminance(YOU_PALETTE.ink2)).toBeLessThan(luminance(YOU_PALETTE.ink3))
   })

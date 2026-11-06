@@ -24,6 +24,7 @@ export const HUB_COPY = {
   /* ── The home screen ── */
   hubName: 'Your member hub',
   daysWord: 'days',
+  dayWord: 'day',
   monthlyWord: 'monthly',
   greeting: (hour: number, firstName: string | null) => {
     const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -56,7 +57,6 @@ export const HUB_COPY = {
   dealsBest: (short: string, line: string, total: number) => `${short}: ${line.charAt(0).toLowerCase()}${line.slice(1)}, ${gbp(total)} delivered`,
   dealsNone: 'Your member prices appear here as each product is due to run out.',
   dealsOpensIn: (short: string, days: number) => `${short} opens in ${days} day${days === 1 ? '' : 's'}`,
-  dealsDays: (days: number) => `${days}d`,
 
   trainingTitle: 'This week',
   trainingStart: 'Build your training plan',
@@ -95,7 +95,7 @@ export const HUB_COPY = {
   orderLine: (reference: string, date: string, total: number) => `${reference} · ${date} · ${gbp(total)}`,
 
   planTitle: 'Your plan',
-  planEyebrow: 'Monthly',
+  planEyebrow: 'Your subscription',
   dataTitle: 'Your data',
   makeMonthly: 'Keep me stocked monthly',
   makeMonthlyBody: 'A monthly plan ships each product as it runs out, at your monthly price.',

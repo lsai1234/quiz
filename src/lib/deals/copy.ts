@@ -14,11 +14,11 @@ export const DEALS_COPY = {
   eyebrow: 'Member prices',
   heading: 'Your member prices',
   intro: 'A price on each product you’ve bought, here in your hub. Each opens about a week before that product is due to run out, so the next one arrives in time.',
-  /** "15% off and free delivery". */
+  /** "15% off and free UK mainland delivery": the condition rides in the line, so no "free" goes out without it. */
   dealLine: (q: Pick<PublicOfferQuote, 'discountPct' | 'deliveryDeal' | 'deliveryCharge' | 'standardDelivery'>) => {
     const parts: string[] = []
     if (q.discountPct > 0) parts.push(`${q.discountPct}% off`)
-    if (q.deliveryDeal === 'free') parts.push('free delivery')
+    if (q.deliveryDeal === 'free') parts.push('free UK mainland delivery')
     if (q.deliveryDeal === 'reduced') parts.push(`delivery ${gbp(q.deliveryCharge)} (usually ${gbp(q.standardDelivery)})`)
     if (q.deliveryDeal === 'included' && parts.length === 0) parts.push('delivery included')
     const s = parts.join(' and ')
@@ -84,6 +84,14 @@ export const HUB_PREVIEW_COPY = {
   dealsMonthly: 'On a monthly plan your products come at your monthly price as they run out; member prices are for anything you add on top.',
   guideTitle: 'Your stack guide and reminders',
   guideBody: 'When to take each product on your day, as a page, an image and calendar reminders.',
+  /* The preview drawn as the hub's own screen. */
+  screenTitle: 'Your member hub',
+  screenDays: '90 days',
+  sessionsCount: (n: number) => `${n} session${n === 1 ? '' : 's'}`,
+  insteadOf: 'instead of',
+  fromWeek: (weeks: number) => `From about week ${weeks}`,
+  /** Under the box's button, whenever an order opens the hub. */
+  underCta: 'Includes 90 days of your member hub.',
   checkInsTitle: 'Amp checks in',
   checkInsBody: 'Every two weeks: thirty seconds on how it’s going, and one-tap changes to your box.',
   loading: 'Building your preview…',

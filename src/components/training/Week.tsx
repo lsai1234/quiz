@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Badge, Button, Card, ChargeMeter, Note, buttonSurface } from '@/components/system'
-import { FOCUS_COPY, SPLIT_COPY, TRAINING_COPY as C, WEEKDAY_LONG, areasPhrase } from '@/lib/training/copy'
+import { Icon } from '@/components/ui/Icon'
+import { FOCUS_COPY, SPLIT_COPY, TRAINING_COPY as C, WEEKDAY_LONG, WEEKDAY_SHORT, areasPhrase } from '@/lib/training/copy'
 import { weekdayOf } from '@/lib/training/generate'
 import type { TrainingAction, TrainingState } from '@/lib/training/state'
 import { WEEKDAYS, type Session, type TrainingPlan } from '@/lib/training/types'
@@ -36,6 +37,7 @@ export function Week({ state, plan, act, busy, error }: { state: TrainingState; 
       <Card padding="roomy" glow="accent">
         <div style={stack('var(--space-3)')}>
           <ChargeMeter label={C.progressLabel} value={planned ? (done / planned) * 100 : 0} showValue valueText={C.progress(done, planned)} tone="positive" />
+          <WeekStrip plan={plan} today={today} />
           <div className="flex flex-wrap" style={{ gap: 'var(--space-1)' }}>
             <Badge tone="accent">{FOCUS_COPY[plan.prefs.focus].label}</Badge>
             {plan.prefs.focus !== 'mobility' && <Badge>{SPLIT_COPY[plan.prefs.split].label}</Badge>}
@@ -183,6 +185,49 @@ function Up({ plan, today, onOpen }: { plan: TrainingPlan; today: number; onOpen
           </Button>
         </div>
       </Card>
+    </div>
+  )
+}
+
+/**
+ * The week at a glance, as the reveal drew it before they bought: a block on
+ * each day with a session, filled once it's done, today's day lit. The list
+ * under the card says the same in words, so this is decoration to a reader.
+ */
+function WeekStrip({ plan, today }: { plan: TrainingPlan; today: number }) {
+  return (
+    <div className="grid grid-cols-7" style={{ gap: 'var(--space-1)' }} aria-hidden data-week-strip>
+      {WEEKDAYS.map((d) => {
+        const sessions = plan.sessions.filter((s) => s.day === d)
+        const strength = sessions.some((s) => s.type === 'strength')
+        const allDone = sessions.length > 0 && sessions.every((s) => s.done)
+        const ground = allDone
+          ? { background: 'var(--fill-positive)', color: 'var(--ink-on-accent)' }
+          : strength
+            ? { background: 'var(--fill-accent)', color: 'var(--ink-on-accent)', boxShadow: '0 var(--space-1) var(--space-3) calc(var(--space-1) * -1) var(--accent-glow)' }
+            : sessions.length
+              ? { border: '1.5px solid var(--accent-line)', color: 'var(--accent)' }
+              : { background: 'var(--surface-1)' }
+        return (
+          <div key={d} className="flex flex-col items-center" style={{ gap: 'var(--space-1)' }}>
+            <span style={{ ...meta, fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', color: d === today ? 'var(--accent)' : 'var(--ink-3)' }}>
+              {WEEKDAY_SHORT[d].charAt(0)}
+            </span>
+            <span
+              className="flex w-full items-center justify-center"
+              style={{
+                height: 'var(--space-8)',
+                borderRadius: 'var(--radius-chip)',
+                outline: d === today ? '1.5px solid var(--accent)' : 'none',
+                outlineOffset: 2,
+                ...ground,
+              }}
+            >
+              {sessions.length > 0 && <Icon name={allDone ? 'check' : strength ? 'dumbbell' : 'activity'} size={13} />}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

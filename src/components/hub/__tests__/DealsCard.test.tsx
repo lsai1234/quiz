@@ -38,7 +38,7 @@ describe('member prices in the hub', () => {
   it('puts open prices in a top-up box, priced by the server, with what is coming and the conditions', async () => {
     render(<DealsCard />)
     expect(await screen.findByText('Your member prices')).toBeInTheDocument()
-    expect(screen.getAllByText('15% off and free delivery').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('15% off and free UK mainland delivery').length).toBeGreaterThan(0)
     expect(await screen.findByRole('button', { name: 'Buy for £29.74' })).toBeInTheDocument()
     expect(screen.getByText(/You save £10.20/)).toBeInTheDocument()
     // Whey is due within 30 days: it can join the box early.

@@ -27,6 +27,29 @@ export const LEVEL_COPY = {
     guarantee: 'First-box guarantee: not right for you? Your money back on the first box',
     rate: (pct: number) => `${pct}% off every month`,
   },
+  /**
+   * The box's list: each service's name in a word or two, and its line under
+   * it (the same promise as `service`, split for the list). The monthly rate
+   * has neither: `service.rate` says it whole.
+   */
+  title: {
+    guide: 'Your stack guide',
+    reminders: 'Reminders',
+    training: 'Training plan',
+    deals: 'Member prices',
+    checkIns: 'Amp check-ins',
+    swaps: 'Swaps',
+    guarantee: 'First-box guarantee',
+  },
+  line: {
+    guide: 'When to take each one, on your day',
+    reminders: 'At your times, in your calendar',
+    training: 'A weekly plan in your hub, built from your answers and yours to change',
+    deals: 'In your hub on what you buy, as each is due to run out',
+    checkIns: 'Every two weeks, and your box changes in one tap',
+    swaps: 'Swap any product, any time',
+    guarantee: 'Not right for you? Your money back on the first box',
+  },
   /** Beside the guarantee, wherever it is said. */
   guaranteeConditions: 'First box only, one per customer. Ask within 30 days of delivery.',
   guaranteeTerms: 'Guarantee terms',

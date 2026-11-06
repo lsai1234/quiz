@@ -167,11 +167,13 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
       aria-labelledby={headingId}
       /* The anchors' scroll margin is the bar plus a 1rem gap, so a jump lands
          a scene below the bar, as the 1rem top padding here does for the card. */
-      className="px-5 pt-4 pb-10 max-w-lg mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]"
+      className={`px-5 pt-4 pb-10 max-w-lg ${offer ? 'lg:max-w-5xl lg:pt-8' : ''} mx-auto scroll-mt-[calc(env(safe-area-inset-top)+4.5rem)]`}
     >
       <div
         ref={rootRef}
-        className="relative overflow-hidden rounded-3xl p-6"
+        // `overflow: clip` on a wide screen: it clips the corner light as `hidden`
+        // does without making the card a scroller, so the box's right column can stick.
+        className={`relative overflow-hidden rounded-3xl p-6 ${offer ? 'lg:supports-[overflow:clip]:overflow-clip lg:rounded-[36px] lg:p-10' : ''}`}
         style={{
           background: `linear-gradient(180deg, rgba(0,212,255,0.08), rgba(255,255,255,0) 40%), ${P.card}`,
           border: `1px solid ${P.hairline}`,
@@ -205,7 +207,7 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
           {stackName ? (
             <span
               data-reveal
-              className="mt-3 block break-words text-[2.6rem] font-black leading-[1.02] tracking-tight"
+              className="mt-3 block break-words text-[2.6rem] font-black leading-[1.02] tracking-tight lg:text-[3.6rem]"
               style={{ color: P.ink, fontFamily: DISPLAY }}
             >
               {stackName}
@@ -262,7 +264,7 @@ export function YouScene({ name, stackName, items, checks, read = null, reducedM
           </button>
         )}
 
-        <div id={whyId} hidden={folded} data-why={folded ? 'folded' : 'open'}>
+        <div id={whyId} hidden={folded} data-why={folded ? 'folded' : 'open'} className={offer ? 'lg:max-w-2xl' : undefined}>
         {read && (read.patterns.length > 0 || read.words) && (
           <section data-reveal aria-labelledby={readId} className="relative mt-7 pt-6" style={{ borderTop: `1px solid ${P.hairline}` }} data-read>
             <SectionHeading id={readId}>{READ_COPY.heading}</SectionHeading>

@@ -24,7 +24,7 @@ export function YourDay({ routine }: { routine: Routine }) {
   if (moments.length === 0) return null
 
   return (
-    <section aria-labelledby={headingId} className="mt-5 rounded-2xl px-4 py-4" style={{ background: P.page }} data-your-day>
+    <section aria-labelledby={headingId} className="mt-5 rounded-[22px] px-4 py-4" style={{ background: P.page, border: `1px solid ${P.hairline}` }} data-your-day>
       <h4 id={headingId} className="text-[17px] font-black leading-tight tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }}>
         {ROUTINE_COPY.heading}
       </h4>

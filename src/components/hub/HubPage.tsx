@@ -65,7 +65,7 @@ export function HubPage() {
   // own request. `YourData` is on every branch: the right to a copy of your data
   // and to have it deleted does not depend on holding a live subscription.
   return (
-    <HubShell onSignOut={logout} nav="home">
+    <HubShell onSignOut={logout} nav="home" wide>
       <MemberHome
         name={session.name ?? null}
         plan={subscription ? <SubscriptionDashboard embedded /> : null}

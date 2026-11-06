@@ -26,8 +26,11 @@ export function HubShell({
   children,
   onSignOut,
   nav,
+  wide = false,
 }: {
   children: ReactNode
+  /** The home's two columns on a wide screen: a wider page, header and all. */
+  wide?: boolean
   /** Omitted while signed out — there is nothing to sign out of. */
   onSignOut?: () => void
   /** Which part of the hub this is, for the header's links; none while signed out. */
@@ -49,7 +52,7 @@ export function HubShell({
         }}
       >
         <div
-          className="max-w-2xl mx-auto flex items-center justify-between"
+          className={`${wide ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto flex items-center justify-between`}
           style={{ padding: 'var(--space-3) var(--gutter)', gap: 'var(--space-3)' }}
         >
           <Link href="/myhub" aria-label="Your member hub">
@@ -76,7 +79,7 @@ export function HubShell({
       </header>
 
       <main
-        className="max-w-2xl mx-auto"
+        className={`${wide ? 'max-w-2xl lg:max-w-5xl' : 'max-w-2xl'} mx-auto`}
         style={{ padding: 'var(--space-6) var(--gutter) var(--space-8)' }}
       >
         {children}

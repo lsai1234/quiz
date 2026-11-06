@@ -95,7 +95,7 @@ describe('member deals', () => {
 
 describe('the words', () => {
   it('puts the condition next to every free delivery and never pressures', () => {
-    expect(DEALS_COPY.dealLine({ discountPct: 15, deliveryDeal: 'free', deliveryCharge: 0, standardDelivery: 3.99 })).toBe('15% off and free delivery')
+    expect(DEALS_COPY.dealLine({ discountPct: 15, deliveryDeal: 'free', deliveryCharge: 0, standardDelivery: 3.99 })).toBe('15% off and free UK mainland delivery')
     expect(DEALS_COPY.freeDeliveryCondition).toMatch(/mainland/)
     const all = JSON.stringify(DEALS_COPY)
     expect(all).not.toMatch(/hurry|last chance|don’t miss|only today|act now/i)

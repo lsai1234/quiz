@@ -27,9 +27,16 @@ export const meta: CSSProperties = { color: 'var(--ink-3)', fontSize: 'var(--tex
 export const col = (gap: string): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 
 /** A card that rises in on the spring, in order. */
-export function Rise({ i, children, className, id, ...rest }: { i: number; children: ReactNode; className?: string; id?: string } & Record<`data-${string}`, unknown>) {
+export function Rise({
+  i,
+  children,
+  className,
+  id,
+  style,
+  ...rest
+}: { i: number; children: ReactNode; className?: string; id?: string; style?: CSSProperties } & Record<`data-${string}`, unknown>) {
   return (
-    <div id={id} className={`hub-rise ${className ?? ''}`} style={{ ['--rise-i' as string]: i } as CSSProperties} {...rest}>
+    <div id={id} className={`hub-rise ${className ?? ''}`} style={{ ['--rise-i' as string]: i, ...style } as CSSProperties} {...rest}>
       {children}
     </div>
   )
@@ -60,7 +67,17 @@ export function Ring({ value, size, stroke, label, children }: { value: number; 
     <div role="img" aria-label={label} className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="absolute inset-0" style={{ transform: 'rotate(-90deg)' }}>
         <circle className="hub-ring-track" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} />
-        <circle className="hub-ring-fill" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v)} />
+        <circle
+          className="hub-ring-fill"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - v)}
+        />
       </svg>
       <div className="relative flex flex-col items-center justify-center text-center">{children}</div>
     </div>

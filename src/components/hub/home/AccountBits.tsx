@@ -78,7 +78,14 @@ export function LinkOrder({ onLinked }: { onLinked: () => void }) {
           {stage === 'code' && (
             <div className="flex items-end" style={{ gap: 'var(--space-2)' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <Input label={C.linkCode} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+                <Input
+                  label={C.linkCode}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                />
               </div>
               <Button
                 variant="primary"

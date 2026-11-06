@@ -824,11 +824,103 @@
   letter-spacing: var(--tracking-display);
   line-height: var(--leading-tight);
 }
+/* Today, as a timeline: a node per moment on a line down the left; the next
+   moment's node lit, a moment whose products are all taken filled. */
+.hub-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.hub-timeline-moment {
+  position: relative;
+  padding-left: var(--space-6);
+}
+.hub-timeline-moment::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-1) + 1px);
+  top: var(--space-5);
+  bottom: calc(var(--space-4) * -1);
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--edge);
+}
+.hub-timeline-moment:last-child::before {
+  display: none;
+}
+.hub-timeline-node {
+  position: absolute;
+  left: 0;
+  top: var(--space-1);
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--edge-strong);
+  background: var(--surface-solid);
+  transition:
+    background var(--duration-base) var(--ease-settle),
+    border-color var(--duration-base) var(--ease-settle),
+    box-shadow var(--duration-base) var(--ease-settle);
+}
+.hub-timeline-moment[data-lit='true'] .hub-timeline-node {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 var(--space-1) var(--accent-fill), 0 0 var(--space-3) var(--accent-glow);
+}
+.hub-timeline-moment[data-over='true'] .hub-timeline-node {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.hub-today-row {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-row);
+  background: var(--surface-1);
+  border: 1px solid var(--edge);
+  transition: background var(--duration-base) var(--ease-settle), border-color var(--duration-base) var(--ease-settle);
+}
+.hub-today-row[data-done='true'] {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* The home. On a phone, one column in reading order: the two column wrappers
+   step aside (`display: contents`) and each section's `order` places it. On a
+   wide screen, the hero across the top and two columns under it, each its own
+   stack, so a tall section never leaves a hole beside a short one. */
+.hub-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack);
+}
+.hub-home-col {
+  display: contents;
+}
+@media (min-width: 1024px) {
+  .hub-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+  .hub-home-wide {
+    grid-column: 1 / -1;
+  }
+  .hub-home-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-width: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hub-rise {
     animation: none;
   }
   .hub-ring-fill {
+    transition: none;
+  }
+  .hub-timeline-node,
+  .hub-today-row {
     transition: none;
   }
 }

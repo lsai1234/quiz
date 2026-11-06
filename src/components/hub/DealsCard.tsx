@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Disclosure, Note } from '@/components/system'
 import { useMemberDealCheckout } from '@/hooks/useMemberDealCheckout'
-import { DEALS_COPY as C } from '@/lib/deals/copy'
+import { DEALS_COPY as C, HUB_PREVIEW_COPY } from '@/lib/deals/copy'
 import type { PublicBox } from '@/lib/deals/box'
 import type { MemberDeal } from '@/lib/deals/engine'
 import type { DealsState } from '@/lib/deals/server'
@@ -182,15 +182,30 @@ export function DealsCard() {
             <h3 style={{ ...eyebrow, color: 'var(--ink-2)' }}>{C.upcomingHeading}</h3>
             <ul style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
               {comingUp.map((d) => (
-                <li key={d.productId} data-deal={d.productId} data-deal-state="upcoming">
-                  <p style={{ ...strong, fontSize: 'var(--text-body-sm)' }}>
-                    {d.short}: {C.dealLine(d.quote)}
-                  </p>
-                  <p style={{ color: 'var(--ink-2)', fontSize: 'var(--text-body-sm)' }}>{C.price(d.quote.total, d.quote.normalTotal)}</p>
-                  <p style={meta}>
-                    {C.opensIn(d.opensInDays, day(d.opensOn))} · {d.estimated ? C.runsOutEstimated(day(d.runsOutOn)) : C.runsOut(day(d.runsOutOn))}
-                  </p>
-                  {d.quote.deliveryDeal === 'free' && <p style={meta}>{C.freeShort}</p>}
+                <li
+                  key={d.productId}
+                  data-deal={d.productId}
+                  data-deal-state="upcoming"
+                  className="flex items-start justify-between"
+                  style={{ gap: 'var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-row)', background: 'var(--surface-1)', border: '1px solid var(--edge)' }}
+                >
+                  <div className="min-w-0">
+                    <p style={{ ...strong, fontSize: 'var(--text-body-sm)' }}>{d.short}</p>
+                    <p style={{ color: 'var(--ink-2)', fontSize: 'var(--text-body-sm)' }}>{C.dealLine(d.quote)}</p>
+                    <p style={{ ...meta, marginTop: 'var(--space-1)' }}>
+                      {C.opensIn(d.opensInDays, day(d.opensOn))} · {d.estimated ? C.runsOutEstimated(day(d.runsOutOn)) : C.runsOut(day(d.runsOutOn))}
+                    </p>
+                    {d.quote.deliveryDeal === 'free' && <p style={meta}>{C.freeShortTail}</p>}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="hub-figure" style={{ fontSize: 'var(--text-lead)', color: 'var(--tone-positive)' }}>
+                      {gbp(d.quote.total)}
+                    </p>
+                    <p style={{ ...meta, fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="sr-only">{`${HUB_PREVIEW_COPY.insteadOf} `}</span>
+                      <s>{gbp(d.quote.normalTotal)}</s>
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

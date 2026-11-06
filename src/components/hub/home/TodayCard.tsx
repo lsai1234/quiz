@@ -7,25 +7,46 @@ import type { TodayItem } from '@/lib/hub/home-types'
 import { body, eyebrow, meta, Ring, strong } from './ui'
 
 /**
- * Today: their products on their day, in time order, each one tick away from
- * taken. The next untaken one is called out; a ring counts them off. Ticks
- * save straight away and last the day.
+ * Today: their products on their day, as a timeline. Products taken at the
+ * same moment sit together under it; each is one tick away from taken. The
+ * next untaken one is called out at the top and its moment lit on the line; a
+ * ring counts them off. Ticks save straight away and last the day.
  */
+interface Moment {
+  key: string
+  time: string | null
+  moment: string
+  items: TodayItem[]
+}
+
+function momentsOf(items: TodayItem[]): Moment[] {
+  const out: Moment[] = []
+  for (const item of items) {
+    const key = `${item.time ?? ''}|${item.moment}`
+    const last = out[out.length - 1]
+    if (last && last.key === key) last.items.push(item)
+    else out.push({ key, time: item.time, moment: item.moment, items: [item] })
+  }
+  return out
+}
+
 export function TodayCard({ items: initial }: { items: TodayItem[] }) {
   const [items, setItems] = useState(initial)
   const [busy, setBusy] = useState<string | null>(null)
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes()
   const done = items.filter((i) => i.done).length
-  const next = useMemo(
-    () => items.find((i) => !i.done && i.minutes !== null && i.minutes >= nowMin - 30) ?? items.find((i) => !i.done) ?? null,
-    [items, nowMin],
-  )
+  const next = useMemo(() => items.find((i) => !i.done && i.minutes !== null && i.minutes >= nowMin - 30) ?? items.find((i) => !i.done) ?? null, [items, nowMin])
+  const moments = useMemo(() => momentsOf(items), [items])
 
   async function toggle(item: TodayItem) {
     setBusy(item.productId)
     const want = !item.done
     setItems((xs) => xs.map((x) => (x.productId === item.productId ? { ...x, done: want } : x)))
-    const res = await fetch('/api/hub/today', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId: item.productId, done: want }) }).catch(() => null)
+    const res = await fetch('/api/hub/today', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: item.productId, done: want }),
+    }).catch(() => null)
     if (!res?.ok) setItems((xs) => xs.map((x) => (x.productId === item.productId ? { ...x, done: !want } : x)))
     setBusy(null)
   }
@@ -39,55 +60,70 @@ export function TodayCard({ items: initial }: { items: TodayItem[] }) {
     )
   }
 
+  const allDone = done === items.length
+
   return (
-    <div data-today>
-      <Card padding="roomy" glow="accent">
+    <div data-today className="h-full">
+      <Card padding="roomy" elevation={2} className="h-full">
         <div className="flex items-center justify-between" style={{ gap: 'var(--space-4)' }}>
           <div className="min-w-0">
             <p style={eyebrow}>{C.todayTitle}</p>
-            <p style={{ ...strong, fontSize: 'var(--text-lead)', fontFamily: 'var(--font-display)', marginTop: 'var(--space-2)' }} aria-live="polite">
+            <p
+              style={{
+                ...strong,
+                fontSize: 'var(--text-title)',
+                fontFamily: 'var(--font-display)',
+                letterSpacing: 'var(--tracking-title)',
+                lineHeight: 'var(--leading-tight)',
+                marginTop: 'var(--space-2)',
+              }}
+              aria-live="polite"
+            >
               {next ? C.todayNext(next.time, next.title) : C.todayAllDone}
             </p>
-            {next && <p style={meta}>{`${next.moment} · ${next.amount}`}</p>}
+            {next && <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{`${next.moment} · ${next.amount}`}</p>}
           </div>
-          <Ring value={items.length ? done / items.length : 0} size={64} stroke={6} label={C.todayProgress(done, items.length)}>
-            <span className="hub-figure" style={{ fontSize: 'var(--text-body)', color: 'var(--ink-1)' }}>
+          <Ring value={items.length ? done / items.length : 0} size={68} stroke={6} label={C.todayProgress(done, items.length)}>
+            <span className="hub-figure" style={{ fontSize: 'var(--text-lead)', color: allDone ? 'var(--accent)' : 'var(--ink-1)' }}>
               {C.todayProgress(done, items.length)}
             </span>
           </Ring>
         </div>
 
-        <ol style={{ marginTop: 'var(--space-5)', display: 'flex', flexDirection: 'column' }}>
-          {items.map((item, i) => {
-            const isNext = next?.productId === item.productId && !item.done
+        <ol className="hub-timeline" style={{ marginTop: 'var(--space-5)' }}>
+          {moments.map((m) => {
+            const lit = m.items.some((i) => i.productId === next?.productId)
+            const over = m.items.every((i) => i.done)
             return (
-              <li
-                key={`${item.productId}-${i}`}
-                className="flex items-center"
-                style={{
-                  gap: 'var(--space-3)',
-                  padding: 'var(--space-3) 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--edge)',
-                }}
-                data-today-item={item.productId}
-                data-done={item.done}
-              >
-                <span className="hub-figure shrink-0" style={{ width: 'calc(var(--space-8) * 1.7)', fontSize: 'var(--text-body-sm)', color: isNext ? 'var(--accent)' : 'var(--ink-3)' }}>
-                  {item.time ?? C.untimed}
-                </span>
-                <span className="min-w-0" style={{ flex: 1 }}>
-                  <span style={{ ...strong, display: 'block', color: item.done ? 'var(--ink-3)' : 'var(--ink-1)', textDecoration: item.done ? 'line-through' : 'none' }}>{item.title}</span>
-                  <span style={{ ...meta, display: 'block' }}>{item.moment}</span>
-                </span>
-                <Button
-                  size="sm"
-                  variant={item.done ? 'primary' : 'secondary'}
-                  icon="check"
-                  aria-pressed={item.done}
-                  aria-label={item.done ? C.todayUntick(item.title) : C.todayTick(item.title)}
-                  disabled={busy === item.productId}
-                  onClick={() => void toggle(item)}
-                />
+              <li key={m.key} className="hub-timeline-moment" data-lit={lit} data-over={over}>
+                <span aria-hidden className="hub-timeline-node" />
+                <p className="flex items-baseline" style={{ gap: 'var(--space-2)' }}>
+                  <span className="hub-figure" style={{ fontSize: 'var(--text-body)', color: lit ? 'var(--accent)' : 'var(--ink-1)' }}>
+                    {m.time ?? C.untimed}
+                  </span>
+                  <span style={meta}>{m.moment}</span>
+                </p>
+                <ul style={{ marginTop: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {m.items.map((item) => (
+                    <li key={item.productId} className="hub-today-row flex items-center" style={{ gap: 'var(--space-3)' }} data-today-item={item.productId} data-done={item.done}>
+                      <span className="min-w-0" style={{ flex: 1 }}>
+                        <span style={{ ...strong, display: 'block', color: item.done ? 'var(--ink-3)' : 'var(--ink-1)', textDecoration: item.done ? 'line-through' : 'none' }}>
+                          {item.title}
+                        </span>
+                        <span style={{ ...meta, display: 'block' }}>{item.amount}</span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant={item.done ? 'primary' : 'secondary'}
+                        icon="check"
+                        aria-pressed={item.done}
+                        aria-label={item.done ? C.todayUntick(item.title) : C.todayTick(item.title)}
+                        disabled={busy === item.productId}
+                        onClick={() => void toggle(item)}
+                      />
+                    </li>
+                  ))}
+                </ul>
               </li>
             )
           })}
