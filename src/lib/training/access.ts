@@ -30,15 +30,11 @@ type Who = Pick<UserRecord, 'id' | 'email'>
 export async function trainingAccess(user: Who, now = new Date()): Promise<TrainingAccess> {
   const { getOfferSettings } = await import('@/lib/offer/store')
   const enabled = (await getOfferSettings()).services.training
-  const { getSubscription } = await import('@/lib/db/hub-data')
-  const sub = await getSubscription(user.id)
-  if (sub && sub.status !== 'cancelled') return { enabled, allowed: enabled, via: 'subscription', until: null }
-  const { latestPaidOrderFor } = await import('@/lib/orders/repo')
-  const order = await latestPaidOrderFor({ userId: user.id, email: user.email })
-  if (order) {
-    const until = new Date(new Date(order.createdAt).getTime() + HUB_DAYS * 86_400_000)
-    if (until > now) return { enabled, allowed: enabled, via: 'order', until: until.toISOString() }
-  }
+  // The hub's own window: a plan that's running, or 90 days after an order or a cancelled plan.
+  const { hubAccess } = await import('@/lib/hub/access')
+  const a = await hubAccess(user, now)
+  if (a.state === 'subscriber') return { enabled, allowed: enabled, via: 'subscription', until: null }
+  if (a.state === 'member') return { enabled, allowed: enabled, via: 'order', until: `${a.until}T00:00:00.000Z` }
   return { enabled, allowed: false, via: null, until: null }
 }
 

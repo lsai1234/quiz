@@ -210,6 +210,16 @@ export async function listPaidOrdersFor(who: { userId?: string | null; email?: s
   return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
 }
 
+/** Everyone who has ordered since a moment, once each by email: who the deal emails go to. */
+export async function listRecentCustomers(sinceIso: string, limit = 5000): Promise<{ email: string; userId: string | null }[]> {
+  const db = await getEngine()
+  const rows = await db.all<{ email: string; user_id: string | null }>(
+    `SELECT LOWER(email) AS email, MAX(user_id) AS user_id FROM orders WHERE email IS NOT NULL AND email <> '' AND status NOT IN ('pending_payment', 'cancelled', 'failed', 'refunded') AND created_at >= ? GROUP BY LOWER(email) LIMIT ${Math.max(1, Math.min(limit, 20000))}`,
+    [sinceIso],
+  )
+  return rows.map((r) => ({ email: r.email, userId: r.user_id ?? null }))
+}
+
 /**
  * Whether this member had a subscription order before the given moment.
  *

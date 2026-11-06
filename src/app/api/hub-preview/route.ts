@@ -28,14 +28,14 @@ export async function POST(req: Request) {
   }
   const ids = Array.isArray(body.productIds) ? body.productIds.filter((x): x is string => typeof x === 'string').slice(0, 12) : []
   const seed = normaliseGuideSeed(body.guide)
-  const { services } = await getOfferSettings()
+  const { services, memberDeals } = await getOfferSettings()
 
   const preview: HubPreview = { training: null, deals: null }
   if (services.training) preview.training = trainingPreview({ day: seed.day, goals: seed.goals, training: seed.training ?? null })
   if (services.deals && body.plan === 'oneoff' && ids.length) {
     const { products } = await getResolvedCatalogue()
     const byId = new Map(products.map((p) => [p.id, p]))
-    preview.deals = dealsPreview(ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p)), seed.day.trainDays)
+    preview.deals = dealsPreview(ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p)), seed.day.trainDays, memberDeals)
   }
   return NextResponse.json(preview)
 }

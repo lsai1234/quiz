@@ -7,6 +7,7 @@ import { checkLiveStock } from '@/lib/supplier/stock-check'
 import { rememberLiveStock } from '@/lib/supplier/sync'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { getHubUser } from '@/lib/auth/session'
+import { describeBox, priceBoxOrder, publicBox, quoteBox, type BoxQuote } from '@/lib/deals/box'
 import { getSubscription } from '@/lib/db/hub-data'
 import { createOrderFromCheckout, newOrderId, normaliseShippingAddress } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
@@ -38,7 +39,7 @@ import {
 } from '@/lib/last-chance/economics'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierAddress } from '@/lib/supplier/types'
-import type { LastChanceSnapshot, OrderChannel, OrderLine } from '@/lib/orders/types'
+import type { LastChanceSnapshot, MemberDealSnapshot, OrderChannel, OrderLine } from '@/lib/orders/types'
 import { supplierIdFor } from '@/lib/catalogue/master'
 import { isAccessory } from '@/lib/catalogue/accessory'
 import { claimsFor } from '@/lib/consult/claims'
@@ -199,6 +200,7 @@ export async function POST(req: Request) {
     claimStarter?: unknown
     shippingAddress?: unknown
     lastChance?: unknown
+    memberDeal?: unknown
     safety?: unknown
     bonus?: unknown
     constraints?: unknown
@@ -322,7 +324,7 @@ export async function POST(req: Request) {
     did not count either. The partner keeps the credit for the stack they
     referred somebody to; this is a separate, smaller sale.
   */
-  const wantsOffer = body.lastChance != null
+  const wantsOffer = body.lastChance != null || body.memberDeal != null
   const code = wantsOffer ? null : await resolveCheckoutCode(typedCode)
   // The channel decides eligibility as well as reporting: codes work on stacks
   // and bundles, not on single products off the shop shelf (`worksOn`). Read
@@ -602,6 +604,75 @@ export async function POST(req: Request) {
   }
 
   /**
+   * A member's deal, or a top-up box of them, from their hub (`lib/deals`).
+   *
+   * Members only: the signed-in account's own deals, worked out again here
+   * from their orders, so a request can only ask for a deal that is theirs and
+   * open (or, in a box with an open one, due within 30 days). One each, no
+   * codes, no gift, and priced by the server (`quoteBox`): each product at its
+   * member price, delivery free over the founders' threshold, and the whole
+   * box checked against the margin floor. Shown one price and about to charge
+   * more: stop and say so. A deal in a checkout is held for half an hour, so
+   * one deal can't be spent twice at once; once the order is paid, the
+   * product's next deal follows the new pack.
+   */
+  let memberDeal: { box: BoxQuote; note: string; snapshot: MemberDealSnapshot; claims: { productId: string; boughtOn: string }[] } | null = null
+  if (body.memberDeal != null) {
+    const want = (typeof body.memberDeal === 'object' ? body.memberDeal : {}) as { expectedTotal?: unknown }
+    if (!user) return NextResponse.json({ error: 'Sign in to use your member prices.' }, { status: 401 })
+    if (body.lastChance != null || founder || starter || body.bonus != null) {
+      await releaseClaim()
+      return NextResponse.json({ error: 'Member prices are bought on their own.' }, { status: 400 })
+    }
+    const ids = new Set(matched.map((m) => m.product.id))
+    if (matched.some((m) => m.quantity !== 1) || ids.size !== matched.length) {
+      return NextResponse.json({ error: 'One of each product, please.' }, { status: 400 })
+    }
+    const { dealsFor } = await import('@/lib/deals/server')
+    const state = await dealsFor(user)
+    const picked = matched.map((m) => ({ m, deal: state.deals.find((d) => d.variantId === m.variant.id) }))
+    if (!state.enabled || picked.some((p) => !p.deal || !p.deal.boxable) || !picked.some((p) => p.deal!.state === 'open')) {
+      return NextResponse.json({ error: 'That member price isn’t open any more.', offerChanged: true }, { status: 409 })
+    }
+    const { kvGet } = await import('@/lib/db/kv')
+    for (const p of picked) {
+      const held = await kvGet<{ boughtOn: string; at: string }>(`deal-claim:${user.id}:${p.m.product.id}`)
+      if (held && held.boughtOn === p.deal!.boughtOn && Date.now() - Date.parse(held.at) < 30 * 60_000) {
+        return NextResponse.json({ error: `Your ${p.deal!.short} price is already in a checkout. Finish that one, or try again in half an hour.` }, { status: 409 })
+      }
+    }
+    const offerSettings = await getOfferSettings()
+    const box = quoteBox(matched.map((m) => ({ product: m.product, variant: m.variant })), offerSettings.memberDeals, config)
+    if (!box.viable) {
+      return NextResponse.json({ error: 'That box isn’t available at a member price any more.', offerChanged: true, box: publicBox(box) }, { status: 409 })
+    }
+    if (typeof want.expectedTotal === 'number' && box.total > want.expectedTotal + 0.009) {
+      return NextResponse.json({ error: `Your box has changed: it’s now ${formatGBP(box.total)} delivered.`, offerChanged: true, box: publicBox(box) }, { status: 409 })
+    }
+    memberDeal = {
+      box,
+      note: describeBox(box),
+      snapshot: {
+        lines: box.lines.map((l, i) => ({ productId: l.productId, listPrice: l.listPrice, offerPrice: l.offerPrice, discountPct: l.discountPct, boughtOn: picked[i].deal!.boughtOn })),
+        standardDelivery: box.standardDelivery,
+        deliveryCharge: box.deliveryCharge,
+        delivery: box.delivery,
+        normalTotal: box.normalTotal,
+        total: box.total,
+      },
+      claims: picked.map((p) => ({ productId: p.m.product.id, boughtOn: p.deal!.boughtOn })),
+    }
+  }
+
+  /** Hold a member's deals while their checkout is open (see above). */
+  const holdDealClaims = async () => {
+    if (!memberDeal || !user) return
+    const { kvSet } = await import('@/lib/db/kv')
+    const at = new Date().toISOString()
+    for (const c of memberDeal.claims) await kvSet(`deal-claim:${user.id}:${c.productId}`, { boughtOn: c.boughtOn, at })
+  }
+
+  /**
    * The free bonus, re-checked before any money moves (plan Phase 3, 5).
    *
    * The page chose it; the hub's settings and the catalogue as they are now
@@ -622,7 +693,7 @@ export async function POST(req: Request) {
       catalogue: products,
       lines: matched.map((m) => ({ product: m.product, price: m.variant.price, cost: unitCostOf(m.product, m.variant.price), quantity: m.quantity })),
       constraints: bonusConstraintsFrom(body.constraints, safety.safetyConstraints),
-      isStack: channel === 'quiz' && !lastChance,
+      isStack: channel === 'quiz' && !lastChance && !memberDeal,
       code:
         founder || starter
           ? { kind: 'set-price' }
@@ -670,6 +741,8 @@ export async function POST(req: Request) {
     ? priceAtFounderTerms(founder.kind, pricedLines, config)
     : lastChance
     ? priceOfferOrder(lastChance.quote)
+    : memberDeal
+    ? priceBoxOrder(memberDeal.box)
     : priceOneOffLines(pricedLines, config, partnerPct)
 
   const orderLines: OrderLine[] = matched.map((m, i) => ({
@@ -751,6 +824,8 @@ export async function POST(req: Request) {
     ? founderDeliveryOptions(founder.kind, { supplierValue, orderValue: priced.total }, config)
     : lastChance
     ? offerDeliveryOptions(lastChance.quote, config)
+    : memberDeal
+    ? offerDeliveryOptions({ listPrice: memberDeal.box.subtotal, deliveryCharge: memberDeal.box.deliveryCharge } as OfferQuote, config)
     : deliveryOptions(priced.subtotal, config)
   // Recorded on the order: what each zone was offered at, so the fulfilment
   // queue judges a Highlands order against the rate it was actually given.
@@ -878,9 +953,10 @@ export async function POST(req: Request) {
         email: user?.email ?? null,
         partnerCode: redemption?.ok ? redemption.code.code : null,
         partnerDiscountPct: redemption?.ok ? partnerPct : null,
-        offer: lastChance?.note ?? null,
+        offer: lastChance?.note ?? memberDeal?.note ?? null,
         bonus: bonus?.record ?? null,
         lastChance: lastChance?.snapshot ?? null,
+        memberDeal: memberDeal?.snapshot ?? null,
         deliveryDue,
         ...founderFields,
         ...safety,
@@ -926,6 +1002,7 @@ export async function POST(req: Request) {
         await releaseClaim()
         return NextResponse.json({ error: 'Stripe did not return a checkout URL.' }, { status: 502 })
       }
+      await holdDealClaims()
       return NextResponse.json({ checkoutUrl: url, orderId })
     } catch (err) {
       console.error('[/api/cart] Stripe session creation failed:', err)
@@ -949,9 +1026,10 @@ export async function POST(req: Request) {
       shipping: mainlandCharge,
       partnerCode: redemption?.ok ? redemption.code.code : null,
       partnerDiscountPct: redemption?.ok ? partnerPct : null,
-      offer: lastChance?.note ?? null,
+      offer: lastChance?.note ?? memberDeal?.note ?? null,
       bonus: bonus?.record ?? null,
       lastChance: lastChance?.snapshot ?? null,
+      memberDeal: memberDeal?.snapshot ?? null,
       deliveryDue,
       ...founderFields,
       ...safety,
@@ -965,5 +1043,6 @@ export async function POST(req: Request) {
   if (founder) await markFounderCodeUsed(founder.code.code, founder.token, order.id)
   // The stack guide was made as the order was paid; the in-page receipt links to it.
   const guide = (await getOrder(order.id))?.guideToken ?? null
+  await holdDealClaims()
   return NextResponse.json({ checkoutUrl: '#mock-checkout', mock: true, orderId: order.id, guide })
 }

@@ -113,6 +113,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     subscription: input.subscription ?? null,
     ...(input.deliveryDue ? { deliveryDue: input.deliveryDue } : {}),
     ...(input.lastChance ? { lastChance: input.lastChance } : {}),
+    ...(input.memberDeal ? { memberDeal: input.memberDeal } : {}),
     ...(input.bonus ? { bonus: input.bonus } : {}),
     ...(input.safetyConstraints && input.healthDataConsent
       ? { safetyConstraints: input.safetyConstraints, healthDataConsent: input.healthDataConsent }

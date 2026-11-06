@@ -1,6 +1,7 @@
 'use client'
 
 import { GUIDE_COPY } from '@/lib/guide/copy'
+import { HUB_COPY } from '@/lib/hub/copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { track } from '@/lib/analytics/events'
@@ -298,6 +299,26 @@ function Processing({ data, timedOut }: { data: ConfirmationResponse; timedOut: 
 }
 
 /** The stack guide, ready: their products on their day. Emailed too, when there is an address. */
+/** First after the receipt: everything that comes with the order lives in the hub. */
+function HubReadyLink({ email }: { email: string | null }) {
+  return (
+    <a
+      href="/myhub"
+      data-hub-ready
+      className="mt-6 flex items-center justify-between gap-3 rounded-2xl px-5 py-5"
+      style={{ background: 'var(--color-accent)', color: 'var(--color-bg)' }}
+    >
+      <span>
+        <span className="block text-base font-black" style={{ fontFamily: 'var(--font-display)' }}>
+          {HUB_COPY.readyTitle}
+        </span>
+        <span className="block text-xs mt-1 font-semibold" style={{ opacity: 0.85 }}>{HUB_COPY.readyLine(email)}</span>
+      </span>
+      <span aria-hidden className="text-xl font-black">→</span>
+    </a>
+  )
+}
+
 function GuideLink({ href }: { href: string }) {
   return (
     <a
@@ -308,7 +329,7 @@ function GuideLink({ href }: { href: string }) {
     >
       <span>
         <span className="block text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-          {GUIDE_COPY.ready}
+          {HUB_COPY.guideAlso}
         </span>
         <span className="block text-xs mt-0.5 text-[var(--color-text-2)]">{GUIDE_COPY.readyLine}</span>
       </span>
@@ -354,6 +375,7 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
 
       {receipt && <ReceiptPrinter receipt={receipt} className="mt-6 mb-1" />}
 
+      <HubReadyLink email={order?.emailMasked ?? null} />
       {(order?.guidePath || subscription?.guidePath) && <GuideLink href={(order?.guidePath || subscription?.guidePath)!} />}
 
       {order?.refunded && (

@@ -50,6 +50,13 @@ export function HubLogin({ onAuthenticate, loading, providers = [], canResetPass
     const params = new URLSearchParams(window.location.search)
     const failed = params.get('auth_error')
     const forgot = params.get('forgot')
+    // From the "Your member hub is ready" email and the order confirmation: the
+    // order's email, filled in, so their order joins the account they make.
+    const prefill = params.get('email')
+    if (prefill && /\S+@\S+\.\S+/.test(prefill) && prefill.length < 200) {
+      setEmail(prefill)
+      if (params.get('new') === '1') setMode('signup')
+    }
     if (!failed && !forgot) return
     if (failed) setFailedProviderId(failed)
     if (forgot) setMode('forgot')
@@ -91,16 +98,16 @@ export function HubLogin({ onAuthenticate, loading, providers = [], canResetPass
       {/* The one screen in the app that greets a member by name carried no
           brand mark at all. */}
       <CHRGDMark size={34} className="mb-5" />
-      <Eyebrow color="var(--accent)" className="mb-2">Subscriber hub</Eyebrow>
+      <Eyebrow color="var(--accent)" className="mb-2">Member hub</Eyebrow>
       <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
-        {mode === 'forgot' ? 'Forgotten password' : 'Manage your stack'}
+        {mode === 'forgot' ? 'Forgotten password' : 'Your member hub'}
       </h1>
       <p className="text-sm text-[var(--ink-3)] leading-relaxed mb-7">
         {mode === 'forgot'
           ? 'Happens to everyone. We’ll email you a link and you’ll be back in a minute.'
           : mode === 'login'
-            ? 'Sign in to swap products, change your dispatch date, and manage your subscription.'
-            : 'Create your account to save your stack, track how it’s working, and manage deliveries.'}
+            ? 'Sign in with the email you ordered with: your guide, member prices, training plan and, on a monthly plan, your deliveries.'
+            : 'Create your account with the email you ordered with, and your orders join it straight away.'}
       </p>
 
       {mode === 'forgot' && (

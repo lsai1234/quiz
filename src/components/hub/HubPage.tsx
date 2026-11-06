@@ -7,8 +7,7 @@ import { HubShell } from './HubShell'
 import { HubSkeleton } from './HubSkeleton'
 import { NoSubscription } from './NoSubscription'
 import { SubscriptionDashboard } from './SubscriptionDashboard'
-import { DealsCard } from './DealsCard'
-import { TrainingCard } from './TrainingCard'
+import { MemberHome } from './home/MemberHome'
 import { YourData } from './YourData'
 
 export function HubPage() {
@@ -60,41 +59,19 @@ export function HubPage() {
    * longer does that where real money is involved, so the state is now real and
    * needs a screen of its own.
    */
-  // `YourData` sits on BOTH signed-in branches rather than inside the dashboard.
-  // The right to a copy of your data and to have it deleted does not depend on
-  // holding a live subscription — a member who never subscribed, or who
-  // cancelled last year, still has answers on file and still has the right to
-  // take them away.
-  if (!subscription) {
-    return (
-      <HubShell onSignOut={logout}>
-        {/* A one-off order opens the training plan too: first, when it's there. */}
-        <div className="empty:hidden mb-6">
-          <DealsCard />
-        </div>
-        <div className="empty:hidden mb-6">
-          <TrainingCard />
-        </div>
-        <NoSubscription name={session.name} email={session.email} onSignOut={logout} />
-        <div className="mt-10">
-          <YourData />
-        </div>
-      </HubShell>
-    )
-  }
-
+  // One member hub for everyone signed in: one-off buyers, subscribers, and
+  // those whose hub has closed (`MemberHome`). The plan controls are a section
+  // of it for subscribers, rendered straight away rather than after the home's
+  // own request. `YourData` is on every branch: the right to a copy of your data
+  // and to have it deleted does not depend on holding a live subscription.
   return (
-    <HubShell onSignOut={logout}>
-      <SubscriptionDashboard />
-      <div className="empty:hidden mt-8">
-        <TrainingCard />
-      </div>
-      <div className="empty:hidden mt-8">
-        <DealsCard />
-      </div>
-      <div className="mt-10">
-        <YourData />
-      </div>
+    <HubShell onSignOut={logout} nav="home">
+      <MemberHome
+        name={session.name ?? null}
+        plan={subscription ? <SubscriptionDashboard embedded /> : null}
+        none={<NoSubscription name={session.name} email={session.email} onSignOut={logout} />}
+        data={<YourData />}
+      />
     </HubShell>
   )
 }

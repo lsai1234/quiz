@@ -43,7 +43,8 @@ function countdownLabel(iso: string): string {
   return `ships in ${days} days`
 }
 
-export function SubscriptionDashboard() {
+/** `embedded`: inside the member hub's home, under its own "Your plan" heading, so no greeting of its own. */
+export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean } = {}) {
   const {
     // Sign-out moved to the shell's header, where an account action belongs.
     subscription: sub, feedback,
@@ -212,12 +213,14 @@ export function SubscriptionDashboard() {
       {/* Greeting. `email.split('@')[0]` used to stand in for a name, which
           greeted paying members as "Hi lewissiara". A real first name if the
           account has one, and otherwise nothing pretending to be one. */}
-      <div className="mb-6" data-reveal>
-        <Eyebrow color="var(--accent)">Your subscription</Eyebrow>
-        <h1 className="text-2xl font-black mt-1.5" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
-          {greeting}
-        </h1>
-      </div>
+      {!embedded && (
+        <div className="mb-6" data-reveal>
+          <Eyebrow color="var(--accent)">Your subscription</Eyebrow>
+          <h1 className="text-2xl font-black mt-1.5" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+            {greeting}
+          </h1>
+        </div>
+      )}
 
       {sub.status === 'cancelled' ? (
         <Card className="text-center py-8" data-reveal>

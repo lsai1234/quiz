@@ -19,7 +19,7 @@ import { sellBundle } from '../support/bundles'
 const PUBLIC_ROUTES: Array<{ path: string; name: string; ready?: string }> = [
   { path: '/', name: 'the quiz hero', ready: 'Build your stack' },
   { path: '/shop', name: 'the shop', ready: 'Everything, à la carte' },
-  { path: '/myhub', name: 'the My Hub gate', ready: 'Manage your stack' },
+  { path: '/myhub', name: 'the My Hub gate', ready: 'Your member hub' },
   { path: '/founderhub', name: 'the Founders Hub gate', ready: 'Founder sign-in' },
   { path: '/partner', name: 'the Partners Hub gate', ready: 'Partner sign-in' },
   { path: '/legal/terms', name: 'the terms' },

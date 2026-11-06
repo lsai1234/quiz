@@ -214,15 +214,48 @@ export function normaliseServices(raw: unknown): ServiceSettings {
   }
 }
 
+/**
+ * Settings → Offer → "Member deals" (`lib/deals`): how big a member's deal on
+ * each kind of product may be, and when a top-up box ships free. A size is a
+ * ceiling, never a promise: each deal is the deepest whole percent up to it
+ * that still keeps the margin floor (Pricing → Last-chance offer).
+ */
+export interface MemberDealSettings {
+  /** The deepest percent off for a kind with no size of its own (0–1). */
+  defaultPct: number
+  /** Sizes by product kind (0–1). */
+  pct: Partial<Record<SwapGroup, number>>
+  /** A top-up box ships free to the UK mainland at or over this (£, inc VAT). */
+  topUpFreeOver: number
+}
+
+export const DEFAULT_MEMBER_DEALS: MemberDealSettings = { defaultPct: 0.15, pct: {}, topUpFreeOver: 40 }
+
+export function normaliseMemberDeals(raw: unknown): MemberDealSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof MemberDealSettings, unknown>>
+  const pct: Partial<Record<SwapGroup, number>> = {}
+  if (r.pct && typeof r.pct === 'object') {
+    for (const [k, v] of Object.entries(r.pct as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v)) pct[k as SwapGroup] = Math.min(0.5, Math.max(0, v))
+    }
+  }
+  return {
+    defaultPct: num(r.defaultPct, DEFAULT_MEMBER_DEALS.defaultPct, 0, 0.5),
+    pct,
+    topUpFreeOver: num(r.topUpFreeOver, DEFAULT_MEMBER_DEALS.topUpFreeOver, 0, 500),
+  }
+}
+
 export interface OfferSettings {
   /** Settings → Offer → "Hero products". Off: the core offer is today's top pick. */
   heroEnabled: boolean
   heroes: Record<string, HeroApproval>
   bonus: BonusSettings
   services: ServiceSettings
+  memberDeals: MemberDealSettings
 }
 
-export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES }
+export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS }
 
 const NOVEL: readonly NovelFoodStatus[] = ['not-novel', 'authorised', 'unauthorised', 'unknown']
 const num = (v: unknown, fallback: number, min = 0, max = Number.POSITIVE_INFINITY) =>
@@ -268,7 +301,7 @@ export function normaliseOffer(raw: unknown): OfferSettings {
   if (r.heroes && typeof r.heroes === 'object') {
     for (const [id, a] of Object.entries(r.heroes)) heroes[id] = normaliseHeroApproval(id, a)
   }
-  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services) }
+  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals) }
 }
 
 /* ── What Phase 3 reads ─────────────────────────────────────────────────── */

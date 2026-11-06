@@ -35,5 +35,6 @@ export function allOn(over: Partial<OfferSettings['bonus']> = {}): OfferSettings
     heroes: Object.fromEntries(HERO_IDS.map((id) => [id, approved(id)])),
     bonus: { ...DEFAULT_OFFER.bonus, enabled: true, pool: [...POOL], minSubtotal: 40, floorPounds: 1, floorPct: 0.02, ...over },
     services: { ...DEFAULT_OFFER.services },
+    memberDeals: { ...DEFAULT_OFFER.memberDeals },
   }
 }

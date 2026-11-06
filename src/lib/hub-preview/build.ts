@@ -8,6 +8,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Goal, QuizAnswers } from '@/lib/types'
 import type { RoutineDay } from '@/lib/routine'
 import { dealPreview, frequencyFor } from '@/lib/deals/engine'
+import type { MemberDealSettings } from '@/lib/offer/settings'
 import { DEALS_COPY } from '@/lib/deals/copy'
 import { buildWeek } from '@/lib/training/generate'
 import { prefillPrefs, type TrainingSeed } from '@/lib/training/prefs'
@@ -34,10 +35,10 @@ export function trainingPreview(input: { day: RoutineDay | null; goals: Goal[]; 
   return sessions.length ? { sessions } : null
 }
 
-export function dealsPreview(products: readonly CatalogueProduct[], trainDays: number | null): HubPreview['deals'] {
+export function dealsPreview(products: readonly CatalogueProduct[], trainDays: number | null, sizes?: MemberDealSettings): HubPreview['deals'] {
   const answers: Partial<QuizAnswers> | null = trainDays ? { trainingFrequency: frequencyFor(trainDays) } : null
   const out = products
-    .map((p) => dealPreview(p, answers))
+    .map((p) => dealPreview(p, answers, undefined, sizes))
     .filter((d): d is NonNullable<typeof d> => d !== null)
     .map((d) => ({
       productId: d.productId,

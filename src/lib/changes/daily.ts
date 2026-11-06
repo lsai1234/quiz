@@ -41,6 +41,8 @@ export interface DailyRunResult {
   shareCardsSwept?: number
   /** Amp's check-in emails queued today. */
   checkInsSent?: number
+  /** Member deal emails sent (a deal opened today). */
+  dealEmailsSent?: number
   /** Imported products whose stock/cost was refreshed from the supplier. */
   productsRefreshed?: number
   /** Imported products whose SKU is no longer in the supplier feed. */
@@ -197,6 +199,16 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] check-in sweep failed:', err)
   }
 
+  // Member deals that opened today: one email each, to anyone who hasn't
+  // stopped them. Never allowed to fail the rest of the job.
+  let dealEmails = { sent: 0 }
+  try {
+    const { sweepDealEmails } = await import('@/lib/deals/emails')
+    dealEmails = await sweepDealEmails()
+  } catch (err) {
+    console.error('[daily] deal email sweep failed:', err)
+  }
+
   // Anonymous share cards past their year. Only cards with no account behind
   // them — a card attached to a customer is theirs, and deleting it because a
   // year passed is deleting something of theirs on a schedule they never agreed
@@ -239,6 +251,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     baselineOnly: detection.baselineOnly,
     shareCardsSwept,
     checkInsSent: checkIns.sent,
+    dealEmailsSent: dealEmails.sent,
     ...base,
     cancelled: detection.cancelled.length,
     // Applied during detection, plus anything whose own clock came due.

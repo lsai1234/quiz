@@ -27,6 +27,10 @@ export type TemplateId =
   | 'stack-guide'
   /** Every two weeks after an order: Amp's check-in (Option 2). */
   | 'check-in'
+  /** A member's deal has opened in their hub (soft opt-in, with a way to stop). */
+  | 'deal-open'
+  /** A 6-digit code to join an order placed under another email to the account. */
+  | 'order-link-code'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
   /** A one-off order item sold out after payment: removed, swapped or back-ordered. */

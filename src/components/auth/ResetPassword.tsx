@@ -123,7 +123,7 @@ export function ResetPassword() {
   return (
     <div className={wrap}>
       <CHRGDMark size={34} className="mb-5" />
-      <Eyebrow color="var(--accent)" className="mb-2">Subscriber hub</Eyebrow>
+      <Eyebrow color="var(--accent)" className="mb-2">Member hub</Eyebrow>
       <h1
         className="text-3xl font-black mb-2"
         style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}

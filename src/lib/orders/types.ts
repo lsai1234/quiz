@@ -349,6 +349,8 @@ export interface Order {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** The last-chance deal this order was sold on — see `LastChanceSnapshot`. */
   lastChance?: LastChanceSnapshot | null
+  /** A member's deal or top-up box from their hub (`lib/deals/box`): what was sold at what. */
+  memberDeal?: MemberDealSnapshot | null
   /** The free bonus this order carries, or carried — see `OrderBonus`. */
   bonus?: OrderBonus | null
   /**
@@ -438,6 +440,8 @@ export interface CreateOrderInput {
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
   /** See `Order.lastChance`. */
   lastChance?: LastChanceSnapshot | null
+  /** See `Order.memberDeal`. */
+  memberDeal?: MemberDealSnapshot | null
   /** See `Order.bonus`. The line itself is in `lines`, flagged `bonus`. */
   bonus?: OrderBonus | null
   /** See `Order.safetyConstraints`. Only with `healthDataConsent`. */
@@ -450,6 +454,16 @@ export interface CreateOrderInput {
  * receipt can show what came off, and the hub what it was sold at, without
  * re-running a quote against prices that have since moved.
  */
+export interface MemberDealSnapshot {
+  lines: { productId: string; listPrice: number; offerPrice: number; discountPct: number; boughtOn: string }[]
+  standardDelivery: number
+  deliveryCharge: number
+  delivery: string
+  /** What it would have cost at the ordinary checkout, delivered (£). */
+  normalTotal: number
+  total: number
+}
+
 export interface LastChanceSnapshot {
   /** Shelf price of the product (£). */
   listPrice: number

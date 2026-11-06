@@ -67,5 +67,7 @@ export function publicOffer(
     bonus: { ...settings.bonus, enabled: shown && settings.bonus.enabled && pool.length > 0, pool },
     // Which services a box comes with: switches only, nothing private.
     services: { ...settings.services },
+    // Deal sizes and the top-up threshold: ceilings the reveal may quote ("up to 15%"), nothing private.
+    memberDeals: { ...settings.memberDeals, pct: { ...settings.memberDeals.pct } },
   }
 }

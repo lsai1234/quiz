@@ -11,12 +11,15 @@ export interface DealsState {
   enabled: boolean
   deals: MemberDeal[]
   hubEndsOn: string | null
+  /** A top-up box ships free at or over this (£). */
+  freeOver: number
 }
 
 export async function dealsFor(user: Pick<UserRecord, 'id' | 'email'>, now = new Date()): Promise<DealsState> {
   const { getOfferSettings } = await import('@/lib/offer/store')
-  const enabled = (await getOfferSettings()).services.deals
-  if (!enabled) return { enabled, deals: [], hubEndsOn: null }
+  const settings = await getOfferSettings()
+  const enabled = settings.services.deals
+  if (!enabled) return { enabled, deals: [], hubEndsOn: null, freeOver: settings.memberDeals.topUpFreeOver }
 
   const { listPaidOrdersFor } = await import('@/lib/orders/repo')
   const since = new Date(now.getTime() - HUB_DAYS * 86_400_000).toISOString()
@@ -34,6 +37,6 @@ export async function dealsFor(user: Pick<UserRecord, 'id' | 'email'>, now = new
 
   const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
   const { products } = await getResolvedCatalogue()
-  const { deals, hubEndsOn } = memberDeals({ purchases, products, answers, planProductIds, now })
-  return { enabled, deals, hubEndsOn }
+  const { deals, hubEndsOn } = memberDeals({ purchases, products, answers, planProductIds, now, sizes: settings.memberDeals })
+  return { enabled, deals, hubEndsOn, freeOver: settings.memberDeals.topUpFreeOver }
 }

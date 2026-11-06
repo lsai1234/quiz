@@ -84,7 +84,7 @@ export function TrainingPage() {
 
   const back = buttonSurface('ghost', 'sm')
   return (
-    <HubShell onSignOut={logout}>
+    <HubShell onSignOut={logout} nav="training">
       <div style={{ marginBottom: 'var(--space-4)' }}>
         <Link href="/myhub" className={back.className} style={back.style} data-back-hub>
           ← {C.backToHub}

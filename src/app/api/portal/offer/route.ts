@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { getOfferSettings, saveBonusSettings, saveServiceSettings, setHeroEnabled } from '@/lib/offer/store'
+import { getOfferSettings, saveBonusSettings, saveMemberDealSettings, saveServiceSettings, setHeroEnabled } from '@/lib/offer/store'
 import { offerView } from '@/lib/offer/view'
 import { PersistError } from '@/lib/portal/persist'
 
@@ -29,7 +29,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  let body: { heroEnabled?: unknown; bonus?: unknown; services?: unknown }
+  let body: { heroEnabled?: unknown; bonus?: unknown; services?: unknown; memberDeals?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     if (typeof body.heroEnabled === 'boolean') await setHeroEnabled(body.heroEnabled)
     if (body.bonus && typeof body.bonus === 'object') await saveBonusSettings(body.bonus as Record<string, unknown>)
     if (body.services && typeof body.services === 'object') await saveServiceSettings(body.services as Record<string, unknown>)
+    if (body.memberDeals && typeof body.memberDeals === 'object') await saveMemberDealSettings(body.memberDeals as Record<string, unknown>)
   } catch (err) {
     if (err instanceof PersistError) return NextResponse.json({ error: err.message }, { status: 503 })
     throw err

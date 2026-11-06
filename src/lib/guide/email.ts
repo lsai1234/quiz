@@ -15,6 +15,7 @@ import { NOT_MEDICAL_ADVICE_SENTENCE } from '@/lib/legal/content'
 import { spokenClock } from '@/lib/routine/ring'
 import { longDate, type StackGuide } from './build'
 import { GUIDE_COPY } from './copy'
+import { HUB_COPY } from '@/lib/hub/copy'
 
 export interface GuideLinks {
   page: string
@@ -29,7 +30,12 @@ function sectionTitle(text: string): string {
   return `<div style="font-family:${S.sans};font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:${S.accentInk};padding:22px 0 8px">${h(text)}</div>`
 }
 
-export function stackGuideEmail(guide: StackGuide, links: GuideLinks, brand: BrandContext): RenderedEmail {
+/**
+ * With `hub`, the email leads with the member hub ("Your member hub is ready",
+ * one button in, with their email filled in) and the guide follows as what's
+ * inside it. Without, it's the guide on its own, as before.
+ */
+export function stackGuideEmail(guide: StackGuide, links: GuideLinks, brand: BrandContext, hub?: { url: string } | null): RenderedEmail {
   const c = GUIDE_COPY
   const first = guide.firstName
 
@@ -105,6 +111,27 @@ ${claims}${warnings}</div>`
   const checkIn = {
     html: sectionTitle(c.checkInHeading) + `<div style="font-family:${S.sans};font-size:14px;line-height:1.6;color:${S.text}">${h(c.checkIn(longDate(guide.checkInOn)))}</div>`,
     text: [c.checkInHeading.toUpperCase(), c.checkIn(longDate(guide.checkInOn))].join('\n'),
+  }
+
+  if (hub) {
+    const H = HUB_COPY
+    const lead = {
+      html: `<div style="font-family:${S.sans};font-size:14px;line-height:1.6;color:${S.text};padding:4px 0 10px">${h(H.emailHow)}</div>`,
+      text: H.emailHow,
+    }
+    const shell = emailShell({
+      preheader: H.emailPreheader,
+      heading: H.emailHeading,
+      intro: H.emailIntro,
+      paragraphs: [],
+      blocks: [lead, image, day, products, ...(services ? [services] : []), checkIn],
+      cta: { label: H.emailCta, url: hub.url },
+      secondaryCta: { label: c.open, url: links.page },
+      footnote: NOT_MEDICAL_ADVICE_SENTENCE,
+      links: { base: brand.baseUrl ?? appBaseUrl(), optOutUrl: null },
+      marketing: null,
+    })
+    return { subject: H.emailSubject(first), ...shell }
   }
 
   const shell = emailShell({

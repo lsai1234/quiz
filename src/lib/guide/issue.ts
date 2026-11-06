@@ -54,12 +54,16 @@ async function sendGuide(guide: StackGuide, to: string, userId: string | null): 
     import('./email'),
   ])
   const base = appBaseUrl()
+  // Lead with the member hub: their email filled in, and sign-up first when there's no account for it yet.
+  const { getUserByEmail } = await import('@/lib/db/users')
+  const hasAccount = Boolean(await getUserByEmail(to).catch(() => null))
+  const hub = { url: `${base}/myhub?email=${encodeURIComponent(to)}${hasAccount ? '' : '&new=1'}` }
   const queued = await queueNotification({
     userId,
     email: to,
     template: 'stack-guide',
     dedupeKey: `stack-guide:${guide.token}`,
-    rendered: stackGuideEmail(guide, guideLinks(guide.token, base), { baseUrl: base }),
+    rendered: stackGuideEmail(guide, guideLinks(guide.token, base), { baseUrl: base }, hub),
   })
   await deliverIfAutomatic(queued)
 }

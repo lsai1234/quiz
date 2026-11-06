@@ -770,3 +770,65 @@
   }
   .system-lever::after { display: none; }
 }
+
+/* ── Member hub ───────────────────────────────────────────────────────────
+   Shapes the hub's screens share; colours come from the component.
+   `.hub-rise` brings a card in on the spring, staggered by `--rise-i`. */
+@keyframes hub-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3)) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hub-rise {
+  animation: hub-rise var(--duration-slow) var(--ease-spring) both;
+  animation-delay: calc(var(--rise-i, 0) * var(--duration-fast) * 0.45);
+}
+/* A sideways row that snaps: the stack's products, the week's days. */
+.hub-rail {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: var(--space-2);
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+  scroll-padding-inline: var(--gutter);
+}
+.hub-rail::-webkit-scrollbar {
+  display: none;
+}
+.hub-rail > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+/* A ring of progress: the track, and the fill drawn on with a glow. */
+.hub-ring-track {
+  stroke: var(--edge-strong);
+}
+.hub-ring-fill {
+  stroke: var(--accent);
+  transition: stroke-dashoffset var(--duration-slow) var(--ease-spring);
+  filter: drop-shadow(0 0 var(--space-1) var(--accent-glow));
+}
+/* Big tabular numerals for counts and days. */
+.hub-figure {
+  font-family: var(--font-display);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-tight);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-rise {
+    animation: none;
+  }
+  .hub-ring-fill {
+    transition: none;
+  }
+}

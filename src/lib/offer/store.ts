@@ -22,6 +22,8 @@ import {
   type HeroApproval,
   type OfferSettings,
   type ServiceSettings,
+  normaliseMemberDeals,
+  type MemberDealSettings,
 } from './settings'
 
 const FILE = 'offer'
@@ -74,6 +76,14 @@ export async function saveServiceSettings(patch: Partial<ServiceSettings>): Prom
 export async function saveBonusSettings(patch: Partial<BonusSettings>): Promise<OfferSettings> {
   return mutate((state) => {
     state.bonus = normaliseBonus({ ...state.bonus, ...patch })
+    return state
+  })
+}
+
+/** Settings → Offer → "Member deals": sizes by kind and the top-up threshold, merged and checked. */
+export async function saveMemberDealSettings(patch: Partial<MemberDealSettings>): Promise<OfferSettings> {
+  return mutate((state) => {
+    state.memberDeals = normaliseMemberDeals({ ...state.memberDeals, ...patch, pct: { ...state.memberDeals.pct, ...(patch.pct ?? {}) } })
     return state
   })
 }

@@ -64,6 +64,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         icon: 'star',
       },
       {
+        slug: 'member-hub',
+        title: 'Member hub',
+        blurb: 'Member deal sizes by kind of product, when a top-up box ships free, what each product’s member price comes to, and how the hub is doing.',
+        icon: 'star',
+      },
+      {
         slug: 'training',
         title: 'Training plan',
         blurb: 'The hub’s training plan: whether it’s on, how many members use it, and tutorial videos for its exercises.',

@@ -48,7 +48,7 @@ describe('HubPage', () => {
   it('shows the login screen once we actually know they are signed out', () => {
     withState({ hydrated: true, session: null })
     render(<HubPage />)
-    expect(screen.getByRole('heading', { name: /manage your stack/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /your member hub/i })).toBeInTheDocument()
   })
 
   it('shows the dashboard, with somewhere to sign out, once the session lands', () => {
@@ -67,13 +67,16 @@ describe('HubPage', () => {
    * this was a header over an empty page — invisible only because the API used
    * to invent a plan for anyone who lacked one.
    */
-  it('shows the no-plan screen rather than an empty page', () => {
+  it('shows the no-plan screen rather than an empty page, once it knows they have never ordered', async () => {
+    const home = { access: { state: 'none', until: null, daysLeft: null, plan: null }, firstName: null, services: { training: false, deals: false, checkIns: true }, today: null, guide: null, checkIn: null, tips: [], training: null, deals: null, orders: [] }
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => home })) as unknown as typeof fetch
     withState({ hydrated: true, session: SESSION, subscription: null })
     render(<HubPage />)
 
-    expect(screen.getByRole('heading', { name: /hi sam/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /hi sam/i })).toBeInTheDocument()
     expect(screen.getByText(/no plan on this account yet/i)).toBeInTheDocument()
     expect(screen.queryByText('Your next box')).not.toBeInTheDocument()
+    delete (global as { fetch?: unknown }).fetch
   })
 
   it('keeps the sign-out action on the no-plan screen', () => {

@@ -24,7 +24,9 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { QuizAnswers, TrainingFrequency } from '@/lib/types'
 import { isAccessory } from '@/lib/catalogue/accessory'
 import { shortNameOf } from '@/lib/catalogue/short-name'
-import { offerProductFor, publicQuote, quoteOffer, type PublicOfferQuote } from '@/lib/last-chance/economics'
+import { publicQuote, type PublicOfferQuote } from '@/lib/last-chance/economics'
+import { DEFAULT_MEMBER_DEALS, type MemberDealSettings } from '@/lib/offer/settings'
+import { memberQuote } from './box'
 import { packMonthsFor } from '@/lib/last-chance/pick'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
@@ -33,6 +35,8 @@ export const HUB_DAYS = 90
 export const LEAD_DAYS = 7
 /** A deal is always open at least this long before the hub ends. */
 export const LAST_CHANCE_WINDOW_DAYS = 14
+/** Products due within this many days can join an open deal's top-up box, at their own member price. */
+export const BOX_WINDOW_DAYS = 30
 /** When a pack's servings aren't recorded: about a month. */
 export const FALLBACK_RUN_OUT_DAYS = 30
 const DAY = 86_400_000
@@ -56,6 +60,8 @@ export interface MemberDeal {
   state: DealState
   /** Whole days until it opens (0 when open). */
   opensInDays: number
+  /** Can go in a top-up box now: open, or due within `BOX_WINDOW_DAYS`. */
+  boxable: boolean
   quote: PublicOfferQuote
 }
 
@@ -115,8 +121,10 @@ export function memberDeals(input: {
   planProductIds?: readonly string[]
   now: Date
   config?: PricingConfig
+  sizes?: MemberDealSettings
 }): { deals: MemberDeal[]; hubEndsOn: string | null } {
   const config = input.config ?? getPricingConfig()
+  const sizes = input.sizes ?? DEFAULT_MEMBER_DEALS
   const now = input.now.getTime()
   const bought = input.purchases.filter((p) => !p.bonus && Number.isFinite(Date.parse(p.at)))
   if (!bought.length) return { deals: [], hubEndsOn: null }
@@ -139,7 +147,7 @@ export function memberDeals(input: {
     if (!product || plan.has(product.id) || product.isSubscriptionOnly || isAccessory(product)) continue
     const variant = variantFor(product, p.variantTitle)
     if (!variant) continue
-    const quote = quoteOffer(offerProductFor(product, variant), config)
+    const quote = memberQuote(product, variant, sizes, config)
     if (!quote.viable) continue
     const boughtAt = Date.parse(p.at)
     const lasts = runOutDays(product, variant, p.quantity, input.answers)
@@ -159,6 +167,7 @@ export function memberDeals(input: {
       endsOn: ymd(endsMs),
       state: open ? 'open' : 'upcoming',
       opensInDays: open ? 0 : Math.ceil((opensMs - now) / DAY),
+      boxable: open || opensMs - now <= BOX_WINDOW_DAYS * DAY,
       quote: publicQuote(quote),
     })
   }
@@ -175,11 +184,12 @@ export function dealPreview(
   product: CatalogueProduct,
   answers: Partial<QuizAnswers> | null,
   config: PricingConfig = getPricingConfig(),
+  sizes: MemberDealSettings = DEFAULT_MEMBER_DEALS,
 ): { productId: string; short: string; weeks: number; estimated: boolean; quote: PublicOfferQuote } | null {
   if (product.isSubscriptionOnly || isAccessory(product)) return null
   const variant = variantFor(product, null)
   if (!variant) return null
-  const quote = quoteOffer(offerProductFor(product, variant), config)
+  const quote = memberQuote(product, variant, sizes, config)
   if (!quote.viable) return null
   const lasts = runOutDays(product, variant, 1, answers)
   const { opensMs } = dealWindow(0, lasts.days, HUB_DAYS * DAY)

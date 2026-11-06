@@ -59,9 +59,9 @@ test('a founder switches it on; an order opens it; the member builds and changes
 
   // From the hub, into the plan.
   await page.goto('/myhub')
-  const card = page.locator('[data-training-card]')
+  const card = page.locator('[data-tile="week"]')
   await expect(card).toBeVisible({ timeout: 20_000 })
-  await card.getByRole('link').click()
+  await card.locator('[data-tile-link="week"]').click()
 
   // Readiness: all seven, and nothing is kept but that it was done.
   const ready = page.locator('[data-readiness]')
@@ -174,5 +174,5 @@ test('a founder switches it on; an order opens it; the member builds and changes
 
   // And it waits in the hub.
   await page.goto('/myhub')
-  await expect(page.locator('[data-training-card]')).toContainText(/sessions done this week/)
+  await expect(page.locator('[data-tile="week"]')).toContainText(/\d+\/\d+/, { timeout: 20_000 })
 })

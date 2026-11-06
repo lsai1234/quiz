@@ -114,3 +114,57 @@ export function guaranteeTerms(): TermsSection[] {
   ]
 }
 
+
+/**
+ * The member hub's terms: what the hub is, how long it's open, and the
+ * conditions every member price carries. Linked from the hub card on the
+ * results page and from the hub. Draft wording, for sign-off (review pack).
+ */
+export function memberHubTerms(input: { freeOver: number }): TermsSection[] {
+  return [
+    {
+      heading: 'What the member hub is',
+      lines: [
+        'Your member hub comes with any CHRGD order, one-off or monthly. Sign in at /myhub with the email you ordered with to open it.',
+        'It holds your stack guide and reminders, Amp’s check-ins, tips for your stack, member prices on what you’ve bought and, while it’s running, your training plan.',
+      ],
+    },
+    {
+      heading: 'How long it’s open',
+      lines: [
+        'For 90 days from your latest order. Every order, including a member price order, starts the 90 days again.',
+        'On a monthly plan it stays open while the plan is running, and for 90 days after it ends.',
+        'When it closes you keep your guide and your order history; the rest opens again with your next order.',
+      ],
+    },
+    {
+      heading: 'Member prices',
+      lines: [
+        'Each product you buy gets its own member price in your hub. It opens about a week before that product is due to run out, worked out from the pack size and how you said you use it, and stays open until your hub closes.',
+        'A member price is for you only, through your hub, signed in. One use each: once you’ve bought it, that product’s next member price follows your new pack.',
+        'Member prices don’t combine with discount codes, the free gift or any other offer.',
+        `A top-up box of member prices ships free to the UK mainland at £${input.freeOver.toFixed(2)} or more; the Highlands and Islands surcharge still applies. Products not yet due can join a box with one that is, if they’re due within 30 days.`,
+        'On a monthly plan, your plan’s own products come at your monthly price. Member prices are for products you buy on top.',
+        'We set member prices product by product and may change them; the price shown in your hub when you check out is the price you pay. We may end member prices, but never for an order you’ve already placed.',
+      ],
+    },
+    {
+      heading: 'Emails',
+      lines: [
+        'We email you when a member price opens. Every one of those emails has a link to stop them, and you can turn them off in your hub. Order and account emails always arrive.',
+      ],
+    },
+    {
+      heading: 'Your training plan',
+      lines: [
+        'The training plan is general fitness guidance, not medical advice. Check with your GP before starting if the readiness check suggests it, and stop if anything hurts.',
+      ],
+    },
+    {
+      heading: 'Your other rights',
+      lines: [
+        'None of this changes your rights as a consumer, including to cancel an order and to a refund for faulty goods.',
+      ],
+    },
+  ]
+}
