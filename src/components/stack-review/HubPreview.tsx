@@ -5,6 +5,8 @@ import { useEffect, useId, useState } from 'react'
 import { Icon } from '@/components/ui/Icon'
 import { DEALS_COPY, HUB_PREVIEW_COPY as C } from '@/lib/deals/copy'
 import type { HubPreview as Preview } from '@/lib/hub-preview/build'
+import type { PublicTrainer } from '@/lib/trainer/types'
+import { TRAINER_COPY } from '@/lib/trainer/copy'
 import { YOU_PALETTE as P } from './you-palette'
 
 /**
@@ -30,6 +32,10 @@ export interface HubPreviewInput {
   guide: unknown
   training: boolean
   deals: boolean
+  /** Amp's check-ins are on. */
+  checkIns?: boolean
+  /** Ask your trainer, when it's live: who members will be asking. */
+  trainer?: PublicTrainer | null
 }
 
 export function HubPreview({ input }: { input: HubPreviewInput }) {
@@ -63,10 +69,11 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
 
   const training = input.training ? preview?.training : null
   const deals = input.deals && input.plan === 'oneoff' ? preview?.deals : null
-  if (!training && !deals && !(input.deals && input.plan === 'subscription')) return null
+  const trainer = input.trainer ?? null
+  if (!trainer && !training && !deals && !(input.deals && input.plan === 'subscription')) return null
 
   return (
-    <section aria-labelledby={headingId} className="mt-6" data-hub-preview>
+    <section aria-labelledby={headingId} className="mt-6 scroll-mt-28" id="hub-preview" data-hub-preview>
       <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accentInk, fontFamily: DISPLAY }}>
         {C.eyebrow}
       </p>
@@ -77,7 +84,7 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
         {C.sub}
       </p>
 
-      {(training || deals) && (
+      {(trainer || training || deals) && (
         <div
           className="relative mt-4 overflow-hidden rounded-[26px] p-3"
           style={{
@@ -97,8 +104,10 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
             <DaysRing />
           </div>
 
+          {trainer && <TrainerPreview trainer={trainer} />}
+
           {training && (
-            <div className="rounded-[18px] px-3.5 py-3" style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }} data-hub-preview-training>
+            <div className={`${trainer ? 'mt-2.5 ' : ''}rounded-[18px] px-3.5 py-3`} style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }} data-hub-preview-training>
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accent, fontFamily: DISPLAY }}>
                   {C.trainingTitle}
@@ -166,7 +175,7 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
 
           {deals && (
             <div
-              className={`${training ? 'mt-2.5' : ''} rounded-[18px] px-3.5 py-3`}
+              className={`${training || trainer ? 'mt-2.5' : ''} rounded-[18px] px-3.5 py-3`}
               style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }}
               data-hub-preview-deals
             >
@@ -249,5 +258,70 @@ function DaysRing() {
         90
       </span>
     </span>
+  )
+}
+
+/**
+ * Ask your trainer, on the drawn hub: who answers, that they're a real
+ * person, and what to ask. No made-up conversation: their name, their line,
+ * and the promise, as the hub itself shows it.
+ */
+function TrainerPreview({ trainer }: { trainer: PublicTrainer }) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-[18px] px-3.5 py-3.5"
+      style={{ background: `linear-gradient(135deg, rgba(0,212,255,0.16), rgba(0,212,255,0.02) 60%), ${P.nightCard}`, border: '1px solid rgba(0,212,255,0.35)' }}
+      data-hub-preview-trainer
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accent, fontFamily: DISPLAY }}>
+          {TRAINER_COPY.revealEyebrow}
+        </p>
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-black" style={{ background: 'rgba(61,220,151,0.16)', color: P.nightPositive, fontFamily: DISPLAY }}>
+          <Icon name="check" size={10} />
+          {TRAINER_COPY.revealBadge}
+        </span>
+      </div>
+      <div className="mt-2.5 flex items-center gap-3">
+        {trainer.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={trainer.photoUrl} alt="" width={48} height={48} className="h-12 w-12 flex-shrink-0 rounded-full object-cover" style={{ border: `2px solid ${P.accent}` }} />
+        ) : (
+          <span
+            aria-hidden
+            className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-[19px] font-black"
+            style={{ background: `linear-gradient(160deg, ${P.accentBright}, ${P.accent} 55%, ${P.accentDeep})`, color: P.night, fontFamily: DISPLAY, boxShadow: '0 0 16px rgba(0,212,255,0.55)' }}
+          >
+            {trainer.name.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block text-[16px] font-black leading-tight" style={{ color: P.nightInk, fontFamily: DISPLAY }}>
+            {TRAINER_COPY.revealTitle(trainer.name)}
+          </span>
+          <span className="mt-0.5 block text-[12px]" style={{ color: P.nightInk3 }}>
+            {`${trainer.role} · ${TRAINER_COPY.replyWithin(trainer.replyHours)}`}
+          </span>
+        </span>
+      </div>
+      <p className="mt-2.5 text-[12.5px] leading-snug" style={{ color: P.nightInk2 }}>
+        {TRAINER_COPY.revealBody(trainer.name)}
+      </p>
+      <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: P.nightInk }}>
+        <span aria-hidden style={{ color: P.accent }}>
+          <Icon name="play" size={11} />
+        </span>
+        {TRAINER_COPY.revealVideo}
+      </p>
+      {/* What asking looks like: a question box, empty, as in the hub. */}
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }} aria-hidden>
+        <span className="text-[12.5px]" style={{ color: P.nightInk3 }}>
+          {TRAINER_COPY.placeholder}
+        </span>
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full" style={{ background: P.accent, color: P.night }}>
+          <Icon name="send" size={13} />
+        </span>
+      </div>
+    </div>
   )
 }

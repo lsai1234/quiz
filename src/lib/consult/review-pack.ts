@@ -30,6 +30,7 @@ import { DEFAULT_BONUS } from '@/lib/offer/settings'
 import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelCopyRows, memberHubTermRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
 import { hubCopyRows } from '@/lib/hub/review-rows'
 import { tipRows } from '@/lib/tips/review-rows'
+import { trainerCopyRows } from '@/lib/trainer/review-rows'
 import { guideCopyRows } from '@/lib/guide/review-rows'
 import { checkInCopyRows } from '@/lib/checkin/review-rows'
 import { trainingCopyRows, trainingLibraryRows } from '@/lib/training/review-rows'
@@ -294,6 +295,8 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     // The member hub for every buyer: its own words, tips and questions, and its terms.
     ...hubCopyRows(),
     ...tipRows(),
+    // Ask your trainer: a real person answering in the hub.
+    ...trainerCopyRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
     ...guaranteeTermRows(),
     ...memberHubTermRows(),

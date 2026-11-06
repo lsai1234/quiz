@@ -39,4 +39,6 @@ export const YOU_PALETTE = {
   nightInk: '#F4F6FB',
   nightInk2: '#C3C8D2',
   nightInk3: '#9EA5B1',
+  /** "Real person": the positive tone, on the dark. */
+  nightPositive: '#3DDC97',
 } as const

@@ -45,6 +45,8 @@ import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
 import { chooseHero, heroReason, personFromSnapshot, type OfferInputs, type PersonFit } from '@/lib/offer/select'
 import { bonusWorth, codeOrBonus, coreOffer, dealPerson, tierBonuses, titleOf, type BonusLine } from '@/lib/offer/results'
 import { OFFER_COPY } from '@/lib/offer/copy'
+import { trainerLive } from '@/lib/offer/settings'
+import { publicTrainer } from '@/lib/trainer/public'
 import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
 import { PRICING_SYNCED_EVENT } from '@/lib/pricing/sync-event'
@@ -1303,7 +1305,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
         charge={chargeView({
           count: activeSlots.length,
           plan: canSubscribeStack && planType === 'subscription' ? 'subscription' : 'oneoff',
-          services: offerSettings.services,
+          services: { ...offerSettings.services, trainer: trainerLive(offerSettings) },
           ratePct: (l) => Math.round(levelSubscriptionRate(l) * 100),
         })}
         addOns={founderKind ? [] : boxAddOns}
@@ -1331,6 +1333,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           guide: guideSeed,
           training: offerSettings.services.training,
           deals: offerSettings.services.deals,
+          checkIns: offerSettings.services.checkIns,
+          trainer: trainerLive(offerSettings) ? publicTrainer(offerSettings.trainer) : null,
         }}
         monthlyMin={
           !canSubscribeStack && founderKind == null && pricing.subscriptionItemCount > 0 && !pricing.subscriptionMinOrderMet
@@ -1708,6 +1712,12 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
                 {formatGBP(barOnCore ? coreTotal : stickyTotal)}
                 {!barOnCore && stickyIsSub && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
               </p>
+              {/* The next reward, while they scroll: delivery and discount lines only (a gift is said with its conditions, in the box). */}
+              {!barOnCore && !starterStack && ladder.next && ladder.next.kind !== 'gift' && (
+                <p className="mt-1 truncate text-[10.5px] font-semibold" style={{ color: 'var(--color-accent)' }} data-sticky-next>
+                  {OFFER_COPY.stickyNext(ladder.next.toGo, ladder.next.label)}
+                </p>
+              )}
             </div>
             <button
               onClick={barOnCore ? startWithCore : handleCheckout}

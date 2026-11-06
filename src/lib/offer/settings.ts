@@ -200,9 +200,15 @@ export interface ServiceSettings {
    * founders turn it on; off, nothing mentions it.
    */
   deals: boolean
+  /**
+   * Ask your trainer (`lib/trainer`): members message a real person, one of
+   * the founders, about their training, and get an answer in the hub. Off
+   * until it's on here and the trainer's profile has a name.
+   */
+  trainer: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false, trainer: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
@@ -211,7 +217,53 @@ export function normaliseServices(raw: unknown): ServiceSettings {
     guarantee: r.guarantee === true,
     training: r.training === true,
     deals: r.deals === true,
+    trainer: r.trainer === true,
   }
+}
+
+/**
+ * Settings → Member hub → "Your trainer": the real person members can ask.
+ * Everything but `notifyEmail` is shown to customers.
+ */
+export interface TrainerProfile {
+  /** Their name as members see it ("Josh"). Empty: nobody is named, and the trainer stays off. */
+  name: string
+  /** One line under the name ("Co-founder · personal trainer"). */
+  role: string
+  /** A few lines in their own words: who they are and how they train. */
+  bio: string
+  /** A photo of them: an https link or a path on this site. Null shows their initial. */
+  photoUrl: string | null
+  /** How soon they promise an answer, in hours. */
+  replyHours: number
+  /** Questions a member can send in a day. */
+  dailyLimit: number
+  /** Where "a new question" emails go. Private: never sent to the browser. */
+  notifyEmail: string | null
+}
+
+export const DEFAULT_TRAINER: TrainerProfile = { name: '', role: 'Personal trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: null }
+
+const text = (v: unknown, max: number, fallback: string) => (typeof v === 'string' ? v.trim().slice(0, max) : fallback)
+
+export function normaliseTrainer(raw: unknown): TrainerProfile {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof TrainerProfile, unknown>>
+  const photo = typeof r.photoUrl === 'string' ? r.photoUrl.trim() : ''
+  const email = typeof r.notifyEmail === 'string' ? r.notifyEmail.trim().toLowerCase() : ''
+  return {
+    name: text(r.name, 40, DEFAULT_TRAINER.name),
+    role: text(r.role, 60, DEFAULT_TRAINER.role) || DEFAULT_TRAINER.role,
+    bio: text(r.bio, 600, DEFAULT_TRAINER.bio),
+    photoUrl: /^https:\/\/[^\s]+$/.test(photo) || /^\/[\w\-./]+$/.test(photo) ? photo.slice(0, 500) : null,
+    replyHours: Math.round(num(r.replyHours, DEFAULT_TRAINER.replyHours, 1, 168)),
+    dailyLimit: Math.round(num(r.dailyLimit, DEFAULT_TRAINER.dailyLimit, 1, 50)),
+    notifyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.slice(0, 200) : null,
+  }
+}
+
+/** The trainer is live: switched on, and someone is named. */
+export function trainerLive(settings: Pick<OfferSettings, 'services' | 'trainer'>): boolean {
+  return settings.services.trainer && settings.trainer.name.trim().length > 0
 }
 
 /**
@@ -253,9 +305,11 @@ export interface OfferSettings {
   bonus: BonusSettings
   services: ServiceSettings
   memberDeals: MemberDealSettings
+  /** Ask your trainer: who they are. */
+  trainer: TrainerProfile
 }
 
-export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS }
+export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS, trainer: DEFAULT_TRAINER }
 
 const NOVEL: readonly NovelFoodStatus[] = ['not-novel', 'authorised', 'unauthorised', 'unknown']
 const num = (v: unknown, fallback: number, min = 0, max = Number.POSITIVE_INFINITY) =>
@@ -301,7 +355,7 @@ export function normaliseOffer(raw: unknown): OfferSettings {
   if (r.heroes && typeof r.heroes === 'object') {
     for (const [id, a] of Object.entries(r.heroes)) heroes[id] = normaliseHeroApproval(id, a)
   }
-  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals) }
+  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals), trainer: normaliseTrainer(r.trainer) }
 }
 
 /* ── What Phase 3 reads ─────────────────────────────────────────────────── */

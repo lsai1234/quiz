@@ -12,6 +12,8 @@ import { DEFAULT_OFFER, normaliseOffer, type OfferSettings } from '@/lib/offer/s
 let cached: Promise<OfferSettings> | null = null
 
 function load(): Promise<OfferSettings> {
+  // No fetch (a test's DOM): everything off, as for a failed read.
+  if (typeof fetch !== 'function') return Promise.resolve(DEFAULT_OFFER)
   if (!cached) {
     cached = fetch('/api/offer', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))

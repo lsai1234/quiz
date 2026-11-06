@@ -20,6 +20,7 @@ export const LEVEL_COPY = {
   service: {
     guide: 'Your stack guide: when to take each one, on your day',
     reminders: 'Reminders at your times, in your calendar',
+    trainer: 'Ask a real personal trainer anything about your training, in your hub',
     training: 'A weekly training plan in your hub, built from your answers and yours to change',
     deals: 'Member prices in your hub on what you buy, as each is due to run out',
     checkIns: 'Amp checks in every two weeks, and your box changes in one tap',
@@ -35,6 +36,7 @@ export const LEVEL_COPY = {
   title: {
     guide: 'Your stack guide',
     reminders: 'Reminders',
+    trainer: 'Your personal trainer',
     training: 'Training plan',
     deals: 'Member prices',
     checkIns: 'Amp check-ins',
@@ -44,6 +46,7 @@ export const LEVEL_COPY = {
   line: {
     guide: 'When to take each one, on your day',
     reminders: 'At your times, in your calendar',
+    trainer: 'A real person answers your questions about your training. Not a bot.',
     training: 'A weekly plan in your hub, built from your answers and yours to change',
     deals: 'In your hub on what you buy, as each is due to run out',
     checkIns: 'Every two weeks, and your box changes in one tap',

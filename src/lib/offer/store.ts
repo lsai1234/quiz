@@ -23,7 +23,9 @@ import {
   type OfferSettings,
   type ServiceSettings,
   normaliseMemberDeals,
+  normaliseTrainer,
   type MemberDealSettings,
+  type TrainerProfile,
 } from './settings'
 
 const FILE = 'offer'
@@ -84,6 +86,14 @@ export async function saveBonusSettings(patch: Partial<BonusSettings>): Promise<
 export async function saveMemberDealSettings(patch: Partial<MemberDealSettings>): Promise<OfferSettings> {
   return mutate((state) => {
     state.memberDeals = normaliseMemberDeals({ ...state.memberDeals, ...patch, pct: { ...state.memberDeals.pct, ...(patch.pct ?? {}) } })
+    return state
+  })
+}
+
+/** Settings → Member hub → "Your trainer": the profile, merged and checked. */
+export async function saveTrainerProfile(patch: Partial<TrainerProfile>): Promise<OfferSettings> {
+  return mutate((state) => {
+    state.trainer = normaliseTrainer({ ...state.trainer, ...patch })
     return state
   })
 }

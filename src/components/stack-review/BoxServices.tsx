@@ -25,6 +25,7 @@ export const GUARANTEE_TERMS_PATH = '/legal/guarantee'
 const MARK: Record<string, IconName> = {
   guide: 'sun',
   reminders: 'bell',
+  trainer: 'chat',
   training: 'dumbbell',
   deals: 'star',
   checkIns: 'sparkle',

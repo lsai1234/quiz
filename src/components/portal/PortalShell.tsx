@@ -31,6 +31,7 @@ const NAV = [
   { href: '/founderhub/pricing', label: 'Pricing' },
   { href: '/founderhub/partners', label: 'Partners' },
   { href: '/founderhub/actions', label: 'Requires action' },
+  { href: '/founderhub/trainer', label: 'Trainer' },
   { href: '/founderhub/monitoring', label: 'Monitoring' },
   { href: '/founderhub/emails', label: 'Emails' },
   { href: '/founderhub/settings', label: 'Settings' },
@@ -40,6 +41,12 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [source, setSource] = useState<{ mode: string; effective: string } | null>(null)
   const [founder, setFounder] = useState<{ name: string } | null>(null)
+  // Members waiting on the trainer, beside its tab.
+  const [waiting, setWaiting] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/portal/trainer').then((r) => (r.ok ? r.json() : null)).then((d) => setWaiting(d?.waiting ?? 0)).catch(() => {})
+  }, [pathname])
 
   useEffect(() => {
     fetch('/api/portal/data-source').then((r) => (r.ok ? r.json() : null)).then((d) => d && setSource(d)).catch(() => {})
@@ -137,6 +144,23 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 }}
               >
                 {n.label}
+                {n.href === '/founderhub/trainer' && waiting > 0 && (
+                  <span
+                    className="hub-figure"
+                    style={{
+                      marginLeft: 'var(--space-1)',
+                      padding: '0 var(--space-1)',
+                      borderRadius: 'var(--radius-pill)',
+                      background: 'var(--attention-fill)',
+                      color: 'var(--tone-attention)',
+                      fontSize: 'var(--text-micro)',
+                    }}
+                    aria-label={`${waiting} waiting`}
+                    data-trainer-waiting-count
+                  >
+                    {waiting}
+                  </span>
+                )}
                 {/* Its own element rather than a bottom border, so it can carry a
                     bloom — a 2px accent line is a line; the same line with light
                     coming off it is a filament. */}

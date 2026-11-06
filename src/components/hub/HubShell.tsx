@@ -4,6 +4,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { Button, Ground, buttonSurface } from '@/components/system'
+import { useOfferSettings } from '@/hooks/useOfferSettings'
+import { trainerLive } from '@/lib/offer/settings'
 
 /**
  * The chrome around the hub.
@@ -20,6 +22,7 @@ import { Button, Ground, buttonSurface } from '@/components/system'
 const NAV = [
   { id: 'home', href: '/myhub', label: 'Home' },
   { id: 'training', href: '/myhub/training', label: 'Training' },
+  { id: 'trainer', href: '/myhub/trainer', label: 'Trainer' },
 ] as const
 
 export function HubShell({
@@ -36,6 +39,9 @@ export function HubShell({
   /** Which part of the hub this is, for the header's links; none while signed out. */
   nav?: (typeof NAV)[number]['id']
 }) {
+  // The trainer's tab only while there's a trainer to ask.
+  const { settings } = useOfferSettings()
+  const trainerOn = trainerLive(settings)
   return (
     // `my-hub` is the region class the focus floor in `system.css` hangs off,
     // the same safety net the Founders Hub roots carry. See `my-hub.test.ts`.
@@ -61,7 +67,7 @@ export function HubShell({
           <div className="flex items-center" style={{ gap: 'var(--space-1)' }}>
             {nav && (
               <nav aria-label="Member hub" className="flex items-center" style={{ gap: 'var(--space-1)' }}>
-                {NAV.map((n) => {
+                {NAV.filter((n) => n.id !== 'trainer' || trainerOn || nav === 'trainer').map((n) => {
                   const surface = buttonSurface(n.id === nav ? 'secondary' : 'ghost', 'sm')
                   return (
                     <Link key={n.id} href={n.href} aria-current={n.id === nav ? 'page' : undefined} className={surface.className} style={surface.style} data-hub-nav={n.id}>

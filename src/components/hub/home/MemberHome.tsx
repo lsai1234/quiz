@@ -10,6 +10,7 @@ import { HubHero } from './HubHero'
 import { StackSection } from './StackSection'
 import { CheckInTile, DealsTile, TipsTile, WeekTile } from './Tiles'
 import { TodayCard } from './TodayCard'
+import { TrainerCard } from './TrainerCard'
 import { col, Rise, SectionHead } from './ui'
 
 /**
@@ -103,7 +104,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   ].filter(Boolean)
   // Reading order on a phone; on a wide screen the day and the money on the
   // left, the glance tiles and the account on the right.
-  const ORDER = { hero: 0, today: 1, tiles: 2, deals: 3, stack: 4, plan: 5, account: 6 } as const
+  const ORDER = { hero: 0, today: 1, trainer: 2, tiles: 3, deals: 4, stack: 5, plan: 6, account: 7 } as const
   const at = (k: keyof typeof ORDER): CSSProperties => ({ order: ORDER[k] })
 
   return (
@@ -142,6 +143,12 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
       </div>
 
       <div className="hub-home-col">
+        {open && home.trainer && (
+          <Rise i={2} style={at('trainer')}>
+            <TrainerCard trainer={home.trainer} />
+          </Rise>
+        )}
+
         {tiles.length > 0 && (
           <Rise i={2} style={at('tiles')}>
             <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)' }} data-bento>

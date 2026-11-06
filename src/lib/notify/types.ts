@@ -31,6 +31,10 @@ export type TemplateId =
   | 'deal-open'
   /** A 6-digit code to join an order placed under another email to the account. */
   | 'order-link-code'
+  /** Ask your trainer: an answer is waiting in their hub. */
+  | 'trainer-reply'
+  /** Ask your trainer: to the trainer, a member's question is waiting. */
+  | 'trainer-question'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
   /** A one-off order item sold out after payment: removed, swapped or back-ordered. */

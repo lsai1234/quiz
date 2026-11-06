@@ -54,6 +54,8 @@ export interface AccountExport {
   checkIns: unknown[]
   /** Their training plan and its setup, and when they did the readiness check (never its answers). */
   training: unknown
+  /** Ask your trainer: their questions and the answers. */
+  trainerQuestions: unknown[]
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -146,6 +148,13 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
       const t = await (await import('@/lib/training/store')).getTraining(userId)
       return t.plan || t.readiness ? { readiness: t.readiness, plan: t.plan } : null
     })(),
+    trainerQuestions: ((await (await import('@/lib/trainer/store')).getThread(userId))?.messages ?? []).map((m) => ({
+      from: m.from,
+      at: m.at,
+      text: m.text,
+      about: m.about,
+      video: m.video?.url ?? null,
+    })),
   }
 }
 
@@ -200,6 +209,10 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   // The training plan, its setup and the readiness record.
   const { deleteTraining } = await import('@/lib/training/store')
   if (await deleteTraining(userId)) deleted.push('training plan')
+
+  // Ask your trainer: their questions and the answers.
+  const { deleteThread } = await import('@/lib/trainer/store')
+  if (await deleteThread(userId)) deleted.push('questions to the trainer')
 
   // Emails keep their audit trail (that a receipt was sent, and when) but lose
   // the recipient and the rendered body.

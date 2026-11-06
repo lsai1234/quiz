@@ -63,11 +63,15 @@ export const OFFER_COPY = {
 
   /* Build your stack: what a bigger stack unlocks, every line one checkout already applies. */
   ladderHeading: 'Build your stack',
+  /** Above the track: the idea in one line. */
+  ladderEyebrow: 'The more you add, the more you get',
   ladderNext: (toGo: number, reward: string) => `${formatGBP(toGo)} more for ${reward.charAt(0).toLowerCase()}${reward.slice(1)}`,
   ladderAll: 'Your box has unlocked everything.',
   ladderUnlocked: 'Unlocked',
   ladderToGo: (toGo: number) => `${formatGBP(toGo)} to go`,
   ladderAdd: 'Add one of these to get there:',
+  /** Under the sticky bar's price, towards the next delivery or discount line (a gift's needs its conditions, so it stays in the card). */
+  stickyNext: (toGo: number, reward: string) => `${formatGBP(toGo)} to ${reward.charAt(0).toLowerCase()}${reward.slice(1)}`,
 } as const
 
 /** Where the terms live. */

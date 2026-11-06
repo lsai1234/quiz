@@ -23,6 +23,8 @@ export function copyRows(
       const args = examples[key]
       if (!args) throw new Error(`copyRows: no example for ${section} › ${key}`)
       rows.push([section, where, (value as (...a: unknown[]) => string)(...args), `${note}. Example`])
+    } else if (Array.isArray(value)) {
+      for (const v of value) if (typeof v === 'string') rows.push([section, where, v, note])
     } else if (value && typeof value === 'object') {
       for (const [k, v] of Object.entries(value)) if (typeof v === 'string') rows.push([section, where, v, `${note}: ${k}`])
     }

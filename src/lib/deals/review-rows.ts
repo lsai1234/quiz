@@ -53,7 +53,7 @@ export function dealCopyRows(): ReviewRow[] {
       {},
       ['heading', 'intro', 'dealLine', 'freeDeliveryCondition', 'price', 'openUntil', 'opensIn', 'runsOut', 'runsOutEstimated', 'buy', 'terms', 'hubOpen', 'changed'],
     ),
-    ...copyRows(s, reveal, H, { sessionsCount: [4], fromWeek: [3] }, { underCta: 'Under the box’s button, with the member hub terms link' }, [
+    ...copyRows(s, reveal, H, { sessionsCount: [4], fromWeek: [3], cardTrainer: ['Josh'] }, { underCta: 'Under the box’s button, with the member hub terms link' }, [
       'eyebrow',
       'heading',
       'sub',

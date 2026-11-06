@@ -1,0 +1,73 @@
+/**
+ * The words of "Ask your trainer": a real person, one of the founders,
+ * answering members' questions about their training in the hub. Scripted,
+ * one file, in the review pack (`trainerCopyRows`).
+ *
+ * Every line says plainly that a person answers, never a bot. Nothing here
+ * says what a product does, and the trainer coaches fitness: injuries, pain
+ * and health conditions go to a GP or physio.
+ */
+
+const within = (hours: number) => (hours <= 24 ? `${hours} hours` : `${Math.round(hours / 24)} days`)
+
+export const TRAINER_COPY = {
+  /* ── In the hub ── */
+  title: 'Ask your trainer',
+  realPerson: 'A real person, not a bot',
+  realLine: (name: string) => `Every answer is written by ${name}, personally. No AI, no scripts, no call centre.`,
+  replyWithin: (hours: number) => `Usually answers within ${within(hours)}`,
+  intro: (name: string) => `Ask ${name} anything about your training: an exercise, your form, how heavy to go, or what to do on a busy week.`,
+  empty: 'No questions yet. Start with anything about your plan.',
+  starters: ['How heavy should I start in my first week?', 'What should I do if I miss a session?', 'Can I swap a gym session for a run?'],
+  starterLabel: 'Not sure where to start?',
+  composerLabel: 'Your question',
+  placeholder: 'What would you like to ask?',
+  send: 'Send question',
+  sending: 'Sending…',
+  sent: 'Sent. The answer will appear here, and we’ll email you when it does.',
+  waiting: (name: string) => `${name} has your question`,
+  left: (n: number) => `${n} question${n === 1 ? '' : 's'} left today`,
+  limit: 'That’s today’s questions. Ask again tomorrow.',
+  tooLong: (max: number) => `Keep it under ${max} characters.`,
+  failed: 'That didn’t send. Please try again.',
+  medical: 'Fitness coaching, not medical advice. For an injury, pain or a health condition, see your GP or a physio first, and please don’t share medical details here.',
+  about: (what: string) => `About: ${what}`,
+  askAbout: (name: string) => `Ask ${name} about this`,
+  video: 'Watch the video',
+  you: 'You',
+  closed: 'Your hub has closed. Order again to ask more questions.',
+  offTitle: 'Ask your trainer',
+  offBody: 'Asking a trainer isn’t open right now. Everything else in your hub is just where you left it.',
+  backToHub: 'Back to your hub',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  clearAbout: 'Remove',
+  /* ── On the hub's home ── */
+  homeTitle: 'Your trainer',
+  homeAsk: 'Ask a question',
+  homeOpen: 'Open the chat',
+  homeAnswered: (name: string) => `${name} answered`,
+  homeWaiting: (name: string) => `${name} has your question`,
+  newBadge: 'New answer',
+  /* ── On the reveal ── */
+  revealEyebrow: 'Your personal trainer',
+  revealTitle: (name: string) => `Ask ${name}, a real personal trainer`,
+  revealBody: (name: string) => `Message ${name} from your hub about your training plan: an exercise, your form, your week. A real person reads every question and answers it, not a bot.`,
+  revealVideo: 'Answers can come with a video showing you how.',
+  revealBadge: 'Real person',
+  /* ── Emails ── */
+  replySubject: (name: string) => `${name} answered your question`,
+  replyPreheader: 'Your answer is waiting in your member hub.',
+  replyHeading: (name: string) => `${name} answered your question`,
+  replyIntro: (firstName: string | null, name: string) => `${firstName ? `Hi ${firstName}, ` : ''}${name} has answered your question in your member hub.`,
+  replyCta: 'Read the answer',
+  questionSubject: (firstName: string | null) => `New question from ${firstName ?? 'a member'}`,
+  questionPreheader: 'A member is waiting for your answer in the Founders Hub.',
+  questionHeading: 'A member asked you a question',
+  questionIntro: (firstName: string | null, about: string | null) => `${firstName ?? 'A member'} has sent a question${about ? ` about ${about}` : ''}. Answer it in the Founders Hub.`,
+  questionCta: 'Open the inbox',
+} as const
+
+/** Longest question a member can send, and longest answer. */
+export const MEMBER_MAX = 1000
+export const TRAINER_MAX = 4000

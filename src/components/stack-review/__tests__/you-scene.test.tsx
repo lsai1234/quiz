@@ -183,7 +183,7 @@ describe('the You scene’s colours', () => {
   })
 
   // The hub preview is drawn as the dark screen the hub is, with its own inks.
-  it.each(['nightInk', 'nightInk2', 'nightInk3', 'accent'] as const)('%s clears AA on the dark screen and its cards', (key) => {
+  it.each(['nightInk', 'nightInk2', 'nightInk3', 'accent', 'nightPositive'] as const)('%s clears AA on the dark screen and its cards', (key) => {
     expect(contrast(YOU_PALETTE[key], YOU_PALETTE.night)).toBeGreaterThanOrEqual(4.5)
     expect(contrast(YOU_PALETTE[key], YOU_PALETTE.nightCard)).toBeGreaterThanOrEqual(4.5)
   })

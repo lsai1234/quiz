@@ -106,6 +106,15 @@ export function guaranteeTerms(): TermsSection[] {
       ],
     },
     {
+      heading: 'Ask your trainer',
+      lines: [
+        'While it’s on, you can message our trainer from your hub about your training. A real person, one of our team, reads every question and writes every answer: nothing you send goes to an AI.',
+        'Answers are general fitness coaching, not medical advice. For an injury, pain or a health condition, see your GP or a physio first, and please don’t send medical details.',
+        'Your hub shows how soon the trainer usually answers. It’s what we work to, not a guaranteed response time, and there’s a limit on questions a day so everyone gets an answer.',
+        'Your questions and the answers are kept with your account, included in your data export, and deleted with your account.',
+      ],
+    },
+    {
       heading: 'Your other rights',
       lines: [
         'This guarantee is on top of your legal rights, including your right to cancel an online order, not instead of them.',
@@ -126,7 +135,7 @@ export function memberHubTerms(input: { freeOver: number }): TermsSection[] {
       heading: 'What the member hub is',
       lines: [
         'Your member hub comes with any CHRGD order, one-off or monthly. Sign in at /myhub with the email you ordered with to open it.',
-        'It holds your stack guide and reminders, Amp’s check-ins, tips for your stack, member prices on what you’ve bought and, while it’s running, your training plan.',
+        'It holds your stack guide and reminders, Amp’s check-ins, tips for your stack, member prices on what you’ve bought and, while they’re running, your training plan and Ask your trainer.',
       ],
     },
     {
@@ -158,6 +167,15 @@ export function memberHubTerms(input: { freeOver: number }): TermsSection[] {
       heading: 'Your training plan',
       lines: [
         'The training plan is general fitness guidance, not medical advice. Check with your GP before starting if the readiness check suggests it, and stop if anything hurts.',
+      ],
+    },
+    {
+      heading: 'Ask your trainer',
+      lines: [
+        'While it’s on, you can message our trainer from your hub about your training. A real person, one of our team, reads every question and writes every answer: nothing you send goes to an AI.',
+        'Answers are general fitness coaching, not medical advice. For an injury, pain or a health condition, see your GP or a physio first, and please don’t send medical details.',
+        'Your hub shows how soon the trainer usually answers. It’s what we work to, not a guaranteed response time, and there’s a limit on questions a day so everyone gets an answer.',
+        'Your questions and the answers are kept with your account, included in your data export, and deleted with your account.',
       ],
     },
     {

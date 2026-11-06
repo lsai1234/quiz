@@ -10,6 +10,10 @@ import { WEEKDAYS, type ActivitySession, type PlannedExercise, type Session, typ
 import { lastTime, nextStep, todays, type NextStep } from '@/lib/training/progress'
 import { doseLine, sessionSummary, sessionTitle } from '@/lib/training/view'
 import { body, eyebrow, meta, stack, strong } from './styles'
+import Link from 'next/link'
+import { useOfferSettings } from '@/hooks/useOfferSettings'
+import { trainerLive } from '@/lib/offer/settings'
+import { TRAINER_COPY } from '@/lib/trainer/copy'
 
 type Act = (a: TrainingAction) => Promise<boolean>
 
@@ -287,7 +291,7 @@ function ActivityBody({ session, prefs, tutorial }: { session: ActivitySession; 
         {session.suggested && <Badge tone="info">{C.suggested}</Badge>}
       </div>
       {clash.length > 0 && !session.suggested && <Note tone="attention">{C.activityLoads(areasPhrase(clash))}</Note>}
-      <Tutorial url={tutorial} />
+      <Tutorial url={tutorial} about={a.name} />
       <section>
         <h3 style={{ ...eyebrow, marginBottom: 'var(--space-2)' }}>{C.pace}</h3>
         <ol style={{ ...stack('var(--space-2)'), ...body, listStyle: 'decimal', paddingLeft: 'var(--space-5)' }}>
@@ -356,13 +360,31 @@ function List({ title, items, ordered = false }: { title: string; items: string[
   )
 }
 
-function Tutorial({ url }: { url: string | null }) {
+function Tutorial({ url, about }: { url: string | null; about?: string }) {
   const link = buttonSurface('secondary', 'sm')
-  if (!url) return <p style={meta}>{C.tutorialSoon}</p>
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className={link.className} style={link.style} data-tutorial-link>
-      {C.tutorial}
-    </a>
+    <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+      {url ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" className={link.className} style={link.style} data-tutorial-link>
+          {C.tutorial}
+        </a>
+      ) : (
+        <p style={meta}>{C.tutorialSoon}</p>
+      )}
+      {about && <AskTrainer about={about} />}
+    </div>
+  )
+}
+
+/** "Ask Josh about this": the exercise's name rides into the question, while there's a trainer to ask. */
+function AskTrainer({ about }: { about: string }) {
+  const { settings } = useOfferSettings()
+  if (!trainerLive(settings)) return null
+  const link = buttonSurface('ghost', 'sm')
+  return (
+    <Link href={`/myhub/trainer?about=${encodeURIComponent(about)}`} className={link.className} style={link.style} data-ask-trainer>
+      {TRAINER_COPY.askAbout(settings.trainer.name)} →
+    </Link>
   )
 }
 
@@ -418,7 +440,7 @@ function ExerciseDetail({
           ))}
         </div>
       </div>
-      <Tutorial url={tutorial} />
+      <Tutorial url={tutorial} about={ex.name} />
       <List title={C.how} items={ex.steps} ordered />
       <List title={C.cues} items={ex.cues} />
       <List title={C.mistakes} items={ex.mistakes} />

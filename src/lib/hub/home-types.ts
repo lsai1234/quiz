@@ -52,6 +52,18 @@ export interface HubHome {
     /** Each session's day and whether it's done, for the week strip. */
     week: { day: number; done: boolean }[]
   } | null
+  /** Ask your trainer, in short; null while it's off. */
+  trainer: {
+    name: string
+    role: string
+    photoUrl: string | null
+    replyHours: number
+    /** Answers since they last looked. */
+    unread: number
+    waiting: boolean
+    /** Their last exchange, for the card: who spoke last and the start of it. */
+    last: { from: 'member' | 'trainer'; text: string; at: string } | null
+  } | null
   deals: { open: number; upcoming: number; next: { short: string; line: string; opensInDays: number } | null; best: { short: string; line: string; total: number } | null } | null
   orders: { reference: string; createdAt: string; total: number; items: string[]; status: string }[]
 }

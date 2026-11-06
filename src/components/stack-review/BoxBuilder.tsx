@@ -15,6 +15,9 @@ import { ProductTile } from './ProductTile'
 import { YourDay } from './YourDay'
 import { BoxServices } from './BoxServices'
 import { HubPreview, MEMBER_HUB_TERMS_PATH, type HubPreviewInput } from './HubPreview'
+import { HubCard } from './HubCard'
+import { Icon, type IconName } from '@/components/ui/Icon'
+import type { RungKind } from '@/lib/offer/ladder'
 import { DEALS_COPY, HUB_PREVIEW_COPY } from '@/lib/deals/copy'
 import type { ChargeView } from '@/lib/offer/levels'
 import type { Routine } from '@/lib/routine'
@@ -114,6 +117,13 @@ export function BoxBuilder({
       {/* On a phone one column, in reading order (each part's `order`); on a wide screen the
           box and what comes with it on the left, and the plan, the rewards and
           the button on the right, staying in view. */}
+      {/* The member hub, before anything else: every order comes with it. */}
+      {hub && (
+        <div style={{ order: 0 }} className="lg:col-span-2">
+          <HubCard input={hub} />
+        </div>
+      )}
+
       <div className="contents lg:block">
         <div style={{ order: 1 }}>
           <div className="flex items-end justify-between gap-3">
@@ -157,9 +167,11 @@ export function BoxBuilder({
                   onClick={() => onOpen(r.id)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   aria-label={`${r.product.title}: ${BOX_COPY.details}`}
-                  style={{ opacity: r.on ? 1 : 0.6, filter: r.on ? 'none' : 'grayscale(0.6)', transition: `opacity 0.25s ${EASE}, filter 0.25s ${EASE}` }}
                 >
-                  <ProductTile imageUrl={r.product.imageUrl} formats={r.product.formats} title={r.product.title} size={r.on ? 56 : 44} />
+                  {/* Off: the picture fades, never the words, so they keep their contrast. */}
+                  <span className="flex-shrink-0" style={{ opacity: r.on ? 1 : 0.5, filter: r.on ? 'none' : 'grayscale(0.7)', transition: `opacity 0.25s ${EASE}, filter 0.25s ${EASE}` }}>
+                    <ProductTile imageUrl={r.product.imageUrl} formats={r.product.formats} title={r.product.title} size={r.on ? 56 : 44} />
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15.5px] font-semibold leading-snug tracking-[-0.01em]" style={{ color: P.ink, fontFamily: DISPLAY }}>
                       {shortNameOf(r.product)}
@@ -182,22 +194,22 @@ export function BoxBuilder({
             ))}
           </ul>
         </div>
-        <div style={{ order: 2 }}>
+        <div style={{ order: 3 }}>
           {/* Their day: what's switched on, and when to take it. */}
           {routine && onCount > 0 && <YourDay routine={routine} />}
         </div>
-        <div style={{ order: 4 }}>
+        <div style={{ order: 5 }}>
           {/* What the box comes with: services, and the level that unlocks more. */}
           {charge && onCount > 0 && <BoxServices view={charge} />}
         </div>
-        <div style={{ order: 5 }}>
+        <div style={{ order: 6 }}>
           {/* The hub the order opens, shown: a first training week and member prices. */}
           {hub && onCount > 0 && <HubPreview input={hub} />}
         </div>
       </div>
 
       <div className="contents lg:sticky lg:top-24 lg:block">
-        <div style={{ order: 3 }}>
+        <div style={{ order: 4 }}>
           {/* Once or monthly: every price on the card follows it. */}
           <p id={planId} className="mt-6 text-[11px] lg:mt-0 font-bold uppercase tracking-[0.14em]" style={{ color: P.ink3, fontFamily: DISPLAY }}>
             {PLAN_COPY.heading}
@@ -249,30 +261,26 @@ export function BoxBuilder({
             </>
           )}
         </div>
-        <div style={{ order: 6 }}>
-          {/* What the box has unlocked, the next line, and products to add to reach it. */}
+        <div style={{ order: 2 }}>
+          {/* The more you add, the more you get: the next line, a track of every line with
+              the box on it, each line in words, and products to add to reach the next. */}
           {ladder.rungs.length > 0 && (
-            <div className="mt-5 rounded-[22px] px-4 py-4" style={{ background: P.page, border: `1px solid ${P.hairline}` }} data-ladder={next ? next.kind : 'all'}>
-              <p className="text-[15px] font-bold leading-snug" style={{ color: P.ink, fontFamily: DISPLAY }}>
+            <div
+              className="mt-5 rounded-[22px] px-4 py-4 lg:mt-5"
+              style={{ background: `linear-gradient(160deg, rgba(0,212,255,0.10), rgba(0,212,255,0) 55%), ${P.page}`, border: '1px solid rgba(0,212,255,0.35)' }}
+              data-ladder={next ? next.kind : 'all'}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accentInk, fontFamily: DISPLAY }}>
+                {OFFER_COPY.ladderEyebrow}
+              </p>
+              <p className="mt-1 text-[17px] font-black leading-snug tracking-tight" style={{ color: P.ink, fontFamily: DISPLAY }} aria-live="polite">
                 {next ? OFFER_COPY.ladderNext(next.toGo, next.label) : OFFER_COPY.ladderAll}
               </p>
-              {next && (
-                <div className="mt-2.5 h-2 overflow-hidden rounded-full" style={{ background: 'rgba(10,10,10,0.08)' }} aria-hidden>
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.round(ladder.progress * 100)}%`,
-                      background: `linear-gradient(90deg, ${P.accentDeep}, ${P.accent} 60%, ${P.accentBright})`,
-                      boxShadow: '0 0 10px rgba(0,212,255,0.55)',
-                      transition: `width 0.4s ${EASE}`,
-                    }}
-                  />
-                </div>
-              )}
-              <ul className="mt-3 space-y-1.5">
+              <RewardsTrack ladder={ladder} />
+              <ul className="mt-3 space-y-2">
                 {ladder.rungs.map((r) => (
-                  <li key={`${r.kind}-${r.at}`} className="flex items-start gap-2" data-rung={r.kind} data-reached={r.reached}>
-                    <Tick on={r.reached} />
+                  <li key={`${r.kind}-${r.at}`} className="flex items-start gap-2.5" data-rung={r.kind} data-reached={r.reached}>
+                    <RungMark kind={r.kind} on={r.reached} />
                     <span className="min-w-0 flex-1 text-[13px] leading-snug" style={{ color: r.reached ? P.ink : P.ink2 }}>
                       <span className="font-semibold">{r.label}</span> <span style={{ color: P.ink3 }}>{r.condition}</span>
                       {r.kind === 'gift' && giftConditions && (
@@ -284,7 +292,11 @@ export function BoxBuilder({
                         </span>
                       )}
                     </span>
-                    {!r.reached && (
+                    {r.reached ? (
+                      <span className="flex-shrink-0 text-[11.5px] font-bold" style={{ color: P.accentInk }}>
+                        {OFFER_COPY.ladderUnlocked}
+                      </span>
+                    ) : (
                       <span className="flex-shrink-0 text-[12px] font-semibold tabular-nums" style={{ color: P.ink2 }}>
                         {OFFER_COPY.ladderToGo(r.toGo)}
                       </span>
@@ -498,18 +510,81 @@ function PlanOption({
   )
 }
 
-function Tick({ on }: { on: boolean }) {
+const RUNG_ICON: Record<RungKind, IconName> = { delivery: 'truck', 'free-delivery': 'truck', bundle: 'percent', gift: 'gift' }
+
+/** A line's mark: its own icon, lit once the box has reached it. */
+function RungMark({ kind, on }: { kind: RungKind; on: boolean }) {
   return (
     <span
       aria-hidden
-      className="mt-0.5 inline-flex flex-shrink-0 items-center justify-center rounded-full"
-      style={{ width: 16, height: 16, background: on ? P.accent : 'transparent', border: on ? 'none' : `1.5px solid rgba(10,10,10,0.25)`, color: P.ink }}
+      className="inline-flex flex-shrink-0 items-center justify-center rounded-lg"
+      style={{
+        width: 24,
+        height: 24,
+        background: on ? `linear-gradient(160deg, ${P.accentBright}, ${P.accent} 55%, ${P.accentDeep})` : P.card,
+        border: on ? 'none' : `1px solid ${P.hairline}`,
+        color: on ? P.ink : P.ink3,
+        boxShadow: on ? '0 4px 10px -6px rgba(0,168,212,0.9)' : 'none',
+      }}
     >
-      {on && (
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
-        </svg>
-      )}
+      <Icon name={RUNG_ICON[kind]} size={13} />
     </span>
+  )
+}
+
+/**
+ * Every line on one track, the box's own spend on it: lines it has passed
+ * lit, the rest waiting, a gift drawn bigger. Lines at the same amount share
+ * a stop. The list under it says the same in words, so this is decoration to
+ * a screen reader.
+ */
+function RewardsTrack({ ladder }: { ladder: Ladder }) {
+  const stops = new Map<number, Ladder['rungs']>()
+  for (const r of ladder.rungs) stops.set(r.at, [...(stops.get(r.at) ?? []), r])
+  const top = Math.max(...ladder.rungs.map((r) => r.at))
+  const scale = top * 1.08
+  const spent = ladder.next ? ladder.next.at - ladder.next.toGo : top
+  const pct = (n: number) => `${Math.min(100, Math.max(0, (n / scale) * 100))}%`
+  const rank: RungKind[] = ['gift', 'free-delivery', 'bundle', 'delivery']
+  return (
+    <div className="relative mt-4 mb-1 h-14" aria-hidden data-rewards-track>
+      <div className="absolute inset-x-0 top-[13px] h-1.5 rounded-full" style={{ background: 'rgba(10,10,10,0.08)' }} />
+      <div
+        className="absolute left-0 top-[13px] h-1.5 rounded-full"
+        style={{
+          width: pct(spent),
+          background: `linear-gradient(90deg, ${P.accentDeep}, ${P.accent} 70%, ${P.accentBright})`,
+          boxShadow: '0 0 12px rgba(0,212,255,0.6)',
+          transition: `width 0.45s ${EASE}`,
+        }}
+      />
+      {[...stops.entries()].map(([at, rungs]) => {
+        const lead = [...rungs].sort((a, b) => rank.indexOf(a.kind) - rank.indexOf(b.kind))[0]
+        const on = rungs.every((r) => r.reached)
+        const big = lead.kind === 'gift'
+        const size = big ? 32 : 26
+        return (
+          <div key={at} className="absolute flex -translate-x-1/2 flex-col items-center" style={{ left: pct(at), top: big ? -3 : 0 }}>
+            <span
+              className="inline-flex items-center justify-center rounded-full"
+              style={{
+                width: size,
+                height: size,
+                background: on ? `linear-gradient(160deg, ${P.accentBright}, ${P.accent} 55%, ${P.accentDeep})` : P.card,
+                border: on ? `2px solid ${P.card}` : `1.5px solid ${big ? P.accent : 'rgba(10,10,10,0.18)'}`,
+                color: on ? P.ink : big ? P.accentInk : P.ink3,
+                boxShadow: on ? '0 0 14px rgba(0,212,255,0.65)' : big ? '0 0 12px rgba(0,212,255,0.35)' : 'none',
+                transition: `background 0.3s ${EASE}, box-shadow 0.3s ${EASE}`,
+              }}
+            >
+              <Icon name={RUNG_ICON[lead.kind]} size={big ? 15 : 12} />
+            </span>
+            <span className="mt-1 text-[10.5px] font-bold tabular-nums" style={{ color: on ? P.ink : P.ink3, fontFamily: DISPLAY }}>
+              {formatGBP(at).replace(/\.00$/, '')}
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }

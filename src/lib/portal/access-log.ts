@@ -23,7 +23,7 @@
  */
 import { getEngine, now } from '@/lib/db/engine'
 
-export type AccessKind = 'member-record' | 'member-order' | 'member-export'
+export type AccessKind = 'member-record' | 'member-order' | 'member-export' | 'member-trainer'
 
 export interface AccessEntry {
   id: string

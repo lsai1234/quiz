@@ -164,6 +164,24 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
     }
   }
 
+  // Ask your trainer, in short.
+  let trainer: HubHome['trainer'] = null
+  const { trainerLive } = await import('@/lib/offer/settings')
+  if (trainerLive(settings) && open) {
+    const { getThread, unreadForMember } = await import('@/lib/trainer/store')
+    const thread = await getThread(user.id)
+    const last = thread?.messages[thread.messages.length - 1] ?? null
+    trainer = {
+      name: settings.trainer.name,
+      role: settings.trainer.role,
+      photoUrl: settings.trainer.photoUrl,
+      replyHours: settings.trainer.replyHours,
+      unread: unreadForMember(thread),
+      waiting: Boolean(thread?.waiting),
+      last: last ? { from: last.from, text: last.text.slice(0, 160), at: last.at } : null,
+    }
+  }
+
   // Seen this week, for the founders' numbers.
   await kvSet(`hub-seen:${user.id}`, { at: now.toISOString() })
 
@@ -196,6 +214,7 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
     checkIn,
     tips,
     training,
+    trainer,
     deals,
     orders: orders.slice(0, 10).map((o) => ({
       reference: o.reference ?? o.id.slice(0, 8).toUpperCase(),
