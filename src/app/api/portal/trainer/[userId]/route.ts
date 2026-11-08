@@ -5,6 +5,7 @@ import { getOfferSettings } from '@/lib/offer/store'
 import { hubAccess } from '@/lib/hub/access'
 import { getUserById } from '@/lib/db/users'
 import { getTraining } from '@/lib/training/store'
+import { setupLine } from '@/lib/training/view'
 import { sendReplyEmail } from '@/lib/trainer/emails'
 import { answerMember, getThread, markTrainerRead, setWaiting, TrainerError } from '@/lib/trainer/store'
 
@@ -43,14 +44,10 @@ export async function GET(_req: Request, { params }: Params) {
     },
     training: plan
       ? {
-          focus: plan.prefs.focus,
-          days: plan.prefs.days,
-          minutes: plan.prefs.minutes,
-          equipment: plan.prefs.equipment,
-          experience: plan.prefs.experience,
-          avoid: plan.prefs.avoid,
+          setup: setupLine(plan.prefs),
           sessions: plan.sessions.length,
           done: plan.sessions.filter((s) => s.done).length,
+          checked: plan.check?.state ?? null,
         }
       : null,
   })

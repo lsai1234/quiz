@@ -5,7 +5,7 @@ import { getOfferSettings } from '@/lib/offer/store'
 import { getUserById } from '@/lib/db/users'
 import { ACTIVITIES, exerciseById } from '@/lib/training/library'
 import { markPlanChecked, plansToCheck } from '@/lib/training/store'
-import { sessionTitle } from '@/lib/training/view'
+import { sessionTitle, setupLine } from '@/lib/training/view'
 import { TRAINER_COPY } from '@/lib/trainer/copy'
 import { sendPlanNoteEmail } from '@/lib/trainer/emails'
 import { firstNameOf } from '@/lib/trainer/server'
@@ -33,7 +33,7 @@ export async function GET() {
         firstName: firstNameOf(user?.name),
         since: p.check!.since,
         source: p.source,
-        prefs: { focus: p.prefs.focus, days: p.prefs.days, minutes: p.prefs.minutes, equipment: p.prefs.equipment, experience: p.prefs.experience, avoid: p.prefs.avoid },
+        setup: setupLine(p.prefs),
         sessions: p.sessions.map((s) => ({
           day: s.day,
           title: sessionTitle(s),

@@ -167,3 +167,12 @@ describe('the routes', () => {
     expect(res).toMatchObject({ on: true, live: true, trainer: { name: 'Josh', photoUrl: null, replyHours: 168 } })
   })
 })
+
+describe('the setup the trainer reads', () => {
+  it('says the days by name and the kit and experience in words', () => {
+    const { setupLine } = jest.requireActual('@/lib/training/view') as typeof import('@/lib/training/view')
+    const line = setupLine({ focus: 'muscle', days: [4, 0, 2], minutes: 45, equipment: 'gym', experience: 'some', avoid: [] })
+    expect(line).toMatch(/^.+ · 3 days \(Mon, Wed, Fri\) · 45 min · A gym · .+$/)
+    expect(line).not.toMatch(/0,2,4|\bgym\b(?! )/)
+  })
+})

@@ -35,7 +35,7 @@ interface PlanRow {
   firstName: string | null
   since: string
   source: 'ai' | 'rules'
-  prefs: { focus: string; days: number; minutes: number; equipment: string; experience: string; avoid: string[] }
+  setup: string
   sessions: { day: number; title: string; moves: string[] }[]
 }
 
@@ -44,7 +44,7 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 interface Opened {
   thread: TrainerThread
   member: { firstName: string | null; email: string; hub: string; hubUntil: string | null }
-  training: { focus: string; days: number; minutes: number; equipment: string; experience: string; avoid: string[]; sessions: number; done: number } | null
+  training: { setup: string; sessions: number; done: number; checked: 'waiting' | 'checked' | null } | null
 }
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
@@ -218,9 +218,9 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
             </div>
             <p style={{ ...BODY, marginTop: 'var(--space-3)' }} data-thread-training>
               {opened.training
-                ? `Training plan: ${opened.training.focus}, ${opened.training.days} days a week, ${opened.training.minutes} min, ${opened.training.equipment}, ${opened.training.experience}${
-                    opened.training.avoid.length ? `, working around: ${opened.training.avoid.join(', ')}` : ''
-                  }. ${opened.training.done} of ${opened.training.sessions} sessions done this week.`
+                ? `Training plan: ${opened.training.setup}. ${opened.training.done} of ${opened.training.sessions} sessions done this week.${
+                    opened.training.checked === 'waiting' ? ' Waiting for your check.' : opened.training.checked === 'checked' ? ' Checked.' : ''
+                  }`
                 : 'No training plan built yet.'}
             </p>
           </Card>
@@ -401,9 +401,8 @@ function PlansToCheck({ onChecked }: { onChecked: () => void }) {
                   <p style={STRONG}>{p.firstName ?? p.email ?? 'Member'}</p>
                   <p style={META}>{`${p.email ?? ''} · waiting ${ago(p.since)} · built by ${p.source === 'ai' ? 'the AI builder' : 'the rules'}`}</p>
                 </div>
-                <Badge tone="info">{`${p.prefs.focus} · ${p.prefs.days} days · ${p.prefs.minutes} min`}</Badge>
               </div>
-              <p style={BODY}>{`${p.prefs.equipment}, ${p.prefs.experience}${p.prefs.avoid.length ? `, working around: ${p.prefs.avoid.join(', ')}` : ''}.`}</p>
+              <p style={BODY}>{p.setup}</p>
               <Disclosure summary={`See the week (${p.sessions.length} sessions)`}>
                 <ol className="flex flex-col" style={{ gap: 'var(--space-2)', paddingTop: 'var(--space-2)' }}>
                   {p.sessions.map((s, i) => (

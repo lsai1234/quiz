@@ -5,8 +5,8 @@
  */
 import { ACTIVITIES, exerciseById } from './library'
 import { sessionMinutes } from './generate'
-import { ACTIVITY_LABEL, INTENSITY_COPY, TEMPLATE_COPY, TRAINING_COPY as C, WEEKDAY_LONG } from './copy'
-import type { PlannedExercise, Session, TrainingPlan, Weekday } from './types'
+import { ACTIVITY_LABEL, EQUIPMENT_COPY, EXPERIENCE_COPY, FOCUS_COPY, INTENSITY_COPY, TEMPLATE_COPY, TRAINING_COPY as C, WEEKDAY_LONG, WEEKDAY_SHORT, areasPhrase } from './copy'
+import type { PlannedExercise, Session, TrainingPlan, TrainingPrefs, Weekday } from './types'
 
 export function sessionTitle(s: Session): string {
   return s.type === 'strength' ? TEMPLATE_COPY[s.template] : ACTIVITIES[s.activity].name
@@ -49,4 +49,19 @@ export function activityLabel(kind: keyof typeof ACTIVITY_LABEL): string {
 /** "22 February", from an ISO date. */
 export function longDay(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+}
+
+/** Their setup in one line, for the trainer: "Build muscle · 3 days (Mon, Wed, Fri) · 45 min · A gym · Some experience · around the knees". */
+export function setupLine(prefs: Pick<TrainingPrefs, 'focus' | 'days' | 'minutes' | 'equipment' | 'experience' | 'avoid'>): string {
+  const days = [...prefs.days].sort((a, b) => a - b)
+  return [
+    FOCUS_COPY[prefs.focus]?.label ?? prefs.focus,
+    `${days.length} day${days.length === 1 ? '' : 's'} (${days.map((d) => WEEKDAY_SHORT[d]).join(', ')})`,
+    `${prefs.minutes} min`,
+    EQUIPMENT_COPY[prefs.equipment]?.label ?? prefs.equipment,
+    EXPERIENCE_COPY[prefs.experience]?.label ?? prefs.experience,
+    prefs.avoid.length ? `working around ${areasPhrase(prefs.avoid)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }

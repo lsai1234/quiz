@@ -83,8 +83,8 @@ export function HubCard({ input }: { input: HubPreviewInput }) {
           <span className="text-[15px] font-black" style={{ color: P.nightPositive, fontFamily: DISPLAY }}>
             {C.cardIncluded}
           </span>
-          <span className="text-[12px]" style={{ color: P.nightInk3 }}>
-            {`· ${C.cardValue(input.hubMonthly)}`}
+          <span className="basis-full text-[12px]" style={{ color: P.nightInk3 }}>
+            {C.cardValue(input.hubMonthly)}
           </span>
         </p>
       )}
