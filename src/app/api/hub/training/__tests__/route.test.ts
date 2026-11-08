@@ -145,11 +145,11 @@ describe('the trainer checks every plan', () => {
     const { POST: check } = await import('@/app/api/portal/trainer/plans/route')
     const { getThread } = await import('@/lib/trainer/store')
     const { listNotifications } = await import('@/lib/notify/outbox')
-    await saveTrainerProfile({ name: 'Josh', checksPlans: true })
+    await saveTrainerProfile({ name: 'Sam', checksPlans: true })
     await saveServiceSettings({ training: true, trainer: true })
     const user = await member(`checked-${Date.now()}@example.com`, true)
     const s = await json(await GET())
-    expect(s.trainer).toMatchObject({ name: 'Josh', checksPlans: true })
+    expect(s.trainer).toMatchObject({ name: 'Sam', checksPlans: true })
     await post({ action: 'ready', answers: [false] })
     const built = await json(await post({ action: 'build', prefs: { ...s.draft, equipment: 'gym', experience: 'some' } }))
     expect(built.plan!.check).toMatchObject({ state: 'waiting' })
@@ -174,7 +174,7 @@ describe('the trainer checks every plan', () => {
 
   it('leaves plans alone while the trainer doesn’t check them', async () => {
     const { saveTrainerProfile } = await import('@/lib/offer/store')
-    await saveTrainerProfile({ name: 'Josh', checksPlans: false })
+    await saveTrainerProfile({ name: 'Sam', checksPlans: false })
     await saveServiceSettings({ training: true, trainer: true })
     await member(`unchecked-${Date.now()}@example.com`, true)
     const s = await json(await GET())

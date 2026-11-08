@@ -57,8 +57,8 @@ export function dealCopyRows(): ReviewRow[] {
     ...copyRows(s, reveal, H, {
       sessionsCount: [4],
       fromWeek: [3],
-      cardTrainer: ['Josh'],
-      cardTrainingChecked: ['Josh'],
+      cardTrainer: ['[Name]'],
+      cardTrainingChecked: ['[Name]'],
       cardValue: [10],
       underCtaValue: [30],
       receiptHubLine: [10],

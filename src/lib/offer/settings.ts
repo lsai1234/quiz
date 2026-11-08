@@ -226,7 +226,7 @@ export function normaliseServices(raw: unknown): ServiceSettings {
  * Everything but `notifyEmail` is shown to customers.
  */
 export interface TrainerProfile {
-  /** Their name as members see it ("Josh"). Empty: nobody is named, and the trainer stays off. */
+  /** Their name as members see it ("Sam", say). Empty: nobody is named, and the trainer stays off. */
   name: string
   /** One line under the name ("Co-founder · personal trainer"). */
   role: string

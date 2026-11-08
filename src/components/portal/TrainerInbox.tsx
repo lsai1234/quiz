@@ -333,7 +333,7 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
             data-trainer-checks
           />
           <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
-            <Input label="Name members see" value={draft.name} onChange={set('name')} placeholder="Josh" data-trainer-name />
+            <Input label="Name members see" value={draft.name} onChange={set('name')} placeholder="Your first name" data-trainer-name />
             <Input label="One line under it" value={draft.role} onChange={set('role')} placeholder="Co-founder · personal trainer" />
           </div>
           <Textarea label="About them, in their own words" rows={3} value={draft.bio} onChange={set('bio')} hint="Shown at the top of the chat. Who they are and how they train; nothing about products or health." />

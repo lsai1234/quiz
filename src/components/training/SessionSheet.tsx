@@ -376,7 +376,7 @@ function Tutorial({ url, about }: { url: string | null; about?: string }) {
   )
 }
 
-/** "Ask Josh about this": the exercise's name rides into the question, while there's a trainer to ask. */
+/** "Ask [Name] about this": the exercise's name rides into the question, while there's a trainer to ask. */
 function AskTrainer({ about }: { about: string }) {
   const { settings } = useOfferSettings()
   if (!trainerLive(settings)) return null

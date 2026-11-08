@@ -72,8 +72,8 @@ describe('the thread', () => {
     const who = { id: `t-${n++}`, email: 'd@example.com', firstName: 'D' }
     await askTrainer(who, { text: 'Q' }, 5, new Date('2026-11-06T10:00:00Z'))
     const { thread } = (await answerMember(who.id, { text: 'A', by: 'Sam Founder' }, new Date('2026-11-06T11:00:00Z')))!
-    const view = viewOf(thread, { name: 'Josh', role: 'Trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: 'josh@example.com', checksPlans: true }, true, true)
-    expect(JSON.stringify(view)).not.toMatch(/Sam Founder|josh@example\.com/)
+    const view = viewOf(thread, { name: 'Sam', role: 'Trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: 'sam@example.com', checksPlans: true }, true, true)
+    expect(JSON.stringify(view)).not.toMatch(/Sam Founder|sam@example\.com/)
     expect(view.unread).toBe(1)
   })
 
@@ -106,12 +106,12 @@ describe('the routes', () => {
   })
 
   it('a member asks; the founders see it, answer with a video; the member reads it and is emailed', async () => {
-    await saveTrainerProfile({ name: 'Josh', role: 'Co-founder · personal trainer', replyHours: 24, dailyLimit: 3, notifyEmail: 'trainer-alerts@example.com' })
+    await saveTrainerProfile({ name: 'Sam', role: 'Co-founder · personal trainer', replyHours: 24, dailyLimit: 3, notifyEmail: 'trainer-alerts@example.com' })
     await saveServiceSettings({ trainer: true })
     const user = await member()
     mockUser.current = user
     const first = (await (await memberGet()).json()) as MemberTrainerView
-    expect(first).toMatchObject({ live: true, open: true, left: 3, trainer: { name: 'Josh', replyHours: 24 } })
+    expect(first).toMatchObject({ live: true, open: true, left: 3, trainer: { name: 'Sam', replyHours: 24 } })
     expect(JSON.stringify(first)).not.toMatch(/trainer-alerts/)
 
     const asked = await memberAsk(post({ text: 'How heavy should I squat?', about: 'Barbell back squat' }))
@@ -136,7 +136,7 @@ describe('the routes', () => {
     expect((await threadAnswer(post({ text: '' }), params(user.id))).status).toBe(400)
     const replies = (await listNotifications({ limit: 200 })).filter((x) => x.template === 'trainer-reply' && x.email === user.email)
     expect(replies).toHaveLength(1)
-    expect(replies[0].rendered.subject).toBe(TRAINER_COPY.replySubject('Josh'))
+    expect(replies[0].rendered.subject).toBe(TRAINER_COPY.replySubject('Sam'))
 
     const read = (await (await memberGet()).json()) as MemberTrainerView
     expect(read.waiting).toBe(false)
@@ -153,7 +153,7 @@ describe('the routes', () => {
   })
 
   it('stops at the day’s limit, and when the hub has closed', async () => {
-    await saveTrainerProfile({ name: 'Josh', dailyLimit: 1 })
+    await saveTrainerProfile({ name: 'Sam', dailyLimit: 1 })
     await saveServiceSettings({ trainer: true })
     mockUser.current = await member()
     expect((await memberAsk(post({ text: 'One' }))).status).toBe(200)
@@ -163,8 +163,8 @@ describe('the routes', () => {
   })
 
   it('founders switch it on and name the trainer', async () => {
-    const res = await (await inboxSave(post({ on: true, trainer: { name: '  Josh  ', photoUrl: 'javascript:alert(1)', replyHours: 999 } }))).json()
-    expect(res).toMatchObject({ on: true, live: true, trainer: { name: 'Josh', photoUrl: null, replyHours: 168 } })
+    const res = await (await inboxSave(post({ on: true, trainer: { name: '  Sam  ', photoUrl: 'javascript:alert(1)', replyHours: 999 } }))).json()
+    expect(res).toMatchObject({ on: true, live: true, trainer: { name: 'Sam', photoUrl: null, replyHours: 168 } })
   })
 })
 
