@@ -133,6 +133,8 @@ export const TRAINING_COPY = {
   nextTitle: (day: string) => `Next: ${day}`,
   start: 'Start',
   allDone: 'Everything’s done this week. Nice work.',
+  /** No sessions left this week, with some not done. */
+  weekLeft: 'No more sessions planned this week. Catch up on one you missed, or start fresh on Monday.',
   calendar: 'Add my week to my calendar',
   calendarNote: 'Your sessions as calendar events at your usual time. Download it again after you change your plan.',
   calendarEvent: (name: string, minutes: number) => `Training: ${name} (${minutes} min)`,

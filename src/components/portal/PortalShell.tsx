@@ -45,7 +45,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   const [waiting, setWaiting] = useState(0)
 
   useEffect(() => {
-    fetch('/api/portal/trainer').then((r) => (r.ok ? r.json() : null)).then((d) => setWaiting(d?.waiting ?? 0)).catch(() => {})
+    fetch('/api/portal/trainer').then((r) => (r.ok ? r.json() : null)).then((d) => setWaiting((d?.waiting ?? 0) + (d?.plansWaiting ?? 0))).catch(() => {})
   }, [pathname])
 
   useEffect(() => {

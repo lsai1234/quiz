@@ -383,7 +383,7 @@ export function BoxBuilder({
                   <path d="M13 2 4 14h7l-1 8 10-12h-7l1-8z" />
                 </svg>
               </span>
-              {HUB_PREVIEW_COPY.underCta}{' '}
+              {hub.hubMonthly != null ? HUB_PREVIEW_COPY.underCtaValue(hub.hubMonthly * 3) : HUB_PREVIEW_COPY.underCta}{' '}
               <Link href={MEMBER_HUB_TERMS_PATH} className="whitespace-nowrap font-semibold underline underline-offset-2" style={{ color: P.ink2 }}>
                 {DEALS_COPY.termsLink}
               </Link>

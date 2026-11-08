@@ -6,7 +6,7 @@ import { Badge, Button, Card, Checkbox, Input, Note, Segmented } from '@/compone
 import { ProductPicker } from './ProductPicker'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus, type ServiceSettings } from '@/lib/offer/settings'
-import { LEVEL_NAME } from '@/lib/offer/bonus-economics'
+import { LEVEL_NAME, type GiftVerdict } from '@/lib/offer/bonus-economics'
 import type { OfferView } from '@/lib/offer/view'
 import { productHref } from '@/lib/portal/product-links'
 
@@ -349,6 +349,7 @@ function BonusCard({ view, saving, onSave }: { view: OfferView; saving: boolean;
           label="Add a product to the bonus pool"
           products={view.products.map((p) => ({ ...p, stackSlots: p.stackSlot ? [p.stackSlot] : [] }) as unknown as CatalogueProduct)}
           disabledIds={inPool}
+          describe={(p) => <GiftVerdictBadge verdict={economics.verdicts[p.id]} />}
           onPick={(p) => {
             setPicking(false)
             onSave({ pool: [...bonus.pool, p.id] })
@@ -384,6 +385,7 @@ function PoolTable({ view, titleOf, saving, onRemove }: { view: OfferView; title
                   Remove
                 </Button>
               </div>
+              <GiftVerdictNote verdict={view.economics.verdicts[id]} />
               {row && row.stacks.length > 0 && (
                 <dl className="grid sm:grid-cols-3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                   {row.stacks.map((s) => (
@@ -408,6 +410,35 @@ function PoolTable({ view, titleOf, saving, onRemove }: { view: OfferView; title
         )
       })}
     </ul>
+  )
+}
+
+const VERDICT_TONE = { good: 'positive', thin: 'attention', never: 'critical' } as const
+
+/** "Would I still make money giving this away?", in one line and its why. */
+function GiftVerdictNote({ verdict }: { verdict: GiftVerdict | undefined }) {
+  if (!verdict) return <p style={{ ...META, marginTop: 'var(--space-2)' }}>No cost or price on file, so no verdict yet.</p>
+  return (
+    <div style={{ marginTop: 'var(--space-2)' }} data-gift-verdict={verdict.tone}>
+      <Note tone={VERDICT_TONE[verdict.tone]} icon={verdict.tone === 'good' ? 'check' : 'alert-triangle'}>
+        <span style={{ fontWeight: 'var(--weight-strong)' }}>{verdict.headline}.</span> {verdict.detail}
+      </Note>
+    </div>
+  )
+}
+
+function GiftVerdictBadge({ verdict }: { verdict: GiftVerdict | undefined }) {
+  if (!verdict) return <Badge tone="neutral">No cost on file</Badge>
+  return (
+    <span className="flex flex-wrap items-center" style={{ gap: 'var(--space-1)' }} data-gift-verdict={verdict.tone}>
+      <Badge tone={VERDICT_TONE[verdict.tone]}>{verdict.tone === 'good' ? 'Profitable' : verdict.tone === 'thin' ? 'Thin' : 'Never given'}</Badge>
+      <span style={META}>
+        {verdict.worstKeep != null
+          ? `Least kept after it: £${verdict.worstKeep.toFixed(2)} (${Math.round((verdict.worstMarginPct ?? 0) * 100)}%)`
+          : 'No example box keeps the floor with it'}
+        {verdict.costToUs != null ? ` · costs £${verdict.costToUs.toFixed(2)}` : ''}
+      </span>
+    </span>
   )
 }
 

@@ -3,6 +3,8 @@
  */
 const mockUser: { current: unknown } = { current: null }
 jest.mock('@/lib/auth/session', () => ({ getHubUser: async () => mockUser.current }))
+// The Founders Hub's side of the trainer's check, signed in as a founder.
+jest.mock('@/lib/portal/guard', () => ({ isPortalAuthed: async () => true, getFounder: async () => ({ email: 'founder@example.com', name: 'Sam Founder' }) }))
 
 import { GET, POST } from '../route'
 import { createUser } from '@/lib/db/users'
@@ -129,5 +131,55 @@ describe('/api/hub/training', () => {
     const result = await deleteAccount(user.id)
     expect(result.deleted).toContain('training plan')
     expect((await getTraining(user.id)).plan).toBeNull()
+  })
+})
+
+describe('the trainer checks every plan', () => {
+  afterEach(async () => {
+    await saveServiceSettings({ training: false, trainer: false })
+  })
+
+  it('a new plan waits for the trainer; small changes keep the tick, a rebuilt week goes back', async () => {
+    const { saveTrainerProfile } = await import('@/lib/offer/store')
+    const { plansToCheck } = await import('@/lib/training/store')
+    const { POST: check } = await import('@/app/api/portal/trainer/plans/route')
+    const { getThread } = await import('@/lib/trainer/store')
+    const { listNotifications } = await import('@/lib/notify/outbox')
+    await saveTrainerProfile({ name: 'Josh', checksPlans: true })
+    await saveServiceSettings({ training: true, trainer: true })
+    const user = await member(`checked-${Date.now()}@example.com`, true)
+    const s = await json(await GET())
+    expect(s.trainer).toMatchObject({ name: 'Josh', checksPlans: true })
+    await post({ action: 'ready', answers: [false] })
+    const built = await json(await post({ action: 'build', prefs: { ...s.draft, equipment: 'gym', experience: 'some' } }))
+    expect(built.plan!.check).toMatchObject({ state: 'waiting' })
+    expect((await plansToCheck()).some((p) => p.userId === user.id)).toBe(true)
+
+    // A founder ticks it, with a note: it lands in their chat, and they're emailed.
+    const res = await check(new Request('http://x', { method: 'POST', body: JSON.stringify({ userId: user.id, note: 'Good week. Keep the first squat sets light.' }) }))
+    expect(res.status).toBe(200)
+    const after = await json(await GET())
+    expect(after.plan!.check).toMatchObject({ state: 'checked' })
+    const thread = await getThread(user.id)
+    expect(thread!.messages[0]).toMatchObject({ from: 'trainer', about: 'Your training plan', text: 'Good week. Keep the first squat sets light.' })
+    expect((await listNotifications({ limit: 300 })).some((n) => n.template === 'trainer-reply' && n.email === user.email)).toBe(true)
+
+    // Moving a session keeps the tick; rebuilding the week sends it back.
+    const strength = after.plan!.sessions.find((x) => x.type === 'strength')!
+    const moved = await json(await post({ action: 'move', sessionId: strength.id, day: strength.day === 6 ? 5 : 6 }))
+    expect(moved.plan!.check!.state).toBe('checked')
+    const rebuilt = await json(await post({ action: 'rebuild-week' }))
+    expect(rebuilt.plan!.check!.state).toBe('waiting')
+  })
+
+  it('leaves plans alone while the trainer doesn’t check them', async () => {
+    const { saveTrainerProfile } = await import('@/lib/offer/store')
+    await saveTrainerProfile({ name: 'Josh', checksPlans: false })
+    await saveServiceSettings({ training: true, trainer: true })
+    await member(`unchecked-${Date.now()}@example.com`, true)
+    const s = await json(await GET())
+    await post({ action: 'ready', answers: [false] })
+    const built = await json(await post({ action: 'build', prefs: { ...s.draft, equipment: 'gym', experience: 'some' } }))
+    expect(built.plan!.check).toBeUndefined()
   })
 })

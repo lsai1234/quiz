@@ -148,6 +148,11 @@ export function DealsCard() {
                       </p>
                       <p style={meta}>{C.boxSaving(box.totalSaving, box.normalTotal)}</p>
                       <p style={meta}>{box.deliveryCharge === 0 ? `${C.boxFreeDelivery}. ${C.freeShortTail}` : C.boxDelivery(box.deliveryCharge, state.freeOver)}</p>
+                      {state.hubValue != null && (
+                        <p style={{ ...meta, color: 'var(--tone-positive)', fontWeight: 'var(--weight-strong)' }} data-deal-box-hub>
+                          {C.boxAddsHub(state.hubValue)}
+                        </p>
+                      )}
                     </>
                   ) : (
                     <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{picked?.length ? (quoting ? C.boxQuoting : C.boxNone) : C.boxEmpty}</p>

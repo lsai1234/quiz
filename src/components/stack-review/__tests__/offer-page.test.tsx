@@ -94,6 +94,31 @@ function receiptTotal(): string {
   return label.closest('div.flex')?.parentElement?.textContent ?? ''
 }
 
+it('shows the member hub as a saving only while it is on sale on its own', async () => {
+  offer = everything()
+  const { unmount } = render(<StackReviewPage reducedMotion />)
+  await screen.findByRole('region', { name: 'Your box' })
+  expect(document.querySelector('[data-receipt-hub]')).toBeNull()
+  expect(document.querySelector('[data-hub-card-value]')).toBeNull()
+  unmount()
+
+  resetOfferSettings()
+  offer = { ...everything(), hubPrice: { monthly: 10, standalone: true } }
+  render(<StackReviewPage reducedMotion />)
+  await screen.findByRole('region', { name: 'Your box' })
+  const line = await waitFor(() => {
+    const el = document.querySelector<HTMLElement>('[data-receipt-hub]')
+    expect(el).not.toBeNull()
+    return el!
+  })
+  expect(line).toHaveTextContent('Member hub · 90 days')
+  expect(line).toHaveTextContent('£10.00 a month on its own · included')
+  expect(line).toHaveTextContent(/£30\.00.*£0\.00/)
+  expect(document.querySelector('[data-receipt-hub-save]')).toHaveTextContent('Your member hub saves you £30.00')
+  expect(document.querySelector('[data-hub-card-value]')).toHaveTextContent(/£30\.00.*Included with your order/)
+  expect(document.querySelector('[data-box-hub-line]')).toHaveTextContent('Includes 90 days of your member hub, £30.00 on its own.')
+})
+
 it('opens on the box: the hero first, under £50, one button with the receipt’s price', async () => {
   offer = everything()
   render(<StackReviewPage reducedMotion />)

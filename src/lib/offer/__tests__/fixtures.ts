@@ -37,5 +37,6 @@ export function allOn(over: Partial<OfferSettings['bonus']> = {}): OfferSettings
     services: { ...DEFAULT_OFFER.services },
     memberDeals: { ...DEFAULT_OFFER.memberDeals },
     trainer: { ...DEFAULT_OFFER.trainer },
+    hubPrice: { ...DEFAULT_OFFER.hubPrice },
   }
 }

@@ -26,7 +26,20 @@ interface Inbox {
   trainer: TrainerProfile
   inbox: InboxRow[]
   waiting: number
+  plansWaiting: number
 }
+
+interface PlanRow {
+  userId: string
+  email: string | null
+  firstName: string | null
+  since: string
+  source: 'ai' | 'rules'
+  prefs: { focus: string; days: number; minutes: number; equipment: string; experience: string; avoid: string[] }
+  sessions: { day: number; title: string; moves: string[] }[]
+}
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 interface Opened {
   thread: TrainerThread
@@ -82,6 +95,7 @@ export function TrainerInbox() {
         </div>
         <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
           {view.waiting > 0 && <Badge tone="attention" dot>{`${view.waiting} waiting`}</Badge>}
+          {view.plansWaiting > 0 && <Badge tone="info" dot>{`${view.plansWaiting} plan${view.plansWaiting === 1 ? '' : 's'} to check`}</Badge>}
           <Badge tone={view.live ? 'positive' : 'neutral'} dot>
             {view.live ? 'Live in the hub' : view.on ? 'Needs a name' : 'Switched off'}
           </Badge>
@@ -89,6 +103,8 @@ export function TrainerInbox() {
       </header>
 
       <ProfileSettings view={view} onSaved={setView} />
+
+      {view.trainer.checksPlans && !openId && <PlansToCheck onChecked={() => void load()} />}
 
       {openId ? (
         <ThreadView userId={openId} trainerName={view.trainer.name} onBack={() => { setOpenId(null); void load() }} />
@@ -262,13 +278,18 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
   )
 }
 
+const withoutChecks = <T extends { checksPlans?: unknown }>(d: T): Omit<T, 'checksPlans'> => {
+  const { checksPlans: _ignored, ...rest } = d
+  return rest
+}
+
 function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) => void }) {
   const [draft, setDraft] = useState({ ...view.trainer, photoUrl: view.trainer.photoUrl ?? '', notifyEmail: view.trainer.notifyEmail ?? '', replyHours: String(view.trainer.replyHours), dailyLimit: String(view.trainer.dailyLimit) })
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const set = (k: keyof typeof draft) => (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [k]: e.target.value }))
 
-  async function save(on?: boolean) {
+  async function save(on?: boolean, extra: Partial<TrainerProfile> = {}) {
     setSaving(true)
     setNote(null)
     try {
@@ -277,7 +298,8 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(on === undefined ? {} : { on }),
-          trainer: { ...draft, replyHours: Number(draft.replyHours), dailyLimit: Number(draft.dailyLimit), photoUrl: draft.photoUrl || null, notifyEmail: draft.notifyEmail || null },
+          // The checks switch saves on its own; the form's copy of it may be stale.
+          trainer: { ...withoutChecks(draft), replyHours: Number(draft.replyHours), dailyLimit: Number(draft.dailyLimit), photoUrl: draft.photoUrl || null, notifyEmail: draft.notifyEmail || null, ...extra },
         }),
       })
       if (!r.ok) throw new Error()
@@ -302,6 +324,14 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
             onChange={(e) => void save(e.target.checked)}
             data-trainer-on
           />
+          <Checkbox
+            label="The trainer checks every new training plan"
+            hint="New plans, new setups and rebuilt weeks wait under Plans to check. Members see “being checked” until it’s ticked, and the results page says every plan is checked."
+            checked={view.trainer.checksPlans}
+            disabled={saving}
+            onChange={(e) => void save(undefined, { checksPlans: e.target.checked })}
+            data-trainer-checks
+          />
           <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
             <Input label="Name members see" value={draft.name} onChange={set('name')} placeholder="Josh" data-trainer-name />
             <Input label="One line under it" value={draft.role} onChange={set('role')} placeholder="Co-founder · personal trainer" />
@@ -322,5 +352,84 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
         </div>
       </Disclosure>
     </Card>
+  )
+}
+
+/**
+ * Plans to check: each new plan, new setup or rebuilt week, longest wait first,
+ * with who it's for, their setup and the week exercise by exercise. "Looks
+ * good" ticks it; a note goes to their chat with it, and emails them.
+ */
+function PlansToCheck({ onChecked }: { onChecked: () => void }) {
+  const [plans, setPlans] = useState<PlanRow[] | null>(null)
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    fetch('/api/portal/trainer/plans')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((d: { plans: PlanRow[] }) => setPlans(d.plans))
+      .catch(() => setPlans([]))
+  }, [])
+  useEffect(() => load(), [load])
+
+  async function check(userId: string) {
+    setBusy(userId)
+    try {
+      const r = await fetch('/api/portal/trainer/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, note: notes[userId] ?? '' }) })
+      if (r.ok) {
+        setPlans((ps) => (ps ?? []).filter((p) => p.userId !== userId))
+        onChecked()
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (!plans) return null
+  return (
+    <section id="plans" className="flex flex-col" style={{ gap: 'var(--space-2)' }} aria-labelledby="plans-heading" data-plans-to-check>
+      <h2 id="plans-heading" style={HEADING}>{`Plans to check (${plans.length})`}</h2>
+      {plans.length === 0 ? (
+        <p style={BODY}>Every plan is checked.</p>
+      ) : (
+        plans.map((p) => (
+          <Card key={p.userId} padding="normal" solid>
+            <div className="flex flex-col" style={{ gap: 'var(--space-3)' }} data-plan-row={p.userId}>
+              <div className="flex flex-wrap items-center justify-between" style={{ gap: 'var(--space-2)' }}>
+                <div>
+                  <p style={STRONG}>{p.firstName ?? p.email ?? 'Member'}</p>
+                  <p style={META}>{`${p.email ?? ''} · waiting ${ago(p.since)} · built by ${p.source === 'ai' ? 'the AI builder' : 'the rules'}`}</p>
+                </div>
+                <Badge tone="info">{`${p.prefs.focus} · ${p.prefs.days} days · ${p.prefs.minutes} min`}</Badge>
+              </div>
+              <p style={BODY}>{`${p.prefs.equipment}, ${p.prefs.experience}${p.prefs.avoid.length ? `, working around: ${p.prefs.avoid.join(', ')}` : ''}.`}</p>
+              <Disclosure summary={`See the week (${p.sessions.length} sessions)`}>
+                <ol className="flex flex-col" style={{ gap: 'var(--space-2)', paddingTop: 'var(--space-2)' }}>
+                  {p.sessions.map((s, i) => (
+                    <li key={`${s.day}-${i}`} style={BODY}>
+                      <span style={{ ...STRONG, fontSize: 'var(--text-body-sm)' }}>{`${DAYS[s.day]} · ${s.title}`}</span>
+                      <span style={{ display: 'block' }}>{s.moves.join(', ')}</span>
+                    </li>
+                  ))}
+                </ol>
+              </Disclosure>
+              <Textarea
+                label="A note for them (optional)"
+                rows={2}
+                value={notes[p.userId] ?? ''}
+                onChange={(e) => setNotes((n) => ({ ...n, [p.userId]: e.target.value }))}
+                hint="Goes to their chat with you, and emails them. Leave it empty to just tick it."
+              />
+              <div>
+                <Button variant="primary" size="sm" icon="check" loading={busy === p.userId} disabled={busy !== null} onClick={() => void check(p.userId)} data-check-plan={p.userId}>
+                  {(notes[p.userId] ?? '').trim() ? 'Checked: send the note' : 'Looks good'}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ))
+      )}
+    </section>
   )
 }

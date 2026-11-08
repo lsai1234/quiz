@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { Button, Input, Modal, ModalBody } from '@/components/system'
 
@@ -11,7 +11,22 @@ import { Button, Input, Modal, ModalBody } from '@/components/system'
  * it belongs to whoever is building a stack, and that is now the pre-built
  * bundle editor rather than the package that sells one.
  */
-export function ProductPicker({ products, disabledIds, onPick, onClose, label = 'Add a product to this bundle' }: { products: CatalogueProduct[]; disabledIds: Set<string>; onPick: (p: CatalogueProduct) => void; onClose: () => void; label?: string }) {
+export function ProductPicker({
+  products,
+  disabledIds,
+  onPick,
+  onClose,
+  label = 'Add a product to this bundle',
+  describe,
+}: {
+  products: CatalogueProduct[]
+  disabledIds: Set<string>
+  onPick: (p: CatalogueProduct) => void
+  onClose: () => void
+  label?: string
+  /** A line under each product, for what picking it would mean (the gift pool's profit verdict). */
+  describe?: (p: CatalogueProduct) => ReactNode
+}) {
   const [q, setQ] = useState('')
   const filtered = products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase()))
   return (
@@ -54,6 +69,7 @@ export function ProductPicker({ products, disabledIds, onPick, onClose, label = 
                   >
                     {p.category} · {p.stackSlots[0]}
                   </span>
+                  {describe && <span className="block" style={{ marginTop: 'var(--space-1)', whiteSpace: 'normal' }}>{describe(p)}</span>}
                 </span>
                 <span style={{ fontSize: 'var(--text-meta)', color: 'var(--accent)' }}>
                   {disabled ? 'Added' : 'Add'}

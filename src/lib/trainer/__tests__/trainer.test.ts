@@ -72,7 +72,7 @@ describe('the thread', () => {
     const who = { id: `t-${n++}`, email: 'd@example.com', firstName: 'D' }
     await askTrainer(who, { text: 'Q' }, 5, new Date('2026-11-06T10:00:00Z'))
     const { thread } = (await answerMember(who.id, { text: 'A', by: 'Sam Founder' }, new Date('2026-11-06T11:00:00Z')))!
-    const view = viewOf(thread, { name: 'Josh', role: 'Trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: 'josh@example.com' }, true, true)
+    const view = viewOf(thread, { name: 'Josh', role: 'Trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: 'josh@example.com', checksPlans: true }, true, true)
     expect(JSON.stringify(view)).not.toMatch(/Sam Founder|josh@example\.com/)
     expect(view.unread).toBe(1)
   })

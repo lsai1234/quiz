@@ -45,7 +45,7 @@ import { quizPerson, withHeroFirst } from '@/lib/stack-blueprint/offer'
 import { chooseHero, heroReason, personFromSnapshot, type OfferInputs, type PersonFit } from '@/lib/offer/select'
 import { bonusWorth, codeOrBonus, coreOffer, dealPerson, tierBonuses, titleOf, type BonusLine } from '@/lib/offer/results'
 import { OFFER_COPY } from '@/lib/offer/copy'
-import { trainerLive } from '@/lib/offer/settings'
+import { hubValue, trainerLive } from '@/lib/offer/settings'
 import { publicTrainer } from '@/lib/trainer/public'
 import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
 import type { PublicOfferQuote } from '@/lib/last-chance/economics'
@@ -1334,7 +1334,8 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
           training: offerSettings.services.training,
           deals: offerSettings.services.deals,
           checkIns: offerSettings.services.checkIns,
-          trainer: trainerLive(offerSettings) ? publicTrainer(offerSettings.trainer) : null,
+          trainer: trainerLive(offerSettings) ? publicTrainer(offerSettings.trainer, offerSettings.services.training) : null,
+          hubMonthly: hubValue(offerSettings) != null ? offerSettings.hubPrice.monthly : null,
         }}
         monthlyMin={
           !canSubscribeStack && founderKind == null && pricing.subscriptionItemCount > 0 && !pricing.subscriptionMinOrderMet
@@ -1587,6 +1588,7 @@ export function StackReviewPage({ reducedMotion }: { reducedMotion?: boolean } =
               bonus={bonus ? { title: bonus.product.title, worth: bonusWorth(bonus), firstBoxOnly: planType === 'subscription' } : null}
               bonusNote={codeBeatsBonus}
               saveLabel={claiming ? undefined : BOX_COPY.receiptSave(activeSlots.length)}
+              hubMonthly={hubValue(offerSettings) != null && !claiming ? offerSettings.hubPrice.monthly : null}
             />
 
             {/* The one form in the journey: a claim, or a free founder code. */}

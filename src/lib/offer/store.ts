@@ -24,6 +24,8 @@ import {
   type ServiceSettings,
   normaliseMemberDeals,
   normaliseTrainer,
+  normaliseHubPrice,
+  type HubPriceSettings,
   type MemberDealSettings,
   type TrainerProfile,
 } from './settings'
@@ -94,6 +96,14 @@ export async function saveMemberDealSettings(patch: Partial<MemberDealSettings>)
 export async function saveTrainerProfile(patch: Partial<TrainerProfile>): Promise<OfferSettings> {
   return mutate((state) => {
     state.trainer = normaliseTrainer({ ...state.trainer, ...patch })
+    return state
+  })
+}
+
+/** Settings → Member hub → "The hub on its own": its price, and whether it's on sale. */
+export async function saveHubPrice(patch: Partial<HubPriceSettings>): Promise<OfferSettings> {
+  return mutate((state) => {
+    state.hubPrice = normaliseHubPrice({ ...state.hubPrice, ...patch })
     return state
   })
 }

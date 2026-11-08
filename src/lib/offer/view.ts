@@ -23,8 +23,10 @@ import {
   costedItem,
   costsIncludeVat,
   exampleStacks,
+  giftVerdict,
   stackMargin,
   type BonusEconomicsRow,
+  type GiftVerdict,
   type BonusProposal,
   type CostedItem,
   type StackMargin,
@@ -62,6 +64,8 @@ export interface OfferView {
     proposal: BonusProposal | null
     /** Pool ids no longer in the catalogue (removed, or never imported). */
     missingFromCatalogue: string[]
+    /** Every product's answer to "would it still be profitable as the gift?", for the pool and the picker. */
+    verdicts: Record<string, GiftVerdict>
   }
   products: ProductOption[]
 }
@@ -108,6 +112,14 @@ export function offerView(settings: OfferSettings, catalogue: CatalogueProduct[]
       rows: bonusEconomics(items, stacks, settings.bonus, config),
       proposal: proposeBonusDefaults(items, stacks, config),
       missingFromCatalogue: settings.bonus.pool.filter((id) => !byId.has(id)),
+      verdicts: Object.fromEntries(
+        bonusEconomics(
+          catalogue.map(costedItem).filter((i): i is CostedItem => i !== null),
+          stacks,
+          settings.bonus,
+          config,
+        ).map((row) => [row.item.id, giftVerdict(row, settings.bonus)]),
+      ),
     },
     products: catalogue.map(optionOf).sort((a, b) => a.title.localeCompare(b.title)),
   }

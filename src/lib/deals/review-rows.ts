@@ -49,11 +49,22 @@ export function dealCopyRows(): ReviewRow[] {
         emailPreheader: ['Creatine'],
         emailHeading: ['Creatine'],
         emailIntro: ['Alex'],
+        boxAddsHub: [30],
       },
       {},
       ['heading', 'intro', 'dealLine', 'freeDeliveryCondition', 'price', 'openUntil', 'opensIn', 'runsOut', 'runsOutEstimated', 'buy', 'terms', 'hubOpen', 'changed'],
     ),
-    ...copyRows(s, reveal, H, { sessionsCount: [4], fromWeek: [3], cardTrainer: ['Josh'] }, { underCta: 'Under the box’s button, with the member hub terms link' }, [
+    ...copyRows(s, reveal, H, {
+      sessionsCount: [4],
+      fromWeek: [3],
+      cardTrainer: ['Josh'],
+      cardTrainingChecked: ['Josh'],
+      cardValue: [10],
+      underCtaValue: [30],
+      receiptHubLine: [10],
+      receiptHubSave: [30],
+      receiptHubSaveMonthly: [10],
+    }, { underCta: 'Under the box’s button, with the member hub terms link' }, [
       'eyebrow',
       'heading',
       'sub',

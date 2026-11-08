@@ -17,6 +17,7 @@ import { ProductTile } from './ProductTile'
 import { ShopAlaCarte } from './ShopAlaCarte'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { FREE_GIFT_TERMS_PATH, OFFER_COPY } from '@/lib/offer/copy'
+import { HUB_PREVIEW_COPY } from '@/lib/deals/copy'
 
 interface LineItem {
   key: string
@@ -84,6 +85,8 @@ interface Props {
   tierLabels?: Partial<Record<StackLevel, string>>
   /** The subscribe-and-save row's own words, where the stack is a box rather than a named depth. */
   saveLabel?: string
+  /** The hub's price a month on its own, while it's on sale on its own (Settings → Member hub): shown as an included line and its saving. */
+  hubMonthly?: number | null
 }
 
 /** Months, said the way a person would say them. */
@@ -207,7 +210,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null, tierLabels, saveLabel,
+  slots, products, subscriptionPlan, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, codeKind = null, starterStack = null, oneOffOnly = null, onCtaRef, bonus = null, bonusNote = null, tierLabels, saveLabel, hubMonthly = null,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -415,6 +418,40 @@ export function PlanReceipt({
           )}
           {bonusNote && (
             <p className="text-[11px] leading-snug" style={{ color: 'var(--color-text-2)' }}>{bonusNote}</p>
+          )}
+          {/* The member hub, as the line it is: on sale on its own at this price, included here. */}
+          {hubMonthly != null && (
+            <div className="flex items-start gap-3" data-receipt-hub>
+              <span
+                aria-hidden
+                className="flex items-center justify-center flex-shrink-0"
+                style={{ width: 40, height: 40, borderRadius: 10, color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }}
+              >
+                <Icon name="bolt" size={18} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-medium leading-snug" style={{ color: 'var(--color-text)' }}>
+                  {isSub ? HUB_PREVIEW_COPY.receiptHubMonthly : HUB_PREVIEW_COPY.receiptHub}
+                </span>
+                <span className="block text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+                  {HUB_PREVIEW_COPY.receiptHubLine(hubMonthly)}
+                </span>
+              </span>
+              <span className="flex-shrink-0 text-right leading-snug">
+                <span className="block text-[11px] tabular-nums line-through" style={{ color: 'var(--color-muted)' }}>
+                  <span className="sr-only">{`${HUB_PREVIEW_COPY.insteadOf} `}</span>
+                  {formatGBP(isSub ? hubMonthly : hubMonthly * 3)}
+                </span>
+                <span className="block text-[13px] font-bold tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                  {formatGBP(0)}
+                </span>
+              </span>
+            </div>
+          )}
+          {hubMonthly != null && (
+            <p className="text-[12px] font-semibold" style={{ color: 'var(--tone-positive)' }} data-receipt-hub-save>
+              {isSub ? HUB_PREVIEW_COPY.receiptHubSaveMonthly(hubMonthly) : HUB_PREVIEW_COPY.receiptHubSave(hubMonthly * 3)}
+            </p>
           )}
         </div>
 

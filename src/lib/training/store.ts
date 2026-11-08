@@ -40,3 +40,20 @@ export async function deleteTraining(userId: string): Promise<boolean> {
 export async function countPlans(limit = 5000): Promise<number> {
   return (await kvListPrefix<TrainingRecord>(PREFIX, limit)).filter((r) => r.value?.plan).length
 }
+
+/** Plans waiting for the trainer's check, the longest wait first. */
+export async function plansToCheck(limit = 5000): Promise<TrainingPlan[]> {
+  return (await kvListPrefix<TrainingRecord>(PREFIX, limit))
+    .map((r) => r.value?.plan)
+    .filter((p): p is TrainingPlan => Boolean(p && p.check?.state === 'waiting'))
+    .sort((a, b) => Date.parse(a.check!.since) - Date.parse(b.check!.since))
+}
+
+/** The trainer has checked it. Null when there's no plan waiting. */
+export async function markPlanChecked(userId: string, by: string, now = new Date()): Promise<TrainingPlan | null> {
+  const record = await getTraining(userId)
+  if (!record.plan || record.plan.check?.state !== 'waiting') return null
+  const plan: TrainingPlan = { ...record.plan, check: { ...record.plan.check, state: 'checked', at: now.toISOString(), by: by.slice(0, 120) } }
+  await saveTraining({ ...record, plan })
+  return plan
+}

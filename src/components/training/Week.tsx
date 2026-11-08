@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { Badge, Button, Card, ChargeMeter, Note, buttonSurface } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
+import Link from 'next/link'
+import { TRAINER_COPY } from '@/lib/trainer/copy'
+import type { PublicTrainer } from '@/lib/trainer/types'
+import type { PlanCheck } from '@/lib/training/types'
 import { FOCUS_COPY, SPLIT_COPY, TRAINING_COPY as C, WEEKDAY_LONG, WEEKDAY_SHORT, areasPhrase } from '@/lib/training/copy'
 import { weekdayOf } from '@/lib/training/generate'
 import type { TrainingAction, TrainingState } from '@/lib/training/state'
@@ -33,6 +37,8 @@ export function Week({ state, plan, act, busy, error }: { state: TrainingState; 
         <h1 style={{ ...display, marginTop: 'var(--space-2)' }}>{C.title}</h1>
         <p style={{ ...body, marginTop: 'var(--space-2)' }}>{C.intro}</p>
       </header>
+
+      {state.trainer && plan.check && <PlanCheckCard trainer={state.trainer} check={plan.check} />}
 
       <Card padding="roomy" glow="accent">
         <div style={stack('var(--space-3)')}>
@@ -169,7 +175,7 @@ function SessionCard({ session, act, busy, onOpen }: { session: Session; act: Ac
 /** The one next thing: today's session, or the next one, a tap from starting. */
 function Up({ plan, today, onOpen }: { plan: TrainingPlan; today: number; onOpen: (id: string) => void }) {
   const next = nextSession(plan, today as Session['day'])
-  if (!next) return <Note tone="positive">{C.allDone}</Note>
+  if (!next) return plan.sessions.every((s) => s.done) ? <Note tone="positive">{C.allDone}</Note> : <Note tone="neutral">{C.weekLeft}</Note>
   const isToday = next.day === today
   return (
     <div data-up={next.id}>
@@ -228,6 +234,47 @@ function WeekStrip({ plan, today }: { plan: TrainingPlan; today: number }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * The trainer's check on this plan: waiting (start anyway, ask anything), or
+ * checked, by name. Only while the trainer checks plans.
+ */
+function PlanCheckCard({ trainer, check }: { trainer: PublicTrainer; check: PlanCheck }) {
+  const checked = check.state === 'checked'
+  const ask = buttonSurface('ghost', 'sm')
+  return (
+    <div data-plan-check={check.state}>
+      <Card padding="normal" tone={checked ? 'positive' : 'info'}>
+        <div className="flex items-start" style={{ gap: 'var(--space-3)' }}>
+          <span
+            aria-hidden
+            className="inline-flex shrink-0 items-center justify-center"
+            style={{
+              width: 'var(--space-8)',
+              height: 'var(--space-8)',
+              borderRadius: 'var(--radius-pill)',
+              background: checked ? 'var(--fill-positive)' : 'var(--fill-accent)',
+              color: 'var(--ink-on-accent)',
+            }}
+          >
+            <Icon name={checked ? 'check' : 'clock'} size={16} />
+          </span>
+          <div className="min-w-0" style={{ flex: 1 }}>
+            <p style={strong}>{checked ? TRAINER_COPY.planChecked(trainer.name) : TRAINER_COPY.planChecking(trainer.name)}</p>
+            <p style={{ ...body, marginTop: 'var(--space-1)' }}>
+              {checked ? TRAINER_COPY.planCheckedLine(trainer.name) : TRAINER_COPY.planCheckingLine(trainer.name, trainer.replyHours)}
+            </p>
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <Link href={`/myhub/trainer?about=${encodeURIComponent(TRAINER_COPY.planNoteAbout)}`} className={ask.className} style={ask.style} data-ask-plan>
+                {TRAINER_COPY.askAboutPlan(trainer.name)} →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }

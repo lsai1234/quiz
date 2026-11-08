@@ -251,3 +251,60 @@ export function proposeBonusDefaults(
 export function costsIncludeVat(config: PricingConfig = getPricingConfig()): boolean {
   return supplierVatIsCost(config)
 }
+
+/**
+ * Is this gift still worth giving? One plain answer per product, for the
+ * founders: what it costs, the least any example box keeps with it in, and
+ * whether that's comfortable, thin, or never offered. The checkout's own rule
+ * stands behind it either way: the gift only goes on an order that still keeps
+ * the floor (`clearsFloor`), so no gifted order goes below it.
+ */
+export type GiftVerdictTone = 'good' | 'thin' | 'never'
+
+export interface GiftVerdict {
+  tone: GiftVerdictTone
+  /** What one gift costs us (£), or null when only estimated. */
+  costToUs: number | null
+  /** The least an example box keeps with the gift in, among those it would be offered on (£ and share of net revenue). */
+  worstKeep: number | null
+  worstMarginPct: number | null
+  /** How many of the example boxes it would be offered on. */
+  offeredOn: number
+  headline: string
+  detail: string
+}
+
+/** Margin under this, with the gift in, reads as thin. */
+export const THIN_MARGIN = 0.15
+
+export function giftVerdict(row: BonusEconomicsRow, settings: Pick<BonusSettings, 'floorPounds' | 'floorPct' | 'minSubtotal'>): GiftVerdict {
+  const gbp = (n: number) => `£${n.toFixed(2)}`
+  const pctOf = (n: number) => `${Math.round(n * 100)}%`
+  const offered = row.stacks.filter((s) => s.qualifies)
+  const floorLine = `The checkout only adds it to an order that still keeps at least ${gbp(settings.floorPounds)}${settings.floorPct > 0 ? ` or ${pctOf(settings.floorPct)} of net revenue, whichever is more` : ''}, on orders from ${gbp(settings.minSubtotal)}.`
+  const costLine = row.costToUs == null ? 'Its cost is estimated: no PowerBody cost on file.' : `Each one costs you ${gbp(row.costToUs)}.`
+  if (!offered.length) {
+    return {
+      tone: 'never',
+      costToUs: row.costToUs,
+      worstKeep: null,
+      worstMarginPct: null,
+      offeredOn: 0,
+      headline: 'Never given at these settings',
+      detail: `${costLine} With it in, none of the example boxes over the minimum keeps the floor, so customers wouldn’t get it. ${floorLine}`,
+    }
+  }
+  const worst = offered.reduce((a, b) => (b.with.contribution < a.with.contribution ? b : a))
+  const thin = worst.with.marginPct < THIN_MARGIN
+  return {
+    tone: thin ? 'thin' : 'good',
+    costToUs: row.costToUs,
+    worstKeep: worst.with.contribution,
+    worstMarginPct: worst.with.marginPct,
+    offeredOn: offered.length,
+    headline: thin
+      ? `Thin: as little as ${gbp(worst.with.contribution)} (${pctOf(worst.with.marginPct)}) left after the gift`
+      : `Profitable: at least ${gbp(worst.with.contribution)} (${pctOf(worst.with.marginPct)}) left after the gift`,
+    detail: `${costLine} That’s the least an example box it’s given with keeps after the gift, delivery, card fees and returns. ${floorLine}`,
+  }
+}

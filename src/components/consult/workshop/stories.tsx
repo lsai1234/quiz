@@ -454,6 +454,7 @@ const DEMO_OFFER: OfferSettings = {
   services: { checkIns: true, guarantee: false, training: false, deals: false, trainer: false },
   memberDeals: DEFAULT_OFFER.memberDeals,
   trainer: DEFAULT_OFFER.trainer,
+  hubPrice: DEFAULT_OFFER.hubPrice,
 }
 
 /** The story as it opens after the charge-up, for someone with patterns found and someone without. */

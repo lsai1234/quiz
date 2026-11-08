@@ -6,7 +6,7 @@ import { memberQuote, sizeFor } from '@/lib/deals/box'
 import { variantFor } from '@/lib/deals/engine'
 import { DEALS_COPY } from '@/lib/deals/copy'
 import { hubMetrics } from '@/lib/hub/metrics'
-import { getOfferSettings, saveMemberDealSettings } from '@/lib/offer/store'
+import { getOfferSettings, saveHubPrice, saveMemberDealSettings } from '@/lib/offer/store'
 import { PersistError } from '@/lib/portal/persist'
 
 /**
@@ -15,7 +15,7 @@ import { PersistError } from '@/lib/portal/persist'
  *   GET   the switches, member deal sizes by kind, what every product's
  *         member price comes to at those sizes (after the floor), and the
  *         hub's numbers
- *   POST  { memberDeals: Partial<MemberDealSettings> }
+ *   POST  { memberDeals?: Partial<MemberDealSettings>, hubPrice?: Partial<HubPriceSettings> }
  */
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +26,7 @@ async function payload() {
   return {
     services: settings.services,
     memberDeals: settings.memberDeals,
+    hubPrice: settings.hubPrice,
     kinds: kinds.map((k) => ({ kind: k, products: sellable.filter((p) => p.swapGroup === k).length })),
     previews: sellable.map((p) => {
       const v = variantFor(p, null)
@@ -52,7 +53,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  let body: { memberDeals?: unknown }
+  let body: { memberDeals?: unknown; hubPrice?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
   }
   try {
     if (body.memberDeals && typeof body.memberDeals === 'object') await saveMemberDealSettings(body.memberDeals as Record<string, unknown>)
+    if (body.hubPrice && typeof body.hubPrice === 'object') await saveHubPrice(body.hubPrice as Record<string, unknown>)
   } catch (err) {
     if (err instanceof PersistError) return NextResponse.json({ error: err.message }, { status: 503 })
     throw err

@@ -169,3 +169,33 @@ export async function deleteThread(userId: string): Promise<boolean> {
   await kvDelete(key(userId))
   return had
 }
+
+/**
+ * The trainer writes first: a note with a checked plan. Starts the thread when
+ * there isn't one yet, and leaves any wait on a question as it was.
+ */
+export async function noteFromTrainer(
+  who: { userId: string; email: string; firstName: string | null },
+  input: { text?: unknown; about?: string | null; by: string },
+  now = new Date(),
+): Promise<{ thread: TrainerThread; message: TrainerMessage }> {
+  const text = cleanText(input.text)
+  if (!text) throw new TrainerError('empty')
+  if (text.length > TRAINER_MAX) throw new TrainerError('too-long')
+  const at = now.toISOString()
+  const thread: TrainerThread = (await getThread(who.userId)) ?? {
+    v: 1,
+    userId: who.userId,
+    email: who.email,
+    firstName: who.firstName,
+    messages: [],
+    waiting: false,
+    lastAt: at,
+    memberReadAt: null,
+    trainerReadAt: at,
+  }
+  const message: TrainerMessage = { id: id(), from: 'trainer', text, at, about: input.about ?? null, video: null, by: input.by.slice(0, 120) }
+  thread.messages.push(message)
+  thread.lastAt = at
+  return { thread: await save(thread), message }
+}

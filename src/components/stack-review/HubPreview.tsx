@@ -36,6 +36,8 @@ export interface HubPreviewInput {
   checkIns?: boolean
   /** Ask your trainer, when it's live: who members will be asking. */
   trainer?: PublicTrainer | null
+  /** The hub's price a month on its own, while it's on sale on its own; null to show no value. */
+  hubMonthly?: number | null
 }
 
 export function HubPreview({ input }: { input: HubPreviewInput }) {
@@ -119,6 +121,14 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
               <p className="mt-1.5 text-[12.5px] leading-snug" style={{ color: P.nightInk2 }}>
                 {C.trainingBody}
               </p>
+              {trainer?.checksPlans && (
+                <p className="mt-2 flex items-start gap-1.5 text-[12.5px] font-semibold leading-snug" style={{ color: P.nightInk }} data-hub-preview-checked>
+                  <span aria-hidden className="mt-px" style={{ color: P.nightPositive }}>
+                    <Icon name="check" size={12} />
+                  </span>
+                  {TRAINER_COPY.revealChecked(trainer.name)}
+                </p>
+              )}
 
               {/* The week at a glance: a block on each day with a session. The list says it in words. */}
               <div className="mt-3 grid grid-cols-7 gap-1.5" aria-hidden>

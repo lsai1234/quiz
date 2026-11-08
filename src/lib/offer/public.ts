@@ -71,5 +71,6 @@ export function publicOffer(
     memberDeals: { ...settings.memberDeals, pct: { ...settings.memberDeals.pct } },
     // The trainer as members see them; where their alerts go stays private.
     trainer: { ...settings.trainer, notifyEmail: null },
+    hubPrice: { ...settings.hubPrice },
   }
 }

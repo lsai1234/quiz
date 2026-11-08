@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { Badge, Button, Card, Input, Note } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Input, Note } from '@/components/system'
 import type { HubMetrics } from '@/lib/hub/metrics'
-import type { MemberDealSettings, ServiceSettings } from '@/lib/offer/settings'
+import type { HubPriceSettings, MemberDealSettings, ServiceSettings } from '@/lib/offer/settings'
 
 /**
  * Settings → Member hub: deal sizes by kind, the top-up box's free-delivery
@@ -16,6 +16,7 @@ import type { MemberDealSettings, ServiceSettings } from '@/lib/offer/settings'
 interface View {
   services: ServiceSettings
   memberDeals: MemberDealSettings
+  hubPrice: HubPriceSettings
   kinds: { kind: string; products: number }[]
   previews: { productId: string; title: string; kind: string; sizePct: number; viable: boolean; line: string; total: number | null; normalTotal: number | null }[]
   metrics: HubMetrics
@@ -83,6 +84,8 @@ export function MemberHubSettings() {
           {error}
         </Note>
       )}
+
+      <HubPriceCard price={view.hubPrice} onSaved={load} />
 
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
@@ -180,5 +183,68 @@ export function MemberHubSettings() {
         </div>
       </Card>
     </div>
+  )
+}
+
+/**
+ * The hub on its own: its monthly price, and whether it's genuinely on sale
+ * at that price. Only then does the box show the 90 days as a saving.
+ */
+function HubPriceCard({ price, onSaved }: { price: HubPriceSettings; onSaved: (v: View) => void }) {
+  const [monthly, setMonthly] = useState(String(price.monthly))
+  const [saving, setSaving] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  async function save(patch: Partial<HubPriceSettings>) {
+    setSaving(true)
+    setNote(null)
+    try {
+      const res = await fetch('/api/portal/member-hub', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hubPrice: patch }) })
+      if (!res.ok) throw new Error()
+      onSaved((await res.json()) as View)
+      setNote('Saved.')
+    } catch {
+      setNote('That did not save. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const value = Number(monthly) * 3
+  return (
+    <Card elevation={1}>
+      <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-hub-price>
+        <h2 style={HEADING}>The hub on its own</h2>
+        <p style={BODY}>
+          With its price on its own set and switched on, the results page shows the 90 days every order brings as a saving: on the membership card, under the button and
+          on the receipt, and each top-up box in the hub says it adds another 90 days at that value.
+        </p>
+        <div className="flex flex-wrap items-end" style={{ gap: 'var(--space-3)' }}>
+          <Input label="Price a month, on its own" prefix="£" type="number" inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
+          <Button size="sm" disabled={saving || Number(monthly) === price.monthly} onClick={() => void save({ monthly: Number(monthly) || 0 })}>
+            Save price
+          </Button>
+        </div>
+        <p style={META}>{Number(monthly) > 0 ? `90 days shows as £${value.toFixed(2)}.` : 'Set a price to show a value.'}</p>
+        <Checkbox
+          label="The hub is on sale on its own at this price"
+          hint="Leave this off until someone can actually buy the hub without an order at this price. A saving against a price nobody can pay is a misleading price under consumer law."
+          checked={price.standalone}
+          disabled={saving}
+          onChange={(e) => void save({ standalone: e.target.checked })}
+          data-hub-standalone
+        />
+        {price.standalone ? (
+          <Note tone="positive" icon="check">
+            Showing: 90 days of the hub as £{(price.monthly * 3).toFixed(2)}, included with every order.
+          </Note>
+        ) : (
+          <Note tone="neutral" icon="info">
+            Off: the hub is described as included with every order, with no price or saving beside it.
+          </Note>
+        )}
+        {note && <p style={META}>{note}</p>}
+      </div>
+    </Card>
   )
 }

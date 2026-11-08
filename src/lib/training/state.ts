@@ -6,6 +6,8 @@ import type { TrainingAccess } from './access'
 import type { PrefsDraft } from './prefs'
 import type { ActivityKind, ReadinessRecord, TrainingPlan, TrainingPrefs, Weekday } from './types'
 
+import type { PublicTrainer } from '@/lib/trainer/types'
+
 export interface TrainingState {
   access: TrainingAccess
   readiness: ReadinessRecord | null
@@ -15,6 +17,8 @@ export interface TrainingState {
   draft: PrefsDraft | null
   /** Tutorial links by exercise or activity id. */
   tutorials: Record<string, string>
+  /** Ask your trainer, while it's live: who checks the plan and answers questions. */
+  trainer: PublicTrainer | null
 }
 
 export type TrainingAction =

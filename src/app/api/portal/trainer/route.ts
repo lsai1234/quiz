@@ -4,6 +4,7 @@ import { getOfferSettings, saveServiceSettings, saveTrainerProfile } from '@/lib
 import { trainerLive } from '@/lib/offer/settings'
 import { PersistError } from '@/lib/portal/persist'
 import { listInbox } from '@/lib/trainer/store'
+import { plansToCheck } from '@/lib/training/store'
 
 /**
  * Founders Hub → Trainer.
@@ -15,8 +16,10 @@ import { listInbox } from '@/lib/trainer/store'
 export const dynamic = 'force-dynamic'
 
 async function payload() {
-  const [settings, inbox] = await Promise.all([getOfferSettings(), listInbox()])
+  const [settings, inbox, plans] = await Promise.all([getOfferSettings(), listInbox(), plansToCheck()])
   return {
+    /** Plans waiting for the trainer's check, for the tab's count. */
+    plansWaiting: plans.length,
     on: settings.services.trainer,
     live: trainerLive(settings),
     trainer: settings.trainer,

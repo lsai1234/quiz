@@ -206,6 +206,20 @@ export interface TrainingPlan {
    * across weeks, rebuilds and swaps, so "last time" is always there.
    */
   log?: Record<string, LogEntry[]>
+  /**
+   * The trainer's check (Ask your trainer, while checks are on): a new plan,
+   * a new setup or a rebuilt week waits for it; small changes don't.
+   */
+  check?: PlanCheck
+}
+
+export interface PlanCheck {
+  state: 'waiting' | 'checked'
+  /** When it started waiting. */
+  since: string
+  /** When it was checked, and by which founder (the Founders Hub's record). */
+  at?: string | null
+  by?: string | null
 }
 
 export interface LogEntry {

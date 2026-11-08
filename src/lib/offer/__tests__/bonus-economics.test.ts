@@ -3,7 +3,7 @@
  * "Free" never moves the stack's price or delivery: only what we keep changes.
  */
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import { bonusEconomics, costedItem, exampleStacks, proposeBonusDefaults, stackMargin, type CostedItem } from '../bonus-economics'
+import { bonusEconomics, costedItem, exampleStacks, giftVerdict, proposeBonusDefaults, stackMargin, THIN_MARGIN, type CostedItem } from '../bonus-economics'
 import { DEFAULT_BONUS } from '../settings'
 
 const stacks = exampleStacks(MOCK_CATALOGUE)
@@ -51,4 +51,36 @@ it('proposes a floor of half what the smallest stack keeps, and the first stack 
   expect(p.minSubtotal % 5).toBe(0)
   expect(p.why).toMatch(/half/)
   expect(proposeBonusDefaults([], stacks)).toBeNull()
+})
+
+describe('the founders’ verdict on a gift', () => {
+  const stacks = exampleStacks(MOCK_CATALOGUE)
+  const items = MOCK_CATALOGUE.map(costedItem).filter((i): i is CostedItem => i !== null)
+  const settings = { ...DEFAULT_BONUS, minSubtotal: 40, floorPounds: 1, floorPct: 0.02 }
+  const rows = bonusEconomics(items, stacks, settings)
+
+  it('names the least any box it’s given with keeps, and calls it thin under the line', () => {
+    for (const row of rows) {
+      const v = giftVerdict(row, settings)
+      const offered = row.stacks.filter((s) => s.qualifies)
+      if (!offered.length) {
+        expect(v.tone).toBe('never')
+        expect(v.worstKeep).toBeNull()
+        continue
+      }
+      const least = Math.min(...offered.map((s) => s.with.contribution))
+      expect(v.worstKeep).toBe(least)
+      expect(v.tone).toBe(v.worstMarginPct! < THIN_MARGIN ? 'thin' : 'good')
+      // Never given below the floor, so the least kept clears it.
+      expect(least).toBeGreaterThanOrEqual(settings.floorPounds)
+      expect(v.headline).toMatch(/£\d+\.\d\d \(\d+%\) left after the gift$/)
+    }
+  })
+
+  it('says it would never be given when the floor rules it out', () => {
+    const strict = { ...settings, floorPounds: 10_000 }
+    const v = giftVerdict(bonusEconomics(items.slice(0, 1), stacks, strict)[0], strict)
+    expect(v).toMatchObject({ tone: 'never', offeredOn: 0, headline: 'Never given at these settings' })
+    expect(v.detail).toContain('£10000.00')
+  })
 })

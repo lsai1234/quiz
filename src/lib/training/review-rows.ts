@@ -74,6 +74,7 @@ export function trainingCopyRows(): ReviewRow[] {
     [s, `${at}, a session`, C.restFor('1:30'), `Rest timer. ${ex}`],
     [s, `${at}, a session`, C.restDone, 'When the rest ends'],
     [s, `${at}, the week`, C.allDone, 'Every session done'],
+    [s, `${at}, the week`, C.weekLeft, 'No sessions left this week, with some not done'],
     [s, `${at}, the week`, C.calendarNote, 'Under "Add my week to my calendar"'],
     [s, 'Calendar file', C.calendarEvent('Upper body', 45), `Event title. ${ex}`],
     [s, 'Calendar file', C.calendarBody, 'Event description'],

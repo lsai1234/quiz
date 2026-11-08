@@ -17,7 +17,9 @@ const DISPLAY = 'var(--font-display)'
 
 export function HubCard({ input }: { input: HubPreviewInput }) {
   const perks: { icon: IconName; title: string; line: string; id: string }[] = [
-    ...(input.training ? [{ id: 'training', icon: 'dumbbell' as const, title: C.cardTraining, line: C.cardTrainingLine }] : []),
+    ...(input.training
+      ? [{ id: 'training', icon: 'dumbbell' as const, title: C.cardTraining, line: input.trainer?.checksPlans ? C.cardTrainingChecked(input.trainer.name) : C.cardTrainingLine }]
+      : []),
     ...(input.deals && input.plan === 'oneoff' ? [{ id: 'deals', icon: 'star' as const, title: C.cardDeals, line: C.cardDealsLine }] : []),
     { id: 'guide', icon: 'sun', title: C.cardGuide, line: C.cardGuideLine },
     ...(input.checkIns ? [{ id: 'checkIns', icon: 'sparkle' as const, title: C.cardCheckIns, line: C.cardCheckInsLine }] : []),
@@ -73,6 +75,19 @@ export function HubCard({ input }: { input: HubPreviewInput }) {
       <p className="relative mt-2 max-w-xl text-[13px] leading-snug" style={{ color: P.nightInk2 }}>
         {C.cardSub}
       </p>
+      {input.hubMonthly != null && (
+        <p className="relative mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1" data-hub-card-value>
+          <span className="text-[13px] font-semibold tabular-nums line-through" style={{ color: P.nightInk3 }}>
+            {`£${(input.hubMonthly * 3).toFixed(2)}`}
+          </span>
+          <span className="text-[15px] font-black" style={{ color: P.nightPositive, fontFamily: DISPLAY }}>
+            {C.cardIncluded}
+          </span>
+          <span className="text-[12px]" style={{ color: P.nightInk3 }}>
+            {`· ${C.cardValue(input.hubMonthly)}`}
+          </span>
+        </p>
+      )}
 
       {t && (
         <div

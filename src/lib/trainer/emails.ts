@@ -77,3 +77,30 @@ export async function sendQuestionEmail(thread: TrainerThread, message: TrainerM
     console.error('[trainer] question alert failed:', err)
   }
 }
+
+/** The member's email when the trainer checks their plan with a note. Never throws. */
+export async function sendPlanNoteEmail(thread: TrainerThread, message: TrainerMessage, trainer: TrainerProfile): Promise<void> {
+  try {
+    const { queueNotification, deliverIfAutomatic } = await import('@/lib/notify/outbox')
+    const base = appBaseUrl()
+    const shell = emailShell({
+      preheader: C.replyPreheader,
+      heading: C.planEmailSubject(trainer.name),
+      intro: C.planEmailIntro(thread.firstName, trainer.name),
+      paragraphs: [C.medical],
+      cta: { label: C.planEmailCta, url: `${base}/myhub/trainer` },
+      links: { base, optOutUrl: null },
+      marketing: null,
+    })
+    const queued = await queueNotification({
+      userId: thread.userId,
+      email: thread.email,
+      template: 'trainer-reply',
+      dedupeKey: `trainer-reply:${message.id}`,
+      rendered: { subject: C.planEmailSubject(trainer.name), ...shell },
+    })
+    await deliverIfAutomatic(queued)
+  } catch (err) {
+    console.error('[trainer] plan note email failed:', err)
+  }
+}

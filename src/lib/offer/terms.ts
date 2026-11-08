@@ -167,6 +167,7 @@ export function memberHubTerms(input: { freeOver: number }): TermsSection[] {
       heading: 'Your training plan',
       lines: [
         'The training plan is general fitness guidance, not medical advice. Check with your GP before starting if the readiness check suggests it, and stop if anything hurts.',
+        'While our trainer checks plans, each new plan, new setup or rebuilt week is checked by our in-house personal trainer. You can use it straight away while it’s being checked, and change any part of it at any time.',
       ],
     },
     {

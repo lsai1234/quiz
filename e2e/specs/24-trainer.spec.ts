@@ -49,7 +49,7 @@ test('a member asks the trainer; the founders answer with a video', async ({ pag
   expect((await page.request.post('/api/portal/offer', { data: { services: { training: true } } })).status()).toBe(200)
 
   // The results page: the member hub first, the trainer at its head, and in what the box comes with.
-  await signUpViaApi(page)
+  const who = await signUpViaApi(page)
   await completeQuiz(page)
   const box = page.locator('[data-box]')
   const card = box.locator('[data-hub-card]')
@@ -105,4 +105,31 @@ test('a member asks the trainer; the founders answer with a video', async ({ pag
   await expect(chat.locator('[data-message="trainer"]')).toContainText('Start with just the bar')
   await expect(chat.locator('[data-trainer-video]')).toHaveAttribute('href', 'https://youtu.be/dQw4w9WgXcQ')
   await shot(page, '12-trainer-answered')
+
+  // Every plan is checked: built, it waits for the trainer; ticked, it says so.
+  await page.goto('/myhub/training')
+  const ready = page.locator('[data-readiness]')
+  await expect(ready).toBeVisible({ timeout: 20_000 })
+  for (let i = 0; i < 7; i++) await ready.locator(`[data-question="${i}"]`).getByRole('radio', { name: 'No' }).click()
+  await page.locator('[data-ready]').click()
+  const setup = page.locator('[data-setup]')
+  await setup.getByRole('radio', { name: /A gym/ }).click()
+  await setup.getByRole('radio', { name: /^Some/ }).click()
+  await page.locator('[data-build]').click()
+  await expect(page.locator('[data-plan-check="waiting"]')).toContainText('Josh is checking your plan', { timeout: 30_000 })
+
+  const checker = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await founderSessionViaApi(checker)
+  await checker.goto('/founderhub/trainer')
+  const plan = checker.locator('[data-plan-row]').filter({ hasText: who.email })
+  await expect(plan).toBeVisible({ timeout: 20_000 })
+  await plan.getByLabel('A note for them (optional)').fill('Good week. Keep the first squat sets light.')
+  await plan.locator('[data-check-plan]').click()
+  await expect(plan).toBeHidden()
+  await checker.close()
+
+  await page.reload()
+  await expect(page.locator('[data-plan-check="checked"]')).toContainText('Checked by Josh', { timeout: 20_000 })
+  await audit(page, 'checked plan')
+  await shot(page, '13-plan-checked')
 })

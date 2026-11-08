@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+import { getOfferSettings } from '@/lib/offer/store'
+import { trainerChecksPlans, trainerLive } from '@/lib/offer/settings'
+import { publicTrainer } from '@/lib/trainer/public'
 import { getHubUser } from '@/lib/auth/session'
 import { rateLimiter } from '@/lib/consult/ai/guard'
 import type { UserRecord } from '@/lib/db/users'
@@ -44,11 +47,13 @@ const aiBusy = rateLimiter(30, 60_000)
 
 async function stateFor(user: UserRecord, record: TrainingRecord, now: Date): Promise<TrainingState> {
   const access = await trainingAccess(user, now)
-  if (!access.allowed) return { access, readiness: null, plan: null, draft: null, tutorials: {} }
+  if (!access.allowed) return { access, readiness: null, plan: null, draft: null, tutorials: {}, trainer: null }
   const plan = record.plan ? rollWeek(record.plan, now) : null
   if (plan && plan !== record.plan) await saveTraining({ ...record, plan })
   const draft = plan ? null : prefillPrefs(await trainingStart(user))
-  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials() }
+  const settings = await getOfferSettings()
+  const trainer = trainerLive(settings) ? publicTrainer(settings.trainer, settings.services.training) : null
+  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer }
 }
 
 export async function GET() {
@@ -110,7 +115,7 @@ export async function POST(req: Request) {
     const sessions = ai.result
       ? sortSessions([...ai.result.sessions, ...rebuildActivities(prefs)])
       : buildWeek(prefs, seed)
-    record = { ...record, plan: newPlan(user.id, prefs, now, seed, sessions, ai.result ? 'ai' : 'rules') }
+    record = { ...record, plan: await queueCheck(newPlan(user.id, prefs, now, seed, sessions, ai.result ? 'ai' : 'rules'), now) }
     await saveTraining(record)
     return NextResponse.json(await stateFor(user, record, now))
   }
@@ -205,7 +210,18 @@ export async function POST(req: Request) {
       return bad('Unknown action')
   }
 
+  // A new setup or a rebuilt week goes back to the trainer; small changes don't.
+  if (plan && RECHECK.has(String(body.action))) plan = await queueCheck(plan, now)
   record = { ...record, plan }
   await saveTraining(record)
   return NextResponse.json(await stateFor(user, record, now))
+}
+
+const RECHECK = new Set(['prefs', 'rebuild-week', 'rebuild-day'])
+
+/** While the trainer checks plans, this one waits for their check. */
+async function queueCheck(plan: TrainingPlan, now: Date): Promise<TrainingPlan> {
+  const settings = await getOfferSettings()
+  if (!trainerChecksPlans(settings)) return plan
+  return { ...plan, check: { state: 'waiting', since: now.toISOString(), at: null, by: null } }
 }

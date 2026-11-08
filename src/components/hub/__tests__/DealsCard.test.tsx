@@ -11,6 +11,7 @@ const state: DealsState = {
   enabled: true,
   hubEndsOn: '2027-02-03',
   freeOver: 40,
+  hubValue: null,
   deals: [
     { productId: 'creatine', variantId: 'creatine-300g', title: 'Creatine Monohydrate', short: 'Creatine', imageUrl: null, boughtOn: '2026-10-01', runsOutOn: '2026-11-10', estimated: false, opensOn: '2026-11-03', endsOn: '2027-02-03', state: 'open', opensInDays: 0, boxable: true, quote },
     { productId: 'whey', variantId: 'whey-1kg', title: 'Whey Protein', short: 'Whey', imageUrl: null, boughtOn: '2026-11-01', runsOutOn: '2026-12-01', estimated: true, opensOn: '2026-11-24', endsOn: '2027-02-03', state: 'upcoming', opensInDays: 19, boxable: true, quote: { ...quote, offerPrice: 32.99, discountPct: 0, deliveryDeal: 'reduced' as const, deliveryCharge: 0.99, total: 33.98, normalTotal: 37.94 } },
@@ -48,6 +49,20 @@ describe('member prices in the hub', () => {
     fireEvent.click(screen.getByRole('button', { name: /How member prices work/ }))
     expect(screen.getByRole('link', { name: 'Member hub terms' })).toHaveAttribute('href', '/legal/member-hub')
     expect(screen.getByRole('checkbox', { name: /Email me when a member price opens/ })).toBeChecked()
+    // The hub's own price isn't on sale on its own here: no value beside the box.
+    expect(document.querySelector('[data-deal-box-hub]')).toBeNull()
+  })
+
+  it('says the box adds 90 days of the hub at its value, once the hub is on sale on its own', async () => {
+    const withValue = { ...state, hubValue: 30 }
+    global.fetch = jest.fn(async (url: RequestInfo | URL) => {
+      if (String(url) === '/api/hub/deals') return { ok: true, status: 200, json: async () => withValue } as Response
+      if (String(url) === '/api/hub/deal-emails') return { ok: true, status: 200, json: async () => ({ on: true }) } as Response
+      if (String(url) === '/api/hub/deals/quote') return { ok: true, status: 200, json: async () => box } as Response
+      return { ok: false, status: 500, json: async () => ({}) } as Response
+    }) as unknown as typeof fetch
+    render(<DealsCard />)
+    expect(await screen.findByText('This box adds 90 days to your hub, £30.00 on its own, included.')).toBeInTheDocument()
   })
 
   it('buys the box through the member checkout, saying the total it showed', async () => {

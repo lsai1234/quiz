@@ -39,6 +39,8 @@ export interface PublicTrainer {
   bio: string
   photoUrl: string | null
   replyHours: number
+  /** They check every new or rebuilt training plan. */
+  checksPlans: boolean
 }
 
 /** `GET /api/hub/trainer`. */

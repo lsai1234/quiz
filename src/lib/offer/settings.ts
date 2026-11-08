@@ -240,9 +240,11 @@ export interface TrainerProfile {
   dailyLimit: number
   /** Where "a new question" emails go. Private: never sent to the browser. */
   notifyEmail: string | null
+  /** They check every new or rebuilt training plan (Founders Hub → Trainer → Plans to check). */
+  checksPlans: boolean
 }
 
-export const DEFAULT_TRAINER: TrainerProfile = { name: '', role: 'Personal trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: null }
+export const DEFAULT_TRAINER: TrainerProfile = { name: '', role: 'Personal trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: null, checksPlans: true }
 
 const text = (v: unknown, max: number, fallback: string) => (typeof v === 'string' ? v.trim().slice(0, max) : fallback)
 
@@ -258,12 +260,44 @@ export function normaliseTrainer(raw: unknown): TrainerProfile {
     replyHours: Math.round(num(r.replyHours, DEFAULT_TRAINER.replyHours, 1, 168)),
     dailyLimit: Math.round(num(r.dailyLimit, DEFAULT_TRAINER.dailyLimit, 1, 50)),
     notifyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.slice(0, 200) : null,
+    checksPlans: r.checksPlans !== false,
   }
+}
+
+/**
+ * Settings → Member hub → "The hub on its own": what the hub costs without an
+ * order, so the 90 days an order brings can be shown as a saving. A saving
+ * against a price nobody can pay is a misleading price, so it shows only
+ * while `standalone` is on: the hub genuinely on sale on its own at `monthly`.
+ */
+export interface HubPriceSettings {
+  /** £ a month, on its own. */
+  monthly: number
+  /** On sale on its own at that price. Off: no value or saving is shown anywhere. */
+  standalone: boolean
+}
+
+export const DEFAULT_HUB_PRICE: HubPriceSettings = { monthly: 10, standalone: false }
+
+export function normaliseHubPrice(raw: unknown): HubPriceSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof HubPriceSettings, unknown>>
+  return { monthly: Math.round(num(r.monthly, DEFAULT_HUB_PRICE.monthly, 0, 100) * 100) / 100, standalone: r.standalone === true }
+}
+
+/** What 90 days of the hub costs on its own (£), or null while it isn't on sale on its own. */
+export function hubValue(settings: Pick<OfferSettings, 'hubPrice'>): number | null {
+  const p = settings.hubPrice
+  return p.standalone && p.monthly > 0 ? Math.round(p.monthly * 3 * 100) / 100 : null
 }
 
 /** The trainer is live: switched on, and someone is named. */
 export function trainerLive(settings: Pick<OfferSettings, 'services' | 'trainer'>): boolean {
   return settings.services.trainer && settings.trainer.name.trim().length > 0
+}
+
+/** Every new or rebuilt training plan waits for the trainer's check: the trainer is live, checks are on, and so is the plan. */
+export function trainerChecksPlans(settings: Pick<OfferSettings, 'services' | 'trainer'>): boolean {
+  return trainerLive(settings) && settings.trainer.checksPlans && settings.services.training
 }
 
 /**
@@ -307,9 +341,11 @@ export interface OfferSettings {
   memberDeals: MemberDealSettings
   /** Ask your trainer: who they are. */
   trainer: TrainerProfile
+  /** The hub's price on its own, for its value on the box. */
+  hubPrice: HubPriceSettings
 }
 
-export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS, trainer: DEFAULT_TRAINER }
+export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS, trainer: DEFAULT_TRAINER, hubPrice: DEFAULT_HUB_PRICE }
 
 const NOVEL: readonly NovelFoodStatus[] = ['not-novel', 'authorised', 'unauthorised', 'unknown']
 const num = (v: unknown, fallback: number, min = 0, max = Number.POSITIVE_INFINITY) =>
@@ -355,7 +391,7 @@ export function normaliseOffer(raw: unknown): OfferSettings {
   if (r.heroes && typeof r.heroes === 'object') {
     for (const [id, a] of Object.entries(r.heroes)) heroes[id] = normaliseHeroApproval(id, a)
   }
-  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals), trainer: normaliseTrainer(r.trainer) }
+  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals), trainer: normaliseTrainer(r.trainer), hubPrice: normaliseHubPrice(r.hubPrice) }
 }
 
 /* ── What Phase 3 reads ─────────────────────────────────────────────────── */

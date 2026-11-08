@@ -47,6 +47,8 @@ export const DEALS_COPY = {
   boxQuoting: 'Working out your box…',
   boxNone: 'That box isn’t available at a member price right now.',
   boxEmpty: 'Tick an open price to build your box',
+  /** Under the top-up box's total, while the hub is on sale on its own. */
+  boxAddsHub: (total: number) => `This box adds 90 days to your hub, ${gbp(total)} on its own, included.`,
   termsLink: 'Member hub terms',
   howTitle: 'How member prices work',
   freeShort: 'Free delivery to the UK mainland; the Highlands and Islands surcharge still applies.',
@@ -93,6 +95,7 @@ export const HUB_PREVIEW_COPY = {
   cardTrainerLine: 'A real personal trainer, not a bot',
   cardTraining: 'Your training plan',
   cardTrainingLine: 'A week built from your answers',
+  cardTrainingChecked: (name: string) => `Built from your answers, checked by ${name}`,
   cardDeals: 'Member prices',
   cardDealsLine: 'On what you buy, as each runs out',
   cardGuide: 'Your stack guide',
@@ -100,6 +103,15 @@ export const HUB_PREVIEW_COPY = {
   cardCheckIns: 'Amp check-ins',
   cardCheckInsLine: 'Every two weeks, changes in one tap',
   cardMore: 'See inside your hub',
+  /* The hub's value, only while it's on sale on its own at that price (Settings → Member hub). */
+  cardValue: (monthly: number) => `${gbp(monthly)} a month on its own`,
+  cardIncluded: 'Included with your order',
+  underCtaValue: (total: number) => `Includes 90 days of your member hub, ${gbp(total)} on its own.`,
+  receiptHub: 'Member hub · 90 days',
+  receiptHubMonthly: 'Member hub · every month of your plan',
+  receiptHubLine: (monthly: number) => `${gbp(monthly)} a month on its own · included`,
+  receiptHubSave: (total: number) => `Your member hub saves you ${gbp(total)}`,
+  receiptHubSaveMonthly: (monthly: number) => `Your member hub saves you ${gbp(monthly)} a month`,
   /* The preview drawn as the hub's own screen. */
   screenTitle: 'Your member hub',
   screenDays: '90 days',

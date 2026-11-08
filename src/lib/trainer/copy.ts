@@ -42,6 +42,17 @@ export const TRAINER_COPY = {
   today: 'Today',
   yesterday: 'Yesterday',
   clearAbout: 'Remove',
+  /* ── The trainer's check of a plan ── */
+  planChecking: (name: string) => `${name} is checking your plan`,
+  planCheckingLine: (name: string, hours: number) => `Usually within ${within(hours)}. Start whenever you like, and ask ${name} anything about it.`,
+  planChecked: (name: string) => `Checked by ${name}`,
+  planCheckedLine: (name: string) => `${name}, our in-house personal trainer, has checked this plan. Change any part of it, or ask about it, any time.`,
+  planNoteAbout: 'Your training plan',
+  askAboutPlan: (name: string) => `Ask ${name} about your plan`,
+  revealChecked: (name: string) => `Every plan is checked by ${name}, our in-house personal trainer, and yours to change.`,
+  planEmailSubject: (name: string) => `${name} checked your training plan`,
+  planEmailIntro: (firstName: string | null, name: string) => `${firstName ? `Hi ${firstName}, ` : ''}${name} has checked your training plan and left you a note in your member hub.`,
+  planEmailCta: 'Read the note',
   /* ── On the hub's home ── */
   homeTitle: 'Your trainer',
   homeAsk: 'Ask a question',

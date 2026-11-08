@@ -25,7 +25,7 @@ describe('/api/hub/deals', () => {
     mockUser.current = null
     expect((await GET()).status).toBe(401)
     mockUser.current = await createUser({ email: 'off@example.com', password: 'a-long-password-1' } as never)
-    expect(await (await GET()).json()).toEqual({ enabled: false, deals: [], hubEndsOn: null, freeOver: 40 })
+    expect(await (await GET()).json()).toEqual({ enabled: false, deals: [], hubEndsOn: null, freeOver: 40, hubValue: null })
   })
 
   it('gives a member a deal on what they bought, with prices and never costs', async () => {
