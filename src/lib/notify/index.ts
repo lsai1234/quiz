@@ -139,7 +139,7 @@ export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
 // part of the order, nothing to judge, and every check-in carries its way out.
 // A trainer's answer, and the trainer's alert that a question is waiting: both asked for, nothing to judge.
 // The hub membership's receipts: it started, its payment moved, it was cancelled. Confirmations of what they did.
-const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation', 'stack-guide', 'check-in', 'deal-open', 'order-link-code', 'trainer-reply', 'trainer-question', 'hub-plan-welcome', 'hub-plan-moved', 'hub-plan-cancelled']
+const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation', 'stack-guide', 'check-in', 'deal-open', 'order-link-code', 'trainer-reply', 'trainer-question', 'training-day', 'training-recap', 'hub-plan-welcome', 'hub-plan-moved', 'hub-plan-cancelled']
 
 export function getAutoSendPolicy(): AutoSendPolicy {
   const raw = (process.env.NOTIFY_AUTO_SEND ?? '').trim().toLowerCase()

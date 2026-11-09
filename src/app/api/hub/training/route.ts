@@ -246,6 +246,12 @@ export async function POST(req: Request) {
       plan = { ...current, introSeen: true }
       break
     }
+    case 'reminders': {
+      // Training emails: each off unless they turn it on.
+      if (typeof body.days !== 'boolean' || typeof body.recap !== 'boolean') return bad('Which emails?')
+      plan = { ...current, reminders: { days: body.days, recap: body.recap } }
+      break
+    }
     default:
       return bad('Unknown action')
   }

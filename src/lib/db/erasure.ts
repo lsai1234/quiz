@@ -58,6 +58,8 @@ export interface AccountExport {
   trainerQuestions: unknown[]
   /** The hub on its own: their membership, and what the quiz told us when they joined. */
   hubMembership: unknown
+  /** Videos they sent (form checks): what each is, and where to download it while it's kept. */
+  videos: unknown[]
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -166,6 +168,12 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
         quizAnswers: start?.seed ?? null,
       }
     })(),
+    videos: (await (await import('@/lib/media/store')).mediaOwnedBy(userId)).map((m) => ({
+      kind: m.kind,
+      sentAt: m.createdAt,
+      deletedAfter: m.expiresAt,
+      download: `/api/media/${m.id}`,
+    })),
   }
 }
 
@@ -217,9 +225,19 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   const { deleteCheckInsFor } = await import('@/lib/checkin/store')
   if ((await deleteCheckInsFor(userId)) > 0) deleted.push('check-ins (answers and address)')
 
-  // The training plan, its setup and the readiness record.
-  const { deleteTraining } = await import('@/lib/training/store')
+  // The training plan, its setup and the readiness record; its live calendar
+  // address and its training emails' stop link go with it.
+  const { deleteTraining, getTraining } = await import('@/lib/training/store')
+  const calendarToken = (await getTraining(userId)).plan?.calendarToken
+  if (calendarToken) await (await import('@/lib/training/live-calendar')).unlinkCalendar(calendarToken)
+  await (await import('@/lib/training/emails')).deleteStopToken(userId)
   if (await deleteTraining(userId)) deleted.push('training plan')
+
+  // Videos they sent (form checks), every chunk.
+  const { mediaOwnedBy, deleteMedia } = await import('@/lib/media/store')
+  let videos = 0
+  for (const m of await mediaOwnedBy(userId)) if (await deleteMedia(m.id)) videos++
+  if (videos > 0) deleted.push('videos they sent')
 
   // Ask your trainer: their questions and the answers.
   const { deleteThread } = await import('@/lib/trainer/store')

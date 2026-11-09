@@ -25,6 +25,8 @@ const LABELS: Record<TemplateId, string> = {
   'order-link-code': 'Join an order: the code',
   'trainer-reply': 'Ask your trainer: an answer is waiting',
   'trainer-question': 'To the trainer: a question is waiting',
+  'training-day': 'Training day (opt-in)',
+  'training-recap': 'First-week recap (opt-in)',
   'hub-plan-welcome': 'Hub membership started',
   'hub-plan-moved': 'Hub membership: payment moved',
   'hub-plan-cancelled': 'Hub membership cancelled',
@@ -102,6 +104,16 @@ export async function sampleEmails(now = new Date()): Promise<SampleEmail[]> {
   }
   add('trainer-reply', trainer.replyEmail('Sam', 'Alex', { hub: `${base}/myhub/trainer`, base }))
   add('trainer-question', trainer.questionEmail('Alex', 'Goblet squat', { inbox: `${base}/founderhub/trainer`, base }))
+  const trainee = await buildSampleMember('plan-midweek', now)
+  const { getTraining } = await import('@/lib/training/store')
+  const trainingPlan = (await getTraining(trainee.user.id)).plan
+  if (trainingPlan) {
+    const training = await import('@/lib/training/emails')
+    const links = { open: `${base}/myhub/training`, stop: `${base}/myhub/training/emails?stop=sample`, base }
+    const left = trainingPlan.sessions.filter((s) => !s.done)
+    if (left.length) add('training-day', training.trainingDayEmail(left.slice(0, 1), trainingPlan.prefs.trainAt ?? 1080, 'Alex', links))
+    add('training-recap', training.recapEmail(training.recapFacts(trainingPlan, now), 'Sam', 'Alex', links))
+  }
   const plan = { monthly: 10, nextChargeAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(), freeUntil: null, endsAt: new Date(now.getTime() + 20 * 86_400_000).toISOString() }
   add('hub-plan-welcome', hubPlan.welcomeEmail(plan, 'Alex', { hub: `${base}/myhub`, base }, now))
   add('hub-plan-moved', hubPlan.movedEmail(plan, new Date(now.getTime() + 100 * 86_400_000).toISOString(), { hub: `${base}/myhub`, base }))

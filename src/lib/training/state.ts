@@ -48,3 +48,4 @@ export type TrainingAction =
   | { action: 'lighter'; sessionId: string; on: boolean }
   | { action: 'calendar-link' }
   | { action: 'intro-seen' }
+  | { action: 'reminders'; days: boolean; recap: boolean }

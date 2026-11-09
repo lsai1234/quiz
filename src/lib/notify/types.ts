@@ -35,6 +35,10 @@ export type TemplateId =
   | 'trainer-reply'
   /** Ask your trainer: to the trainer, a member's question is waiting. */
   | 'trainer-question'
+  /** Training plan (opt-in): the morning of a training day, today's session. */
+  | 'training-day'
+  /** Training plan (opt-in): once, after the first week. */
+  | 'training-recap'
   /** The member hub on its own: membership started. */
   | 'hub-plan-welcome'
   /** The member hub on its own: a stack order moved the next payment back. */

@@ -2,6 +2,7 @@
 import type { ReviewRow } from '@/lib/consult/review-pack'
 import { copyRows } from '@/lib/consult/copy-rows'
 import { COACHING_COPY } from './coaching-copy'
+import { TRAINING_EMAIL_COPY } from './email-copy'
 
 export function coachingCopyRows(): ReviewRow[] {
   return copyRows(
@@ -30,6 +31,32 @@ export function coachingCopyRows(): ReviewRow[] {
       metLine: ['[Name]'],
       metFirst: ['Wednesday', '6pm'],
       metFirstNoTime: ['Wednesday'],
+    },
+  )
+}
+
+export function trainingEmailCopyRows(): ReviewRow[] {
+  return copyRows(
+    'Training emails wording',
+    'Opt-in emails from the training plan: the switch on the week, the training-day email, the one-off recap after the first week, and the stop link’s page. "[Name]" stands for the trainer’s name set in Settings',
+    TRAINING_EMAIL_COPY,
+    {
+      daySubject: ['Full body A'],
+      dayPreheader: ['Full body A', 45],
+      dayHeading: ['Full body A'],
+      dayIntro: ['Alex'],
+      dayAt: ['Full body A', '6pm', 45],
+      dayNoTime: ['Full body A', 45],
+      dayAlso: ['Yoga class', 60],
+      recapIntro: ['Alex', '2 November'],
+      recapDone: [3],
+      recapWentUp: ['Goblet squat', '20 kg × 8', '22 kg × 8'],
+      recapHeaviest: ['Romanian deadlift', '40 kg × 8'],
+      recapChecked: ['[Name]'],
+      recapChecking: ['[Name]'],
+      recapAsk: ['[Name]'],
+      recapNext: ['Full body B', 'Wednesday'],
+      recapNextAt: ['Full body B', 'Wednesday', '6pm'],
     },
   )
 }

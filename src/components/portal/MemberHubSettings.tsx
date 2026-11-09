@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Note } from '@/components/system'
 import type { HubMetrics } from '@/lib/hub/metrics'
+import type { Share, TrainingMeasures } from '@/lib/training/measures'
 import type { HubPriceSettings, MemberDealSettings, ServiceSettings } from '@/lib/offer/settings'
 
 /**
@@ -24,12 +25,16 @@ interface View {
   hubOnSale?: boolean
   /** The hub on its own: members by state, and the monthly they bring. */
   hubPlans?: { paying: number; onFreeDays: number; cancelling: number; monthly: number }
+  /** What we measure about the training plan and the trainer. */
+  measures?: TrainingMeasures | null
 }
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
 const META = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' } as const
 const BODY = { fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' } as const
 const money = (n: number | null) => (n == null ? '—' : `£${n.toFixed(2)}`)
+const pct = (s: Share) => (s.of ? `${Math.round((s.n / s.of) * 100)}%` : '—')
+const outOf = (s: Share, what: string, none: string) => (s.of ? `${s.n} of ${s.of} ${what}` : none)
 const pretty = (kind: string) => kind.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
 export function MemberHubSettings() {
@@ -117,6 +122,8 @@ export function MemberHubSettings() {
           </p>
         </div>
       </Card>
+
+      {view.measures && <MeasuresCard m={view.measures} />}
 
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
@@ -274,5 +281,44 @@ function HubPriceCard({ price, onSale, plans, onSaved }: { price: HubPriceSettin
         {note && <p style={META}>{note}</p>}
       </div>
     </Card>
+  )
+}
+
+/** What we measure: whether the training plan and the trainer bring people back. Real members only. */
+function MeasuresCard({ m }: { m: TrainingMeasures }) {
+  const a = m.answers
+  const rows: [string, string, string][] = [
+    ['Reorders: training members', pct(m.reorder.training), outOf(m.reorder.training, 'ordered again', 'No buyers five weeks in yet')],
+    ['Reorders: everyone else', pct(m.reorder.rest), outOf(m.reorder.rest, 'ordered again', 'No buyers five weeks in yet')],
+    ['First session inside 7 days', pct(m.firstSession), outOf(m.firstSession, 'plans a week or more old', 'No plans a week old yet')],
+    ['Training this week', pct(m.thisWeek), outOf(m.thisWeek, 'plans', 'No plans yet')],
+    ['Sessions a week', m.sessionsPerWeek == null ? '—' : String(m.sessionsPerWeek), 'Per plan, over the last 4 full weeks'],
+    ['Still training in week 4', pct(m.week4), outOf(m.week4, 'plans past week 4', 'No plans past week 4 yet')],
+    ['Still training in week 12', pct(m.week12), outOf(m.week12, 'plans past week 12', 'No plans past week 12 yet')],
+    ['Answers inside the stated time', pct({ of: a.answered, n: a.withinPromise }), a.answered ? `${a.withinPromise} of ${a.answered} inside ${a.promiseHours} hours, 30 days` : 'No answers in 30 days'],
+    ['Answers rated helpful', pct({ of: a.rated, n: a.helpful }), a.rated ? `${a.helpful} of ${a.rated} rated, 30 days` : 'None rated in 30 days'],
+    ['Plan checks inside 24 hours', pct(m.checks), `${outOf(m.checks, 'checks, 30 days', 'No checks in 30 days')}${m.checks.waitingOver24h ? ` · ${m.checks.waitingOver24h} waiting longer now` : ''}`],
+  ]
+  return (
+    <div data-training-measures>
+      <Card elevation={1}>
+        <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+          <h2 style={HEADING}>What we measure</h2>
+          <p style={BODY}>
+            Whether the training plan and the trainer bring people back. Reorders count one-off buyers whose first order is at least five weeks old. Sample
+            members never count.
+          </p>
+          <div className="grid grid-cols-2" style={{ gap: 'var(--space-4)' }}>
+            {rows.map(([label, value, note]) => (
+              <div key={label}>
+                <p style={META}>{label}</p>
+                <p style={{ ...HEADING, fontSize: 'var(--text-display)', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+                <p style={META}>{note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }

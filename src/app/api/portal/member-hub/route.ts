@@ -38,7 +38,8 @@ async function hubPlanCounts(now = new Date()) {
 }
 
 async function payload() {
-  const [settings, { products }, metrics, hubPlans] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue(), hubMetrics(), hubPlanCounts()])
+  const { trainingMeasures } = await import('@/lib/training/measures')
+  const [settings, { products }, metrics, hubPlans, measures] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue(), hubMetrics(), hubPlanCounts(), trainingMeasures().catch(() => null)])
   const sellable = products.filter((p) => !p.isSubscriptionOnly && !isAccessory(p))
   const kinds = [...new Set(sellable.map((p) => p.swapGroup))].sort()
   return {
@@ -46,6 +47,7 @@ async function payload() {
     memberDeals: settings.memberDeals,
     hubPrice: settings.hubPrice,
     hubOnSale: hubOnSale(settings),
+    measures,
     kinds: kinds.map((k) => ({ kind: k, products: sellable.filter((p) => p.swapGroup === k).length })),
     previews: sellable.map((p) => {
       const v = variantFor(p, null)

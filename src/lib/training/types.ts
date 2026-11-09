@@ -239,6 +239,8 @@ export interface TrainingPlan {
   calendarToken?: string | null
   /** They've seen "Meet [Name]" after their first setup. */
   introSeen?: boolean
+  /** Training emails they turned on (`lib/training/emails`): off unless set. */
+  reminders?: { days: boolean; recap: boolean } | null
 }
 
 export type WeekMode = 'busy' | 'away'

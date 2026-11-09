@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge, Button, Card, Note, Segmented, buttonSurface } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Note, Segmented, buttonSurface } from '@/components/system'
 import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
+import { TRAINING_EMAIL_COPY as E } from '@/lib/training/email-copy'
+import { recapStillDue, remindersOf } from '@/lib/training/reminders'
 import type { PublicTrainer } from '@/lib/trainer/types'
 import { WEEKDAY_LONG } from '@/lib/training/copy'
 import type { TrainingAction } from '@/lib/training/state'
@@ -82,6 +84,27 @@ export function LiveCalendarCard({ url, act, busy }: { url: string | null; act: 
               </Button>
             </div>
           )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+/** Training emails: on training days, and a recap after the first week. Both off unless turned on. */
+export function TrainingEmailsCard({ plan, act, busy }: { plan: TrainingPlan; act: Act; busy: string | null }) {
+  const on = remindersOf(plan)
+  const recapOffered = on.recap || recapStillDue(plan, new Date())
+  const set = (patch: Partial<typeof on>) => void act({ action: 'reminders', ...on, ...patch })
+  return (
+    <div data-training-emails={on.days || on.recap ? 'on' : 'off'}>
+      <Card padding="normal">
+        <div style={stack('var(--space-3)')}>
+          <div style={stack('var(--space-1)')}>
+            <p style={eyebrow}>{E.switchTitle}</p>
+            <p style={meta}>{E.switchLine}</p>
+          </div>
+          <Checkbox label={E.daysLabel} hint={E.daysHint} checked={on.days} disabled={busy !== null} onChange={(e) => set({ days: e.target.checked })} data-emails-days />
+          {recapOffered && <Checkbox label={E.recapLabel} hint={E.recapHint} checked={on.recap} disabled={busy !== null} onChange={(e) => set({ recap: e.target.checked })} data-emails-recap />}
         </div>
       </Card>
     </div>

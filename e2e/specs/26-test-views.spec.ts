@@ -96,3 +96,26 @@ test('workout mode: a set at a time, rest, how it felt, and the trainer one tap 
   const state = await (await page.request.get('/api/hub/training')).json()
   expect(Object.values(state.plan.felt ?? {}).flat().some((f) => (f as { felt: string }).felt === 'hard')).toBe(true)
 })
+
+test('training emails: off until turned on, and the email previews show both', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await founderSessionViaApi(page)
+  await page.goto('/api/portal/test-views/open?view=training-midweek')
+  const card = page.locator('[data-training-emails]')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await expect(card).toHaveAttribute('data-training-emails', 'off')
+  await card.getByText('On training days').click()
+  await expect(card).toHaveAttribute('data-training-emails', 'on')
+  const state = await (await page.request.get('/api/hub/training')).json()
+  expect(state.plan.reminders).toMatchObject({ days: true })
+  await shot(page, 'training-emails')
+
+  await page.goto('/founderhub/settings/test-views/emails')
+  await expect(page.locator('[data-test-email="training-day"]')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-test-email="training-recap"]')).toBeVisible()
+
+  // A stop link that isn't real says so, and stops nothing.
+  await page.goto('/myhub/training/emails?stop=not-a-real-token-at-all-xx')
+  await page.locator('[data-stop]').click()
+  await expect(page.locator('[data-stop-training-emails]')).toContainText('doesn’t work any more')
+})

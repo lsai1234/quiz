@@ -43,6 +43,10 @@ export interface DailyRunResult {
   checkInsSent?: number
   /** Member deal emails sent (a deal opened today). */
   dealEmailsSent?: number
+  /** Training emails members turned on: training-day emails and first-week recaps. */
+  trainingEmails?: { days: number; recaps: number }
+  /** Uploaded videos past their keep date (form checks) or abandoned mid-upload, deleted. */
+  mediaSwept?: number
   /** Imported products whose stock/cost was refreshed from the supplier. */
   productsRefreshed?: number
   /** Imported products whose SKU is no longer in the supplier feed. */
@@ -209,6 +213,16 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] deal email sweep failed:', err)
   }
 
+  // Training emails the member turned on: today's session, and the recap
+  // after their first week. Never allowed to fail the rest of the job.
+  let trainingEmails = { days: 0, recaps: 0 }
+  try {
+    const { sweepTrainingEmails } = await import('@/lib/training/emails')
+    trainingEmails = await sweepTrainingEmails()
+  } catch (err) {
+    console.error('[daily] training email sweep failed:', err)
+  }
+
   // Anonymous share cards past their year. Only cards with no account behind
   // them — a card attached to a customer is theirs, and deleting it because a
   // year passed is deleting something of theirs on a schedule they never agreed
@@ -219,6 +233,17 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     shareCardsSwept = await sweepExpiredShareCards()
   } catch (err) {
     console.error('[daily] share card sweep failed:', err)
+  }
+
+  // Uploaded videos past their keep date: a member's form check goes after 30
+  // days, and an upload abandoned halfway after a day. Never allowed to fail
+  // the rest of the job.
+  let mediaSwept = 0
+  try {
+    const { sweepExpiredMedia } = await import('@/lib/media/store')
+    mediaSwept = await sweepExpiredMedia()
+  } catch (err) {
+    console.error('[daily] media sweep failed:', err)
   }
 
   // Retention. Deliberately last: it deletes things, and running it after the
@@ -252,6 +277,8 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     shareCardsSwept,
     checkInsSent: checkIns.sent,
     dealEmailsSent: dealEmails.sent,
+    trainingEmails,
+    mediaSwept,
     ...base,
     cancelled: detection.cancelled.length,
     // Applied during detection, plus anything whose own clock came due.

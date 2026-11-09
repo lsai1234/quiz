@@ -13,7 +13,7 @@ import type { TrainingAction, TrainingState } from '@/lib/training/state'
 import { WEEKDAYS, type Session, type TrainingPlan } from '@/lib/training/types'
 import { longDay, nextSession, progressOf, sessionSummary, sessionTitle } from '@/lib/training/view'
 import { ChangePlanSheet } from './ChangePlanSheet'
-import { BackAfterGapCard, ChangedBy, LiveCalendarCard, MeetTrainerCard, WeekModeCard, backAfterGap } from './CoachingBits'
+import { BackAfterGapCard, ChangedBy, LiveCalendarCard, MeetTrainerCard, TrainingEmailsCard, WeekModeCard, backAfterGap } from './CoachingBits'
 import { SessionSheet } from './SessionSheet'
 import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { body, display, eyebrow, meta, stack, strong } from './styles'
@@ -135,7 +135,10 @@ export function Week({
       </ol>
 
       {coaching ? (
-        <LiveCalendarCard url={state.calendarUrl ?? null} act={act} busy={busy} />
+        <>
+          <LiveCalendarCard url={state.calendarUrl ?? null} act={act} busy={busy} />
+          <TrainingEmailsCard plan={plan} act={act} busy={busy} />
+        </>
       ) : (
         <div style={stack('var(--space-1)')}>
           <div>

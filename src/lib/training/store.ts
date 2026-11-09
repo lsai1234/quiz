@@ -43,6 +43,15 @@ export async function countPlans(limit = 5000): Promise<number> {
   return (await kvListPrefix<TrainingRecord>(PREFIX, limit)).filter((r) => r.value?.plan && !samples.has(r.value.userId)).length
 }
 
+/** Every real member's plan (never the samples), for the daily job's training emails. */
+export async function realPlans(limit = 5000): Promise<TrainingPlan[]> {
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
+  return (await kvListPrefix<TrainingRecord>(PREFIX, limit))
+    .map((r) => r.value?.plan)
+    .filter((p): p is TrainingPlan => Boolean(p && !samples.has(p.userId)))
+}
+
 /** Plans waiting for the trainer's check, the longest wait first: real members, or only the samples (Test views). */
 export async function plansToCheck(limit = 5000, which: 'real' | 'samples' = 'real'): Promise<TrainingPlan[]> {
   const { sampleMemberIds } = await import('@/lib/samples/registry')

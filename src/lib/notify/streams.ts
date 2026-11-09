@@ -88,6 +88,8 @@ const STREAM_FOR_TEMPLATE: Record<TemplateId, MailStream> = {
   'order-link-code': 'account',
   'trainer-reply': 'orders',
   'trainer-question': 'orders',
+  'training-day': 'orders',
+  'training-recap': 'orders',
   'hub-plan-welcome': 'subscriptions',
   'hub-plan-moved': 'subscriptions',
   'hub-plan-cancelled': 'subscriptions',
