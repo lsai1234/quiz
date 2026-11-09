@@ -33,7 +33,21 @@ import {
 const FILE = 'offer'
 
 /** For reading: never throws; an unreadable document reads as the defaults (everything off). */
+/**
+ * The settings as this request sees them: live, or, in a founder's browser
+ * with a test view open (Settings → Test views), with that view's switches.
+ * The Founders Hub reads `getLiveOfferSettings` instead, so its own pages
+ * always show what's really on.
+ */
 export async function getOfferSettings(): Promise<OfferSettings> {
+  const live = await getLiveOfferSettings()
+  const { currentTestView, withTestSwitches } = await import('@/lib/samples/session')
+  const view = await currentTestView()
+  return view ? withTestSwitches(live, view.switches) : live
+}
+
+/** What's really on, whoever is asking. */
+export async function getLiveOfferSettings(): Promise<OfferSettings> {
   return normaliseOffer(await readJson<unknown>(FILE, DEFAULT_OFFER))
 }
 

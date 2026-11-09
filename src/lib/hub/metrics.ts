@@ -50,7 +50,11 @@ export async function hubMetrics(now = new Date()): Promise<HubMetrics> {
     return (byEmail.get(o.email.toLowerCase()) ?? []).some((c) => Date.parse(c) < t && t - Date.parse(c) <= 90 * DAY)
   })
 
-  const plans = await kvListPrefix<{ plan: { weekOf: string; sessions: { done: boolean }[] } | null }>('training:', 20_000)
+  // Sample members (Settings → Test views) never count.
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
+  const real = <T,>(rows: { key: string; value: T }[], prefix: string) => rows.filter((r) => !samples.has(r.key.slice(prefix.length)))
+  const plans = real(await kvListPrefix<{ plan: { weekOf: string; sessions: { done: boolean }[] } | null }>('training:', 20_000), 'training:')
   const monday = (() => {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
@@ -59,7 +63,7 @@ export async function hubMetrics(now = new Date()): Promise<HubMetrics> {
 
   return {
     openHubs: customers.length + subs.length,
-    activeThisWeek: seen.filter((s) => s.value?.at && now.getTime() - Date.parse(s.value.at) <= 7 * DAY).length,
+    activeThisWeek: real(seen, 'hub-seen:').filter((s) => s.value?.at && now.getTime() - Date.parse(s.value.at) <= 7 * DAY).length,
     dealsUsed30: deals.length,
     dealOrdersValue30: Math.round(deals.reduce((s, o) => s + o.total, 0) * 100) / 100,
     dealSavings30: Math.round(deals.reduce((s, o) => s + Math.max(0, (o.memberDeal?.normalTotal ?? 0) - (o.memberDeal?.total ?? 0)), 0) * 100) / 100,

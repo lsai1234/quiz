@@ -133,10 +133,17 @@ export async function setWaiting(userId: string, waiting: boolean): Promise<Trai
 }
 
 /** The Founders Hub's inbox: waiting first, longest wait at the top; then the newest. */
-export async function listInbox(limit = 500): Promise<InboxRow[]> {
+/**
+ * The inbox: real members, or, with the Founders Hub's sample switch on, only
+ * the sample members from Settings → Test views. Never both at once.
+ */
+export async function listInbox(limit = 500, which: 'real' | 'samples' = 'real'): Promise<InboxRow[]> {
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
   const rows = (await kvListPrefix<TrainerThread>(PREFIX, limit))
     .map((r) => r.value)
     .filter((t): t is TrainerThread => Boolean(t && t.v === 1 && t.messages?.length))
+    .filter((t) => samples.has(t.userId) === (which === 'samples'))
     .map((t): InboxRow => {
       const last = t.messages[t.messages.length - 1]
       // The first of the member's messages since the last answer.

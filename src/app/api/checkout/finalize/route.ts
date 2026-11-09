@@ -19,6 +19,9 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const user = await getHubUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  const { testCheckoutRefusal } = await import('@/lib/samples/registry')
+  const testRefusal = await testCheckoutRefusal({ userId: user.id, email: user.email })
+  if (testRefusal) return NextResponse.json({ error: testRefusal, code: 'test-view' }, { status: 403 })
 
   let body: CheckoutPayload
   try {

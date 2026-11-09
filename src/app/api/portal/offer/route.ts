@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { getOfferSettings, saveBonusSettings, saveMemberDealSettings, saveTrainerProfile, saveServiceSettings, setHeroEnabled } from '@/lib/offer/store'
+import { getLiveOfferSettings, saveBonusSettings, saveMemberDealSettings, saveTrainerProfile, saveServiceSettings, setHeroEnabled } from '@/lib/offer/store'
 import { offerView } from '@/lib/offer/view'
 import { PersistError } from '@/lib/portal/persist'
 
@@ -18,7 +18,7 @@ import { PersistError } from '@/lib/portal/persist'
 export const dynamic = 'force-dynamic'
 
 async function payload() {
-  const [settings, { products }] = await Promise.all([getOfferSettings(), getResolvedCatalogue()])
+  const [settings, { products }] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue()])
   return offerView(settings, products)
 }
 

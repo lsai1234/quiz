@@ -101,6 +101,36 @@ export function ScrollExperience() {
     void useQuizStore.persist.rehydrate()
     setHydrated(true)
 
+    // Test views (Settings → Test views): a quiz from its first question, or a
+    // sample person's results page, built in this tab and never sent anywhere.
+    const test = new URLSearchParams(window.location.search)
+    if (test.get('test') === 'results') {
+      setRestoring(true)
+      void (async () => {
+        try {
+          const { loadSampleResults } = await import('@/lib/samples/results')
+          if (await loadSampleResults(test.get('person'), test.get('plan'))) {
+            setAct(4)
+            setAnimKey((k) => k + 1)
+          }
+        } finally {
+          setRestoring(false)
+        }
+      })()
+      return
+    }
+    if (test.get('test') === 'quiz' && test.get('then') !== 'hub') {
+      const q = useQuizStore.getState()
+      q.reset()
+      clearResultsOpen()
+      const track = test.get('track')
+      if (track === 'performance' || track === 'wellbeing') q.setAnswer('track', track)
+      setResumeDismissed(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+      return
+    }
+
     if (new URLSearchParams(window.location.search).get('then') === 'hub') {
       // The hub is about training: the performance track asks how they train.
       // Answers they already gave on this device are kept, so it picks up from them.

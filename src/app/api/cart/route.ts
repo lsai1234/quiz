@@ -280,6 +280,10 @@ export async function POST(req: Request) {
   }
 
   const user = await getHubUser().catch(() => null)
+  // Test views (Settings → Test views): a sample member, or a browser with one open, can't pay.
+  const { testCheckoutRefusal } = await import('@/lib/samples/registry')
+  const testRefusal = await testCheckoutRefusal(user ? { userId: user.id, email: user.email } : null)
+  if (testRefusal) return NextResponse.json({ error: testRefusal, code: 'test-view' }, { status: 403 })
   const safety = orderSafetyFrom(body.safety)
   // The stack guide's seed (their day, goals, first name), checked; the guide
   // itself is made when the order is paid (`lib/guide/issue`).

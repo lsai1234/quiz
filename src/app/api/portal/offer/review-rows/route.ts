@@ -1,6 +1,6 @@
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { getOfferSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings } from '@/lib/offer/store'
 import { offerView } from '@/lib/offer/view'
 import { bonusTermRows, heroReviewRows } from '@/lib/offer/review-rows'
 import { reviewPackCsv } from '@/lib/consult/review-pack'
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   if (!(await isPortalAuthed())) return new Response('Unauthorized', { status: 401 })
-  const [settings, { products }] = await Promise.all([getOfferSettings(), getResolvedCatalogue()])
+  const [settings, { products }] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue()])
   const view = offerView(settings, products)
   const csv = reviewPackCsv([...heroReviewRows(view.heroes), ...bonusTermRows(settings.bonus)])
   return new Response(csv, {

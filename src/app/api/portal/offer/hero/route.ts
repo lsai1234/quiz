@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFounder } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { getOfferSettings, saveHeroApproval } from '@/lib/offer/store'
+import { getLiveOfferSettings, saveHeroApproval } from '@/lib/offer/store'
 import { heroView } from '@/lib/offer/view'
 import { PersistError } from '@/lib/portal/persist'
 import type { HeroApproval } from '@/lib/offer/settings'
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 const EDITABLE: (keyof HeroApproval)[] = ['hero', 'legalGB', 'novelFood', 'safetyReviewed', 'safetyNotes', 'claimId', 'checkedBy', 'checkedAt']
 
 async function view(id: string) {
-  const [settings, { products }] = await Promise.all([getOfferSettings(), getResolvedCatalogue()])
+  const [settings, { products }] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue()])
   return heroView(settings, id, products.find((p) => p.id === id))
 }
 

@@ -66,15 +66,18 @@ export function TrainerInbox() {
   const [error, setError] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // `?samples=1` (Settings → Test views): the sample members, in place of real ones.
+  const [samples] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('samples') === '1')
+
   const load = useCallback(async () => {
     try {
-      const r = await fetch('/api/portal/trainer')
+      const r = await fetch(samples ? '/api/portal/trainer?samples=1' : '/api/portal/trainer')
       if (!r.ok) throw new Error()
       setView((await r.json()) as Inbox)
     } catch {
       setError('Couldn’t load the inbox.')
     }
-  }, [])
+  }, [samples])
 
   useEffect(() => {
     void load()
@@ -102,9 +105,18 @@ export function TrainerInbox() {
         </div>
       </header>
 
-      <ProfileSettings view={view} onSaved={setView} />
+      {samples ? (
+        <Note tone="attention" icon="info">
+          Sample members from Settings → Test views, in place of real ones. Answer and check them freely: nothing reaches anyone.{' '}
+          <a href="/founderhub/trainer" style={{ textDecoration: 'underline' }}>
+            Back to real members
+          </a>
+        </Note>
+      ) : (
+        <ProfileSettings view={view} onSaved={setView} />
+      )}
 
-      {view.trainer.checksPlans && !openId && <PlansToCheck onChecked={() => void load()} />}
+      {view.trainer.checksPlans && !openId && <PlansToCheck samples={samples} onChecked={() => void load()} />}
 
       {openId ? (
         <ThreadView userId={openId} trainerName={view.trainer.name} onBack={() => { setOpenId(null); void load() }} />
@@ -360,17 +372,17 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
  * with who it's for, their setup and the week exercise by exercise. "Looks
  * good" ticks it; a note goes to their chat with it, and emails them.
  */
-function PlansToCheck({ onChecked }: { onChecked: () => void }) {
+function PlansToCheck({ samples = false, onChecked }: { samples?: boolean; onChecked: () => void }) {
   const [plans, setPlans] = useState<PlanRow[] | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    fetch('/api/portal/trainer/plans')
+    fetch(samples ? '/api/portal/trainer/plans?samples=1' : '/api/portal/trainer/plans')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((d: { plans: PlanRow[] }) => setPlans(d.plans))
       .catch(() => setPlans([]))
-  }, [])
+  }, [samples])
   useEffect(() => load(), [load])
 
   async function check(userId: string) {

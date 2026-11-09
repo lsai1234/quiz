@@ -38,12 +38,17 @@ export async function deleteTraining(userId: string): Promise<boolean> {
 
 /** For the founders' numbers: how many members have a plan. */
 export async function countPlans(limit = 5000): Promise<number> {
-  return (await kvListPrefix<TrainingRecord>(PREFIX, limit)).filter((r) => r.value?.plan).length
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
+  return (await kvListPrefix<TrainingRecord>(PREFIX, limit)).filter((r) => r.value?.plan && !samples.has(r.value.userId)).length
 }
 
-/** Plans waiting for the trainer's check, the longest wait first. */
-export async function plansToCheck(limit = 5000): Promise<TrainingPlan[]> {
+/** Plans waiting for the trainer's check, the longest wait first: real members, or only the samples (Test views). */
+export async function plansToCheck(limit = 5000, which: 'real' | 'samples' = 'real'): Promise<TrainingPlan[]> {
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
   return (await kvListPrefix<TrainingRecord>(PREFIX, limit))
+    .filter((r) => samples.has(r.value?.userId ?? '') === (which === 'samples'))
     .map((r) => r.value?.plan)
     .filter((p): p is TrainingPlan => Boolean(p && p.check?.state === 'waiting'))
     .sort((a, b) => Date.parse(a.check!.since) - Date.parse(b.check!.since))

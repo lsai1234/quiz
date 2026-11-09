@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { productPayload } from '@/lib/portal/product-edit'
 import { ProductWorkspace } from '@/components/portal/product/ProductWorkspace'
-import { getOfferSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings } from '@/lib/offer/store'
 import { heroView } from '@/lib/offer/view'
 
 /**
@@ -52,7 +52,7 @@ export default async function ProductItemPage({ params }: { params: Promise<{ id
   if (!payload) notFound()
   // The hero checks live in their own document (`portal:offer`), read here
   // with the product so the page asks nothing more once it is drawn.
-  const hero = payload.state === 'pending' ? null : heroView(await getOfferSettings(), payload.product.id, payload.product)
+  const hero = payload.state === 'pending' ? null : heroView(await getLiveOfferSettings(), payload.product.id, payload.product)
   return (
     <Suspense>
       <ProductWorkspace initial={payload} hero={hero} />

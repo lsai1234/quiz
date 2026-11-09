@@ -34,7 +34,9 @@ export async function GET() {
   let seeded = false
   // Never over someone who joined the hub on its own: a demo box plan would contradict what they bought.
   const { getHubPlan } = await import('@/lib/hub-plan/store')
-  if (!subscription && seedsDemoSubscription() && !(await getHubPlan(user.id))) {
+  // Nor over a sample member (Settings → Test views): their state is the scenario's.
+  const { isSampleEmail } = await import('@/lib/samples/domain')
+  if (!subscription && seedsDemoSubscription() && !isSampleEmail(user.email) && !(await getHubPlan(user.id))) {
     const { products } = await getResolvedCatalogue()
     subscription = createMockSubscription(products, user.email ?? '')
     await saveSubscription(user.id, subscription)

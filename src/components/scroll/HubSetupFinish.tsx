@@ -14,7 +14,11 @@ import { HUB_PLAN_COPY as C } from '@/lib/hub-plan/copy'
 export function HubSetupFinish() {
   const [failed, setFailed] = useState(false)
 
+  // A test view (`?test=quiz`): nothing is saved; say what would happen.
+  const [test] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('test') === 'quiz')
+
   useEffect(() => {
+    if (test) return
     const a = useQuizStore.getState().answers
     const seed = {
       day: dayFromQuiz(a),
@@ -34,11 +38,18 @@ export function HubSetupFinish() {
     return () => {
       live = false
     }
-  }, [])
+  }, [test])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center bg-[#0A0A0A]" data-hub-setup-finish>
-      {failed ? (
+      {test ? (
+        <>
+          <p className="text-[15px] text-white/85 max-w-sm leading-snug">Test view: a new member’s answers would be saved here, and they’d land in their hub with their training plan ready to build. Nothing was saved.</p>
+          <a href="/api/portal/test-views/open?view=hub-only-paying" className="mt-5 px-5 py-3 rounded-xl text-[14px] font-bold text-[#0A0A0A] bg-[#00D4FF]">
+            See a sample hub member
+          </a>
+        </>
+      ) : failed ? (
         <>
           <p className="text-[15px] text-white/85 max-w-sm leading-snug">{C.setupFailed}</p>
           <a href="/myhub" className="mt-5 px-5 py-3 rounded-xl text-[14px] font-bold text-[#0A0A0A] bg-[#00D4FF]">

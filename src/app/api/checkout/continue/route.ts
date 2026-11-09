@@ -33,6 +33,8 @@ export async function GET(req: Request) {
 
   const user = await getHubUser()
   if (!user || !token) return NextResponse.redirect(signedOut)
+  const { testCheckoutRefusal } = await import('@/lib/samples/registry')
+  if (await testCheckoutRefusal({ userId: user.id, email: user.email })) return NextResponse.redirect(`${origin}/myhub`)
 
   const stored = await kvGet<{ payload: CheckoutPayload }>(PENDING_KEY_PREFIX + token)
   await kvDelete(PENDING_KEY_PREFIX + token)

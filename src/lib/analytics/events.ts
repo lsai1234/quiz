@@ -12,6 +12,7 @@
  */
 
 import { getQuizArm } from '@/lib/experiments/client'
+import { testViewOpen } from '@/lib/samples/domain'
 import { forwardToPixel } from './meta-pixel'
 import { buildVisitContext, type VisitContext } from './visit'
 
@@ -363,6 +364,12 @@ export function track(event: AnalyticsEvent, props: EventProps = {}): void {
   if (typeof window === 'undefined') return
   try {
     if (privacyOptedOut()) return
+    // A founder's test view (Settings → Test views) isn't a visitor: our own
+    // numbers skip it. What reaches the Meta pixel is unchanged.
+    if (testViewOpen()) {
+      forwardToPixel(event, props)
+      return
+    }
     const body = JSON.stringify({
       event,
       props: { arm: getQuizArm(), ...props },

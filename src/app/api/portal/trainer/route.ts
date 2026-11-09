@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { getOfferSettings, saveServiceSettings, saveTrainerProfile } from '@/lib/offer/store'
+import { getLiveOfferSettings, saveServiceSettings, saveTrainerProfile } from '@/lib/offer/store'
 import { trainerLive } from '@/lib/offer/settings'
 import { PersistError } from '@/lib/portal/persist'
 import { listInbox } from '@/lib/trainer/store'
@@ -15,9 +15,11 @@ import { plansToCheck } from '@/lib/training/store'
  */
 export const dynamic = 'force-dynamic'
 
-async function payload() {
-  const [settings, inbox, plans] = await Promise.all([getOfferSettings(), listInbox(), plansToCheck()])
+async function payload(which: 'real' | 'samples' = 'real') {
+  const [settings, inbox, plans] = await Promise.all([getLiveOfferSettings(), listInbox(500, which), plansToCheck(5000, which)])
   return {
+    /** Showing the sample members from Settings → Test views instead of real ones. */
+    samples: which === 'samples',
     /** Plans waiting for the trainer's check, for the tab's count. */
     plansWaiting: plans.length,
     on: settings.services.trainer,
@@ -28,9 +30,10 @@ async function payload() {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return NextResponse.json(await payload())
+  // `?samples=1`: the sample members from Settings → Test views, in place of real ones.
+  return NextResponse.json(await payload(new URL(req?.url ?? 'http://local/').searchParams.get('samples') === '1' ? 'samples' : 'real'))
 }
 
 export async function POST(req: Request) {

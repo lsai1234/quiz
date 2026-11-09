@@ -368,6 +368,16 @@ export interface ResolveInput {
  * renders success on the strength of the URL alone.
  */
 export async function resolveConfirmation(input: ResolveInput): Promise<ConfirmationResponse> {
+  // ── Test views: a sample order, only in a browser with a test view open ──
+  // No analytics: a sample is not a sale, and must never be reported as one.
+  if (input.mockOrderId?.startsWith('sample_')) {
+    const { currentTestView } = await import('@/lib/samples/session')
+    if (!(await currentTestView())) return RECOVERY
+    const { getSampleOrder } = await import('@/lib/samples/registry')
+    const order = await getSampleOrder(input.mockOrderId)
+    return order ? { ...(await buildFromOrder(order, input.origin)), analytics: null } : RECOVERY
+  }
+
   // ── Mock mode: no Stripe session exists, so the order id IS the evidence ──
   if (getPaymentSource() !== 'stripe') {
     if (!input.mockOrderId) return RECOVERY

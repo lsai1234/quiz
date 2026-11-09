@@ -15,6 +15,8 @@
  * Server-only.
  */
 import { randomUUID } from 'crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { isSampleEmail } from '@/lib/samples/domain'
 import { getEngine, now } from '@/lib/db/engine'
 import { canSendFromHub, getNotifier, isAutoSendEnabled, sendsAutomatically } from './index'
 import { fromAddressFor, replyToAddress, streamFor } from './streams'
@@ -89,6 +91,19 @@ async function write(notification: Notification): Promise<void> {
  * already been queued for this member — the caller doesn't need to care whether
  * it won the race.
  */
+/**
+ * Test views draw every email with sample data (Settings → Test views). Inside
+ * `captureEmails`, queueing hands the rendered email back instead of storing
+ * it, so the real templates render and nothing reaches the outbox.
+ */
+const captured = new AsyncLocalStorage<Notification[]>()
+
+export async function captureEmails<T>(run: () => Promise<T>): Promise<{ result: T; emails: Notification[] }> {
+  const emails: Notification[] = []
+  const result = await captured.run(emails, run)
+  return { result, emails }
+}
+
 export async function queueNotification(input: QueueInput): Promise<Notification> {
   const dedupeKey =
     input.dedupeKey ??
@@ -116,6 +131,15 @@ export async function queueNotification(input: QueueInput): Promise<Notification
     updatedAt: at,
     sentAt: null,
   }
+
+  // Captured for a test view, or to a sample member: never stored, never sent.
+  // Marked sent so `deliverIfAutomatic` leaves it alone.
+  const box = captured.getStore()
+  if (box) {
+    box.push(notification)
+    return { ...notification, status: 'sent' }
+  }
+  if (isSampleEmail(input.email)) return { ...notification, status: 'sent' }
 
   try {
     await write(notification)

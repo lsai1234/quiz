@@ -167,6 +167,12 @@ export async function hasOtherOrder(who: { userId?: string | null; email?: strin
 export async function latestPaidOrderFor(who: { userId?: string | null; email?: string | null }): Promise<Order | null> {
   const email = who.email?.trim().toLowerCase() || null
   if (!email && !who.userId) return null
+  // A sample member's orders are sample data, never rows here (`lib/samples`).
+  const samples = await import('@/lib/samples/registry')
+  if (await samples.isSampleMember(who)) {
+    const theirs = await samples.sampleOrdersFor(who)
+    return [...theirs].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+  }
   const db = await getEngine()
   const clauses: string[] = []
   const args: string[] = []
@@ -192,6 +198,11 @@ export async function latestPaidOrderFor(who: { userId?: string | null; email?: 
 export async function listPaidOrdersFor(who: { userId?: string | null; email?: string | null }, sinceIso: string, limit = 50): Promise<Order[]> {
   const email = who.email?.trim().toLowerCase() || null
   if (!email && !who.userId) return []
+  const samples = await import('@/lib/samples/registry')
+  if (await samples.isSampleMember(who)) {
+    const theirs = await samples.sampleOrdersFor(who)
+    return theirs.filter((o) => o.createdAt >= sinceIso).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit)
+  }
   const db = await getEngine()
   const clauses: string[] = []
   const args: string[] = []

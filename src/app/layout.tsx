@@ -7,6 +7,7 @@ import { MetaPixel } from '@/components/MetaPixel'
 import { PageViews } from '@/components/analytics/PageViews'
 import { RealUserMonitoring } from '@/components/analytics/RealUserMonitoring'
 import { ViewportHeight, VIEWPORT_HEIGHT_SNIPPET } from '@/components/ViewportHeight'
+import { TestViewBanner } from '@/components/TestViewBanner'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -64,7 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Sizes the app shells before the first paint — see ViewportHeight. */}
         <script dangerouslySetInnerHTML={{ __html: VIEWPORT_HEIGHT_SNIPPET }} />
       </head>
-      <body className="min-h-full antialiased"><ViewportHeight /><PortalSync /><ErrorReporter /><MetaPixel /><PageViews /><RealUserMonitoring />{children}</body>
+      <body className="min-h-full antialiased"><ViewportHeight /><PortalSync /><ErrorReporter /><MetaPixel /><PageViews /><RealUserMonitoring />{children}<TestViewBanner /></body>
     </html>
   )
 }

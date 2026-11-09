@@ -6,7 +6,7 @@ import { memberQuote, sizeFor } from '@/lib/deals/box'
 import { variantFor } from '@/lib/deals/engine'
 import { DEALS_COPY } from '@/lib/deals/copy'
 import { hubMetrics } from '@/lib/hub/metrics'
-import { getOfferSettings, saveHubPrice, saveMemberDealSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings, saveHubPrice, saveMemberDealSettings } from '@/lib/offer/store'
 import { PersistError } from '@/lib/portal/persist'
 import { hubOnSale } from '@/lib/offer/settings'
 
@@ -23,7 +23,9 @@ export const dynamic = 'force-dynamic'
 /** The hub on its own (`lib/hub-plan`): who's paying, who's on a stack's free days, and the monthly it brings. */
 async function hubPlanCounts(now = new Date()) {
   const { listHubPlans } = await import('@/lib/hub-plan/store')
-  const plans = await listHubPlans()
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
+  const plans = (await listHubPlans()).filter((p) => !samples.has(p.userId))
   const active = plans.filter((p) => p.status === 'active')
   const onFreeDays = active.filter((p) => p.freeUntil && Date.parse(p.freeUntil) > now.getTime())
   const cancelling = plans.filter((p) => p.status === 'cancelling' && p.endsAt && Date.parse(p.endsAt) > now.getTime())
@@ -36,7 +38,7 @@ async function hubPlanCounts(now = new Date()) {
 }
 
 async function payload() {
-  const [settings, { products }, metrics, hubPlans] = await Promise.all([getOfferSettings(), getResolvedCatalogue(), hubMetrics(), hubPlanCounts()])
+  const [settings, { products }, metrics, hubPlans] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue(), hubMetrics(), hubPlanCounts()])
   const sellable = products.filter((p) => !p.isSubscriptionOnly && !isAccessory(p))
   const kinds = [...new Set(sellable.map((p) => p.swapGroup))].sort()
   return {

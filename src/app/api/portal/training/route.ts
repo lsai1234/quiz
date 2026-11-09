@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { getOfferSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings } from '@/lib/offer/store'
 import { ACTIVITIES, EXERCISES } from '@/lib/training/library'
 import { countPlans } from '@/lib/training/store'
 import { getTutorials, setTutorial } from '@/lib/training/tutorials'
@@ -17,7 +17,7 @@ import { getTutorials, setTutorial } from '@/lib/training/tutorials'
 export const dynamic = 'force-dynamic'
 
 async function payload() {
-  const [settings, tutorials, plans] = await Promise.all([getOfferSettings(), getTutorials(), countPlans()])
+  const [settings, tutorials, plans] = await Promise.all([getLiveOfferSettings(), getTutorials(), countPlans()])
   return {
     enabled: settings.services.training,
     plans,

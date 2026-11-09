@@ -121,6 +121,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
           'Whether customers get the current quiz or the new adaptive one, and how the two compare.',
         icon: 'sparkle',
       },
+      {
+        slug: 'test-views',
+        title: 'Test views',
+        blurb: 'Every screen with sample data: each quiz, the results page, every state of the hub, and every email. Nothing real is touched.',
+        icon: 'monitor',
+      },
     ],
   },
   {

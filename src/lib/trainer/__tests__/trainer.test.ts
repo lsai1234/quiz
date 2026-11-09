@@ -122,7 +122,7 @@ describe('the routes', () => {
     const alerts = (await listNotifications({ limit: 200 })).filter((x) => x.template === 'trainer-question' && x.email === 'trainer-alerts@example.com' && JSON.stringify(x).includes(user.id))
     expect(alerts).toHaveLength(1)
 
-    const inbox = await (await inboxGet()).json()
+    const inbox = await (await inboxGet(new Request('http://x/api/portal/trainer'))).json()
     const row = inbox.inbox.find((r: { userId: string }) => r.userId === user.id)
     expect(row).toMatchObject({ waiting: true, firstName: 'Jo', unread: true })
 

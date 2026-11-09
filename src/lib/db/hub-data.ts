@@ -15,6 +15,9 @@ import type { FeedbackCheckIn } from '@/lib/feedback'
 import { getEngine, now } from './engine'
 
 export async function getSubscription(userId: string): Promise<MemberSubscription | null> {
+  // A sample member's plan is sample data, never a row here (`lib/samples`).
+  const samples = await import('@/lib/samples/registry')
+  if (await samples.isSampleUserId(userId)) return samples.getSampleSubscription(userId)
   const db = await getEngine()
   const row = await db.get<{ data: string }>('SELECT data FROM subscriptions WHERE user_id = ?', [userId])
   if (!row) return null
@@ -33,6 +36,8 @@ export async function getSubscription(userId: string): Promise<MemberSubscriptio
  * whatever the quiz was taken under — and only becomes real money later.
  */
 export async function saveSubscription(userId: string, subscription: MemberSubscription): Promise<void> {
+  const samples = await import('@/lib/samples/registry')
+  if (await samples.isSampleUserId(userId)) return samples.setSampleSubscription(userId, subscription)
   const db = await getEngine()
   await db.run(
     `INSERT INTO subscriptions (user_id, data, mode, updated_at) VALUES (?, ?, ?, ?)

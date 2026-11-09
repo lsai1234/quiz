@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFounder, isPortalAuthed } from '@/lib/portal/guard'
 import { logMemberAccess } from '@/lib/portal/access-log'
-import { getOfferSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings } from '@/lib/offer/store'
 import { hubAccess } from '@/lib/hub/access'
 import { getUserById } from '@/lib/db/users'
 import { getTraining } from '@/lib/training/store'
@@ -66,7 +66,7 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const done = await answerMember(userId, { ...body, by: founder.name || founder.email })
     if (!done) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const settings = await getOfferSettings()
+    const settings = await getLiveOfferSettings()
     await sendReplyEmail(done.thread, done.message, settings.trainer)
     return NextResponse.json({ thread: done.thread })
   } catch (err) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFounder, isPortalAuthed } from '@/lib/portal/guard'
 import { logMemberAccess } from '@/lib/portal/access-log'
-import { getOfferSettings } from '@/lib/offer/store'
+import { getLiveOfferSettings } from '@/lib/offer/store'
 import { getUserById } from '@/lib/db/users'
 import { ACTIVITIES, exerciseById } from '@/lib/training/library'
 import { markPlanChecked, plansToCheck } from '@/lib/training/store'
@@ -21,9 +21,9 @@ import { noteFromTrainer, TrainerError } from '@/lib/trainer/store'
  */
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const plans = await plansToCheck()
+  const plans = await plansToCheck(5000, new URL(req?.url ?? 'http://local/').searchParams.get('samples') === '1' ? 'samples' : 'real')
   const rows = await Promise.all(
     plans.map(async (p) => {
       const user = await getUserById(p.userId)
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     if (user) {
       try {
         const { thread, message } = await noteFromTrainer({ userId: user.id, email: user.email, firstName: firstNameOf(user.name) }, { text: body.note, about: TRAINER_COPY.planNoteAbout, by })
-        await sendPlanNoteEmail(thread, message, (await getOfferSettings()).trainer)
+        await sendPlanNoteEmail(thread, message, (await getLiveOfferSettings()).trainer)
       } catch (err) {
         if (!(err instanceof TrainerError)) throw err
       }
