@@ -60,3 +60,39 @@ test('a founder opens test views and leaves', async ({ page }) => {
   const body = (await me.json().catch(() => ({}))) as { user?: { email?: string } | null }
   expect(body.user?.email ?? '').not.toContain('sample.chrgd.test')
 })
+
+test('workout mode: a set at a time, rest, how it felt, and the trainer one tap away', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await founderSessionViaApi(page)
+  await page.goto('/api/portal/test-views/open?view=training-workout')
+  const workout = page.locator('[data-workout]')
+  await expect(workout).toBeVisible({ timeout: 30_000 })
+  if ((await workout.getAttribute('data-workout-phase')) === 'warmup') await page.locator('[data-workout-warmup-done]').click()
+  await expect(page.locator('[data-workout-target]')).toContainText('Set 1 of')
+  await expect(page.locator('[data-workout-ask]')).toBeVisible()
+  await shot(page, 'workout-set')
+
+  // Done: the rest ring, then the next set.
+  await page.locator('[data-workout-done]').click()
+  await expect(page.locator('[data-workout-rest]')).toBeVisible()
+  await shot(page, 'workout-rest')
+  await page.locator('[data-workout-skip]').click()
+  await expect(page.locator('[data-workout-target]')).toContainText('Set 2 of')
+
+  // Through the last set to "How did that feel?".
+  for (let i = 0; i < 8; i++) {
+    if (await page.locator('[data-workout-felt]').isVisible()) break
+    await page.locator('[data-workout-done]').click()
+    if (await page.locator('[data-workout-skip]').isVisible()) await page.locator('[data-workout-skip]').click()
+  }
+  await expect(page.locator('[data-workout-felt]')).toBeVisible()
+  await shot(page, 'workout-felt')
+  await page.locator('[data-felt="hard"]').click()
+  await expect(page.locator('[data-workout-target]')).toContainText('Set 1 of')
+
+  // Leave, and the week remembers how it felt.
+  await page.locator('[data-workout-close]').click()
+  await expect(workout).toHaveCount(0)
+  const state = await (await page.request.get('/api/hub/training')).json()
+  expect(Object.values(state.plan.felt ?? {}).flat().some((f) => (f as { felt: string }).felt === 'hard')).toBe(true)
+})

@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto'
 import { kvDelete, kvGet, kvListPrefix, kvSet } from '@/lib/db/kv'
 import { cleanTutorialUrl } from '@/lib/training/tutorials'
 import { MEMBER_MAX, TRAINER_MAX } from './copy'
-import type { InboxRow, TrainerMessage, TrainerThread, TrainerVideo } from './types'
+import type { InboxRow, MessageContext, TrainerMessage, TrainerThread, TrainerVideo } from './types'
 
 const PREFIX = 'trainer-thread:'
 const key = (userId: string) => PREFIX + userId
@@ -35,6 +35,19 @@ export function cleanText(raw: unknown): string {
 }
 
 const cleanAbout = (raw: unknown) => (typeof raw === 'string' && raw.trim() ? raw.trim().replace(/\s+/g, ' ').slice(0, 80) : null)
+
+/** The set a question was asked from, with sensible numbers or none. */
+export function cleanContext(raw: unknown): MessageContext | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const n = (v: unknown, max: number, step = 1) => {
+    const x = typeof v === 'string' ? Number(v) : v
+    return typeof x === 'number' && Number.isFinite(x) && x > 0 && x <= max ? Math.round(x / step) * step : null
+  }
+  const felt = r.felt === 'easy' || r.felt === 'right' || r.felt === 'hard' ? r.felt : null
+  const c: MessageContext = { set: n(r.set, 20), of: n(r.of, 20), kg: n(r.kg, 500, 0.25), reps: n(r.reps, 300), felt }
+  return Object.values(c).some((v) => v !== null) ? c : null
+}
 
 export async function getThread(userId: string): Promise<TrainerThread | null> {
   const t = await kvGet<TrainerThread>(key(userId))
@@ -63,7 +76,7 @@ export function unreadForMember(t: TrainerThread | null): number {
 /** A member's question. Throws `TrainerError` for an empty or long one, or past today's limit. */
 export async function askTrainer(
   who: { id: string; email: string; firstName: string | null },
-  input: { text?: unknown; about?: unknown },
+  input: { text?: unknown; about?: unknown; context?: unknown },
   dailyLimit: number,
   now = new Date(),
 ): Promise<{ thread: TrainerThread; message: TrainerMessage }> {
@@ -73,7 +86,8 @@ export async function askTrainer(
   const had = await getThread(who.id)
   if (askedToday(had, now) >= dailyLimit) throw new TrainerError('limit')
   const at = now.toISOString()
-  const message: TrainerMessage = { id: id(), from: 'member', text, at, about: cleanAbout(input.about), video: null }
+  const context = cleanContext(input.context)
+  const message: TrainerMessage = { id: id(), from: 'member', text, at, about: cleanAbout(input.about), video: null, ...(context ? { context } : {}) }
   const thread: TrainerThread = had ?? { v: 1, userId: who.id, email: who.email, firstName: who.firstName, messages: [], waiting: false, lastAt: at, memberReadAt: null, trainerReadAt: null }
   thread.email = who.email
   thread.firstName = who.firstName ?? thread.firstName
@@ -183,7 +197,7 @@ export async function deleteThread(userId: string): Promise<boolean> {
  */
 export async function noteFromTrainer(
   who: { userId: string; email: string; firstName: string | null },
-  input: { text?: unknown; about?: string | null; by: string },
+  input: { text?: unknown; about?: string | null; by: string; kind?: TrainerMessage['kind'] },
   now = new Date(),
 ): Promise<{ thread: TrainerThread; message: TrainerMessage }> {
   const text = cleanText(input.text)
@@ -201,8 +215,91 @@ export async function noteFromTrainer(
     memberReadAt: null,
     trainerReadAt: at,
   }
-  const message: TrainerMessage = { id: id(), from: 'trainer', text, at, about: input.about ?? null, video: null, by: input.by.slice(0, 120) }
+  const message: TrainerMessage = { id: id(), from: 'trainer', text, at, about: input.about ?? null, video: null, by: input.by.slice(0, 120), ...(input.kind ? { kind: input.kind } : {}) }
   thread.messages.push(message)
   thread.lastAt = at
   return { thread: await save(thread), message }
 }
+
+/** The member rates an answer: helpful, or not quite. Null when there's no such answer. */
+export async function rateAnswer(userId: string, messageId: string, rating: 'helpful' | 'not-quite'): Promise<TrainerThread | null> {
+  const t = await getThread(userId)
+  const m = t?.messages.find((x) => x.id === messageId && x.from === 'trainer' && !x.kind)
+  if (!t || !m) return null
+  m.rating = rating
+  return save(t)
+}
+
+/** The trainer has opened the thread since the member's last question. */
+export function readByTrainer(t: TrainerThread | null): boolean {
+  if (!t?.trainerReadAt) return false
+  const lastMember = [...t.messages].reverse().find((m) => m.from === 'member')
+  return Boolean(lastMember && Date.parse(t.trainerReadAt) >= Date.parse(lastMember.at))
+}
+
+/**
+ * The welcome the trainer wrote once, to a member whose hub has just opened:
+ * once per member, never twice. Null when there's nothing to send.
+ */
+export async function ensureWelcome(who: { userId: string; email: string; firstName: string | null }, welcome: string, now = new Date()): Promise<TrainerThread | null> {
+  if (!welcome.trim()) return null
+  const t = await getThread(who.userId)
+  if (t?.messages.some((m) => m.kind === 'welcome')) return null
+  const { thread } = await noteFromTrainer(who, { text: welcome, by: 'welcome', kind: 'welcome' }, now)
+  return thread
+}
+
+export interface ReplyStats {
+  /** Median hours from a question to its answer, over the window. */
+  medianHours: number | null
+  /** Questions answered in the window. */
+  answered: number
+  /** Of the answers rated, how many were helpful. */
+  rated: number
+  helpful: number
+  /** Answered within the stated reply time. */
+  withinPromise: number
+}
+
+/** Questions to answers, real members only, over the last `days`. */
+export function replyStatsFrom(threads: TrainerThread[], promiseHours: number, now = new Date(), days = 30): ReplyStats {
+  const since = now.getTime() - days * DAY
+  const waits: number[] = []
+  let rated = 0
+  let helpful = 0
+  for (const t of threads) {
+    let asked: number | null = null
+    for (const m of t.messages) {
+      if (m.from === 'member') {
+        if (asked === null) asked = Date.parse(m.at)
+        continue
+      }
+      if (m.kind) continue
+      if (asked !== null && Date.parse(m.at) >= since) waits.push((Date.parse(m.at) - asked) / 3_600_000)
+      asked = null
+      if (Date.parse(m.at) >= since && m.rating) {
+        rated++
+        if (m.rating === 'helpful') helpful++
+      }
+    }
+  }
+  waits.sort((a, b) => a - b)
+  const median = waits.length ? (waits.length % 2 ? waits[(waits.length - 1) / 2] : (waits[waits.length / 2 - 1] + waits[waits.length / 2]) / 2) : null
+  return { medianHours: median === null ? null : Math.round(median * 10) / 10, answered: waits.length, rated, helpful, withinPromise: waits.filter((w) => w <= promiseHours).length }
+}
+
+let statsCache: { at: number; promise: number; stats: ReplyStats } | null = null
+
+/** The reply stats across real members, worked out at most every ten minutes. */
+export async function replyStats(promiseHours: number, now = new Date()): Promise<ReplyStats> {
+  if (statsCache && statsCache.promise === promiseHours && now.getTime() - statsCache.at < 600_000) return statsCache.stats
+  const { sampleMemberIds } = await import('@/lib/samples/registry')
+  const samples = await sampleMemberIds()
+  const threads = (await kvListPrefix<TrainerThread>(PREFIX, 5000)).map((r) => r.value).filter((t): t is TrainerThread => Boolean(t?.v === 1 && !samples.has(t.userId)))
+  const stats = replyStatsFrom(threads, promiseHours, now)
+  statsCache = { at: now.getTime(), promise: promiseHours, stats }
+  return stats
+}
+
+/** Enough answers to show a measured reply time rather than the promise. */
+export const MEDIAN_FLOOR = 20

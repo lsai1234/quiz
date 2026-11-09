@@ -451,7 +451,7 @@ const DEMO_OFFER: OfferSettings = {
     }),
   ),
   bonus: { ...DEFAULT_OFFER.bonus, enabled: true, pool: ['chrgd-vitamin-d3-k2', 'chrgd-electrolytes', 'chrgd-vitamin-c-zinc'], minSubtotal: 40, floorPounds: 1, floorPct: 0.02 },
-  services: { checkIns: true, guarantee: false, training: false, deals: false, trainer: false },
+  services: { checkIns: true, guarantee: false, training: false, deals: false, trainer: false, coaching: false, video: false, programmes: false },
   memberDeals: DEFAULT_OFFER.memberDeals,
   trainer: DEFAULT_OFFER.trainer,
   hubPrice: DEFAULT_OFFER.hubPrice,

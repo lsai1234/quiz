@@ -6,6 +6,9 @@ import { hubAccess } from '@/lib/hub/access'
 import { getUserById } from '@/lib/db/users'
 import { getTraining } from '@/lib/training/store'
 import { setupLine } from '@/lib/training/view'
+import { rollWeek } from '@/lib/training/edit'
+import { coachingOn } from '@/lib/offer/settings'
+import { editablePlan } from '@/lib/trainer/plan-view'
 import { sendReplyEmail } from '@/lib/trainer/emails'
 import { answerMember, getThread, markTrainerRead, setWaiting, TrainerError } from '@/lib/trainer/store'
 
@@ -50,6 +53,8 @@ export async function GET(_req: Request, { params }: Params) {
           checked: plan.check?.state ?? null,
         }
       : null,
+    // The plan editor's view of their week (coaching tools on).
+    plan: plan && coachingOn(await getLiveOfferSettings(), 'coaching') ? editablePlan(rollWeek(plan, new Date())) : null,
   })
 }
 

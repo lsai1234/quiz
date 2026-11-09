@@ -14,6 +14,7 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { getTraining } from '@/lib/training/store'
 import { deleteAccount, exportAccount } from '@/lib/db/erasure'
 import type { TrainingState } from '@/lib/training/state'
+import { GET as calendarFeed } from '@/app/api/training/calendar/[token]/route'
 
 process.env.NOTIFY_TEST_ALLOWLIST = '@example.com'
 delete process.env.OPENAI_API_KEY
@@ -181,5 +182,49 @@ describe('the trainer checks every plan', () => {
     await post({ action: 'ready', answers: [false] })
     const built = await json(await post({ action: 'build', prefs: { ...s.draft, equipment: 'gym', experience: 'some' } }))
     expect(built.plan!.check).toBeUndefined()
+  })
+})
+
+describe('the coaching tools (Phase 1)', () => {
+  afterEach(async () => {
+    await saveServiceSettings({ training: false, coaching: false })
+  })
+
+  it('rates an exercise, sets a busy week, lightens a session and hands out a live calendar that follows the plan', async () => {
+    await saveServiceSettings({ training: true, coaching: true })
+    await member(`coach-${Date.now()}@example.com`, true)
+    await post({ action: 'ready' })
+    let s = await json(await post({ action: 'build', prefs: { days: [0, 2, 4], minutes: 45, focus: 'muscle', split: 'auto', equipment: 'gym', experience: 'some', avoid: [], activities: [], trainAt: 1080 } }))
+    expect(s.coaching).toEqual({ coaching: true, video: false, programmes: false })
+    const first = s.plan!.sessions.find((x) => x.type === 'strength')!
+    const ex = first.type === 'strength' ? first.exercises[0].id : ''
+
+    s = await json(await post({ action: 'felt', exerciseId: ex, felt: 'hard' }))
+    expect(s.plan!.felt![ex][0].felt).toBe('hard')
+    expect((await post({ action: 'felt', exerciseId: ex, felt: 'meh' })).status).toBe(400)
+
+    s = await json(await post({ action: 'week-mode', kind: 'busy' }))
+    expect(s.plan!.weekMode?.kind).toBe('busy')
+    s = await json(await post({ action: 'week-mode', kind: null }))
+    expect(s.plan!.weekMode).toBeNull()
+
+    s = await json(await post({ action: 'lighter', sessionId: first.id, on: true }))
+    expect((s.plan!.sessions.find((x) => x.id === first.id) as { lighter?: unknown }).lighter).toBeTruthy()
+
+    s = await json(await post({ action: 'calendar-link' }))
+    expect(s.calendarUrl).toMatch(/\/api\/training\/calendar\/[A-Za-z0-9_-]{32}$/)
+    const token = s.calendarUrl!.split('/').pop()!
+    const feed = await calendarFeed(new Request(`http://x/api/training/calendar/${token}`), { params: Promise.resolve({ token }) })
+    expect(feed.status).toBe(200)
+    expect(await feed.text()).toContain('BEGIN:VCALENDAR')
+
+    // A new link stops the old one.
+    s = await json(await post({ action: 'calendar-link' }))
+    const old = await calendarFeed(new Request(`http://x/api/training/calendar/${token}`), { params: Promise.resolve({ token }) })
+    expect(old.status).toBe(404)
+    expect(s.calendarUrl).not.toContain(token)
+
+    s = await json(await post({ action: 'intro-seen' }))
+    expect(s.plan!.introSeen).toBe(true)
   })
 })

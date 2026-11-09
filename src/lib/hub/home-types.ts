@@ -67,6 +67,8 @@ export interface HubHome {
   } | null
   deals: { open: number; upcoming: number; next: { short: string; line: string; opensInDays: number } | null; best: { short: string; line: string; total: number } | null } | null
   orders: { reference: string; createdAt: string; total: number; items: string[]; status: string }[]
+  /** Today's training session for the Today card (coaching tools on): "6pm · Full body A · 45 min", with Start. */
+  todaySession: { id: string; title: string; time: string | null; minutes: number; workout: boolean } | null
   /** The hub on its own, when they've joined; null otherwise. */
   membership: HubPlanView | null
   /** While the hub is on sale on its own and theirs isn't open: an offer to join (£ a month). Never automatic. */

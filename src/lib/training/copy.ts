@@ -154,7 +154,6 @@ export const TRAINING_COPY = {
   swapTo: (name: string) => `Swap to ${name}`,
   noAlternatives: 'Nothing else suits your setup for this one.',
   tutorial: 'Watch the tutorial',
-  tutorialSoon: 'Video tutorial coming soon.',
   pace: 'How to pace it',
   activityLoads: (areas: string) => `You chose this one, so it stays. It loads your ${areas}, which you’re working around.`,
 

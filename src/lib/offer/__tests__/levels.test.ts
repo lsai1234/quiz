@@ -35,7 +35,7 @@ describe('charge levels: a bigger box comes with more', () => {
   })
 
   it('never mentions a service that is switched off', () => {
-    const v = chargeView({ count: 9, plan: 'subscription', services: { checkIns: false, guarantee: false, training: false, deals: false, trainer: false }, ratePct })
+    const v = chargeView({ count: 9, plan: 'subscription', services: { checkIns: false, guarantee: false, training: false, deals: false, trainer: false, coaching: false, video: false, programmes: false }, ratePct })
     expect(v.services.map((s) => s.id)).not.toEqual(expect.arrayContaining(['checkIns']))
     expect(JSON.stringify(v)).not.toMatch(/guarantee/i)
   })

@@ -26,6 +26,9 @@ const SWITCHES: { key: keyof TestSwitches; label: string }[] = [
   { key: 'deals', label: 'Member prices' },
   { key: 'checkIns', label: 'Amp check-ins' },
   { key: 'hubOnSale', label: 'The hub on sale on its own (and its saving)' },
+  { key: 'coaching', label: 'Coaching tools: workout mode, how it felt, busy and away, live calendar' },
+  { key: 'video', label: 'Video, form checks and the answers library' },
+  { key: 'programmes', label: 'Programmes, goals and the progress page' },
 ]
 
 export function TestViews() {

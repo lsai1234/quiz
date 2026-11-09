@@ -17,7 +17,10 @@ export const dynamic = 'force-dynamic'
 
 async function payload(which: 'real' | 'samples' = 'real') {
   const [settings, inbox, plans] = await Promise.all([getLiveOfferSettings(), listInbox(500, which), plansToCheck(5000, which)])
+  const { replyStats } = await import('@/lib/trainer/store')
   return {
+    /** Reply time and ratings over the last 30 days, real members only. */
+    stats: await replyStats(settings.trainer.replyHours),
     /** Showing the sample members from Settings → Test views instead of real ones. */
     samples: which === 'samples',
     /** Plans waiting for the trainer's check, for the tab's count. */

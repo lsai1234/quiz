@@ -4,7 +4,7 @@
  */
 import type { TrainingAccess } from './access'
 import type { PrefsDraft } from './prefs'
-import type { ActivityKind, ReadinessRecord, TrainingPlan, TrainingPrefs, Weekday } from './types'
+import type { ActivityKind, Felt, ReadinessRecord, TrainingPlan, TrainingPrefs, WeekMode, Weekday } from './types'
 
 import type { PublicTrainer } from '@/lib/trainer/types'
 
@@ -19,6 +19,14 @@ export interface TrainingState {
   tutorials: Record<string, string>
   /** Ask your trainer, while it's live: who checks the plan and answers questions. */
   trainer: PublicTrainer | null
+  /** The trainer's tip on each exercise, by id (while the trainer is live). */
+  tips?: Record<string, string>
+  /** Uploaded videos by exercise or activity id, for the silent loop (Phase 2). */
+  videos?: Record<string, string>
+  /** Which coaching phases are on (Founders Hub → Training). */
+  coaching?: { coaching: boolean; video: boolean; programmes: boolean }
+  /** Their live calendar's address, once they've asked for one. */
+  calendarUrl?: string | null
 }
 
 export type TrainingAction =
@@ -35,3 +43,8 @@ export type TrainingAction =
   | { action: 'sets'; sessionId: string; exerciseId: string; doneSets: number }
   | { action: 'log'; exerciseId: string; weightKg: number | null; reps: number | null }
   | { action: 'reset' }
+  | { action: 'felt'; exerciseId: string; felt: Felt }
+  | { action: 'week-mode'; kind: WeekMode | null }
+  | { action: 'lighter'; sessionId: string; on: boolean }
+  | { action: 'calendar-link' }
+  | { action: 'intro-seen' }

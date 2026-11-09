@@ -1,9 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { Button, Card } from '@/components/system'
+import { Button, Card, buttonSurface } from '@/components/system'
+import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { HUB_COPY as C } from '@/lib/hub/copy'
-import type { TodayItem } from '@/lib/hub/home-types'
+import type { HubHome, TodayItem } from '@/lib/hub/home-types'
 import { body, eyebrow, meta, Ring, strong } from './ui'
 
 /**
@@ -30,7 +32,20 @@ function momentsOf(items: TodayItem[]): Moment[] {
   return out
 }
 
-export function TodayCard({ items: initial }: { items: TodayItem[] }) {
+/** Today's training session, one tap from starting it (coaching tools on). */
+function SessionRow({ session }: { session: NonNullable<HubHome['todaySession']> }) {
+  const start = buttonSurface('primary', 'sm')
+  return (
+    <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }} data-today-session={session.id}>
+      <p style={{ ...strong, minWidth: 0 }}>{W.todaySession(session.time ?? C.untimed, session.title, session.minutes)}</p>
+      <Link href={session.workout ? `/myhub/training?workout=${encodeURIComponent(session.id)}` : '/myhub/training'} className={start.className} style={start.style} data-today-start>
+        {W.todayStart}
+      </Link>
+    </div>
+  )
+}
+
+export function TodayCard({ items: initial, session = null }: { items: TodayItem[]; session?: HubHome['todaySession'] }) {
   const [items, setItems] = useState(initial)
   const [busy, setBusy] = useState<string | null>(null)
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes()
@@ -55,7 +70,13 @@ export function TodayCard({ items: initial }: { items: TodayItem[] }) {
     return (
       <Card padding="roomy">
         <p style={eyebrow}>{C.todayTitle}</p>
-        <p style={{ ...body, marginTop: 'var(--space-2)' }}>{C.todayEmpty}</p>
+        {session ? (
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <SessionRow session={session} />
+          </div>
+        ) : (
+          <p style={{ ...body, marginTop: 'var(--space-2)' }}>{C.todayEmpty}</p>
+        )}
       </Card>
     )
   }
@@ -89,6 +110,12 @@ export function TodayCard({ items: initial }: { items: TodayItem[] }) {
             </span>
           </Ring>
         </div>
+
+        {session && (
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <SessionRow session={session} />
+          </div>
+        )}
 
         <ol className="hub-timeline" style={{ marginTop: 'var(--space-5)' }}>
           {moments.map((m) => {

@@ -19,7 +19,7 @@ import {
   type Rotation,
 } from './generate'
 import { exerciseById } from './library'
-import type { ActivityChoice, PlannedExercise, Session, StrengthSession, TrainingPlan, TrainingPrefs, Weekday } from './types'
+import type { ActivityChoice, Felt, PlannedExercise, Session, StrengthSession, TrainerChange, TrainingPlan, TrainingPrefs, WeekMode, Weekday } from './types'
 
 const strength = (s: Session[]) => s.filter((x): x is StrengthSession => x.type === 'strength')
 const stamp = (plan: TrainingPlan, now: Date): TrainingPlan => ({ ...plan, updatedAt: now.toISOString() })
@@ -235,13 +235,143 @@ export function setSets(plan: TrainingPlan, sessionId: string, exerciseId: strin
   )
 }
 
-/** A new week: last week's ticks go into the history and the week starts clean. */
+/**
+ * A new week: last week's ticks go into the history and the week starts clean.
+ * A busy or away week ends with it, and any lighter session goes back to
+ * normal: both were for that week only.
+ */
 export function rollWeek(plan: TrainingPlan, now: Date): TrainingPlan {
   const monday = mondayOf(now)
   if (plan.weekOf >= monday) return plan
   const history = [{ weekOf: plan.weekOf, done: plan.sessions.filter((s) => s.done).length, planned: plan.sessions.length }, ...plan.history].slice(0, 12)
-  const sessions = plan.sessions.map((s) =>
-    s.type === 'strength' ? { ...s, done: false, exercises: s.exercises.map((p) => ({ ...p, doneSets: 0 })) } : { ...s, done: false },
+  const base = plan.weekMode ? plan.weekMode.saved : plan.sessions
+  const sessions = base.map((s) =>
+    s.type === 'strength'
+      ? { ...s, done: false, lighter: null, exercises: (s.lighter?.exercises ?? s.exercises).map((p) => ({ ...p, doneSets: 0 })) }
+      : { ...s, done: false },
   )
-  return { ...plan, weekOf: monday, history, sessions }
+  return { ...plan, weekOf: monday, history, sessions, weekMode: null }
+}
+
+/* ── How it felt ─────────────────────────────────────────────────────────── */
+
+export const FELT_KEEP = 6
+
+/** One tap after an exercise's last set: kept newest first, one a day. */
+export function setFelt(plan: TrainingPlan, exerciseId: string, felt: Felt, now: Date): TrainingPlan {
+  const on = now.toISOString().slice(0, 10)
+  const had = (plan.felt?.[exerciseId] ?? []).filter((f) => f.on !== on)
+  return stamp({ ...plan, felt: { ...(plan.felt ?? {}), [exerciseId]: [{ on, felt }, ...had].slice(0, FELT_KEEP) } }, now)
+}
+
+/** The last time it was rated, before today. */
+export function lastFelt(plan: TrainingPlan, exerciseId: string, today: string): Felt | null {
+  return (plan.felt?.[exerciseId] ?? []).find((f) => f.on < today)?.felt ?? null
+}
+
+/* ── A busy week, or away ────────────────────────────────────────────────── */
+
+/** The setup a mode builds this week's sessions from. */
+export function prefsForMode(prefs: TrainingPrefs, kind: WeekMode): TrainingPrefs {
+  return kind === 'busy' ? { ...prefs, minutes: Math.min(prefs.minutes, 30) as TrainingPrefs['minutes'] } : { ...prefs, equipment: 'bodyweight' }
+}
+
+/**
+ * Shorter sessions this week, or bodyweight only while they're away: the
+ * sessions not yet done are rebuilt for it, done ones are left alone, and the
+ * week as it was is kept to go back to (switched off, or on Monday).
+ */
+export function setWeekMode(plan: TrainingPlan, kind: WeekMode | null, now: Date): TrainingPlan {
+  const saved = plan.weekMode?.saved ?? plan.sessions
+  if (!kind) {
+    if (!plan.weekMode) return plan
+    // Back to the week as it was, keeping what they've done since.
+    const sessions = saved.map((s) => (plan.sessions.find((x) => x.id === s.id)?.done ? { ...s, done: true } : s))
+    return stamp({ ...plan, sessions, weekMode: null }, now)
+  }
+  const prefs = prefsForMode(plan.prefs, kind)
+  const sessions = saved.map((s) => {
+    const current = plan.sessions.find((x) => x.id === s.id) ?? s
+    if (current.done || s.type !== 'strength') return current
+    const fresh = strengthSession(s.day, s.template, prefs, plan.seed, new Map())
+    return { ...fresh, id: s.id, done: false }
+  })
+  return stamp({ ...plan, sessions, weekMode: { kind, weekOf: plan.weekOf, saved } }, now)
+}
+
+/* ── Not feeling it today ────────────────────────────────────────────────── */
+
+/**
+ * A lighter version of one session: a set fewer on each exercise (never
+ * below one) and the lower end of the range. Their choice, for today; it
+ * can be switched back, and it's gone next week.
+ */
+export function setLighter(plan: TrainingPlan, sessionId: string, on: boolean, now: Date): TrainingPlan {
+  return stamp(
+    {
+      ...plan,
+      sessions: plan.sessions.map((x) => {
+        if (x.id !== sessionId || x.type !== 'strength') return x
+        if (!on) return x.lighter ? { ...x, exercises: x.lighter.exercises.map((p) => ({ ...p, doneSets: Math.min(p.sets, x.exercises.find((e) => e.id === p.id)?.doneSets ?? 0) })), lighter: null } : x
+        if (x.lighter) return x
+        const exercises = x.exercises.map((p) => {
+          const sets = Math.max(1, p.sets - 1)
+          return { ...p, sets, high: p.low, doneSets: Math.min(p.doneSets, sets) }
+        })
+        return { ...x, exercises, lighter: { exercises: x.exercises } }
+      }),
+    },
+    now,
+  )
+}
+
+/* ── The trainer's changes ───────────────────────────────────────────────── */
+
+export interface TrainerEdit {
+  sessionId: string
+  exerciseId: string
+  /** Swap it for this exercise (from the library, and suited to their setup). */
+  swapTo?: string | null
+  sets?: number | null
+  low?: number | null
+  high?: number | null
+}
+
+/**
+ * A change the trainer makes from the Founders Hub, with the same rules as
+ * the member's own: a swap must suit their setup, and sets and reps stay in
+ * sensible bounds. The member sees "Changed by [Name]" and the reason.
+ */
+export function trainerEdit(plan: TrainingPlan, edit: TrainerEdit, by: TrainerChange, now: Date): TrainingPlan | null {
+  const s = plan.sessions.find((x): x is StrengthSession => x.id === edit.sessionId && x.type === 'strength')
+  if (!s) return null
+  let next: TrainingPlan = plan
+  let id = edit.exerciseId
+  if (edit.swapTo && edit.swapTo !== edit.exerciseId) {
+    const swapped = swapExercise(plan, s.id, edit.exerciseId, edit.swapTo, now)
+    if (!swapped) return null
+    next = swapped
+    id = edit.swapTo
+  }
+  const clamp = (v: number | null | undefined, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null)
+  return stamp(
+    {
+      ...next,
+      sessions: next.sessions.map((x) => {
+        if (x.id !== s.id || x.type !== 'strength') return x
+        return {
+          ...x,
+          changedBy: by,
+          exercises: x.exercises.map((p) => {
+            if (p.id !== id) return p
+            const sets = clamp(edit.sets, 1, 8) ?? p.sets
+            const low = clamp(edit.low, 1, 120) ?? p.low
+            const high = Math.max(low, clamp(edit.high, 1, 120) ?? p.high)
+            return { ...p, sets, low, high, doneSets: Math.min(p.doneSets, sets), changedBy: by }
+          }),
+        }
+      }),
+    },
+    now,
+  )
 }

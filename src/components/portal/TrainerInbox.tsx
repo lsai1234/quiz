@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Badge, Button, Card, Checkbox, Disclosure, Input, Note, Textarea } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Disclosure, Input, Note, Select, Textarea } from '@/components/system'
 import type { TrainerProfile } from '@/lib/offer/settings'
-import { TRAINER_MAX } from '@/lib/trainer/copy'
+import { TRAINER_COPY, TRAINER_MAX } from '@/lib/trainer/copy'
+import type { EditablePlan } from '@/lib/trainer/plan-view'
 import type { InboxRow, TrainerThread } from '@/lib/trainer/types'
 
 /**
@@ -27,6 +28,7 @@ interface Inbox {
   inbox: InboxRow[]
   waiting: number
   plansWaiting: number
+  stats?: { medianHours: number | null; answered: number; rated: number; helpful: number; withinPromise: number }
 }
 
 interface PlanRow {
@@ -45,6 +47,8 @@ interface Opened {
   thread: TrainerThread
   member: { firstName: string | null; email: string; hub: string; hubUntil: string | null }
   training: { setup: string; sessions: number; done: number; checked: 'waiting' | 'checked' | null } | null
+  /** Their week for the plan editor, while the coaching tools are on. */
+  plan?: EditablePlan | null
 }
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
@@ -97,6 +101,12 @@ export function TrainerInbox() {
           <p style={{ ...BODY, marginTop: 'var(--space-1)' }}>Members’ questions about their training. A real person answers every one: nothing here goes to an AI.</p>
         </div>
         <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
+          {view.stats && view.stats.answered > 0 && (
+            <Badge tone="neutral" dot>
+              {`Median reply ${view.stats.medianHours}h · ${view.stats.answered} answered in 30 days`}
+            </Badge>
+          )}
+          {view.stats && view.stats.rated > 0 && <Badge tone="neutral" dot>{`${Math.round((view.stats.helpful / view.stats.rated) * 100)}% helpful (${view.stats.rated} rated)`}</Badge>}
           {view.waiting > 0 && <Badge tone="attention" dot>{`${view.waiting} waiting`}</Badge>}
           {view.plansWaiting > 0 && <Badge tone="info" dot>{`${view.plansWaiting} plan${view.plansWaiting === 1 ? '' : 's'} to check`}</Badge>}
           <Badge tone={view.live ? 'positive' : 'neutral'} dot>
@@ -237,13 +247,22 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
             </p>
           </Card>
 
+          {opened.plan && <PlanEditor userId={userId} plan={opened.plan} onChanged={(plan, thread) => setOpened((o) => (o ? { ...o, plan, thread } : o))} />}
+
           <ol className="flex flex-col" style={{ gap: 'var(--space-2)' }} aria-label="Messages">
             {opened.thread.messages.map((m) => (
               <li key={m.id} className={m.from === 'trainer' ? 'flex justify-end' : 'flex'}>
                 <div style={{ maxWidth: '85%' }}>
                   <Card padding="tight" tone={m.from === 'trainer' ? 'accent' : undefined} solid={m.from !== 'trainer'}>
+                    {m.kind === 'welcome' && <p style={META}>The welcome every new member gets</p>}
                     {m.about && <p style={{ ...META, color: 'var(--accent)', fontWeight: 'var(--weight-strong)' }}>{`About: ${m.about}`}</p>}
+                    {m.context && <p style={META} data-thread-context>{TRAINER_COPY.contextLine(m.context)}</p>}
                     <p style={{ ...BODY, color: 'var(--ink-1)', whiteSpace: 'pre-line' }}>{m.text}</p>
+                    {m.rating && (
+                      <p style={{ ...META, marginTop: 'var(--space-1)' }} data-thread-rating={m.rating}>
+                        {m.rating === 'helpful' ? 'They found this helpful' : 'They said: not quite'}
+                      </p>
+                    )}
                     {m.video && (
                       <p style={{ ...META, marginTop: 'var(--space-2)' }}>
                         <a href={m.video.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>
@@ -290,8 +309,9 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
   )
 }
 
-const withoutChecks = <T extends { checksPlans?: unknown }>(d: T): Omit<T, 'checksPlans'> => {
-  const { checksPlans: _ignored, ...rest } = d
+// Switches and uploads save on their own; the form's copy of them may be stale.
+const withoutChecks = <T extends { checksPlans?: unknown; qualificationsConfirmed?: unknown; welcomeVideo?: unknown; introVideo?: unknown }>(d: T) => {
+  const { checksPlans: _a, qualificationsConfirmed: _b, welcomeVideo: _c, introVideo: _d, ...rest } = d
   return rest
 }
 
@@ -350,6 +370,25 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
           </div>
           <Textarea label="About them, in their own words" rows={3} value={draft.bio} onChange={set('bio')} hint="Shown at the top of the chat. Who they are and how they train; nothing about products or health." />
           <Input label="Photo (https link or a path on this site)" value={draft.photoUrl} onChange={set('photoUrl')} placeholder="https://…" />
+          <Textarea
+            label="Welcome for new members"
+            rows={3}
+            value={draft.welcome}
+            onChange={set('welcome')}
+            hint="Written once, sent to each member as their hub opens (coaching tools on), and labelled as one you send everyone. Coaching only: nothing about products or health."
+          />
+          <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
+            <Input label="Days you answer" value={draft.answersOn} onChange={set('answersOn')} placeholder="Monday to Friday" hint="Said on screen, so a weekend wait isn’t a broken promise." />
+            <Input label="Qualifications you hold" value={draft.qualifications} onChange={set('qualifications')} placeholder="Level 3 Personal Trainer" hint="Exactly as on the certificate. Shown only once confirmed below." />
+          </div>
+          <Checkbox
+            label="These qualifications are confirmed"
+            hint="Tick once the certificate and professional liability insurance are checked. Until then, nothing about qualifications shows anywhere."
+            checked={view.trainer.qualificationsConfirmed}
+            disabled={saving}
+            onChange={(e) => void save(undefined, { qualificationsConfirmed: e.target.checked })}
+            data-trainer-qualifications-confirmed
+          />
           <div className="grid sm:grid-cols-3" style={{ gap: 'var(--space-3)' }}>
             <Input label="Answers within (hours)" inputMode="numeric" value={draft.replyHours} onChange={set('replyHours')} />
             <Input label="Questions a day, per member" inputMode="numeric" value={draft.dailyLimit} onChange={set('dailyLimit')} />
@@ -442,5 +481,104 @@ function PlansToCheck({ samples = false, onChecked }: { samples?: boolean; onChe
         ))
       )}
     </section>
+  )
+}
+
+/**
+ * The trainer changes the plan directly: swap an exercise for one that suits
+ * the member, or change its sets and reps, with a reason the member sees as
+ * "Changed by [Name]". A note in their chat says what changed and why.
+ */
+function PlanEditor({ userId, plan, onChanged }: { userId: string; plan: EditablePlan; onChanged: (plan: EditablePlan, thread: TrainerThread) => void }) {
+  const [editing, setEditing] = useState<{ sessionId: string; exerciseId: string } | null>(null)
+  const [draft, setDraft] = useState({ swapTo: '', sets: '', low: '', high: '', reason: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    if (!editing) return
+    setBusy(true)
+    setError(null)
+    const n = (v: string) => (v.trim() ? Number(v) : null)
+    const r = await fetch(`/api/portal/trainer/${encodeURIComponent(userId)}/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...editing, swapTo: draft.swapTo || null, sets: n(draft.sets), low: n(draft.low), high: n(draft.high), reason: draft.reason }),
+    }).catch(() => null)
+    const d = r ? ((await r.json().catch(() => null)) as { plan?: EditablePlan; thread?: TrainerThread; error?: string } | null) : null
+    setBusy(false)
+    if (!r?.ok || !d?.plan || !d.thread) {
+      setError(d?.error ?? 'That didn’t save.')
+      return
+    }
+    onChanged(d.plan, d.thread)
+    setEditing(null)
+  }
+
+  return (
+    <Card padding="normal">
+      <Disclosure summary="Their plan: change it directly">
+        <div className="flex flex-col" style={{ gap: 'var(--space-4)', paddingTop: 'var(--space-3)' }} data-plan-editor>
+          {plan.sessions.map((s) => (
+            <section key={s.id} className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+              <p style={STRONG}>{`${s.title}${s.done ? ' · done' : ''}`}</p>
+              {s.exercises.map((e) => {
+                const open = editing?.sessionId === s.id && editing.exerciseId === e.id
+                return (
+                  <div key={e.id} className="flex flex-col" style={{ gap: 'var(--space-2)' }} data-plan-exercise={e.id}>
+                    <div className="flex flex-wrap items-center justify-between" style={{ gap: 'var(--space-2)' }}>
+                      <p style={BODY}>
+                        {`${e.name} · ${e.sets} × ${e.low === e.high ? e.high : `${e.low}–${e.high}`}`}
+                        {e.changedBy && <span style={META}>{` · changed by ${e.changedBy.name}: ${e.changedBy.reason}`}</span>}
+                      </p>
+                      {!open && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditing({ sessionId: s.id, exerciseId: e.id })
+                            setDraft({ swapTo: '', sets: String(e.sets), low: String(e.low), high: String(e.high), reason: '' })
+                          }}
+                          data-plan-edit={e.id}
+                        >
+                          Change
+                        </Button>
+                      )}
+                    </div>
+                    {open && (
+                      <div className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+                        <Select label="Swap for" value={draft.swapTo} onChange={(ev) => setDraft((d) => ({ ...d, swapTo: ev.target.value }))}>
+                          <option value="">Keep {e.name}</option>
+                          {e.alternatives.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name}
+                            </option>
+                          ))}
+                        </Select>
+                        <div className="grid grid-cols-3" style={{ gap: 'var(--space-2)' }}>
+                          <Input label="Sets" inputMode="numeric" value={draft.sets} onChange={(ev) => setDraft((d) => ({ ...d, sets: ev.target.value }))} />
+                          <Input label="Reps from" inputMode="numeric" value={draft.low} onChange={(ev) => setDraft((d) => ({ ...d, low: ev.target.value }))} />
+                          <Input label="Reps to" inputMode="numeric" value={draft.high} onChange={(ev) => setDraft((d) => ({ ...d, high: ev.target.value }))} />
+                        </div>
+                        <Input label="Why (the member sees this)" value={draft.reason} onChange={(ev) => setDraft((d) => ({ ...d, reason: ev.target.value }))} placeholder="Fewer sets while your knee settles." data-plan-reason />
+                        {error && <Note tone="critical">{error}</Note>}
+                        <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>
+                          <Button variant="primary" size="sm" loading={busy} disabled={!draft.reason.trim()} onClick={() => void save()} data-plan-save>
+                            Change their plan
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </section>
+          ))}
+        </div>
+      </Disclosure>
+    </Card>
   )
 }

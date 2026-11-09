@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, Button, Card, Note, Textarea, buttonSurface } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
 import { MEMBER_MAX, TRAINER_COPY as C } from '@/lib/trainer/copy'
-import type { MemberTrainerView } from '@/lib/trainer/types'
+import type { MemberTrainerView, MessageContext } from '@/lib/trainer/types'
 import { body, col, eyebrow, meta, strong } from '../home/ui'
 import { RealBadge, TrainerAvatar, when } from './TrainerBits'
 
@@ -21,6 +21,10 @@ export function TrainerChat() {
   const [failed, setFailed] = useState(false)
   const [text, setText] = useState('')
   const [about, setAbout] = useState<string | null>(null)
+  // From workout mode: the set it's about, with its numbers.
+  const [context, setContext] = useState<MessageContext | null>(null)
+  const [rated, setRated] = useState<Record<string, 'helpful' | 'not-quite'>>({})
+  const composerRef = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
@@ -37,8 +41,13 @@ export function TrainerChat() {
   useEffect(() => {
     load()
     // "Ask about this" from an exercise: /myhub/trainer?about=Barbell%20back%20squat
-    const a = new URLSearchParams(window.location.search).get('about')
+    const q = new URLSearchParams(window.location.search)
+    const a = q.get('about')
     if (a) setAbout(a.slice(0, 80))
+    const num = (k: string) => (q.get(k) && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : null)
+    const felt = q.get('felt')
+    const c: MessageContext = { set: num('set'), of: num('of'), kg: num('kg'), reps: num('reps'), felt: felt === 'easy' || felt === 'right' || felt === 'hard' ? felt : null }
+    if (Object.values(c).some((v) => v !== null)) setContext(c)
     // A reply may have landed while they were elsewhere.
     const onFocus = () => load()
     window.addEventListener('focus', onFocus)
@@ -54,11 +63,12 @@ export function TrainerChat() {
     setError(null)
     setSent(false)
     try {
-      const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, about }) })
+      const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, about, context }) })
       if (res.ok) {
         setView((await res.json()) as MemberTrainerView)
         setText('')
         setAbout(null)
+        setContext(null)
         setSent(true)
       } else {
         const code = ((await res.json().catch(() => ({}))) as { error?: string }).error
@@ -68,6 +78,16 @@ export function TrainerChat() {
       setError(C.failed)
     } finally {
       setSending(false)
+    }
+  }
+
+  async function rate(messageId: string, rating: 'helpful' | 'not-quite') {
+    setRated((r) => ({ ...r, [messageId]: rating }))
+    const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rate', messageId, rating }) }).catch(() => null)
+    if (res?.ok) setView((await res.json()) as MemberTrainerView)
+    if (rating === 'not-quite') {
+      setText((t) => t || C.notQuitePrefill)
+      composerRef.current?.scrollIntoView?.({ block: 'center' })
     }
   }
 
@@ -111,10 +131,12 @@ export function TrainerChat() {
             <div style={{ marginTop: 'var(--space-3)' }}>
               <RealBadge />
             </div>
-            <p className="flex items-center" style={{ ...meta, gap: 'var(--space-1)', marginTop: 'var(--space-2)' }}>
+            <p className="flex items-center" style={{ ...meta, gap: 'var(--space-1)', marginTop: 'var(--space-2)' }} data-trainer-reply-time>
               <Icon name="clock" size={12} />
-              {C.replyWithin(t.replyHours)}
+              {view.replyStat ? C.medianReply(view.replyStat.medianHours) : C.replyWithin(t.replyHours)}
             </p>
+            {t.answersOn && <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{C.answersOn(t.name, t.answersOn)}</p>}
+            {t.qualifications && <p style={{ ...meta, marginTop: 'var(--space-1)' }} data-trainer-qualifications>{C.qualifications(t.qualifications)}</p>}
           </div>
         </div>
         <p style={{ ...strong, fontSize: 'var(--text-body-sm)', marginTop: 'var(--space-4)' }} data-trainer-real>
@@ -145,6 +167,7 @@ export function TrainerChat() {
                   }}
                 >
                   {m.about && <p style={{ ...meta, color: 'var(--accent)', fontWeight: 'var(--weight-strong)', marginBottom: 'var(--space-1)' }}>{C.about(m.about)}</p>}
+                  {m.context && <p style={{ ...meta, marginBottom: 'var(--space-1)' }} data-message-context>{C.contextLine(m.context)}</p>}
                   <p style={{ ...body, color: 'var(--ink-1)', whiteSpace: 'pre-line' }}>{m.text}</p>
                 </div>
                 <p style={{ ...meta, textAlign: 'right', marginTop: 'var(--space-1)' }}>{`${C.you} · ${when(m.at)}`}</p>
@@ -154,6 +177,7 @@ export function TrainerChat() {
             <div key={m.id} className="flex items-end" style={{ gap: 'var(--space-2)' }} data-message="trainer">
               <TrainerAvatar name={t.name} photoUrl={t.photoUrl} size={32} />
               <div style={{ maxWidth: '85%' }}>
+                {m.kind === 'welcome' && <p style={{ ...meta, marginBottom: 'var(--space-1)' }} data-welcome-label>{C.welcomeLabel(t.name)}</p>}
                 <div
                   style={{
                     background: 'var(--surface-2)',
@@ -167,9 +191,38 @@ export function TrainerChat() {
                   {m.video && <VideoLink url={m.video.url} title={m.video.title} />}
                 </div>
                 <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{`${t.name} · ${when(m.at)}`}</p>
+                {m.kind === 'welcome' && view.open && view.messages.every((x) => x.from !== 'member') && (
+                  <div style={{ marginTop: 'var(--space-2)' }}>
+                    <Button variant="secondary" size="sm" onClick={() => composerRef.current?.scrollIntoView?.({ block: 'center' })} data-first-question>
+                      {C.firstQuestion}
+                    </Button>
+                  </div>
+                )}
+                {view.coaching && !m.kind && (
+                  <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }} data-rate={m.id}>
+                    {(m.rating ?? rated[m.id]) ? (
+                      <p style={meta}>{(m.rating ?? rated[m.id]) === 'helpful' ? C.rateThanks : C.rateNotQuiteThanks}</p>
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="sm" icon="check" onClick={() => void rate(m.id, 'helpful')} data-rate-helpful>
+                          {C.rateHelpful}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => void rate(m.id, 'not-quite')} data-rate-not-quite>
+                          {C.rateNotQuite}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ),
+        )}
+        {view.waiting && view.readByTrainer && (
+          <p className="flex items-center justify-end" style={{ ...meta, gap: 'var(--space-1)' }} data-read-by-trainer>
+            <Icon name="check" size={12} />
+            {C.readBy(t.name)}
+          </p>
         )}
         {view.waiting && (
           <p className="flex items-center" style={{ ...meta, gap: 'var(--space-2)' }} data-trainer-waiting>
@@ -183,7 +236,7 @@ export function TrainerChat() {
       {/* Ask. */}
       {view.open ? (
         <Card padding="normal" elevation={2}>
-          <div style={col('var(--space-3)')} data-trainer-composer>
+          <div ref={composerRef} style={col('var(--space-3)')} data-trainer-composer>
             {view.messages.length === 0 && !text && (
               <div>
                 <p style={{ ...meta, marginBottom: 'var(--space-2)' }}>{C.starterLabel}</p>
@@ -196,10 +249,18 @@ export function TrainerChat() {
                 </div>
               </div>
             )}
-            {about && (
-              <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
-                <Badge tone="accent">{C.about(about)}</Badge>
-                <Button variant="ghost" size="sm" onClick={() => setAbout(null)}>
+            {(about || context) && (
+              <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }} data-composer-context>
+                {about && <Badge tone="accent">{C.about(about)}</Badge>}
+                {context && <Badge>{C.contextLine(context)}</Badge>}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAbout(null)
+                    setContext(null)
+                  }}
+                >
                   {C.clearAbout}
                 </Button>
               </div>

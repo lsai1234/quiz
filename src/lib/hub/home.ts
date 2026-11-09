@@ -133,6 +133,7 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
 
   // The training plan's next session.
   let training: HubHome['training'] = null
+  let todaySession: HubHome['todaySession'] = null
   if (services.training && open) {
     const { getTraining } = await import('@/lib/training/store')
     const { rollWeek, weekdayOf } = await Promise.all([import('@/lib/training/edit'), import('@/lib/training/generate')]).then(([e, g]) => ({ rollWeek: e.rollWeek, weekdayOf: g.weekdayOf }))
@@ -141,6 +142,19 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
     const plan = rec.plan ? rollWeek(rec.plan, now) : null
     const next = plan ? nextSession(plan, weekdayOf(now)) : null
     const p = plan ? progressOf(plan) : { done: 0, planned: 0 }
+    // Today's session, on the Today card at their training time (coaching tools on).
+    const { coachingOn } = await import('@/lib/offer/settings')
+    const todays = plan && coachingOn(settings, 'coaching') ? plan.sessions.find((x) => x.day === weekdayOf(now) && !x.done) : null
+    if (todays) {
+      const { sessionLength } = await import('@/lib/training/view')
+      todaySession = {
+        id: todays.id,
+        title: sessionTitle(todays),
+        time: plan?.prefs.trainAt != null ? spokenClock(plan.prefs.trainAt) : null,
+        minutes: sessionLength(todays),
+        workout: todays.type === 'strength',
+      }
+    }
     training = {
       hasPlan: Boolean(plan),
       next: next ? { title: sessionTitle(next), day: next.day, summary: sessionSummary(next) } : null,
@@ -170,7 +184,10 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
   let trainer: HubHome['trainer'] = null
   const { trainerLive } = await import('@/lib/offer/settings')
   if (trainerLive(settings) && open) {
-    const { getThread, unreadForMember } = await import('@/lib/trainer/store')
+    const { ensureWelcome, getThread, unreadForMember } = await import('@/lib/trainer/store')
+    // The trainer's welcome, once, as the hub opens (coaching tools on).
+    const { coachingOn } = await import('@/lib/offer/settings')
+    if (coachingOn(settings, 'coaching')) await ensureWelcome({ userId: user.id, email: user.email, firstName }, settings.trainer.welcome, now)
     const thread = await getThread(user.id)
     const last = thread?.messages[thread.messages.length - 1] ?? null
     trainer = {
@@ -234,5 +251,6 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
     })),
     membership,
     joinOffer,
+    todaySession,
   }
 }

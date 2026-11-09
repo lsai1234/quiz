@@ -29,6 +29,9 @@ async function state() {
       deals: live.services.deals,
       checkIns: live.services.checkIns,
       hubOnSale: hubOnSale(live),
+      coaching: live.services.coaching,
+      video: live.services.video,
+      programmes: live.services.programmes,
     },
   }
 }

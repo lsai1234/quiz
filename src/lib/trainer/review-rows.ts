@@ -34,6 +34,13 @@ export function trainerCopyRows(): ReviewRow[] {
       revealChecked: ['[Name]'],
       planEmailSubject: ['[Name]'],
       planEmailIntro: ['Alex', '[Name]'],
+      contextLine: [{ set: 2, of: 3, kg: 20, reps: 8, felt: 'hard' }],
+      readBy: ['[Name]'],
+      medianReply: [9],
+      answersOn: ['[Name]', 'Monday to Friday'],
+      welcomeLabel: ['[Name]'],
+      changeNote: ['Goblet squat', 'Fewer sets while your knee settles.'],
+      qualifications: ['Level 3 Personal Trainer'],
     },
     { medical: 'Under the question box, and in the answer email', realPerson: 'Badge beside the trainer, everywhere they appear' },
   )

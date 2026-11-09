@@ -18,9 +18,13 @@ export interface TestSwitches {
   checkIns: boolean
   /** The hub on sale on its own, with its saving on the results page. */
   hubOnSale: boolean
+  /** The training plan's coaching phases (`ServiceSettings`). */
+  coaching: boolean
+  video: boolean
+  programmes: boolean
 }
 
-export const DEFAULT_TEST_SWITCHES: TestSwitches = { training: true, trainer: true, deals: true, checkIns: true, hubOnSale: true }
+export const DEFAULT_TEST_SWITCHES: TestSwitches = { training: true, trainer: true, deals: true, checkIns: true, hubOnSale: true, coaching: true, video: true, programmes: true }
 
 export interface TestView {
   v: 1
@@ -39,7 +43,7 @@ export const TEST_VIEW_HOURS = 12
 export function normaliseSwitches(raw: unknown): TestSwitches {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const on = (k: keyof TestSwitches) => (typeof r[k] === 'boolean' ? (r[k] as boolean) : DEFAULT_TEST_SWITCHES[k])
-  return { training: on('training'), trainer: on('trainer'), deals: on('deals'), checkIns: on('checkIns'), hubOnSale: on('hubOnSale') }
+  return { training: on('training'), trainer: on('trainer'), deals: on('deals'), checkIns: on('checkIns'), hubOnSale: on('hubOnSale'), coaching: on('coaching'), video: on('video'), programmes: on('programmes') }
 }
 
 export async function openTestView(by: string, switches: TestSwitches, token?: string | null, now = new Date()): Promise<TestView> {
@@ -83,7 +87,7 @@ export function withTestSwitches(settings: OfferSettings, s: TestSwitches): Offe
   const named = settings.trainer.name.trim().length > 0
   return {
     ...settings,
-    services: { ...settings.services, training: s.training, trainer: s.trainer, deals: s.deals, checkIns: s.checkIns },
+    services: { ...settings.services, training: s.training, trainer: s.trainer, deals: s.deals, checkIns: s.checkIns, coaching: s.coaching, video: s.video, programmes: s.programmes },
     trainer: s.trainer && !named ? { ...settings.trainer, ...SAMPLE_TRAINER } : settings.trainer,
     hubPrice: { ...settings.hubPrice, standalone: s.hubOnSale, monthly: settings.hubPrice.monthly > 0 ? settings.hubPrice.monthly : 10 },
   }

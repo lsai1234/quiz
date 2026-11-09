@@ -32,6 +32,7 @@ import { hubCopyRows } from '@/lib/hub/review-rows'
 import { tipRows } from '@/lib/tips/review-rows'
 import { trainerCopyRows } from '@/lib/trainer/review-rows'
 import { hubPlanCopyRows } from '@/lib/hub-plan/review-rows'
+import { coachingCopyRows } from '@/lib/training/coaching-review-rows'
 import { guideCopyRows } from '@/lib/guide/review-rows'
 import { checkInCopyRows } from '@/lib/checkin/review-rows'
 import { trainingCopyRows, trainingLibraryRows } from '@/lib/training/review-rows'
@@ -299,6 +300,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     // Ask your trainer: a real person answering in the hub.
     ...trainerCopyRows(),
     ...hubPlanCopyRows(),
+    ...coachingCopyRows(),
     ...freeGiftTermRows(DEFAULT_BONUS),
     ...guaranteeTermRows(),
     ...memberHubTermRows(),

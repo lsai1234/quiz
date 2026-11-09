@@ -16,6 +16,7 @@ import { createOrderFromCheckout } from '@/lib/orders/service'
 import { listNotifications } from '@/lib/notify/outbox'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { saveServiceSettings, saveTrainerProfile } from '@/lib/offer/store'
+import { DEFAULT_TRAINER } from '@/lib/offer/settings'
 import { exportAccount } from '@/lib/db/erasure'
 import { accessesForMember } from '@/lib/portal/access-log'
 import { askTrainer, answerMember, askedToday, cleanText, getThread, listInbox, TrainerError } from '../store'
@@ -72,7 +73,7 @@ describe('the thread', () => {
     const who = { id: `t-${n++}`, email: 'd@example.com', firstName: 'D' }
     await askTrainer(who, { text: 'Q' }, 5, new Date('2026-11-06T10:00:00Z'))
     const { thread } = (await answerMember(who.id, { text: 'A', by: 'Sam Founder' }, new Date('2026-11-06T11:00:00Z')))!
-    const view = viewOf(thread, { name: 'Sam', role: 'Trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: 'sam@example.com', checksPlans: true }, true, true)
+    const view = viewOf(thread, { ...DEFAULT_TRAINER, name: 'Sam', role: 'Trainer', notifyEmail: 'sam@example.com' }, true, true)
     expect(JSON.stringify(view)).not.toMatch(/Sam Founder|sam@example\.com/)
     expect(view.unread).toBe(1)
   })
@@ -174,5 +175,85 @@ describe('the setup the trainer reads', () => {
     const line = setupLine({ focus: 'muscle', days: [4, 0, 2], minutes: 45, equipment: 'gym', experience: 'some', avoid: [] })
     expect(line).toMatch(/^.+ · 3 days \(Mon, Wed, Fri\) · 45 min · A gym · .+$/)
     expect(line).not.toMatch(/0,2,4|\bgym\b(?! )/)
+  })
+})
+
+describe('coaching tools: context, ratings, honest signals, the welcome, plan changes', () => {
+  afterEach(async () => {
+    await saveServiceSettings({ trainer: false, coaching: false, training: false })
+  })
+
+  it('keeps sensible context and drops junk', async () => {
+    const { cleanContext } = await import('../store')
+    expect(cleanContext({ set: 2, of: '3', kg: 20.1, reps: 8, felt: 'hard' })).toEqual({ set: 2, of: 3, kg: 20, reps: 8, felt: 'hard' })
+    expect(cleanContext({ set: -1, kg: 'lots', felt: 'meh' })).toBeNull()
+  })
+
+  it('works out the median reply, ratings and answers within the promise, leaving notes and welcomes out', async () => {
+    const { replyStatsFrom } = await import('../store')
+    const t0 = Date.parse('2026-11-01T10:00:00Z')
+    const at = (h: number) => new Date(t0 + h * 3_600_000).toISOString()
+    const thread = {
+      v: 1 as const, userId: 'u', email: 'e', firstName: null, waiting: false, lastAt: at(0), memberReadAt: null, trainerReadAt: null,
+      messages: [
+        { id: 'w', from: 'trainer' as const, text: 'Welcome', at: at(0), about: null, video: null, kind: 'welcome' as const },
+        { id: 'a', from: 'member' as const, text: 'q', at: at(1), about: null, video: null },
+        { id: 'b', from: 'trainer' as const, text: 'a', at: at(5), about: null, video: null, rating: 'helpful' as const },
+        { id: 'c', from: 'member' as const, text: 'q', at: at(10), about: null, video: null },
+        { id: 'd', from: 'member' as const, text: 'q2', at: at(11), about: null, video: null },
+        { id: 'e', from: 'trainer' as const, text: 'a', at: at(40), about: null, video: null, rating: 'not-quite' as const },
+      ],
+    }
+    const s = replyStatsFrom([thread], 24, new Date(t0 + 48 * 3_600_000))
+    expect(s.answered).toBe(2)
+    expect(s.medianHours).toBe(17) // 4h and 30h
+    expect(s).toMatchObject({ rated: 2, helpful: 1, withinPromise: 1 })
+  })
+
+  it('sends the welcome once, asks with context, says when it was read, and takes a rating', async () => {
+    await saveServiceSettings({ trainer: true, coaching: true, training: true })
+    await saveTrainerProfile({ name: 'Sam', welcome: 'Welcome in. Ask me anything about your plan.' })
+    const user = await member()
+    mockUser.current = user
+    const first = (await (await memberGet()).json()) as MemberTrainerView
+    expect(first.messages.filter((m) => m.kind === 'welcome')).toHaveLength(1)
+    await memberGet()
+    expect(((await (await memberGet()).json()) as MemberTrainerView).messages.filter((m) => m.kind === 'welcome')).toHaveLength(1)
+
+    const asked = (await (await memberAsk(post({ text: 'Too heavy?', about: 'Goblet squat', context: { set: 2, of: 3, kg: 20, reps: 8 } }))).json()) as MemberTrainerView
+    expect(asked.messages.at(-1)?.context).toMatchObject({ set: 2, kg: 20 })
+    expect(asked.readByTrainer).toBe(false)
+    // A founder opens it: read.
+    await threadGet(new Request('http://x'), params(user.id))
+    expect(((await (await memberGet()).json()) as MemberTrainerView).readByTrainer).toBe(true)
+
+    const { thread } = (await answerMember(user.id, { text: 'Keep it there for now.', by: 'Sam' }))!
+    const answer = thread.messages.at(-1)!
+    const rated = (await (await memberAsk(post({ action: 'rate', messageId: answer.id, rating: 'helpful' }))).json()) as MemberTrainerView
+    expect(rated.messages.find((m) => m.id === answer.id)?.rating).toBe('helpful')
+  })
+
+  it('lets the trainer change a member’s plan, with a reason the member sees and a note in their chat', async () => {
+    await saveServiceSettings({ trainer: true, coaching: true, training: true })
+    await saveTrainerProfile({ name: 'Sam' })
+    const user = await member()
+    const { saveTraining, getTraining } = await import('@/lib/training/store')
+    const { newPlan } = await import('@/lib/training/edit')
+    const plan = newPlan(user.id, { days: [0, 2, 4], minutes: 45, focus: 'muscle', split: 'auto', equipment: 'gym', experience: 'some', avoid: [], activities: [], trainAt: 1080 }, new Date())
+    await saveTraining({ v: 1, userId: user.id, readiness: { cleared: true, at: new Date().toISOString() }, plan })
+    const s = plan.sessions.find((x) => x.type === 'strength')!
+    const ex = s.type === 'strength' ? s.exercises[0] : null
+    const { POST: editPlan } = await import('@/app/api/portal/trainer/[userId]/plan/route')
+    const refused = await editPlan(post({ sessionId: s.id, exerciseId: ex!.id, sets: 2 }), params(user.id))
+    expect(refused.status).toBe(400)
+    const ok = await editPlan(post({ sessionId: s.id, exerciseId: ex!.id, sets: 2, reason: 'Fewer sets while your knee settles.' }), params(user.id))
+    expect(ok.status).toBe(200)
+    const saved = (await getTraining(user.id)).plan!
+    const changed = saved.sessions.find((x) => x.id === s.id)!
+    expect(changed.type === 'strength' && changed.exercises[0]).toMatchObject({ sets: 2, changedBy: { name: 'Sam', reason: 'Fewer sets while your knee settles.' } })
+    const t = await getThread(user.id)
+    expect(t?.messages.at(-1)).toMatchObject({ kind: 'change' })
+    expect(t?.messages.at(-1)?.text).toContain('Fewer sets while your knee settles.')
+    expect((await accessesForMember(user.id)).some((a) => a.kind === 'member-trainer')).toBe(true)
   })
 })

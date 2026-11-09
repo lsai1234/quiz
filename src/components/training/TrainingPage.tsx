@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { HubLogin } from '@/components/hub/HubLogin'
 import { HubShell } from '@/components/hub/HubShell'
 import { HubSkeleton } from '@/components/hub/HubSkeleton'
@@ -12,6 +12,10 @@ import type { TrainingAction, TrainingState } from '@/lib/training/state'
 import { Readiness } from './Readiness'
 import { Setup } from './Setup'
 import { Week } from './Week'
+import { WorkoutMode } from './WorkoutMode'
+import { nextSession } from '@/lib/training/view'
+import { weekdayOf } from '@/lib/training/generate'
+import type { StrengthSession } from '@/lib/training/types'
 import { body, display, eyebrow, stack } from './styles'
 
 /**
@@ -73,6 +77,59 @@ export function TrainingPage() {
     }
   }, [])
 
+  /*
+    Workout mode's ticks go out one at a time, in order. When there's no
+    signal they wait on the phone (localStorage) and go when it's back, so a
+    session in a basement gym is never lost.
+  */
+  const [workoutId, setWorkoutId] = useState<string | null>(null)
+  const [offline, setOffline] = useState(false)
+  const flushing = useRef(false)
+  const flush = useCallback(async () => {
+    if (flushing.current) return
+    flushing.current = true
+    try {
+      for (;;) {
+        const queue = readQueue()
+        if (!queue.length) break
+        const res = await fetch('/api/hub/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(queue[0]) }).catch(() => null)
+        if (!res) {
+          setOffline(true)
+          return
+        }
+        writeQueue(readQueue().slice(1))
+        if (res.ok) setState((await res.json()) as TrainingState)
+      }
+      setOffline(false)
+    } finally {
+      flushing.current = false
+    }
+  }, [])
+  const send = useCallback(
+    (a: TrainingAction) => {
+      writeQueue([...readQueue(), a])
+      void flush()
+    },
+    [flush],
+  )
+  useEffect(() => {
+    const online = () => void flush()
+    window.addEventListener('online', online)
+    void flush()
+    return () => window.removeEventListener('online', online)
+  }, [flush])
+
+  // `?workout=next` (the hub's Today card, a test view) or `?workout=<session id>`.
+  const coachingOn = Boolean(state?.coaching?.coaching)
+  useEffect(() => {
+    if (!state?.plan || !coachingOn) return
+    const want = new URLSearchParams(window.location.search).get('workout')
+    if (!want) return
+    window.history.replaceState(null, '', window.location.pathname)
+    const target = want === 'next' ? nextSession(state.plan, weekdayOf(new Date())) : state.plan.sessions.find((x) => x.id === want)
+    if (target?.type === 'strength') setWorkoutId(target.id)
+  }, [state?.plan, coachingOn])
+
   if (!hydrated) {
     return (
       <HubShell>
@@ -103,10 +160,43 @@ export function TrainingPage() {
       ) : !state.plan ? (
         state.draft && <Setup draft={state.draft} busy={busy === 'build:'} error={error} onBuild={(prefs) => void act({ action: 'build', prefs })} />
       ) : (
-        <Week state={state} plan={state.plan} act={act} busy={busy} error={error} />
+        <Week state={state} plan={state.plan} act={act} busy={busy} error={error} onStart={setWorkoutId} />
       )}
+      {state?.plan && workoutId && (() => {
+        const session = state.plan.sessions.find((x): x is StrengthSession => x.id === workoutId && x.type === 'strength')
+        return session ? (
+          <WorkoutMode
+            plan={state.plan}
+            session={session}
+            trainer={state.trainer}
+            tips={state.tips ?? {}}
+            videos={state.videos ?? {}}
+            offline={offline}
+            send={send}
+            onClose={() => setWorkoutId(null)}
+          />
+        ) : null
+      })()}
     </HubShell>
   )
+}
+
+const QUEUE_KEY = 'chrgd-training-queue'
+function readQueue(): TrainingAction[] {
+  try {
+    const raw = window.localStorage.getItem(QUEUE_KEY)
+    return raw ? (JSON.parse(raw) as TrainingAction[]) : []
+  } catch {
+    return []
+  }
+}
+function writeQueue(q: TrainingAction[]): void {
+  try {
+    if (q.length) window.localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-200)))
+    else window.localStorage.removeItem(QUEUE_KEY)
+  } catch {
+    /* No storage: the ticks go straight out, or not at all offline. */
+  }
 }
 
 function Closed({ title, body: text, cta }: { title: string; body: string; cta?: { href: string; label: string } }) {

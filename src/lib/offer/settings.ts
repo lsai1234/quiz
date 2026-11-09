@@ -206,9 +206,23 @@ export interface ServiceSettings {
    * until it's on here and the trainer's profile has a name.
    */
   trainer: boolean
+  /**
+   * The training plan's coaching tools, by phase (docs: "Trainer and training
+   * plan"), each off until tried. Each needs the training plan on too.
+   *   coaching    workout mode, how it felt, busy and away weeks, a lighter
+   *               session, the live calendar, the trainer's tips and changes,
+   *               questions in context, nudges and the week-one recap
+   *   video       uploaded videos, video notes, form checks, saved replies,
+   *               the answers library and the results page's proof
+   *   programmes  8- and 12-week programmes, goals, missed sessions finding
+   *               a home, warm-ups and cool-downs, the progress page, live Q&A
+   */
+  coaching: boolean
+  video: boolean
+  programmes: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false, trainer: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false, trainer: false, coaching: false, video: false, programmes: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
@@ -218,7 +232,15 @@ export function normaliseServices(raw: unknown): ServiceSettings {
     training: r.training === true,
     deals: r.deals === true,
     trainer: r.trainer === true,
+    coaching: r.coaching === true,
+    video: r.video === true,
+    programmes: r.programmes === true,
   }
+}
+
+/** A coaching phase is live: its own switch and the training plan both on. */
+export function coachingOn(settings: Pick<OfferSettings, 'services'>, phase: 'coaching' | 'video' | 'programmes'): boolean {
+  return settings.services.training && settings.services[phase]
 }
 
 /**
@@ -242,9 +264,37 @@ export interface TrainerProfile {
   notifyEmail: string | null
   /** They check every new or rebuilt training plan (Founders Hub → Trainer → Plans to check). */
   checksPlans: boolean
+  /**
+   * A welcome they write once, sent to every new member as their hub opens
+   * (coaching tools on), labelled as one they send everyone. Empty: none.
+   */
+  welcome: string
+  /** The days they answer, said on screen ("Monday to Friday"), so a weekend wait isn't a broken promise. */
+  answersOn: string
+  /** The qualifications they actually hold, as they hold them. Shown only once confirmed. */
+  qualifications: string
+  qualificationsConfirmed: boolean
+  /** Their welcome video (hub) and their intro for the results page: uploaded media ids (Phase 2). */
+  welcomeVideo: string | null
+  introVideo: string | null
 }
 
-export const DEFAULT_TRAINER: TrainerProfile = { name: '', role: 'Personal trainer', bio: '', photoUrl: null, replyHours: 48, dailyLimit: 5, notifyEmail: null, checksPlans: true }
+export const DEFAULT_TRAINER: TrainerProfile = {
+  name: '',
+  role: 'Personal trainer',
+  bio: '',
+  photoUrl: null,
+  replyHours: 48,
+  dailyLimit: 5,
+  notifyEmail: null,
+  checksPlans: true,
+  welcome: '',
+  answersOn: '',
+  qualifications: '',
+  qualificationsConfirmed: false,
+  welcomeVideo: null,
+  introVideo: null,
+}
 
 const text = (v: unknown, max: number, fallback: string) => (typeof v === 'string' ? v.trim().slice(0, max) : fallback)
 
@@ -261,6 +311,12 @@ export function normaliseTrainer(raw: unknown): TrainerProfile {
     dailyLimit: Math.round(num(r.dailyLimit, DEFAULT_TRAINER.dailyLimit, 1, 50)),
     notifyEmail: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.slice(0, 200) : null,
     checksPlans: r.checksPlans !== false,
+    welcome: text(r.welcome, 1000, ''),
+    answersOn: text(r.answersOn, 60, ''),
+    qualifications: text(r.qualifications, 200, ''),
+    qualificationsConfirmed: r.qualificationsConfirmed === true,
+    welcomeVideo: typeof r.welcomeVideo === 'string' && /^m_[A-Za-z0-9_-]{22}$/.test(r.welcomeVideo) ? r.welcomeVideo : null,
+    introVideo: typeof r.introVideo === 'string' && /^m_[A-Za-z0-9_-]{22}$/.test(r.introVideo) ? r.introVideo : null,
   }
 }
 

@@ -14,6 +14,9 @@ import Link from 'next/link'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { trainerLive } from '@/lib/offer/settings'
 import { TRAINER_COPY } from '@/lib/trainer/copy'
+import type { PublicTrainer } from '@/lib/trainer/types'
+import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
+import { ChangedBy } from './CoachingBits'
 
 type Act = (a: TrainingAction) => Promise<boolean>
 
@@ -30,6 +33,11 @@ export function SessionSheet({
   act,
   busy,
   onClose,
+  coaching = false,
+  trainer = null,
+  tips = {},
+  videos = {},
+  onStart,
 }: {
   session: Session
   plan: TrainingPlan
@@ -38,6 +46,13 @@ export function SessionSheet({
   act: Act
   busy: string | null
   onClose: () => void
+  /** The coaching tools are on: workout mode, a lighter session, the trainer's tips. */
+  coaching?: boolean
+  trainer?: PublicTrainer | null
+  tips?: Record<string, string>
+  /** Uploaded videos by exercise or activity id. */
+  videos?: Record<string, string>
+  onStart?: (sessionId: string) => void
 }) {
   const [detail, setDetail] = useState<{ id: string; main: boolean } | null>(null)
 
@@ -52,6 +67,8 @@ export function SessionSheet({
             session={session as StrengthSession}
             prefs={prefs}
             tutorial={tutorials[detail.id] ?? null}
+            video={videos[detail.id] ?? null}
+            tip={coaching && trainer && tips[detail.id] ? { name: trainer.name, text: tips[detail.id] } : null}
             busy={busy}
             onBack={() => setDetail(null)}
             onOpen={(id) => setDetail({ id, main: false })}
@@ -60,24 +77,39 @@ export function SessionSheet({
             }}
           />
         ) : session.type === 'strength' ? (
-          <StrengthBody session={session} plan={plan} prefs={prefs} act={act} busy={busy} onOpen={(id, main) => setDetail({ id, main })} />
+          <>
+            {session.changedBy && (
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <ChangedBy change={session.changedBy} />
+              </div>
+            )}
+            <StrengthBody session={session} plan={plan} prefs={prefs} act={act} busy={busy} onOpen={(id, main) => setDetail({ id, main })} />
+            {coaching && !session.done && <LighterChoice session={session} act={act} busy={busy} />}
+          </>
         ) : (
-          <ActivityBody session={session} prefs={prefs} tutorial={tutorials[session.activity] ?? null} />
+          <ActivityBody session={session} prefs={prefs} tutorial={tutorials[session.activity] ?? null} video={videos[session.activity] ?? null} />
         )}
         {!detail && <SessionActions session={session} act={act} busy={busy} onRemoved={onClose} />}
       </ModalBody>
       {!detail && (
         <ModalFooter>
-          <Button
-            variant={session.done ? 'secondary' : 'primary'}
-            fullWidth
-            icon={session.done ? undefined : 'check'}
-            loading={busy === `done:${session.id}`}
-            onClick={() => void act({ action: 'done', sessionId: session.id, done: !session.done })}
-            data-session-done
-          >
-            {session.done ? C.markNotDone : C.markDone}
-          </Button>
+          <div className="flex w-full flex-col" style={{ gap: 'var(--space-2)' }}>
+            {onStart && session.type === 'strength' && !session.done && (
+              <Button variant="primary" fullWidth icon="play" onClick={() => onStart(session.id)} data-sheet-start-workout>
+                {W.start}
+              </Button>
+            )}
+            <Button
+              variant={session.done || (onStart && session.type === 'strength') ? 'secondary' : 'primary'}
+              fullWidth
+              icon={session.done ? undefined : 'check'}
+              loading={busy === `done:${session.id}`}
+              onClick={() => void act({ action: 'done', sessionId: session.id, done: !session.done })}
+              data-session-done
+            >
+              {session.done ? C.markNotDone : C.markDone}
+            </Button>
+          </div>
         </ModalFooter>
       )}
     </Modal>
@@ -281,7 +313,28 @@ function LogRow({
   )
 }
 
-function ActivityBody({ session, prefs, tutorial }: { session: ActivitySession; prefs: TrainingPrefs; tutorial: string | null }) {
+/** "Not feeling it today?": a lighter version of the session, their choice, just for today. */
+function LighterChoice({ session, act, busy }: { session: StrengthSession; act: Act; busy: string | null }) {
+  const on = Boolean(session.lighter)
+  return (
+    <section style={{ ...stack('var(--space-2)'), marginTop: 'var(--space-5)' }} data-lighter={on}>
+      <h3 style={eyebrow}>{W.lighterTitle}</h3>
+      <p style={meta}>{W.lighterLine}</p>
+      <div>
+        <Button variant="secondary" size="sm" loading={busy === `lighter:${session.id}`} disabled={busy !== null} onClick={() => void act({ action: 'lighter', sessionId: session.id, on: !on })} data-lighter-toggle>
+          {on ? W.lighterOff : W.lighterOn}
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+/** An uploaded video: a silent loop on the page, with its controls. */
+function VideoLoop({ src, label }: { src: string; label: string }) {
+  return <video src={src} muted loop playsInline autoPlay controls aria-label={label} style={{ width: '100%', borderRadius: 'var(--radius-card)', background: 'var(--surface-1)' }} data-exercise-video />
+}
+
+function ActivityBody({ session, prefs, tutorial, video = null }: { session: ActivitySession; prefs: TrainingPrefs; tutorial: string | null; video?: string | null }) {
   const a = ACTIVITIES[session.activity]
   const clash = activityConflicts(session.activity, prefs.avoid)
   return (
@@ -291,6 +344,7 @@ function ActivityBody({ session, prefs, tutorial }: { session: ActivitySession; 
         {session.suggested && <Badge tone="info">{C.suggested}</Badge>}
       </div>
       {clash.length > 0 && !session.suggested && <Note tone="attention">{C.activityLoads(areasPhrase(clash))}</Note>}
+      {video && <VideoLoop src={video} label={a.name} />}
       <Tutorial url={tutorial} about={a.name} />
       <section>
         <h3 style={{ ...eyebrow, marginBottom: 'var(--space-2)' }}>{C.pace}</h3>
@@ -364,12 +418,11 @@ function Tutorial({ url, about }: { url: string | null; about?: string }) {
   const link = buttonSurface('secondary', 'sm')
   return (
     <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
-      {url ? (
+      {/* No video yet: the steps lead, and nothing promises one is coming. */}
+      {url && (
         <a href={url} target="_blank" rel="noopener noreferrer" className={link.className} style={link.style} data-tutorial-link>
           {C.tutorial}
         </a>
-      ) : (
-        <p style={meta}>{C.tutorialSoon}</p>
       )}
       {about && <AskTrainer about={about} />}
     </div>
@@ -394,6 +447,8 @@ function ExerciseDetail({
   session,
   prefs,
   tutorial,
+  video = null,
+  tip = null,
   busy,
   onBack,
   onOpen,
@@ -404,6 +459,8 @@ function ExerciseDetail({
   session: StrengthSession
   prefs: TrainingPrefs
   tutorial: string | null
+  video?: string | null
+  tip?: { name: string; text: string } | null
   busy: string | null
   onBack: () => void
   onOpen: (id: string) => void
@@ -440,7 +497,16 @@ function ExerciseDetail({
           ))}
         </div>
       </div>
+      {video && <VideoLoop src={video} label={ex.name} />}
       <Tutorial url={tutorial} about={ex.name} />
+      {tip && (
+        <Note tone="accent" icon="chat">
+          <span style={{ ...strong, display: 'block' }}>{W.tipFrom(tip.name)}</span>
+          <span style={{ display: 'block', marginTop: 'var(--space-1)' }} data-trainer-tip>
+            {tip.text}
+          </span>
+        </Note>
+      )}
       <List title={C.how} items={ex.steps} ordered />
       <List title={C.cues} items={ex.cues} />
       <List title={C.mistakes} items={ex.mistakes} />

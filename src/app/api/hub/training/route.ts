@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getOfferSettings } from '@/lib/offer/store'
-import { trainerChecksPlans, trainerLive } from '@/lib/offer/settings'
+import { coachingOn, trainerChecksPlans, trainerLive } from '@/lib/offer/settings'
 import { publicTrainer } from '@/lib/trainer/public'
 import { getHubUser } from '@/lib/auth/session'
 import { rateLimiter } from '@/lib/consult/ai/guard'
@@ -17,7 +17,10 @@ import {
   removeSession,
   rollWeek,
   setDone,
+  setFelt,
+  setLighter,
   setSets,
+  setWeekMode,
   swapExercise,
   type PrefsPatch,
 } from '@/lib/training/edit'
@@ -28,7 +31,7 @@ import { getTraining, saveTraining, type TrainingRecord } from '@/lib/training/s
 import { getTutorials } from '@/lib/training/tutorials'
 import { isExerciseId } from '@/lib/training/library'
 import { normaliseLog, withLog } from '@/lib/training/progress'
-import { ACTIVITY_KINDS, type ActivityKind, type StrengthSession, type TrainingPlan, type Weekday } from '@/lib/training/types'
+import { ACTIVITY_KINDS, FELTS, type ActivityKind, type Felt, type StrengthSession, type TrainingPlan, type Weekday } from '@/lib/training/types'
 
 /**
  * GET  /api/hub/training → TrainingState
@@ -47,13 +50,19 @@ const aiBusy = rateLimiter(30, 60_000)
 
 async function stateFor(user: UserRecord, record: TrainingRecord, now: Date): Promise<TrainingState> {
   const access = await trainingAccess(user, now)
-  if (!access.allowed) return { access, readiness: null, plan: null, draft: null, tutorials: {}, trainer: null }
+  if (!access.allowed) return { access, readiness: null, plan: null, draft: null, tutorials: {}, trainer: null, tips: {}, videos: {}, coaching: { coaching: false, video: false, programmes: false }, calendarUrl: null }
   const plan = record.plan ? rollWeek(record.plan, now) : null
   if (plan && plan !== record.plan) await saveTraining({ ...record, plan })
   const draft = plan ? null : prefillPrefs(await trainingStart(user))
   const settings = await getOfferSettings()
   const trainer = trainerLive(settings) ? publicTrainer(settings.trainer, settings.services.training) : null
-  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer }
+  const coaching = { coaching: coachingOn(settings, 'coaching'), video: coachingOn(settings, 'video'), programmes: coachingOn(settings, 'programmes') }
+  const { getTrainerTips } = await import('@/lib/training/trainer-tips')
+  const tips = trainer && coaching.coaching ? await getTrainerTips() : {}
+  const { appBaseUrl } = await import('@/lib/notify')
+  const { calendarFeedUrl } = await import('@/lib/training/live-calendar')
+  const calendarUrl = plan?.calendarToken && coaching.coaching ? calendarFeedUrl(appBaseUrl(), plan.calendarToken) : null
+  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer, tips, coaching, calendarUrl, videos: await videosFor(coaching.video) }
 }
 
 export async function GET() {
@@ -206,6 +215,37 @@ export async function POST(req: Request) {
       plan = { ...withLog(current, ex, { on: now.toISOString().slice(0, 10), ...entry }), updatedAt: now.toISOString() }
       break
     }
+    case 'felt': {
+      const ex = text(body.exerciseId)
+      const felt = FELTS.includes(body.felt as Felt) ? (body.felt as Felt) : null
+      if (!ex || !isExerciseId(ex) || !felt) return bad('How did it feel?')
+      plan = setFelt(current, ex, felt, now)
+      break
+    }
+    case 'week-mode': {
+      const kind = body.kind === 'busy' || body.kind === 'away' ? body.kind : body.kind === null ? null : undefined
+      if (kind === undefined) return bad('Busy, away, or back to normal?')
+      plan = setWeekMode(current, kind, now)
+      break
+    }
+    case 'lighter': {
+      const id = text(body.sessionId)
+      if (!id || typeof body.on !== 'boolean') return bad('Which session?')
+      plan = setLighter(current, id, body.on, now)
+      break
+    }
+    case 'calendar-link': {
+      // A live calendar address, or a new one in place of the old (which stops working).
+      const { newCalendarToken, linkCalendar } = await import('@/lib/training/live-calendar')
+      const token = newCalendarToken()
+      await linkCalendar(token, user.id, current.calendarToken)
+      plan = { ...current, calendarToken: token }
+      break
+    }
+    case 'intro-seen': {
+      plan = { ...current, introSeen: true }
+      break
+    }
     default:
       return bad('Unknown action')
   }
@@ -218,6 +258,13 @@ export async function POST(req: Request) {
 }
 
 const RECHECK = new Set(['prefs', 'rebuild-week', 'rebuild-day'])
+
+/** Uploaded videos by exercise, while video is on (Phase 2). */
+async function videosFor(on: boolean): Promise<Record<string, string>> {
+  if (!on) return {}
+  const { exerciseVideos } = await import('@/lib/media/exercise-videos')
+  return exerciseVideos()
+}
 
 /** While the trainer checks plans, this one waits for their check. */
 async function queueCheck(plan: TrainingPlan, now: Date): Promise<TrainingPlan> {

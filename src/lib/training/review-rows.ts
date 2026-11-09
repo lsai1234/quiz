@@ -64,7 +64,6 @@ export function trainingCopyRows(): ReviewRow[] {
     [s, `${at}, the week`, Object.values(ACTIVITY_LABEL).join(', '), 'Activities they can add'],
     [s, `${at}, the week`, Object.values(INTENSITY_COPY).join(', '), 'How hard an activity is'],
     [s, `${at}, a session`, C.warmupBody, 'Warm-up'],
-    [s, `${at}, an exercise`, C.tutorialSoon, 'Until a founder adds a video'],
     [s, `${at}, an exercise`, Object.values(MUSCLE_COPY).join(', '), 'Muscle names'],
     [s, `${at}, a session`, C.lastTime(20, 10, false), `Under an exercise. ${ex}`],
     [s, `${at}, a session`, C.nextWeight(22.5), `The next step, once the top of the range is reached. ${ex}`],

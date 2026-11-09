@@ -6,6 +6,18 @@ export interface TrainerVideo {
   title: string | null
 }
 
+/**
+ * Where a question was asked from (workout mode, an exercise, the plan), so
+ * the member never has to explain the setup and the trainer never asks back.
+ */
+export interface MessageContext {
+  set: number | null
+  of: number | null
+  kg: number | null
+  reps: number | null
+  felt: 'easy' | 'right' | 'hard' | null
+}
+
 export interface TrainerMessage {
   id: string
   from: 'member' | 'trainer'
@@ -17,6 +29,12 @@ export interface TrainerMessage {
   video: TrainerVideo | null
   /** Which founder sent an answer: the Founders Hub's record, never shown to the member. */
   by?: string | null
+  /** The set it was asked from, with its numbers. */
+  context?: MessageContext | null
+  /** The member's rating of an answer. */
+  rating?: 'helpful' | 'not-quite' | null
+  /** A message the trainer wrote once for everyone, or about a change to the plan. */
+  kind?: 'welcome' | 'plan-note' | 'change' | null
 }
 
 export interface TrainerThread {
@@ -41,6 +59,10 @@ export interface PublicTrainer {
   replyHours: number
   /** They check every new or rebuilt training plan. */
   checksPlans: boolean
+  /** The days they answer ("Monday to Friday"), when stated. */
+  answersOn?: string | null
+  /** The qualifications they actually hold, once confirmed. */
+  qualifications?: string | null
 }
 
 /** `GET /api/hub/trainer`. */
@@ -57,6 +79,12 @@ export interface MemberTrainerView {
   dailyLimit: number
   /** Answers since they last looked. */
   unread: number
+  /** The trainer has opened the thread since their last question. */
+  readByTrainer?: boolean
+  /** The measured reply time: the median over the last 30 days, once there are enough answers to say. */
+  replyStat?: { medianHours: number; answered: number } | null
+  /** The coaching tools are on: ratings and context. */
+  coaching?: boolean
 }
 
 /** A row of the Founders Hub's inbox. */

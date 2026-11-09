@@ -135,9 +135,9 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
       </Rise>
 
       <div className="hub-home-col">
-        {open && home.today && (
+        {open && (home.today || home.todaySession) && (
           <Rise i={1} style={at('today')}>
-            <TodayCard items={home.today.items} />
+            <TodayCard items={home.today?.items ?? []} session={home.todaySession} />
           </Rise>
         )}
 

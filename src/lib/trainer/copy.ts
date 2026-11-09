@@ -77,6 +77,23 @@ export const TRAINER_COPY = {
   questionHeading: 'A member asked you a question',
   questionIntro: (firstName: string | null, about: string | null) => `${firstName ?? 'A member'} has sent a question${about ? ` about ${about}` : ''}. Answer it in the Founders Hub.`,
   questionCta: 'Open the inbox',
+  /* ── Coaching tools: context, ratings, honest signals, the welcome ── */
+  contextLine: (c: { set: number | null; of: number | null; kg: number | null; reps: number | null; felt: 'easy' | 'right' | 'hard' | null }) =>
+    [c.set ? (c.of ? `Set ${c.set} of ${c.of}` : `Set ${c.set}`) : null, c.kg ? `${c.kg} kg${c.reps ? ` × ${c.reps}` : ''}` : c.reps ? `${c.reps} reps` : null, c.felt ? { easy: 'felt easy', right: 'felt about right', hard: 'felt hard' }[c.felt] : null]
+      .filter(Boolean)
+      .join(' · '),
+  rateHelpful: 'Helpful',
+  rateNotQuite: 'Not quite',
+  rateThanks: 'Thanks, noted.',
+  rateNotQuiteThanks: 'Thanks. Say what’s still unclear below, and the trainer will pick it up.',
+  notQuitePrefill: 'About your last answer: ',
+  readBy: (name: string) => `${name} has read this`,
+  medianReply: (hours: number) => `Usually answers in about ${hours < 1 ? 'an hour' : hours < 24 ? `${Math.round(hours)} hour${Math.round(hours) === 1 ? '' : 's'}` : `${Math.round(hours / 24)} day${Math.round(hours / 24) === 1 ? '' : 's'}`} (the middle of the last 30 days)`,
+  answersOn: (name: string, days: string) => `${name} answers ${days}`,
+  welcomeLabel: (name: string) => `A welcome ${name} sends every new member`,
+  firstQuestion: 'Ask your first question',
+  changeNote: (exercise: string, reason: string) => `I’ve changed ${exercise} in your plan. ${reason}`,
+  qualifications: (q: string) => `Qualified: ${q}`,
 } as const
 
 /** Longest question a member can send, and longest answer. */

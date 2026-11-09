@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Badge, Button, Card, Input, Note } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Input, Note, Textarea } from '@/components/system'
+import { uploadVideo } from '@/lib/media/client'
+import { FilePickButton } from './FilePickButton'
 
 /**
- * Settings → Training plan: whether the hub's training plan is on, how many
- * members have one, and a tutorial link for each exercise and activity.
- * Members see "Watch the tutorial" once a link is here, and "coming soon"
- * until then.
+ * Settings → Training plan: whether the hub's training plan is on and which
+ * coaching phases are, how many members have one, and for each exercise and
+ * activity: a tutorial link, the trainer's tip, and an uploaded video. Nothing
+ * needs filming: an exercise without a video leads with its steps.
  */
 
 interface Item {
@@ -16,12 +18,21 @@ interface Item {
   name: string
   group: string
   url: string | null
+  tip: string | null
+  video: string | null
 }
 interface View {
   enabled: boolean
+  phases: { coaching: boolean; video: boolean; programmes: boolean }
   plans: number
   items: Item[]
 }
+
+const PHASES: { key: keyof View['phases']; label: string; hint: string }[] = [
+  { key: 'coaching', label: 'Coaching tools', hint: 'Workout mode, how it felt, busy and away weeks, a lighter session, the live calendar, the trainer’s tips and changes, questions in context, nudges and the week-one recap.' },
+  { key: 'video', label: 'Video and form checks', hint: 'Uploaded videos on exercises, video notes, members’ form checks (deleted after 30 days), saved replies, the answers library and the results page’s proof.' },
+  { key: 'programmes', label: 'Programmes and goals', hint: '8- and 12-week programmes, goals with milestones, missed sessions finding a home, warm-ups and cool-downs, the progress page and the monthly live Q&A.' },
+]
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
 const META = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' } as const
@@ -58,12 +69,13 @@ export function TrainingSettings() {
       .catch(() => setError('Could not load the training settings. Reload the page to try again.'))
   }, [])
 
-  const save = useCallback(async (id: string, url: string | null) => {
-    const res = await fetch('/api/portal/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, url }) })
+  const post = useCallback(async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/portal/training', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json().catch(() => null)
     if (!res.ok) throw new Error(data?.error ?? 'That did not save.')
     setView(data as View)
   }, [])
+  const save = useCallback((id: string, url: string | null) => post({ id, url }), [post])
 
   const groups = useMemo(() => {
     const out = new Map<string, Item[]>()
@@ -73,7 +85,7 @@ export function TrainingSettings() {
 
   if (error && !view) return <Note tone="critical" icon="alert-triangle">{error}</Note>
   if (!view) return <Note tone="neutral" icon="clock">Reading the training settings…</Note>
-  const withVideo = view.items.filter((i) => i.url).length
+  const withVideo = view.items.filter((i) => i.url || i.video).length
 
   return (
     <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
@@ -97,19 +109,41 @@ export function TrainingSettings() {
       </Card>
 
       <Card elevation={1}>
+        <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-coaching-phases>
+          <h2 style={HEADING}>Coaching phases</h2>
+          <p style={BODY}>Each phase is off until you try it, and needs the training plan on. Try them first in Settings → Test views.</p>
+          {PHASES.map((p) => (
+            <Checkbox
+              key={p.key}
+              label={p.label}
+              hint={p.hint}
+              checked={view.phases[p.key]}
+              onChange={(e) => void post({ services: { [p.key]: e.target.checked } }).catch((err) => setError(err.message))}
+              data-phase={p.key}
+            />
+          ))}
+        </div>
+      </Card>
+
+      <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
           <div>
-            <h2 style={HEADING}>Tutorial videos</h2>
+            <h2 style={HEADING}>Exercises: videos and tips</h2>
             <p style={{ ...META, marginTop: 'var(--space-1)' }}>
-              A link per exercise or activity: YouTube, Vimeo or our own storage, https only. Members see &ldquo;Watch the tutorial&rdquo; once a link is
-              here, and &ldquo;Video tutorial coming soon&rdquo; until then. {withVideo} of {view.items.length} have one.
+              For each exercise or activity, any of: a video uploaded from your phone (MP4 or MOV), a YouTube or Vimeo link, and the trainer’s tip in their own
+              words. Nothing has to be filmed: without a video, the exercise leads with its steps. A video shows on that exercise straight away, as a silent
+              loop in workout mode. {withVideo} of {view.items.length} have a video or link.
             </p>
           </div>
           {groups.map(([group, items]) => (
             <section key={group} style={{ display: 'grid', gap: 'var(--space-3)' }}>
               <h3 style={{ ...BODY, fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>{GROUP_LABEL[group] ?? group}</h3>
               {items.map((item) => (
-                <TutorialRow key={item.id} item={item} onSave={save} />
+                <div key={item.id} style={{ display: 'grid', gap: 'var(--space-2)', paddingBottom: 'var(--space-3)', borderBottom: '1px solid var(--edge)' }}>
+                  <TutorialRow item={item} onSave={save} />
+                  <VideoRow item={item} onSet={(videoId) => post({ id: item.id, videoId })} />
+                  <TipRow item={item} onSave={(tip) => post({ id: item.id, tip })} />
+                </div>
               ))}
             </section>
           ))}
@@ -149,6 +183,72 @@ function TutorialRow({ item, onSave }: { item: Item; onSave: (id: string, url: s
           }}
         >
           Save
+        </Button>
+      </div>
+      {message && <p style={META} role="status">{message}</p>}
+    </div>
+  )
+}
+
+/** Upload a video for an exercise, or take it off. */
+function VideoRow({ item, onSet }: { item: Item; onSet: (videoId: string | null) => Promise<void> }) {
+  const [progress, setProgress] = useState<number | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  async function pick(file: File | undefined) {
+    if (!file) return
+    setMessage(null)
+    setProgress(0)
+    try {
+      const up = await uploadVideo(file, { endpoint: '/api/portal/media', kind: 'exercise', title: item.name, maxBytes: 60 * 1024 * 1024, onProgress: setProgress })
+      await onSet(up.id)
+      setMessage('Uploaded. It shows on this exercise now.')
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'The upload didn’t go through.')
+    } finally {
+      setProgress(null)
+    }
+  }
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-2)' }} data-exercise-video-row={item.id}>
+      {item.video && <video src={item.video} muted loop playsInline controls style={{ width: 'calc(var(--space-8) * 6)', maxWidth: '100%', borderRadius: 'var(--radius-card)' }} />}
+      <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
+        <FilePickButton accept="video/mp4,video/quicktime,video/webm" onFile={(f) => void pick(f)} variant="secondary" size="sm" icon="plus" loading={progress !== null} aria-label={`Upload a video for ${item.name}`}>
+          {progress !== null ? `Uploading ${Math.round(progress * 100)}%` : item.video ? 'Replace video' : 'Upload video'}
+        </FilePickButton>
+        {item.video && (
+          <Button variant="ghost" size="sm" icon="trash" onClick={() => void onSet(null)}>
+            Remove video
+          </Button>
+        )}
+      </div>
+      {message && <p style={META} role="status">{message}</p>}
+    </div>
+  )
+}
+
+/** The trainer's tip, in their own words: shown to every member as "[Name]'s tip". */
+function TipRow({ item, onSave }: { item: Item; onSave: (tip: string | null) => Promise<void> }) {
+  const [value, setValue] = useState(item.tip ?? '')
+  const [message, setMessage] = useState<string | null>(null)
+  const dirty = value.trim() !== (item.tip ?? '')
+  return (
+    <div style={{ display: 'grid', gap: 'var(--space-2)' }} data-trainer-tip-row={item.id}>
+      <Textarea label="The trainer’s tip" hint="A sentence or two, in the trainer’s own words. Coaching only: no health claims or products." rows={2} maxLength={280} value={value} onChange={(e) => setValue(e.target.value)} />
+      <div>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!dirty}
+          onClick={async () => {
+            try {
+              await onSave(value.trim() || null)
+              setMessage('Saved.')
+            } catch (err) {
+              setMessage(err instanceof Error ? err.message : 'That did not save.')
+            }
+          }}
+        >
+          Save tip
         </Button>
       </div>
       {message && <p style={META} role="status">{message}</p>}

@@ -154,7 +154,20 @@ export interface PlannedExercise {
   restSec: number
   /** Sets ticked off this week. */
   doneSets: number
+  /** The trainer changed this exercise, and why (Founders Hub → Trainer). */
+  changedBy?: TrainerChange | null
 }
+
+/** A change the trainer made to a member's plan, with their reason. */
+export interface TrainerChange {
+  name: string
+  reason: string
+  at: string
+}
+
+/** How an exercise felt, one tap after its last set. */
+export type Felt = 'easy' | 'right' | 'hard'
+export const FELTS: Felt[] = ['easy', 'right', 'hard']
 
 export interface StrengthSession {
   id: string
@@ -164,6 +177,10 @@ export interface StrengthSession {
   warmup: string[]
   exercises: PlannedExercise[]
   done: boolean
+  /** "Not feeling it today": the lighter version is on; the session as it was, to go back to. */
+  lighter?: { exercises: PlannedExercise[] } | null
+  /** The trainer changed this session, and why. */
+  changedBy?: TrainerChange | null
 }
 
 export interface ActivitySession {
@@ -211,7 +228,20 @@ export interface TrainingPlan {
    * a new setup or a rebuilt week waits for it; small changes don't.
    */
   check?: PlanCheck
+  /** How each exercise felt, newest first, a few each: it moves next time's target. */
+  felt?: Record<string, { on: string; felt: Felt }[]>
+  /**
+   * A busy week (shorter sessions) or away (bodyweight only), for this week
+   * only: the sessions as they were, put back on Monday or when switched off.
+   */
+  weekMode?: { kind: WeekMode; weekOf: string; saved: Session[] } | null
+  /** The key in their live calendar's address: unguessable, and replaceable. */
+  calendarToken?: string | null
+  /** They've seen "Meet [Name]" after their first setup. */
+  introSeen?: boolean
 }
+
+export type WeekMode = 'busy' | 'away'
 
 export interface PlanCheck {
   state: 'waiting' | 'checked'
