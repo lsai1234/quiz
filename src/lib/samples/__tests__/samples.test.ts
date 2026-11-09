@@ -47,7 +47,7 @@ describe('sample members', () => {
   it('keep a box plan out of the subscriptions table', async () => {
     const { user } = await buildSampleMember('monthly-active', NOW)
     expect((await getSubscription(user.id))?.status).toBe('active')
-    expect((await listActiveSubscriptions()).some((s) => s.customerEmail === user.email)).toBe(false)
+    expect((await listActiveSubscriptions()).some((s) => s.userId === user.id)).toBe(false)
     expect((await hubAccess(user, NOW)).state).toBe('subscriber')
   })
 
