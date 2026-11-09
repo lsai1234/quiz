@@ -54,7 +54,7 @@ export function HubHero({ home, name }: { home: HubHome; name: string | null }) 
             <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
               {a.state === 'subscriber' && (
                 <Badge tone="accent" dot>
-                  {a.plan === 'paused' ? C.memberPaused : C.memberMonthly}
+                  {a.plan === 'paused' ? C.memberPaused : a.plan === 'active' ? C.memberMonthly : a.hubPlan === 'active' ? C.memberHub : C.memberMonthly}
                 </Badge>
               )}
               {a.state === 'member' && a.daysLeft != null && (
@@ -64,7 +64,7 @@ export function HubHero({ home, name }: { home: HubHome; name: string | null }) 
               )}
               {a.state === 'ended' && <Badge tone="attention">{C.endedTitle}</Badge>}
             </div>
-            {open && <p style={{ ...meta, marginTop: 'var(--space-2)' }}>{a.state === 'subscriber' ? C.monthlyKeeps : C.anyOrderAdds}</p>}
+            {open && <p style={{ ...meta, marginTop: 'var(--space-2)' }}>{a.state === 'subscriber' ? (a.plan === 'active' || a.plan === 'paused' ? C.monthlyKeeps : C.membershipKeeps) : C.anyOrderAdds}</p>}
           </div>
           {open && (
             <Ring value={value} size={96} stroke={8} label={a.state === 'member' && a.daysLeft != null ? C.memberFor(a.daysLeft) : C.memberMonthly}>

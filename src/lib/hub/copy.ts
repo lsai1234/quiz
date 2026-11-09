@@ -35,6 +35,9 @@ export const HUB_COPY = {
   memberPaused: 'Plan paused',
   anyOrderAdds: 'Any order adds 90 days.',
   monthlyKeeps: 'Open while your plan runs, and 90 days after.',
+  /** The hub on its own (`lib/hub-plan`), while it's paid for. */
+  membershipKeeps: 'Open while your membership runs. Cancel any time.',
+  memberHub: 'Hub member',
   endedTitle: 'Your hub has closed',
   endedBody: 'Your guide and orders are still here. Your member prices, tips and training open again with your next order, for another 90 days.',
   endedCta: 'Order again',

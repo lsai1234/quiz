@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getOfferSettings } from '@/lib/offer/store'
 import { memberHubTerms } from '@/lib/offer/terms'
+import { hubOnSale } from '@/lib/offer/settings'
 
 /** The member hub's terms: access, member prices, emails. Linked from the hub card and the hub. */
 export const dynamic = 'force-dynamic'
@@ -11,8 +12,8 @@ export const metadata: Metadata = {
 }
 
 export default async function MemberHubTermsPage() {
-  const { memberDeals } = await getOfferSettings()
-  const sections = memberHubTerms({ freeOver: memberDeals.topUpFreeOver })
+  const settings = await getOfferSettings()
+  const sections = memberHubTerms({ freeOver: settings.memberDeals.topUpFreeOver, hubPlan: hubOnSale(settings) ? { monthly: settings.hubPrice.monthly } : null })
   return (
     <main className="min-h-screen px-5 py-10" style={{ background: 'var(--color-bg)' }}>
       <div className="max-w-lg mx-auto">

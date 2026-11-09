@@ -156,6 +156,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     await confirmByEmail(order)
     await alertFounders(order)
     await sendAutomatically(order)
+    await moveHubPlanPayment(order)
   }
   return order
 }
@@ -172,6 +173,20 @@ async function sendAutomatically(order: Order): Promise<void> {
     await scheduleAutoSend(order)
   } catch (err) {
     console.error('[orders] automatic sending could not be scheduled:', err)
+  }
+}
+
+/**
+ * An order's 90 free days push a hub member's next payment back, so nobody
+ * pays for days a stack gives them (`lib/hub-plan`). Same funnel and the same
+ * promise as the rest: every paid order, never throws, never blocks.
+ */
+async function moveHubPlanPayment(order: Order): Promise<void> {
+  try {
+    const { extendHubPlanFor } = await import('@/lib/hub-plan/server')
+    await extendHubPlanFor(order)
+  } catch (err) {
+    console.error('[orders] hub membership payment could not be moved:', err)
   }
 }
 
@@ -497,6 +512,7 @@ export async function markOrderPaid(
     }
     await alertFounders(order)
     await sendAutomatically(order)
+    await moveHubPlanPayment(order)
   }
   return order
 }

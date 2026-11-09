@@ -56,6 +56,8 @@ export interface AccountExport {
   training: unknown
   /** Ask your trainer: their questions and the answers. */
   trainerQuestions: unknown[]
+  /** The hub on its own: their membership, and what the quiz told us when they joined. */
+  hubMembership: unknown
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -155,6 +157,15 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
       about: m.about,
       video: m.video?.url ?? null,
     })),
+    hubMembership: await (async () => {
+      const plan = await (await import('@/lib/hub-plan/store')).getHubPlan(userId)
+      const start = await (await import('@/lib/hub-plan/server')).getHubStart(userId)
+      if (!plan && !start) return null
+      return {
+        membership: plan ? { status: plan.status, monthly: plan.monthly, startedAt: plan.startedAt, nextChargeAt: plan.nextChargeAt, endsAt: plan.endsAt, cancelledAt: plan.cancelledAt } : null,
+        quizAnswers: start?.seed ?? null,
+      }
+    })(),
   }
 }
 
@@ -213,6 +224,24 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   // Ask your trainer: their questions and the answers.
   const { deleteThread } = await import('@/lib/trainer/store')
   if (await deleteThread(userId)) deleted.push('questions to the trainer')
+
+  // The hub on its own: stop any payment first, then the record and the quiz answers it kept.
+  const { getHubPlan, deleteHubPlan } = await import('@/lib/hub-plan/store')
+  const hubPlan = await getHubPlan(userId)
+  if (hubPlan) {
+    if (hubPlan.stripeSubscriptionId && (hubPlan.status === 'active' || hubPlan.status === 'cancelling')) {
+      try {
+        const { cancelStripeSubscription } = await import('@/lib/payments/stripe')
+        await cancelStripeSubscription(hubPlan.stripeSubscriptionId)
+      } catch (err) {
+        console.error(`[erasure] hub membership for ${userId} could not be cancelled in Stripe:`, err)
+      }
+    }
+    await deleteHubPlan(userId)
+    deleted.push('hub membership')
+  }
+  const { kvDelete } = await import('@/lib/db/kv')
+  await kvDelete(`hub-start:${userId}`)
 
   // Emails keep their audit trail (that a receipt was sent, and when) but lose
   // the recipient and the rendered body.

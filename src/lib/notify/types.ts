@@ -35,6 +35,12 @@ export type TemplateId =
   | 'trainer-reply'
   /** Ask your trainer: to the trainer, a member's question is waiting. */
   | 'trainer-question'
+  /** The member hub on its own: membership started. */
+  | 'hub-plan-welcome'
+  /** The member hub on its own: a stack order moved the next payment back. */
+  | 'hub-plan-moved'
+  /** The member hub on its own: cancelled (or refunded inside 14 days). */
+  | 'hub-plan-cancelled'
   /** A plan has started: here is your receipt, and here is your hub. */
   | 'subscription-confirmation'
   /** A one-off order item sold out after payment: removed, swapped or back-ordered. */

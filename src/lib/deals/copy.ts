@@ -104,9 +104,9 @@ export const HUB_PREVIEW_COPY = {
   cardCheckInsLine: 'Every two weeks, changes in one tap',
   cardMore: 'See inside your hub',
   /* The hub's value, only while it's on sale on its own at that price (Settings → Member hub). */
-  cardValue: (monthly: number) => `${gbp(monthly)} a month on its own`,
-  cardIncluded: 'Included with your order',
-  underCtaValue: (total: number) => `Includes 90 days of your member hub, ${gbp(total)} on its own.`,
+  cardValue: (monthly: number) => `${gbp(monthly)} a month on its own. Yours free, with no hub subscription: nothing to cancel.`,
+  cardIncluded: 'Free with your order',
+  underCtaValue: (total: number) => `Includes 90 days of your member hub free, ${gbp(total)} on its own. No hub subscription, nothing to cancel.`,
   receiptHub: 'Member hub · 90 days',
   receiptHubMonthly: 'Member hub · every month of your plan',
   receiptHubLine: (monthly: number) => `${gbp(monthly)} a month on its own · included`,

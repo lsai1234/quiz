@@ -132,8 +132,11 @@ describe('the hub on its own', () => {
   it('has no value to show until it is on sale on its own', () => {
     const { hubValue, normaliseHubPrice, DEFAULT_OFFER } = jest.requireActual('../settings') as typeof import('../settings')
     expect(hubValue(DEFAULT_OFFER)).toBeNull()
-    expect(hubValue({ hubPrice: { monthly: 10, standalone: true } })).toBe(30)
-    expect(hubValue({ hubPrice: { monthly: 0, standalone: true } })).toBeNull()
+    const sells = { services: { ...DEFAULT_OFFER.services, training: true }, trainer: DEFAULT_OFFER.trainer }
+    expect(hubValue({ ...sells, hubPrice: { monthly: 10, standalone: true } })).toBe(30)
+    expect(hubValue({ ...sells, hubPrice: { monthly: 0, standalone: true } })).toBeNull()
+    // Nothing in it to sell on its own (no training plan, no trainer): not on sale, so no saving.
+    expect(hubValue({ services: { ...DEFAULT_OFFER.services, training: false, trainer: false }, trainer: DEFAULT_OFFER.trainer, hubPrice: { monthly: 10, standalone: true } })).toBeNull()
     expect(normaliseHubPrice({ monthly: '12.5', standalone: 'yes' })).toEqual({ monthly: 10, standalone: false })
     expect(normaliseHubPrice({ monthly: 12.499, standalone: true })).toEqual({ monthly: 12.5, standalone: true })
     expect(normaliseHubPrice({ monthly: 1000 })).toEqual({ monthly: 100, standalone: false })

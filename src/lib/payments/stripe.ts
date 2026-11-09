@@ -360,6 +360,89 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
   return { id: session.id, url: session.url }
 }
 
+/** Stamped on a hub plan's session and subscription, so its events never reach the box handlers. */
+export const HUB_PLAN_TAG = 'hub'
+const HUB_LINE = 'hub'
+
+export interface CreateHubPlanSessionOptions {
+  /** The hub's monthly price, in major units. */
+  monthly: number
+  /** The member's user id, echoed back on the webhook. */
+  clientReferenceId: string
+  customerId?: string | null
+  customerEmail?: string | null
+  currency?: string
+  /**
+   * Take the first payment then (ISO) rather than today: the free days a stack
+   * gave them are still running. At least two days ahead, or Stripe refuses it.
+   */
+  firstChargeAt?: string | null
+  successUrl: string
+  cancelUrl: string
+}
+
+/**
+ * The member hub on its own, £X a month (`lib/hub-plan`). Priced in the
+ * session like the box plans, so nothing is set up in Stripe first. No
+ * delivery address and no phone: nothing ships. Tagged on the session AND the
+ * subscription, so its invoices and changes are told apart from a box plan's
+ * — a box plan's invoice raises a delivery, and a hub payment must never.
+ */
+export async function createHubPlanSession(opts: CreateHubPlanSessionOptions): Promise<{ id: string; url: string | null }> {
+  const stripe = getStripeClient()
+  const currency = (opts.currency ?? DEFAULT_CURRENCY).toLowerCase()
+  const metadata = { userId: opts.clientReferenceId, plan: HUB_PLAN_TAG }
+  const trialEnd = opts.firstChargeAt && Number.isFinite(Date.parse(opts.firstChargeAt)) ? Math.floor(Date.parse(opts.firstChargeAt) / 1000) : null
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency,
+          unit_amount: Math.round(opts.monthly * 100),
+          recurring: { interval: 'month' },
+          product_data: { name: 'CHRGD Member Hub', metadata: { [LINE_TAG_KEY]: HUB_LINE } },
+        },
+      },
+    ],
+    client_reference_id: opts.clientReferenceId,
+    ...customerFields(opts),
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    metadata,
+    subscription_data: { metadata, ...(trialEnd ? { trial_end: trialEnd } : {}) },
+  })
+  return { id: session.id, url: session.url }
+}
+
+/**
+ * Move a hub plan's next payment to `chargeAt` (ISO): a stack's free days are
+ * running. Done as a free period on the subscription, without proration, so
+ * nothing is charged or credited for the move itself.
+ */
+export async function moveHubPlanCharge(stripeSubscriptionId: string, chargeAt: string): Promise<void> {
+  const stripe = getStripeClient()
+  await stripe.subscriptions.update(stripeSubscriptionId, {
+    trial_end: Math.floor(Date.parse(chargeAt) / 1000),
+    proration_behavior: 'none',
+  })
+}
+
+/**
+ * Stop (or restart) a hub plan's payments at the end of what's paid. Returns
+ * when it ends, from Stripe, when Stripe says.
+ */
+export async function setHubPlanCancelAtPeriodEnd(stripeSubscriptionId: string, cancel: boolean): Promise<{ endsAt: string | null }> {
+  const stripe = getStripeClient()
+  const s = (await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: cancel })) as Stripe.Subscription & {
+    current_period_end?: number | null
+  }
+  // During free days the period ends when they do, so this covers both.
+  const end = s.cancel_at ?? s.items?.data?.[0]?.current_period_end ?? s.current_period_end ?? null
+  return { endsAt: cancel && end ? new Date(end * 1000).toISOString() : null }
+}
+
 /** The product a subscription item is priced against, when it was expanded. */
 function productMetadataOf(item: Stripe.SubscriptionItem): Stripe.Metadata | null {
   const product = item.price.product

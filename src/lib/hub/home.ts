@@ -98,7 +98,9 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
   }
   const today = ymd(now)
   const done = guide && open ? await getTicks(user.id, today) : []
-  const firstName = guide?.firstName ?? (user.name ? user.name.trim().split(/\s+/)[0] : null)
+  const { getHubStart } = await import('@/lib/hub-plan/server')
+  const start = guide ? null : await getHubStart(user.id)
+  const firstName = guide?.firstName ?? start?.seed.firstName ?? (user.name ? user.name.trim().split(/\s+/)[0] : null)
 
   // Check-ins on that guide.
   let checkIn: HubHome['checkIn'] = null
@@ -185,6 +187,13 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
   // Seen this week, for the founders' numbers.
   await kvSet(`hub-seen:${user.id}`, { at: now.toISOString() })
 
+  // The hub on its own: their membership, or an offer to join once theirs has closed.
+  const { memberHubPlanView } = await import('@/lib/hub-plan/server')
+  const membership = await memberHubPlanView(user.id, now)
+  const boxRunning = Boolean(sub && sub.status !== 'cancelled')
+  const { hubOnSale } = await import('@/lib/offer/settings')
+  const joinOffer = hubOnSale(settings) && !open && !boxRunning && !membership ? { monthly: settings.hubPrice.monthly } : null
+
   return {
     access,
     firstName,
@@ -223,5 +232,7 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
       items: o.lines.filter((l) => !l.bonus).map((l) => l.title),
       status: o.status,
     })),
+    membership,
+    joinOffer,
   }
 }

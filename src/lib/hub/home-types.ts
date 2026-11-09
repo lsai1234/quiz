@@ -3,6 +3,7 @@
  * shows, in one request. Types only, safe in the browser.
  */
 import type { HubAccess } from './access'
+import type { HubPlanView } from '@/lib/hub-plan/plan'
 import type { Tip } from '@/lib/tips/library'
 
 export interface TodayItem {
@@ -66,4 +67,8 @@ export interface HubHome {
   } | null
   deals: { open: number; upcoming: number; next: { short: string; line: string; opensInDays: number } | null; best: { short: string; line: string; total: number } | null } | null
   orders: { reference: string; createdAt: string; total: number; items: string[]; status: string }[]
+  /** The hub on its own, when they've joined; null otherwise. */
+  membership: HubPlanView | null
+  /** While the hub is on sale on its own and theirs isn't open: an offer to join (£ a month). Never automatic. */
+  joinOffer: { monthly: number } | null
 }

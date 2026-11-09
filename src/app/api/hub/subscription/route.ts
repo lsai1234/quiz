@@ -32,7 +32,9 @@ export async function GET() {
 
   let subscription = await getSubscription(user.id)
   let seeded = false
-  if (!subscription && seedsDemoSubscription()) {
+  // Never over someone who joined the hub on its own: a demo box plan would contradict what they bought.
+  const { getHubPlan } = await import('@/lib/hub-plan/store')
+  if (!subscription && seedsDemoSubscription() && !(await getHubPlan(user.id))) {
     const { products } = await getResolvedCatalogue()
     subscription = createMockSubscription(products, user.email ?? '')
     await saveSubscription(user.id, subscription)

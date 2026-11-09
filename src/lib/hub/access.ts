@@ -4,6 +4,9 @@
  *   One-off buyer   90 days from their latest order; any order resets it
  *   Subscriber      while the plan is active or paused, then 90 days after it
  *                   was cancelled (or after their latest order, if later)
+ *   Hub member      the hub on its own (`lib/hub-plan`): while it's paid for,
+ *                   then to the end of the month paid once cancelled (or 90
+ *                   days after their latest order, if later)
  *   Ended           the guide and order history, read-only; the rest says
  *                   "Order again to unlock"
  *
@@ -25,6 +28,8 @@ export interface HubAccess {
   daysLeft: number | null
   /** The plan, when there is one. */
   plan: 'active' | 'paused' | 'cancelled' | null
+  /** The hub on its own, while it keeps the hub open: paying, or cancelled and paid up to `until`. */
+  hubPlan: 'active' | 'cancelling' | null
 }
 
 type Who = Pick<UserRecord, 'id' | 'email'>
@@ -33,29 +38,38 @@ type Who = Pick<UserRecord, 'id' | 'email'>
 export function hubAccessFrom(input: {
   plan: { status: 'active' | 'paused' | 'cancelled'; cancelledAt?: string | null } | null
   latestOrderAt: string | null
+  /** The hub on its own, when they've joined. */
+  hubPlan?: { status: 'pending' | 'active' | 'cancelling' | 'cancelled'; endsAt: string | null } | null
   now: Date
 }): HubAccess {
   const { plan, latestOrderAt, now } = input
-  if (plan && plan.status !== 'cancelled') return { state: 'subscriber', until: null, daysLeft: null, plan: plan.status }
-  const starts = [latestOrderAt, plan?.status === 'cancelled' ? (plan.cancelledAt ?? null) : null]
+  const hp = input.hubPlan ?? null
+  const paidTo = hp?.status === 'cancelling' && hp.endsAt && Number.isFinite(Date.parse(hp.endsAt)) ? Date.parse(hp.endsAt) : null
+  const hubPlan = hp?.status === 'active' ? 'active' : paidTo !== null && paidTo > now.getTime() ? 'cancelling' : null
+  if (plan && plan.status !== 'cancelled') return { state: 'subscriber', until: null, daysLeft: null, plan: plan.status, hubPlan }
+  if (hubPlan === 'active') return { state: 'subscriber', until: null, daysLeft: null, plan: plan?.status ?? null, hubPlan }
+  const ends = [latestOrderAt, plan?.status === 'cancelled' ? (plan.cancelledAt ?? null) : null]
     .filter((s): s is string => Boolean(s) && Number.isFinite(Date.parse(s as string)))
-    .map((s) => Date.parse(s))
-  if (!starts.length) return { state: 'none', until: null, daysLeft: null, plan: plan?.status ?? null }
-  const end = Math.max(...starts) + HUB_DAYS * DAY
+    .map((s) => Date.parse(s) + HUB_DAYS * DAY)
+  if (paidTo !== null) ends.push(paidTo)
+  if (!ends.length) return { state: 'none', until: null, daysLeft: null, plan: plan?.status ?? null, hubPlan }
+  const end = Math.max(...ends)
   const until = new Date(end).toISOString().slice(0, 10)
   const left = Math.ceil((end - now.getTime()) / DAY)
   return left > 0
-    ? { state: 'member', until, daysLeft: left, plan: plan?.status ?? null }
-    : { state: 'ended', until, daysLeft: 0, plan: plan?.status ?? null }
+    ? { state: 'member', until, daysLeft: left, plan: plan?.status ?? null, hubPlan }
+    : { state: 'ended', until, daysLeft: 0, plan: plan?.status ?? null, hubPlan }
 }
 
 export async function hubAccess(user: Who, now = new Date()): Promise<HubAccess> {
   const { getSubscription } = await import('@/lib/db/hub-data')
   const { latestPaidOrderFor } = await import('@/lib/orders/repo')
-  const [sub, order] = await Promise.all([getSubscription(user.id), latestPaidOrderFor({ userId: user.id, email: user.email })])
+  const { getHubPlan } = await import('@/lib/hub-plan/store')
+  const [sub, order, hubPlan] = await Promise.all([getSubscription(user.id), latestPaidOrderFor({ userId: user.id, email: user.email }), getHubPlan(user.id)])
   return hubAccessFrom({
     plan: sub ? { status: sub.status, cancelledAt: sub.cancelledAt ?? null } : null,
     latestOrderAt: order?.createdAt ?? null,
+    hubPlan: hubPlan ? { status: hubPlan.status, endsAt: hubPlan.endsAt } : null,
     now,
   })
 }

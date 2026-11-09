@@ -12,6 +12,10 @@ import { Act5Bundle } from './Act5Bundle'
 import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
 import { CHANGE_ANSWERS_HASH, clearResultsOpen, resultsOpenFor } from '@/lib/consult/results-tab'
+import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
+
+/** The quiz in hub mode, after joining the hub on its own: no results page, straight to the hub. */
+const HubSetupFinish = dynamic(() => import('./HubSetupFinish').then((m) => m.HubSetupFinish), { ssr: false })
 
 /**
  * Loaded only when someone actually opens it, so the home page carries none of
@@ -46,6 +50,13 @@ const TRANSITIONS: Record<Act, string> = {
 
 export function ScrollExperience() {
   const [act, setAct] = useState<Act>(1)
+  /**
+   * `/?then=hub`: they've just joined the hub on its own (`lib/hub-plan`). The
+   * quiz runs straight away, and its end saves their training answers and
+   * opens the hub instead of the results page.
+   */
+  const [hubSetup, setHubSetup] = useState(false)
+  const [hubFinishing, setHubFinishing] = useState(false)
   /**
    * The third way in from the hero: the Amp Consult. It takes Act 2's place —
    * the same hero before it, the same analysis and reveal after it once the
@@ -83,12 +94,29 @@ export function ScrollExperience() {
   // Once a quiz or a consult is under way, fetch the results page in the
   // background, so the reveal never waits on it.
   useEffect(() => {
-    if (act >= 2 || consult) void loadReveal()
-  }, [act, consult])
+    if ((act >= 2 || consult) && !hubSetup) void loadReveal()
+  }, [act, consult, hubSetup])
 
   useEffect(() => {
     void useQuizStore.persist.rehydrate()
     setHydrated(true)
+
+    if (new URLSearchParams(window.location.search).get('then') === 'hub') {
+      // The hub is about training: the performance track asks how they train.
+      // Answers they already gave on this device are kept, so it picks up from them.
+      const q = useQuizStore.getState()
+      if (!q.answers.track) {
+        q.setAnswer('track', 'performance')
+        q.setGoals([])
+      }
+      q.setConsultExclusions(null)
+      clearResultsOpen()
+      setHubSetup(true)
+      setResumeDismissed(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+      return
+    }
 
     /*
       `/#stack` reopens the reveal.
@@ -159,14 +187,14 @@ export function ScrollExperience() {
   */
   const resumedConsult = useRef(false)
   useEffect(() => {
-    if (resumedConsult.current || !resolved || heroOffer === 'quiz-only' || act !== 1) return
+    if (resumedConsult.current || !resolved || heroOffer === 'quiz-only' || act !== 1 || hubSetup) return
     resumedConsult.current = true
     if (window.location.hash !== STACK_RETURN_HASH && hasActiveConsultSession()) {
       setConsult(true)
       setAct(2)
       setAnimKey((k) => k + 1)
     }
-  }, [resolved, heroOffer, act])
+  }, [resolved, heroOffer, act, hubSetup])
 
   /*
     "Change my answers" on a consult's results page (`ConsultNote`): reopen the
@@ -256,9 +284,15 @@ export function ScrollExperience() {
             onHandoff={() => { setReopenConsult(false); goTo(4) }}
           />
         )}
-        {act === 2 && !consult && (useV2
-          ? <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />
-          : <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />)}
+        {act === 2 && !consult && hubSetup && !hubFinishing && (
+          <p className="px-5 py-3 text-center text-[13px] leading-snug text-white/85 bg-[#0A0A0A] border-b border-[#00D4FF]/30" data-hub-setup-banner>
+            {HUB_PLAN_COPY.setupBanner}
+          </p>
+        )}
+        {act === 2 && !consult && hubFinishing && <HubSetupFinish />}
+        {act === 2 && !consult && !hubFinishing && (useV2
+          ? <QuizV2 onComplete={() => (hubSetup ? setHubFinishing(true) : goTo(3))} reducedMotion={reducedMotion} />
+          : <Act2Quiz onComplete={() => (hubSetup ? setHubFinishing(true) : goTo(3))} reducedMotion={reducedMotion} />)}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
         {act === 4 && <Act4Reveal reducedMotion={reducedMotion} />}
         {act === 5 && <Act5Bundle reducedMotion={reducedMotion} />}

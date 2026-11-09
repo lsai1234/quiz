@@ -20,15 +20,23 @@ export async function POST(req: Request) {
   if (getPaymentSource() !== 'stripe') {
     return NextResponse.json({ error: 'Billing portal is only available with Stripe payments enabled.' }, { status: 400 })
   }
-  const sub = await getSubscription(user.id)
-  if (!sub?.stripeCustomerId) {
+  // `{ plan: 'hub' }`: the card on the hub membership (`lib/hub-plan`), else the box plan's.
+  const body = (await req.json().catch(() => null)) as { plan?: unknown } | null
+  let customerId: string | null = null
+  if (body?.plan === 'hub') {
+    const { getHubPlan } = await import('@/lib/hub-plan/store')
+    customerId = (await getHubPlan(user.id))?.stripeCustomerId ?? null
+  } else {
+    customerId = (await getSubscription(user.id))?.stripeCustomerId ?? null
+  }
+  if (!customerId) {
     return NextResponse.json({ error: 'No Stripe customer on file for this account yet.' }, { status: 400 })
   }
 
   const origin = process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
   try {
     const { createBillingPortalSession } = await import('@/lib/payments/stripe')
-    const { url } = await createBillingPortalSession(sub.stripeCustomerId, `${origin}/myhub`)
+    const { url } = await createBillingPortalSession(customerId, `${origin}/myhub`)
     return NextResponse.json({ url })
   } catch (err) {
     console.error('[billing-portal] failed:', err)

@@ -13,7 +13,7 @@
  */
 import type { ReviewRow } from '@/lib/consult/review-pack'
 import { CLAIMS } from '@/lib/consult/claims'
-import { DEFAULT_MEMBER_DEALS, HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings } from './settings'
+import { DEFAULT_MEMBER_DEALS, DEFAULT_HUB_PRICE, HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings } from './settings'
 import { LEVEL_NAME } from './bonus-economics'
 import type { HeroRow } from './view'
 import { OFFER_COPY } from './copy'
@@ -211,7 +211,8 @@ export function levelCopyRows(): ReviewRow[] {
 
 /** The member hub's terms page, at the default free-delivery threshold. */
 export function memberHubTermRows(): ReviewRow[] {
-  return memberHubTerms({ freeOver: DEFAULT_MEMBER_DEALS.topUpFreeOver }).flatMap((section) =>
+  // With the hub on sale on its own, so its section is in the pack for sign-off too.
+  return memberHubTerms({ freeOver: DEFAULT_MEMBER_DEALS.topUpFreeOver, hubPlan: { monthly: DEFAULT_HUB_PRICE.monthly } }).flatMap((section) =>
     section.lines.map((line): ReviewRow => ['Member hub terms', `/legal/member-hub: ${section.heading}`, line, 'Customer wording, for sign-off']),
   )
 }

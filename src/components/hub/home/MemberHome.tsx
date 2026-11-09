@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Disclosure, Note, Skeleton } from '@/components/system'
 import { HUB_COPY as C } from '@/lib/hub/copy'
+import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
 import type { HubHome } from '@/lib/hub/home-types'
 import { DealsCard } from '../DealsCard'
 import { LinkOrder, OrdersSection } from './AccountBits'
 import { HubHero } from './HubHero'
+import { JoinOfferCard, MembershipCard } from './MembershipCard'
 import { StackSection } from './StackSection'
 import { CheckInTile, DealsTile, TipsTile, WeekTile } from './Tiles'
 import { TodayCard } from './TodayCard'
@@ -41,6 +43,16 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   }, [])
   useEffect(() => load(), [load])
 
+  // Just joined the hub on its own (`?joined=1`, or `?welcome=1` after the quiz): say so once.
+  const [welcome, setWelcome] = useState(false)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('joined') === '1' || q.get('welcome') === '1') {
+      setWelcome(true)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
+
   if (failed && !home) {
     return (
       <div className="mx-auto max-w-2xl" style={col('var(--stack)')}>
@@ -72,7 +84,9 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   if (home.access.state === 'none' && none) {
     return (
       <div className="mx-auto max-w-2xl" style={col('var(--stack)')} data-member-home data-hub-state="none">
+        {home.membership && <MembershipCard membership={home.membership} onChange={load} />}
         {none}
+        {home.joinOffer && <JoinOfferCard monthly={home.joinOffer.monthly} />}
         <LinkOrder onLinked={load} />
         {data}
       </div>
@@ -104,11 +118,18 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   ].filter(Boolean)
   // Reading order on a phone; on a wide screen the day and the money on the
   // left, the glance tiles and the account on the right.
-  const ORDER = { hero: 0, today: 1, trainer: 2, tiles: 3, deals: 4, stack: 5, plan: 6, account: 7 } as const
+  const ORDER = { welcome: 0, hero: 0, offer: 1, today: 1, trainer: 2, tiles: 3, deals: 4, stack: 5, plan: 6, membership: 7, account: 8 } as const
   const at = (k: keyof typeof ORDER): CSSProperties => ({ order: ORDER[k] })
 
   return (
     <div className="hub-home" data-member-home data-hub-state={home.access.state}>
+      {welcome && (
+        <div className="hub-home-wide" style={at('welcome')} data-hub-welcome>
+          <Note tone="positive" icon="check" live="polite">
+            {HUB_PLAN_COPY.welcome}
+          </Note>
+        </div>
+      )}
       <Rise i={0} className="hub-home-wide" style={at('hero')}>
         <HubHero home={home} name={name} />
       </Rise>
@@ -154,6 +175,18 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
             <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)' }} data-bento>
               {tiles}
             </div>
+          </Rise>
+        )}
+
+        {home.joinOffer && (
+          <Rise i={1} style={at('offer')}>
+            <JoinOfferCard monthly={home.joinOffer.monthly} />
+          </Rise>
+        )}
+
+        {home.membership && (
+          <Rise i={6} style={at('membership')}>
+            <MembershipCard membership={home.membership} onChange={load} />
           </Rise>
         )}
 

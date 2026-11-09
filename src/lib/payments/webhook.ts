@@ -122,6 +122,13 @@ function idOf(ref: string | { id: string } | null | undefined): string | undefin
 }
 
 export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOutcome> {
+  // The member hub on its own claims its own events first: everything below
+  // treats a subscription event as the box plan's, and a hub payment must never
+  // raise a delivery or end a box plan. Null means "not a hub plan".
+  const { handleHubPlanEvent } = await import('@/lib/hub-plan/webhook')
+  const hub = await handleHubPlanEvent(event)
+  if (hub) return hub
+
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session

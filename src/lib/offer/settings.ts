@@ -285,9 +285,19 @@ export function normaliseHubPrice(raw: unknown): HubPriceSettings {
 }
 
 /** What 90 days of the hub costs on its own (£), or null while it isn't on sale on its own. */
-export function hubValue(settings: Pick<OfferSettings, 'hubPrice'>): number | null {
+export function hubValue(settings: Pick<OfferSettings, 'hubPrice' | 'services' | 'trainer'>): number | null {
+  return hubOnSale(settings) ? Math.round(settings.hubPrice.monthly * 3 * 100) / 100 : null
+}
+
+/**
+ * The hub can be bought on its own (`lib/hub-plan`): switched on, priced, and
+ * with something in it to sell — the training plan or the trainer. The same
+ * test decides whether the results page may show the hub as a saving, so a
+ * saving never stands against a price nobody can pay.
+ */
+export function hubOnSale(settings: Pick<OfferSettings, 'hubPrice' | 'services' | 'trainer'>): boolean {
   const p = settings.hubPrice
-  return p.standalone && p.monthly > 0 ? Math.round(p.monthly * 3 * 100) / 100 : null
+  return p.standalone && p.monthly > 0 && (settings.services.training || trainerLive(settings))
 }
 
 /** The trainer is live: switched on, and someone is named. */

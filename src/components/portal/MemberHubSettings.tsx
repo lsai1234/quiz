@@ -20,6 +20,10 @@ interface View {
   kinds: { kind: string; products: number }[]
   previews: { productId: string; title: string; kind: string; sizePct: number; viable: boolean; line: string; total: number | null; normalTotal: number | null }[]
   metrics: HubMetrics
+  /** Switched on, priced, and with the training plan or the trainer in it. */
+  hubOnSale?: boolean
+  /** The hub on its own: members by state, and the monthly they bring. */
+  hubPlans?: { paying: number; onFreeDays: number; cancelling: number; monthly: number }
 }
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
@@ -85,7 +89,7 @@ export function MemberHubSettings() {
         </Note>
       )}
 
-      <HubPriceCard price={view.hubPrice} onSaved={load} />
+      <HubPriceCard price={view.hubPrice} onSale={view.hubOnSale ?? false} plans={view.hubPlans ?? null} onSaved={load} />
 
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
@@ -190,7 +194,7 @@ export function MemberHubSettings() {
  * The hub on its own: its monthly price, and whether it's genuinely on sale
  * at that price. Only then does the box show the 90 days as a saving.
  */
-function HubPriceCard({ price, onSaved }: { price: HubPriceSettings; onSaved: (v: View) => void }) {
+function HubPriceCard({ price, onSale, plans, onSaved }: { price: HubPriceSettings; onSale: boolean; plans: View['hubPlans'] | null; onSaved: (v: View) => void }) {
   const [monthly, setMonthly] = useState(String(price.monthly))
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -216,8 +220,9 @@ function HubPriceCard({ price, onSaved }: { price: HubPriceSettings; onSaved: (v
       <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-hub-price>
         <h2 style={HEADING}>The hub on its own</h2>
         <p style={BODY}>
-          With its price on its own set and switched on, the results page shows the 90 days every order brings as a saving: on the membership card, under the button and
-          on the receipt, and each top-up box in the hub says it adds another 90 days at that value.
+          Switched on, the hub is on sale in the shop at this price a month (<Link href="/shop/hub" style={{ textDecoration: 'underline' }}>/shop/hub</Link>): members pay by
+          card each month and cancel any time. The results page then shows the 90 days every stack brings as a saving, on the membership card, under the button and on
+          the receipt. Stack orders still bring 90 days free with no subscription; they never start one.
         </p>
         <div className="flex flex-wrap items-end" style={{ gap: 'var(--space-3)' }}>
           <Input label="Price a month, on its own" prefix="£" type="number" inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} />
@@ -225,23 +230,46 @@ function HubPriceCard({ price, onSaved }: { price: HubPriceSettings; onSaved: (v
             Save price
           </Button>
         </div>
-        <p style={META}>{Number(monthly) > 0 ? `90 days shows as £${value.toFixed(2)}.` : 'Set a price to show a value.'}</p>
+        <p style={META}>{Number(monthly) > 0 ? `90 days shows as £${value.toFixed(2)}. A new price applies to people who join after you change it.` : 'Set a price to sell it.'}</p>
         <Checkbox
-          label="The hub is on sale on its own at this price"
-          hint="Leave this off until someone can actually buy the hub without an order at this price. A saving against a price nobody can pay is a misleading price under consumer law."
+          label="Sell the hub on its own at this price"
+          hint="Puts it in the shop and turns on the saving. Switching it off stops new members joining; anyone already paying carries on until they cancel."
           checked={price.standalone}
-          disabled={saving}
+          disabled={saving || !(price.monthly > 0)}
           onChange={(e) => void save({ standalone: e.target.checked })}
           data-hub-standalone
         />
-        {price.standalone ? (
+        {price.standalone && !onSale ? (
+          <Note tone="attention" icon="info">
+            Not on sale yet: there’s nothing in the hub to sell on its own. Switch on the training plan or the trainer in{' '}
+            <Link href="/founderhub/settings/offer" style={{ textDecoration: 'underline' }}>
+              Offer → Box services
+            </Link>
+            . Until then it isn’t in the shop and no saving shows.
+          </Note>
+        ) : price.standalone ? (
           <Note tone="positive" icon="check">
-            Showing: 90 days of the hub as £{(price.monthly * 3).toFixed(2)}, included with every order.
+            On sale at £{price.monthly.toFixed(2)} a month. The results page shows 90 days of the hub as £{(price.monthly * 3).toFixed(2)}, included with every stack.
           </Note>
         ) : (
           <Note tone="neutral" icon="info">
-            Off: the hub is described as included with every order, with no price or saving beside it.
+            Off: not in the shop, and the hub is described as included with every order, with no price or saving beside it.
           </Note>
+        )}
+        {plans && (
+          <div className="grid grid-cols-2" style={{ gap: 'var(--space-4)' }} data-hub-plan-counts>
+            {[
+              ['Paying members', String(plans.paying), `£${plans.monthly.toFixed(2)} a month`],
+              ['On a stack’s free days', String(plans.onFreeDays), 'Their next payment waits'],
+              ['Cancelled, still open', String(plans.cancelling), 'Open to the end of the month paid'],
+            ].map(([label, value, sub]) => (
+              <div key={label}>
+                <p style={META}>{label}</p>
+                <p style={{ ...HEADING, fontSize: 'var(--text-display)', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+                <p style={META}>{sub}</p>
+              </div>
+            ))}
+          </div>
         )}
         {note && <p style={META}>{note}</p>}
       </div>

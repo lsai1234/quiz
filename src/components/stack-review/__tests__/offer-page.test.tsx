@@ -103,7 +103,9 @@ it('shows the member hub as a saving only while it is on sale on its own', async
   unmount()
 
   resetOfferSettings()
-  offer = { ...everything(), hubPrice: { monthly: 10, standalone: true } }
+  // On sale on its own: priced, switched on, and with the training plan in it to sell.
+  const base = everything()
+  offer = { ...base, services: { ...base.services, training: true }, hubPrice: { monthly: 10, standalone: true } }
   render(<StackReviewPage reducedMotion />)
   await screen.findByRole('region', { name: 'Your box' })
   const line = await waitFor(() => {
@@ -115,8 +117,8 @@ it('shows the member hub as a saving only while it is on sale on its own', async
   expect(line).toHaveTextContent('£10.00 a month on its own · included')
   expect(line).toHaveTextContent(/£30\.00.*£0\.00/)
   expect(document.querySelector('[data-receipt-hub-save]')).toHaveTextContent('Your member hub saves you £30.00')
-  expect(document.querySelector('[data-hub-card-value]')).toHaveTextContent(/£30\.00.*Included with your order/)
-  expect(document.querySelector('[data-box-hub-line]')).toHaveTextContent('Includes 90 days of your member hub, £30.00 on its own.')
+  expect(document.querySelector('[data-hub-card-value]')).toHaveTextContent(/£30\.00.*Free with your order.*no hub subscription/)
+  expect(document.querySelector('[data-box-hub-line]')).toHaveTextContent('Includes 90 days of your member hub free, £30.00 on its own. No hub subscription, nothing to cancel.')
 })
 
 it('opens on the box: the hero first, under £50, one button with the receipt’s price', async () => {

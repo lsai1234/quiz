@@ -129,15 +129,32 @@ export function guaranteeTerms(): TermsSection[] {
  * conditions every member price carries. Linked from the hub card on the
  * results page and from the hub. Draft wording, for sign-off (review pack).
  */
-export function memberHubTerms(input: { freeOver: number }): TermsSection[] {
+export function memberHubTerms(input: { freeOver: number; /** While the hub is on sale on its own (`lib/hub-plan`). */ hubPlan?: { monthly: number } | null }): TermsSection[] {
+  const gbp = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`)
+  const onItsOwn: TermsSection[] = input.hubPlan
+    ? [
+        {
+          heading: 'The member hub on its own',
+          lines: [
+            `You can also join the member hub on its own, without an order, for ${gbp(input.hubPlan.monthly)} a month paid by card. It opens your training plan, Ask your trainer and member prices on what you buy. Your stack guide, reminders and check-ins come with an order, because they’re built from what you’ve bought.`,
+            'Your membership renews every month until you cancel. Cancel any time in your hub: it stays open to the end of the month you’ve paid for, and nothing more is taken.',
+            'Cancel within 14 days of joining and we refund your first payment in full, and your membership ends then.',
+            'If the 90 days from an order are still running when you join, your first payment is taken when they end. While you’re a member, any order gives you 90 days free and your next payment waits until they’re used up.',
+            'If we change the monthly price, we’ll email you at least 30 days before it applies to you, and you can cancel before then.',
+          ],
+        },
+      ]
+    : []
   return [
     {
       heading: 'What the member hub is',
       lines: [
         'Your member hub comes with any CHRGD order, one-off or monthly. Sign in at /myhub with the email you ordered with to open it.',
         'It holds your stack guide and reminders, Amp’s check-ins, tips for your stack, member prices on what you’ve bought and, while they’re running, your training plan and Ask your trainer.',
+        'The 90 days that come with an order are free, and they are not a subscription: they end by themselves, with nothing to cancel and nothing charged.',
       ],
     },
+    ...onItsOwn,
     {
       heading: 'How long it’s open',
       lines: [

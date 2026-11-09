@@ -43,6 +43,7 @@ import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
+import { ShopHubCard } from './ShopHubCard'
 import { ShopHeroProvider, ShopMasthead, ShopTwinTiles, ShopBreak } from './ShopHeroes'
 import { StackReturnBar } from './StackReturnBar'
 import { BREAK_AFTER_SHELF } from '@/lib/shop/placements'
@@ -739,6 +740,9 @@ export function ShopShell() {
 
       {/* The twin tiles, under the goals. Absent until a founder fills them. */}
       {!searching && <ShopTwinTiles />}
+
+      {/* The member hub on its own, while it's on sale. */}
+      {!searching && <ShopHubCard />}
 
       {!searching && <TrustStrip products={products} />}
 

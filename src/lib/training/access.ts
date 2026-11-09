@@ -47,7 +47,8 @@ export interface TrainingStart {
 /**
  * What their order or plan already says about their training: the guide
  * seed's day and goals, and the quiz's training answers (on the seed, or with
- * a monthly plan's saved answers). Nothing about their health.
+ * a monthly plan's saved answers). A hub member who joined without an order:
+ * the same, from the quiz they took after joining. Nothing about their health.
  */
 export async function trainingStart(user: Who): Promise<TrainingStart> {
   const { getSubscription, getQuiz } = await import('@/lib/db/hub-data')
@@ -58,6 +59,11 @@ export async function trainingStart(user: Who): Promise<TrainingStart> {
   if (!seed) {
     const { latestPaidOrderFor } = await import('@/lib/orders/repo')
     seed = (await latestPaidOrderFor({ userId: user.id, email: user.email }))?.guideSeed ?? null
+  }
+  // A hub member with no order: what the quiz told us when they joined (`lib/hub-plan`).
+  if (!seed) {
+    const { getHubStart } = await import('@/lib/hub-plan/server')
+    seed = (await getHubStart(user.id))?.seed ?? null
   }
   const fromAnswers = answers
     ? normaliseTrainingSeed({ types: answers.trainingType, experience: answers.trainingExperience, focus: answers.trainingFocus })
