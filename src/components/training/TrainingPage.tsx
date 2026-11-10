@@ -174,6 +174,7 @@ export function TrainingPage() {
             offline={offline}
             send={send}
             onClose={() => setWorkoutId(null)}
+            programmes={Boolean(state.coaching?.programmes)}
           />
         ) : null
       })()}

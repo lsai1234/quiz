@@ -3,6 +3,7 @@ import type { ReviewRow } from '@/lib/consult/review-pack'
 import { copyRows } from '@/lib/consult/copy-rows'
 import { COACHING_COPY } from './coaching-copy'
 import { TRAINING_EMAIL_COPY } from './email-copy'
+import { MUSCLE_LABEL, PROGRAMME_COPY } from './programme-copy'
 
 export function coachingCopyRows(): ReviewRow[] {
   return copyRows(
@@ -59,4 +60,31 @@ export function trainingEmailCopyRows(): ReviewRow[] {
       recapNextAt: ['Full body B', 'Wednesday', '6pm'],
     },
   )
+}
+
+export function programmeCopyRows(): ReviewRow[] {
+  const where = 'My Hub (/myhub/training and /myhub/training/progress), behind Settings → Training plan → Programmes and goals. "[Name]" stands for the trainer’s name set in Settings'
+  return [
+    ...copyRows('Programmes and goals wording', where, PROGRAMME_COPY, {
+      programmeStart: [8],
+      programmeChecked: ['[Name]'],
+      programmeWeek: [4, 8],
+      compareLine: ['Goblet squat', '16 kg × 8', '22 kg × 8'],
+      goalDone: ['3 March'],
+      milestoneOn: ['3 March'],
+      missedTitle: ['Tuesday'],
+      missedMove: ['Full body A', 'Thursday'],
+      missedNoRoom: ['Full body A'],
+      movedFrom: ['Tuesday'],
+      rampLine: ['Goblet squat'],
+      sessions: [9],
+      bestsCount: [3],
+      workedSets: [6],
+      liveLine: ['[Name]'],
+      liveWhen: ['Tuesday 2 December', '7pm', 60],
+      liveRecordingUntil: ['2 March'],
+    }),
+    ...copyRows('Programmes and goals wording: milestones', where, PROGRAMME_COPY.milestone, { liftAt: ['Goblet squat', 24], runs: [5], weeks3: [4] }),
+    ...copyRows('Programmes and goals wording: muscles', where, MUSCLE_LABEL, {}),
+  ]
 }

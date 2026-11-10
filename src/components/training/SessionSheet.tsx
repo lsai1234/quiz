@@ -1,5 +1,6 @@
 'use client'
 
+import { CooldownBlock, RampNote } from './ProgrammeBits'
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Note, OptionRow, Select, buttonSurface } from '@/components/system'
 import { INTENSITY_COPY, MUSCLE_COPY, TRAINING_COPY as C, WEEKDAY_LONG, areasPhrase } from '@/lib/training/copy'
@@ -34,6 +35,7 @@ export function SessionSheet({
   busy,
   onClose,
   coaching = false,
+  programmes = false,
   trainer = null,
   tips = {},
   videos = {},
@@ -48,6 +50,8 @@ export function SessionSheet({
   onClose: () => void
   /** The coaching tools are on: workout mode, a lighter session, the trainer's tips. */
   coaching?: boolean
+  /** Programmes and goals are on: the ramp sets and the cool-down. */
+  programmes?: boolean
   trainer?: PublicTrainer | null
   tips?: Record<string, string>
   /** Uploaded videos by exercise or activity id. */
@@ -83,7 +87,9 @@ export function SessionSheet({
                 <ChangedBy change={session.changedBy} />
               </div>
             )}
+            {programmes && <RampNote session={session} prefs={prefs} />}
             <StrengthBody session={session} plan={plan} prefs={prefs} act={act} busy={busy} onOpen={(id, main) => setDetail({ id, main })} />
+            {programmes && <CooldownBlock session={session} prefs={prefs} onOpen={(id) => setDetail({ id, main: false })} />}
             {coaching && !session.done && <LighterChoice session={session} act={act} busy={busy} />}
           </>
         ) : (

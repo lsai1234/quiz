@@ -15,6 +15,8 @@ import { longDay, nextSession, progressOf, sessionSummary, sessionTitle } from '
 import { ChangePlanSheet } from './ChangePlanSheet'
 import { BackAfterGapCard, ChangedBy, LiveCalendarCard, MeetTrainerCard, TrainingEmailsCard, WeekModeCard, backAfterGap } from './CoachingBits'
 import { SessionSheet } from './SessionSheet'
+import { GoalCard, LiveQaCard, MissedCard, ProgrammeCard } from './ProgrammeBits'
+import { PROGRAMME_COPY as P } from '@/lib/training/programme-copy'
 import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { body, display, eyebrow, meta, stack, strong } from './styles'
 
@@ -41,6 +43,8 @@ export function Week({
   onStart?: (sessionId: string) => void
 }) {
   const coaching = Boolean(state.coaching?.coaching)
+  // Programmes and goals (Phase 3).
+  const programmes = Boolean(state.coaching?.programmes)
   const [openId, setOpenId] = useState<string | null>(null)
   const [changing, setChanging] = useState(false)
   const today = weekdayOf(new Date())
@@ -62,6 +66,8 @@ export function Week({
 
       {coaching && backAfterGap(plan) && <BackAfterGapCard next={nextSession(plan, today as Session['day'])} act={act} busy={busy} />}
 
+      {programmes && <MissedCard plan={plan} act={act} busy={busy} />}
+
       <Card padding="roomy" glow="accent">
         <div style={stack('var(--space-3)')}>
           <ChargeMeter label={C.progressLabel} value={planned ? (done / planned) * 100 : 0} showValue valueText={C.progress(done, planned)} tone="positive" />
@@ -75,13 +81,22 @@ export function Week({
             {plan.source === 'ai' ? C.builtWithAi : C.builtWithRules}
             {last ? ` ${C.lastWeek(last.done, last.planned)}` : ''}
           </p>
-          <div>
+          <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>
             <Button variant="secondary" icon="sliders" onClick={() => setChanging(true)} data-change>
               {C.changeCta}
             </Button>
+            {programmes && (
+              <Link href="/myhub/training/progress" className={buttonSurface('ghost', 'md').className} style={buttonSurface('ghost', 'md').style} data-progress-link>
+                {P.progressLink} →
+              </Link>
+            )}
           </div>
         </div>
       </Card>
+
+      {programmes && <ProgrammeCard plan={plan} trainer={state.trainer?.checksPlans ? state.trainer.name : null} act={act} busy={busy} />}
+      {programmes && <GoalCard plan={plan} act={act} busy={busy} />}
+      {programmes && state.liveQa && <LiveQaCard qa={state.liveQa} trainer={state.trainer?.name ?? null} />}
 
       <Up plan={plan} today={today} onOpen={setOpenId} onStart={coaching ? onStart : undefined} />
 
@@ -166,6 +181,7 @@ export function Week({
           busy={busy}
           onClose={() => setOpenId(null)}
           coaching={coaching}
+          programmes={programmes}
           trainer={state.trainer}
           tips={state.tips ?? {}}
           videos={state.videos ?? {}}
@@ -195,6 +211,11 @@ function SessionCard({ session, act, busy, onOpen, video = false }: { session: S
             {session.type === 'activity' && session.suggested && (
               <div style={{ marginTop: 'var(--space-1)' }}>
                 <Badge tone="info">{C.suggested}</Badge>
+              </div>
+            )}
+            {(session.movedFrom != null || session.skipped) && (
+              <div style={{ marginTop: 'var(--space-1)' }} data-session-moved>
+                <Badge tone={session.skipped ? 'neutral' : 'info'}>{session.skipped ? P.dropped : P.movedFrom(WEEKDAY_LONG[session.movedFrom ?? session.day])}</Badge>
               </div>
             )}
             {session.type === 'strength' && (session.lighter || session.changedBy || video) && (

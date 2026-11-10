@@ -1,5 +1,6 @@
 'use client'
 
+import { CooldownBlock } from './ProgrammeBits'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Note, buttonSurface } from '@/components/system'
@@ -32,6 +33,7 @@ export function WorkoutMode({
   offline,
   send,
   onClose,
+  programmes = false,
 }: {
   plan: TrainingPlan
   session: StrengthSession
@@ -43,6 +45,8 @@ export function WorkoutMode({
   offline: boolean
   send: (a: TrainingAction) => void
   onClose: () => void
+  /** Programmes and goals are on: the cool-down after the last set. */
+  programmes?: boolean
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const exercises = session.exercises.filter((p) => exerciseById(p.id))
@@ -301,6 +305,7 @@ export function WorkoutMode({
                 </ul>
               )
             )}
+            {programmes && <CooldownBlock session={session} prefs={plan.prefs} />}
             <Button variant="primary" size="lg" fullWidth onClick={onClose} data-workout-finish>
               {W.finish}
             </Button>

@@ -271,6 +271,34 @@ export async function buildSampleMember(scenario: SampleScenario, now = new Date
       await oneOff(12)
       await sampleTraining(user, now, { check: 'checked', doneUpTo: 7 })
       break
+    case 'plan-programme': {
+      // Week 4 of 8 (the lighter week), a lift goal part-way, three weeks of lifts behind it.
+      await oneOff(30)
+      let plan = await sampleTraining(user, now, { check: 'checked', doneUpTo: 0 })
+      const [{ mondayOf }, { applyProgrammeWeek, startProgramme }, { withLog }, { newGoal }, { saveTraining, getTraining }] = await Promise.all([
+        import('@/lib/training/generate'),
+        import('@/lib/training/programme'),
+        import('@/lib/training/progress'),
+        import('@/lib/training/goals'),
+        import('@/lib/training/store'),
+      ])
+      const monday = mondayOf(now)
+      const weeksAgo = (n: number, day = 1) => new Date(Date.parse(`${monday}T12:00:00Z`) - n * 7 * DAY + day * DAY).toISOString().slice(0, 10)
+      plan = { ...startProgramme({ ...plan, log: {} }, 8, weeksAgo(3, 0)), history: [3, 2, 3].map((done, i) => ({ weekOf: weeksAgo(i + 1, 0), done, planned: 4 })) }
+      const lifts = plan.sessions.flatMap((s) => (s.type === 'strength' ? s.exercises.slice(0, 2).map((e) => e.id) : []))
+      for (const [i, id] of [...new Set(lifts)].slice(0, 4).entries()) {
+        for (const [w, kg, reps] of [[3, 14, 8], [2, 16, 8], [1, 16, 10], [0, 18, 8]] as const) {
+          const on = weeksAgo(w, i % 2)
+          if (on <= now.toISOString().slice(0, 10)) plan = withLog(plan, id, { on, weightKg: kg + i * 4, reps })
+        }
+      }
+      const first = [...new Set(lifts)][0]
+      plan = applyProgrammeWeek({ ...plan, weekOf: monday })
+      plan = { ...plan, goal: first ? newGoal({ ...plan, log: {} }, { kind: 'lift', exerciseId: first, targetKg: 30 }, new Date(`${weeksAgo(3, 0)}T12:00:00Z`)) : null }
+      if (plan.goal) plan = { ...plan, goal: { ...plan.goal, startKg: 12 } }
+      await saveTraining({ ...(await getTraining(user.id)), plan })
+      break
+    }
     case 'trainer-video': {
       // A form check from the member, answered with a video note, rated helpful and shared.
       await oneOff(20)

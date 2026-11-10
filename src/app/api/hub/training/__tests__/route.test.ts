@@ -228,3 +228,36 @@ describe('the coaching tools (Phase 1)', () => {
     expect(s.plan!.introSeen).toBe(true)
   })
 })
+
+describe('programmes and goals (Phase 3)', () => {
+  afterEach(async () => {
+    await saveServiceSettings({ training: false, coaching: false, programmes: false })
+  })
+
+  it('starts a programme and sets a goal only while the switch is on', async () => {
+    await saveServiceSettings({ training: true, coaching: true, programmes: false })
+    await member(`prog-${Date.now()}@example.com`, true)
+    await post({ action: 'ready' })
+    let s = await json(await post({ action: 'build', prefs: { days: [0, 2, 4], minutes: 45, focus: 'muscle', split: 'auto', equipment: 'gym', experience: 'some', avoid: [], activities: [], trainAt: 1080 } }))
+    expect((await post({ action: 'programme', weeks: 8 })).status).toBe(404)
+    expect((await post({ action: 'goal', kind: 'pull-up' })).status).toBe(404)
+
+    await saveServiceSettings({ programmes: true })
+    expect((await post({ action: 'programme', weeks: 6 })).status).toBe(400)
+    s = await json(await post({ action: 'programme', weeks: 12 }))
+    expect(s.plan!.programme).toMatchObject({ weeks: 12, endedOn: null })
+    expect(s.coaching?.programmes).toBe(true)
+
+    s = await json(await post({ action: 'goal', kind: 'three-a-week' }))
+    expect(s.plan!.goal).toMatchObject({ kind: 'three-a-week', doneOn: null })
+    const lift = s.plan!.sessions.flatMap((x) => (x.type === 'strength' ? x.exercises.map((e) => e.id) : [])).find((id) => id !== 'plank')!
+    expect((await post({ action: 'goal', kind: 'lift', exerciseId: lift, targetKg: 0 })).status).toBe(400)
+    s = await json(await post({ action: 'goal', kind: null }))
+    expect(s.plan!.goal).toBeNull()
+
+    // Only a session that's really missed, to the day that's really free.
+    expect((await post({ action: 'missed', sessionId: 'nope', to: null })).status).toBe(400)
+    s = await json(await post({ action: 'programme-stop' }))
+    expect(s.plan!.programme).toBeNull()
+  })
+})

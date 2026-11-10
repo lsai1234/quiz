@@ -41,6 +41,7 @@ export type SampleScenario =
   | 'trainer-waiting'
   | 'trainer-answered'
   | 'trainer-video'
+  | 'plan-programme'
 
 export const SAMPLE_SCENARIOS: SampleScenario[] = [
   'none',
@@ -60,6 +61,7 @@ export const SAMPLE_SCENARIOS: SampleScenario[] = [
   'trainer-waiting',
   'trainer-answered',
   'trainer-video',
+  'plan-programme',
 ]
 
 /** The sample people on the results page. */
@@ -104,6 +106,8 @@ export const TEST_VIEWS: TestViewDef[] = [
   member('training-waiting', 'Training and trainer', 'New plan waiting for its check', 'Just built, waiting for the trainer', 'plan-waiting', '/myhub/training'),
   member('training-midweek', 'Training and trainer', 'Checked plan mid-week', 'Two sessions done, lifts logged', 'plan-midweek', '/myhub/training'),
   member('training-workout', 'Training and trainer', 'Workout mode', 'Today’s session, one set at a time', 'plan-midweek', '/myhub/training?workout=next'),
+  member('training-programme', 'Training and trainer', 'Programme, goal and a missed session', 'Programmes on: week 4 of 8 (lighter), a lift goal part-way', 'plan-programme', '/myhub/training'),
+  member('training-progress', 'Training and trainer', 'Progress page', 'This month against last, personal bests, a line per lift, the body map', 'plan-programme', '/myhub/training/progress'),
   member('trainer-waiting', 'Training and trainer', 'A question waiting', 'Asked about a lift, no answer yet', 'trainer-waiting', '/myhub/trainer'),
   member('trainer-answered', 'Training and trainer', 'An answer with a video', 'The trainer has replied', 'trainer-answered', '/myhub/trainer'),
   member('trainer-video', 'Training and trainer', 'A form check and a video note', 'Video on: the member’s clip, the trainer’s note, sharing', 'trainer-video', '/myhub/trainer'),

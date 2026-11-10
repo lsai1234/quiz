@@ -24,7 +24,10 @@ import {
   swapExercise,
   type PrefsPatch,
 } from '@/lib/training/edit'
-import { buildWeek, rebuildActivities, sortSessions } from '@/lib/training/generate'
+import { buildWeek, mondayOf, rebuildActivities, sortSessions, weekdayOf } from '@/lib/training/generate'
+import { startProgramme } from '@/lib/training/programme'
+import { newGoal, tickMilestone, withGoalDone } from '@/lib/training/goals'
+import { missedSessions, nextFreeDay, rehome } from '@/lib/training/missed'
 import { normalisePrefs, prefillPrefs } from '@/lib/training/prefs'
 import type { TrainingState } from '@/lib/training/state'
 import { getTraining, saveTraining, type TrainingRecord } from '@/lib/training/store'
@@ -62,7 +65,7 @@ async function stateFor(user: UserRecord, record: TrainingRecord, now: Date): Pr
   const { appBaseUrl } = await import('@/lib/notify')
   const { calendarFeedUrl } = await import('@/lib/training/live-calendar')
   const calendarUrl = plan?.calendarToken && coaching.coaching ? calendarFeedUrl(appBaseUrl(), plan.calendarToken) : null
-  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer, tips, coaching, calendarUrl, videos: await videosFor(coaching.video) }
+  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer, tips, coaching, calendarUrl, videos: await videosFor(coaching.video), liveQa: coaching.programmes ? await liveQaFor(now) : null }
 }
 
 export async function GET() {
@@ -246,6 +249,49 @@ export async function POST(req: Request) {
       plan = { ...current, introSeen: true }
       break
     }
+    /* ── Programmes and goals (Phase 3) ── */
+    case 'programme': {
+      if (!(await phase3())) return bad('Not available', 404)
+      if (body.weeks !== 8 && body.weeks !== 12) return bad('8 or 12 weeks?')
+      plan = startProgramme(current, body.weeks, mondayOf(now))
+      break
+    }
+    case 'programme-stop': {
+      plan = { ...current, programme: null }
+      break
+    }
+    case 'programme-close': {
+      if (!current.programme) return bad('No programme')
+      plan = { ...current, programme: { ...current.programme, endedOn: now.toISOString().slice(0, 10) } }
+      break
+    }
+    case 'goal': {
+      if (!(await phase3())) return bad('Not available', 404)
+      if (body.kind === null) {
+        plan = { ...current, goal: null }
+        break
+      }
+      const goal = newGoal(current, { kind: body.kind, exerciseId: body.exerciseId, targetKg: body.targetKg }, now)
+      if (!goal) return bad('That goal doesn’t fit')
+      plan = withGoalDone({ ...current, goal }, now)
+      break
+    }
+    case 'goal-tick': {
+      const id = text(body.id)
+      if (!id) return bad('Which milestone?')
+      plan = tickMilestone(current, id, now)
+      break
+    }
+    case 'missed': {
+      const id = text(body.sessionId)
+      const to = body.to === null ? null : weekday(body.to)
+      if (!id || to === undefined || (body.to !== null && to === null)) return bad('Where to?')
+      const missed = missedSessions(current, weekdayOf(now), mondayOf(now)).find((s) => s.id === id)
+      if (!missed) return bad('That session isn’t missed')
+      if (to !== null && nextFreeDay(current, weekdayOf(now)) !== to) return bad('That day isn’t free')
+      plan = rehome(current, id, to, now)
+      break
+    }
     case 'reminders': {
       // Training emails: each off unless they turn it on.
       if (typeof body.days !== 'boolean' || typeof body.recap !== 'boolean') return bad('Which emails?')
@@ -256,14 +302,31 @@ export async function POST(req: Request) {
       return bad('Unknown action')
   }
 
-  // A new setup or a rebuilt week goes back to the trainer; small changes don't.
+  // A goal's milestones tick themselves from what they log and tick.
+  if (plan && GOAL_MOVES.has(String(body.action))) plan = withGoalDone(plan, now)
+  // A new setup, a rebuilt week or a new programme goes back to the trainer; small changes don't.
   if (plan && RECHECK.has(String(body.action))) plan = await queueCheck(plan, now)
   record = { ...record, plan }
   await saveTraining(record)
   return NextResponse.json(await stateFor(user, record, now))
 }
 
-const RECHECK = new Set(['prefs', 'rebuild-week', 'rebuild-day'])
+const RECHECK = new Set(['prefs', 'rebuild-week', 'rebuild-day', 'programme'])
+const GOAL_MOVES = new Set(['log', 'done', 'sets'])
+
+/** Programmes and goals are on (Settings → Training plan). */
+async function phase3(): Promise<boolean> {
+  return coachingOn(await getOfferSettings(), 'programmes')
+}
+
+/** The live Q&A as members see it; a sample one in a test view when none is set. */
+async function liveQaFor(now: Date) {
+  const { getLiveQa, liveQaView } = await import('@/lib/training/live-qa')
+  const qa = await getLiveQa()
+  if (qa) return liveQaView(qa, now)
+  const { currentTestView, sampleLiveQa } = await import('@/lib/samples/session')
+  return (await currentTestView()) ? liveQaView(sampleLiveQa(now), now) : null
+}
 
 /** Uploaded videos by exercise, while video is on (Phase 2). */
 async function videosFor(on: boolean): Promise<Record<string, string>> {

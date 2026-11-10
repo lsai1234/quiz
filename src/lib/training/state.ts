@@ -4,7 +4,7 @@
  */
 import type { TrainingAccess } from './access'
 import type { PrefsDraft } from './prefs'
-import type { ActivityKind, Felt, ReadinessRecord, TrainingPlan, TrainingPrefs, WeekMode, Weekday } from './types'
+import type { ActivityKind, Felt, GoalKind, ReadinessRecord, TrainingPlan, TrainingPrefs, WeekMode, Weekday } from './types'
 
 import type { PublicTrainer } from '@/lib/trainer/types'
 
@@ -27,6 +27,8 @@ export interface TrainingState {
   coaching?: { coaching: boolean; video: boolean; programmes: boolean }
   /** Their live calendar's address, once they've asked for one. */
   calendarUrl?: string | null
+  /** The monthly live Q&A, while Programmes and goals is on. */
+  liveQa?: import('./live-qa').LiveQaView | null
 }
 
 export type TrainingAction =
@@ -49,3 +51,9 @@ export type TrainingAction =
   | { action: 'calendar-link' }
   | { action: 'intro-seen' }
   | { action: 'reminders'; days: boolean; recap: boolean }
+  | { action: 'programme'; weeks: 8 | 12 }
+  | { action: 'programme-stop' }
+  | { action: 'programme-close' }
+  | { action: 'goal'; kind: GoalKind | null; exerciseId?: string; targetKg?: number }
+  | { action: 'goal-tick'; id: string }
+  | { action: 'missed'; sessionId: string; to: Weekday | null }

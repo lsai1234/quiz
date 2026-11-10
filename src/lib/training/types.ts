@@ -181,6 +181,10 @@ export interface StrengthSession {
   lighter?: { exercises: PlannedExercise[] } | null
   /** The trainer changed this session, and why. */
   changedBy?: TrainerChange | null
+  /** Missed, and moved to a free day this week only: the day it goes back to on Monday. */
+  movedFrom?: Weekday | null
+  /** Missed with no free day left: dropped for this week, nothing to catch up. */
+  skipped?: boolean
 }
 
 export interface ActivitySession {
@@ -193,6 +197,8 @@ export interface ActivitySession {
   /** Put in by the plan rather than chosen by them. */
   suggested: boolean
   done: boolean
+  movedFrom?: Weekday | null
+  skipped?: boolean
 }
 
 export type Session = StrengthSession | ActivitySession
@@ -241,6 +247,36 @@ export interface TrainingPlan {
   introSeen?: boolean
   /** Training emails they turned on (`lib/training/emails`): off unless set. */
   reminders?: { days: boolean; recap: boolean } | null
+  /** An 8- or 12-week programme (Phase 3, `./programme`). */
+  programme?: Programme | null
+  /** The goal they picked, with milestones ticked from their logs (`./goals`). */
+  goal?: TrainingGoal | null
+  /** Activities ticked done, by date, newest first: what a run goal counts. */
+  activities?: { on: string; kind: ActivityKind }[]
+}
+
+/** A block of weeks: foundation, build, a lighter week every fourth, and a test week at the end. */
+export interface Programme {
+  weeks: 8 | 12
+  /** Monday of week 1, YYYY-MM-DD. */
+  startedOn: string
+  /** Finished, when they saw the comparison. */
+  endedOn?: string | null
+}
+
+export type GoalKind = 'lift' | 'pull-up' | 'run-5k' | 'three-a-week'
+export interface TrainingGoal {
+  kind: GoalKind
+  /** For a lift: which one, and the weight they're aiming for (they set it). */
+  exerciseId?: string | null
+  targetKg?: number | null
+  /** Where the lift started, from their log when they picked it. */
+  startKg?: number | null
+  setOn: string
+  /** Milestones they tick themselves, where the log can't know (a 5 km run). */
+  ticked?: string[]
+  /** When the last milestone fell. */
+  doneOn?: string | null
 }
 
 export type WeekMode = 'busy' | 'away'

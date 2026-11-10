@@ -102,3 +102,10 @@ export function withTestSwitches(settings: OfferSettings, s: TestSwitches): Offe
     hubPrice: { ...settings.hubPrice, standalone: s.hubOnSale, monthly: settings.hubPrice.monthly > 0 ? settings.hubPrice.monthly : 10 },
   }
 }
+
+/** A live Q&A for test views when none is set: the first Tuesday of next month, 7pm UK, an hour. */
+export function sampleLiveQa(now: Date): import('@/lib/training/live-qa').LiveQa {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 19, 0))
+  while (d.getUTCDay() !== 2) d.setUTCDate(d.getUTCDate() + 1)
+  return { title: 'Live Q&A with Sam (sample)', startsAt: d.toISOString(), minutes: 60, joinUrl: null, recordingUrl: null, updatedAt: now.toISOString() }
+}

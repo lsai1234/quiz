@@ -2,6 +2,7 @@
  * Changing a plan: each change re-plans only what it touches. Pure: every
  * function takes a plan and returns a new one.
  */
+import { applyProgrammeWeek } from './programme'
 import { doseFor } from './dose'
 import {
   activityId,
@@ -207,9 +208,18 @@ export function rebuildWeek(plan: TrainingPlan, now: Date, replacement?: { sessi
 
 /** Tick a session done, or not. */
 export function setDone(plan: TrainingPlan, sessionId: string, done: boolean, now: Date): TrainingPlan {
+  // Activities done, by date, for goals that count them (a 5 km run): kept short.
+  const on = now.toISOString().slice(0, 10)
+  const act = plan.sessions.find((x) => x.id === sessionId && x.type === 'activity')
+  const activities = act && act.type === 'activity'
+    ? done
+      ? [{ on, kind: act.activity }, ...(plan.activities ?? []).filter((a) => !(a.on === on && a.kind === act.activity))].slice(0, 120)
+      : (plan.activities ?? []).filter((a) => !(a.on === on && a.kind === act.activity))
+    : plan.activities
   return stamp(
     {
       ...plan,
+      ...(activities ? { activities } : {}),
       sessions: plan.sessions.map((x) => {
         if (x.id !== sessionId) return x
         if (x.type === 'strength') return { ...x, done, exercises: x.exercises.map((p) => ({ ...p, doneSets: done ? p.sets : p.doneSets })) }
@@ -245,12 +255,16 @@ export function rollWeek(plan: TrainingPlan, now: Date): TrainingPlan {
   if (plan.weekOf >= monday) return plan
   const history = [{ weekOf: plan.weekOf, done: plan.sessions.filter((s) => s.done).length, planned: plan.sessions.length }, ...plan.history].slice(0, 12)
   const base = plan.weekMode ? plan.weekMode.saved : plan.sessions
-  const sessions = base.map((s) =>
-    s.type === 'strength'
-      ? { ...s, done: false, lighter: null, exercises: (s.lighter?.exercises ?? s.exercises).map((p) => ({ ...p, doneSets: 0 })) }
-      : { ...s, done: false },
+  // A session moved for a missed day goes back to its own day; a dropped one comes back.
+  const sessions = sortSessions(
+    base.map((s) =>
+      s.type === 'strength'
+        ? { ...s, day: s.movedFrom ?? s.day, movedFrom: null, skipped: false, done: false, lighter: null, exercises: (s.lighter?.exercises ?? s.exercises).map((p) => ({ ...p, doneSets: 0 })) }
+        : { ...s, day: s.movedFrom ?? s.day, movedFrom: null, skipped: false, done: false },
+    ),
   )
-  return { ...plan, weekOf: monday, history, sessions, weekMode: null }
+  // A programme's lighter week (`./programme`).
+  return applyProgrammeWeek({ ...plan, weekOf: monday, history, sessions, weekMode: null })
 }
 
 /* ── How it felt ─────────────────────────────────────────────────────────── */

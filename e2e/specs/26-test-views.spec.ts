@@ -154,3 +154,34 @@ test('video phase: a form check and a video note, the About page, the inbox and 
   await page.locator('[data-hub-preview]').scrollIntoViewIfNeeded()
   await shot(page, 'results-proof')
 })
+
+test('programmes and goals: the lighter week, a goal, the cool-down, the progress page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await founderSessionViaApi(page)
+  await page.goto('/api/portal/test-views/open?view=training-programme')
+  await expect(page.locator('[data-programme="lighter"]')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-programme]')).toContainText('Week 4 of 8')
+  await expect(page.locator('[data-goal="lift"] [data-milestone-done="true"]').first()).toBeVisible()
+  await expect(page.locator('[data-live-qa]')).toBeVisible()
+  // A missed session (any day before today): move it, and it says where from.
+  const missed = page.locator('[data-missed]')
+  if (await missed.count()) {
+    const move = missed.locator('[data-missed-move]')
+    if (await move.count()) {
+      await move.click()
+      await expect(page.locator('[data-session-moved]').first()).toBeVisible()
+    }
+  }
+  await shot(page, 'training-programme')
+
+  // A session: the ramp sets before, the cool-down after.
+  await page.locator('[data-session-type="strength"] [data-open-session]').first().click()
+  await expect(page.locator('[data-cooldown]')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await page.goto('/myhub/training/progress')
+  await expect(page.locator('[data-progress-months]')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-lift-chart]').first()).toBeVisible()
+  await expect(page.locator('[data-progress-bests] li').first()).toBeVisible()
+  await shot(page, 'training-progress')
+})
