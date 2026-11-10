@@ -15,7 +15,7 @@ import { longDay, nextSession, progressOf, sessionSummary, sessionTitle } from '
 import { ChangePlanSheet } from './ChangePlanSheet'
 import { BackAfterGapCard, ChangedBy, LiveCalendarCard, MeetTrainerCard, TrainingEmailsCard, WeekModeCard, backAfterGap } from './CoachingBits'
 import { SessionSheet } from './SessionSheet'
-import { GoalCard, LiveQaCard, MissedCard, ProgrammeCard } from './ProgrammeBits'
+import { GoalCard, MissedCard, ProgrammeCard } from './ProgrammeBits'
 import { PROGRAMME_COPY as P } from '@/lib/training/programme-copy'
 import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { body, display, eyebrow, meta, stack, strong } from './styles'
@@ -96,7 +96,6 @@ export function Week({
 
       {programmes && <ProgrammeCard plan={plan} trainer={state.trainer?.checksPlans ? state.trainer.name : null} act={act} busy={busy} />}
       {programmes && <GoalCard plan={plan} act={act} busy={busy} />}
-      {programmes && state.liveQa && <LiveQaCard qa={state.liveQa} trainer={state.trainer?.name ?? null} />}
 
       <Up plan={plan} today={today} onOpen={setOpenId} onStart={coaching ? onStart : undefined} />
 

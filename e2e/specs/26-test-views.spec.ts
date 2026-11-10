@@ -162,7 +162,6 @@ test('programmes and goals: the lighter week, a goal, the cool-down, the progres
   await expect(page.locator('[data-programme="lighter"]')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('[data-programme]')).toContainText('Week 4 of 8')
   await expect(page.locator('[data-goal="lift"] [data-milestone-done="true"]').first()).toBeVisible()
-  await expect(page.locator('[data-live-qa]')).toBeVisible()
   // A missed session (any day before today): move it, and it says where from.
   const missed = page.locator('[data-missed]')
   if (await missed.count()) {

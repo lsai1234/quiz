@@ -27,8 +27,6 @@ export interface TrainingState {
   coaching?: { coaching: boolean; video: boolean; programmes: boolean }
   /** Their live calendar's address, once they've asked for one. */
   calendarUrl?: string | null
-  /** The monthly live Q&A, while Programmes and goals is on. */
-  liveQa?: import('./live-qa').LiveQaView | null
 }
 
 export type TrainingAction =

@@ -1,8 +1,8 @@
 /**
  * The words of Phase 3 (programmes and goals): programmes and their weeks,
  * goals and milestones, a missed session finding a home, the warm-up and
- * cool-down, the progress page and the monthly live Q&A. Scripted, one file,
- * in the review pack (`programmeCopyRows`).
+ * cool-down, and the progress page. Scripted, one file, in the review pack
+ * (`programmeCopyRows`).
  *
  * No streaks, no guilt, and nothing about what training does for anyone's
  * health. A lighter week and a dropped session are said plainly, as normal.
@@ -93,17 +93,6 @@ export const PROGRAMME_COPY = {
   workedSets: (n: number) => `${n} set${n === 1 ? '' : 's'}`,
   front: 'Front',
   back: 'Back',
-
-  /* ── Live Q&A ── */
-  liveTitle: 'Live Q&A',
-  liveLine: (name: string) => `An hour with ${name} each month, open to every member. Bring a question.`,
-  liveWhen: (date: string, time: string, minutes: number) => `${date}, ${time} · ${minutes} min`,
-  liveJoin: 'Join',
-  liveJoinLater: 'The join link shows here the day before.',
-  liveRecorded: 'It’s recorded, and members can watch it for 90 days. Keep your camera and microphone off if you’d rather not be in it.',
-  liveAdd: 'Add to my calendar',
-  liveRecording: 'Watch the last one',
-  liveRecordingUntil: (date: string) => `Kept until ${date}`,
 }
 
 export const MUSCLE_LABEL: Record<Muscle, string> = {

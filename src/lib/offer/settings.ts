@@ -216,7 +216,7 @@ export interface ServiceSettings {
    *   video       uploaded videos, video notes, form checks, saved replies,
    *               the answers library and the results page's proof
    *   programmes  8- and 12-week programmes, goals, missed sessions finding
-   *               a home, warm-ups and cool-downs, the progress page, live Q&A
+   *               a home, warm-ups and cool-downs, the progress page
    */
   coaching: boolean
   video: boolean

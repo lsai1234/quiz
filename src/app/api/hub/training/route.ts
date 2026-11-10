@@ -65,7 +65,7 @@ async function stateFor(user: UserRecord, record: TrainingRecord, now: Date): Pr
   const { appBaseUrl } = await import('@/lib/notify')
   const { calendarFeedUrl } = await import('@/lib/training/live-calendar')
   const calendarUrl = plan?.calendarToken && coaching.coaching ? calendarFeedUrl(appBaseUrl(), plan.calendarToken) : null
-  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer, tips, coaching, calendarUrl, videos: await videosFor(coaching.video), liveQa: coaching.programmes ? await liveQaFor(now) : null }
+  return { access, readiness: record.readiness, plan, draft, tutorials: await getTutorials(), trainer, tips, coaching, calendarUrl, videos: await videosFor(coaching.video) }
 }
 
 export async function GET() {
@@ -317,15 +317,6 @@ const GOAL_MOVES = new Set(['log', 'done', 'sets'])
 /** Programmes and goals are on (Settings → Training plan). */
 async function phase3(): Promise<boolean> {
   return coachingOn(await getOfferSettings(), 'programmes')
-}
-
-/** The live Q&A as members see it; a sample one in a test view when none is set. */
-async function liveQaFor(now: Date) {
-  const { getLiveQa, liveQaView } = await import('@/lib/training/live-qa')
-  const qa = await getLiveQa()
-  if (qa) return liveQaView(qa, now)
-  const { currentTestView, sampleLiveQa } = await import('@/lib/samples/session')
-  return (await currentTestView()) ? liveQaView(sampleLiveQa(now), now) : null
 }
 
 /** Uploaded videos by exercise, while video is on (Phase 2). */

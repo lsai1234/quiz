@@ -21,17 +21,9 @@ interface Item {
   tip: string | null
   video: string | null
 }
-interface LiveQa {
-  title: string
-  startsAt: string
-  minutes: number
-  joinUrl: string | null
-  recordingUrl: string | null
-}
 interface View {
   enabled: boolean
   phases: { coaching: boolean; video: boolean; programmes: boolean }
-  liveQa?: LiveQa | null
   plans: number
   items: Item[]
 }
@@ -39,7 +31,7 @@ interface View {
 const PHASES: { key: keyof View['phases']; label: string; hint: string }[] = [
   { key: 'coaching', label: 'Coaching tools', hint: 'Workout mode, how it felt, busy and away weeks, a lighter session, the live calendar, the trainer’s tips and changes, questions in context, nudges and the week-one recap.' },
   { key: 'video', label: 'Video and form checks', hint: 'Uploaded videos on exercises, video notes, members’ form checks (deleted after 30 days), saved replies, the answers library and the results page’s proof.' },
-  { key: 'programmes', label: 'Programmes and goals', hint: '8- and 12-week programmes, goals with milestones, missed sessions finding a home, warm-ups and cool-downs, the progress page and the monthly live Q&A.' },
+  { key: 'programmes', label: 'Programmes and goals', hint: '8- and 12-week programmes, goals with milestones, missed sessions finding a home, warm-ups and cool-downs, and the progress page.' },
 ]
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
@@ -132,8 +124,6 @@ export function TrainingSettings() {
           ))}
         </div>
       </Card>
-
-      {view.phases.programmes && <LiveQaSettings qa={view.liveQa ?? null} onSave={(liveQa) => post({ liveQa })} />}
 
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-5)' }}>
@@ -267,75 +257,3 @@ function TipRow({ item, onSave }: { item: Item; onSave: (tip: string | null) => 
 }
 
 /** A Date as the `datetime-local` input takes it, in this browser's time. */
-function localInput(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-/** The monthly live Q&A (Programmes and goals): when, how long, the join link, and the recording afterwards. */
-function LiveQaSettings({ qa, onSave }: { qa: LiveQa | null; onSave: (qa: Record<string, unknown> | null) => Promise<void> }) {
-  const [draft, setDraft] = useState({
-    title: qa?.title ?? 'Live Q&A',
-    startsAt: localInput(qa?.startsAt),
-    minutes: String(qa?.minutes ?? 60),
-    joinUrl: qa?.joinUrl ?? '',
-    recordingUrl: qa?.recordingUrl ?? '',
-  })
-  const [message, setMessage] = useState<string | null>(null)
-  const set = (k: keyof typeof draft) => (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [k]: e.target.value }))
-  const recordingEnds = qa?.recordingUrl ? new Date(Date.parse(qa.startsAt) + 90 * 86_400_000) : null
-  return (
-    <Card elevation={1}>
-      <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-live-qa-settings>
-        <h2 style={HEADING}>Monthly live Q&A</h2>
-        <p style={BODY}>
-          An hour a month with the trainer, open to every member with an open hub. Members see the date, can add it to their calendar, and get the join link the day
-          before. Say at the start that it’s being recorded. Add the recording afterwards: it shows for 90 days from the session, then it’s gone from the hub, so delete it where it’s hosted then.
-        </p>
-        <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
-          <Input label="Title" compact value={draft.title} onChange={set('title')} />
-          <Input label="When (UK time)" compact type="datetime-local" value={draft.startsAt} onChange={set('startsAt')} data-live-qa-when />
-          <Input label="Minutes" compact inputMode="numeric" value={draft.minutes} onChange={set('minutes')} />
-          <Input label="Join link" compact type="url" placeholder="https://" value={draft.joinUrl} onChange={set('joinUrl')} hint="Zoom, Meet, Teams or a YouTube live link" />
-        </div>
-        <Input label="Recording (after it’s happened)" compact type="url" placeholder="https://" value={draft.recordingUrl} onChange={set('recordingUrl')} hint="An unlisted link. Delete it where it’s hosted after 90 days." />
-        {recordingEnds && <p style={META}>{`The recording shows until ${recordingEnds.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}.`}</p>}
-        <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!draft.startsAt}
-            onClick={async () => {
-              try {
-                await onSave({ ...draft, startsAt: new Date(draft.startsAt).toISOString(), minutes: Number(draft.minutes) })
-                setMessage('Saved.')
-              } catch (err) {
-                setMessage(err instanceof Error ? err.message : 'That did not save.')
-              }
-            }}
-            data-live-qa-save
-          >
-            Save
-          </Button>
-          {qa && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="trash"
-              onClick={async () => {
-                await onSave(null).catch(() => {})
-                setDraft({ title: 'Live Q&A', startsAt: '', minutes: '60', joinUrl: '', recordingUrl: '' })
-                setMessage('Cleared.')
-              }}
-            >
-              Clear
-            </Button>
-          )}
-          {message && <p style={META} role="status">{message}</p>}
-        </div>
-      </div>
-    </Card>
-  )
-}

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { Badge, Button, Card, Input, Note, OptionRow, Segmented, Select, buttonSurface } from '@/components/system'
-import type { LiveQaView } from '@/lib/training/live-qa'
 import { Icon } from '@/components/ui/Icon'
 import { WEEKDAY_LONG } from '@/lib/training/copy'
 import { cooldownFor } from '@/lib/training/cooldown'
@@ -356,59 +355,5 @@ export function CooldownBlock({ session, prefs, onOpen }: { session: StrengthSes
         </>
       )}
     </section>
-  )
-}
-
-/* ── The monthly live Q&A ─────────────────────────────────────────────────── */
-
-const when = (iso: string) => {
-  const d = new Date(iso)
-  const date = d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' })
-  const h = Number(d.toLocaleString('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Europe/London' }))
-  const m = d.toLocaleString('en-GB', { minute: '2-digit', timeZone: 'Europe/London' }).padStart(2, '0')
-  const time = `${h % 12 === 0 ? 12 : h % 12}${m === '00' ? '' : `:${m}`}${h < 12 ? 'am' : 'pm'}`
-  return { date, time }
-}
-
-export function LiveQaCard({ qa, trainer }: { qa: LiveQaView; trainer: string | null }) {
-  const join = buttonSurface('primary', 'sm')
-  const add = buttonSurface('secondary', 'sm')
-  const t = when(qa.startsAt)
-  return (
-    <div data-live-qa={qa.upcoming ? 'upcoming' : 'recording'}>
-      <Card padding="normal">
-        <div style={stack('var(--space-2)')}>
-          <p style={eyebrow}>{P.liveTitle}</p>
-          <p style={strong}>{qa.title}</p>
-          {trainer && <p style={body}>{P.liveLine(trainer)}</p>}
-          {qa.upcoming ? (
-            <>
-              <p style={{ ...body, color: 'var(--ink-1)' }}>{P.liveWhen(t.date, t.time, qa.minutes)}</p>
-              <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>
-                {qa.joinUrl && (
-                  <a href={qa.joinUrl} target="_blank" rel="noopener noreferrer" className={join.className} style={join.style} data-live-join>
-                    {P.liveJoin}
-                  </a>
-                )}
-                <a href="/api/hub/live-qa/calendar" className={add.className} style={add.style} data-live-add>
-                  {P.liveAdd}
-                </a>
-              </div>
-              {!qa.joinUrl && <p style={meta}>{P.liveJoinLater}</p>}
-              <p style={meta} data-live-recorded>{P.liveRecorded}</p>
-            </>
-          ) : (
-            qa.recording && (
-              <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
-                <a href={qa.recording.url} target="_blank" rel="noopener noreferrer" className={add.className} style={add.style} data-live-recording>
-                  {P.liveRecording}
-                </a>
-                <span style={meta}>{P.liveRecordingUntil(longDay(qa.recording.until))}</span>
-              </div>
-            )
-          )}
-        </div>
-      </Card>
-    </div>
   )
 }
