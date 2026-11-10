@@ -119,7 +119,7 @@ export function TrainingSettings() {
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-coaching-phases>
           <h2 style={HEADING}>Coaching phases</h2>
-          <p style={BODY}>Coaching tools are on; video and programmes stay off until you switch them on. Every phase needs the training plan on. Try any of them first in Settings → Test views.</p>
+          <p style={BODY}>Coaching tools and video are on; programmes stays off until you switch it on. Every phase needs the training plan on. Try any of them first in Settings → Test views.</p>
           {PHASES.map((p) => (
             <Checkbox
               key={p.key}

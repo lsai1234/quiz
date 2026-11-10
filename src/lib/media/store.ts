@@ -14,6 +14,7 @@
  */
 import { randomBytes } from 'node:crypto'
 import { kvDelete, kvGet, kvListPrefix, kvSet } from '@/lib/db/kv'
+import { RETENTION } from '@/lib/legal/content'
 
 export type MediaKind = 'exercise' | 'trainer' | 'note' | 'form-check'
 
@@ -44,7 +45,8 @@ export const MEDIA_MAX_BYTES: Record<MediaKind, number> = {
   note: 40 * 1024 * 1024,
   'form-check': 30 * 1024 * 1024,
 }
-export const FORM_CHECK_DAYS = 30
+/** From the privacy notice's retention table, so the two can't drift apart. */
+export const FORM_CHECK_DAYS = RETENTION.formCheckDays
 const STILL_MAX = 200_000
 
 const metaKey = (id: string) => `media:${id}`

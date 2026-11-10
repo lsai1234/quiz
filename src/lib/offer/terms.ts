@@ -112,6 +112,7 @@ export function guaranteeTerms(): TermsSection[] {
         'Answers are general fitness coaching, not medical advice. For an injury, pain or a health condition, see your GP or a physio first, and please don’t send medical details.',
         'Your hub shows how soon the trainer usually answers. It’s what we work to, not a guaranteed response time, and there’s a limit on questions a day so everyone gets an answer.',
         'Your questions and the answers are kept with your account, included in your data export, and deleted with your account.',
+        'While form checks are on, you can send a video clip of up to 30 seconds with a question. Only you and our team can watch it, and it’s deleted after 30 days.',
       ],
     },
     {
@@ -194,6 +195,7 @@ export function memberHubTerms(input: { freeOver: number; /** While the hub is o
         'Answers are general fitness coaching, not medical advice. For an injury, pain or a health condition, see your GP or a physio first, and please don’t send medical details.',
         'Your hub shows how soon the trainer usually answers. It’s what we work to, not a guaranteed response time, and there’s a limit on questions a day so everyone gets an answer.',
         'Your questions and the answers are kept with your account, included in your data export, and deleted with your account.',
+        'While form checks are on, you can send a video clip of up to 30 seconds with a question. Only you and our team can watch it, and it’s deleted after 30 days.',
       ],
     },
     {

@@ -208,8 +208,8 @@ export interface ServiceSettings {
   trainer: boolean
   /**
    * The training plan's coaching tools, by phase (docs: "Trainer and training
-   * plan"). Each needs the training plan on too. Phase 1 (coaching) is on
-   * unless switched off; video and programmes are off until tried.
+   * plan"). Each needs the training plan on too. Phases 1 and 2 (coaching,
+   * video) are on unless switched off; programmes is off until tried.
    *   coaching    workout mode, how it felt, busy and away weeks, a lighter
    *               session, the live calendar, the trainer's tips and changes,
    *               questions in context, nudges and the week-one recap
@@ -223,7 +223,7 @@ export interface ServiceSettings {
   programmes: boolean
 }
 
-export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false, trainer: false, coaching: true, video: false, programmes: false }
+export const DEFAULT_SERVICES: ServiceSettings = { checkIns: true, guarantee: false, training: false, deals: false, trainer: false, coaching: true, video: true, programmes: false }
 
 export function normaliseServices(raw: unknown): ServiceSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ServiceSettings, unknown>>
@@ -235,7 +235,8 @@ export function normaliseServices(raw: unknown): ServiceSettings {
     trainer: r.trainer === true,
     // Phase 1 is go: on unless it's been switched off.
     coaching: r.coaching !== false,
-    video: r.video === true,
+    // Phase 2 is go, too.
+    video: r.video !== false,
     programmes: r.programmes === true,
   }
 }
