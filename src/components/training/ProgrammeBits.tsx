@@ -395,6 +395,7 @@ export function LiveQaCard({ qa, trainer }: { qa: LiveQaView; trainer: string | 
                 </a>
               </div>
               {!qa.joinUrl && <p style={meta}>{P.liveJoinLater}</p>}
+              <p style={meta} data-live-recorded>{P.liveRecorded}</p>
             </>
           ) : (
             qa.recording && (

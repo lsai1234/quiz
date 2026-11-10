@@ -186,6 +186,7 @@ export function memberHubTerms(input: { freeOver: number; /** While the hub is o
       lines: [
         'The training plan is general fitness guidance, not medical advice. Check with your GP before starting if the readiness check suggests it, and stop if anything hurts.',
         'While our trainer checks plans, each new plan, new setup or rebuilt week is checked by our in-house personal trainer. You can use it straight away while it’s being checked, and change any part of it at any time.',
+        'While it runs, a monthly live Q&A with our trainer is open to members. It’s recorded, and members can watch the recording for 90 days. Keep your camera and microphone off if you’d rather not be in it.',
       ],
     },
     {

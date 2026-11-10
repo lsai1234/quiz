@@ -195,7 +195,7 @@ describe('the coaching tools (Phase 1)', () => {
     await member(`coach-${Date.now()}@example.com`, true)
     await post({ action: 'ready' })
     let s = await json(await post({ action: 'build', prefs: { days: [0, 2, 4], minutes: 45, focus: 'muscle', split: 'auto', equipment: 'gym', experience: 'some', avoid: [], activities: [], trainAt: 1080 } }))
-    expect(s.coaching).toEqual({ coaching: true, video: true, programmes: false })
+    expect(s.coaching).toEqual({ coaching: true, video: true, programmes: true })
     const first = s.plan!.sessions.find((x) => x.type === 'strength')!
     const ex = first.type === 'strength' ? first.exercises[0].id : ''
 

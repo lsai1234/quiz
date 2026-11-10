@@ -100,6 +100,7 @@ export const PROGRAMME_COPY = {
   liveWhen: (date: string, time: string, minutes: number) => `${date}, ${time} · ${minutes} min`,
   liveJoin: 'Join',
   liveJoinLater: 'The join link shows here the day before.',
+  liveRecorded: 'It’s recorded, and members can watch it for 90 days. Keep your camera and microphone off if you’d rather not be in it.',
   liveAdd: 'Add to my calendar',
   liveRecording: 'Watch the last one',
   liveRecordingUntil: (date: string) => `Kept until ${date}`,

@@ -119,7 +119,7 @@ export function TrainingSettings() {
       <Card elevation={1}>
         <div style={{ display: 'grid', gap: 'var(--space-3)' }} data-coaching-phases>
           <h2 style={HEADING}>Coaching phases</h2>
-          <p style={BODY}>Coaching tools and video are on; programmes stays off until you switch it on. Every phase needs the training plan on. Try any of them first in Settings → Test views.</p>
+          <p style={BODY}>All three are on, and each can be switched off here. Every phase needs the training plan on. Try any of them in Settings → Test views.</p>
           {PHASES.map((p) => (
             <Checkbox
               key={p.key}
@@ -292,7 +292,7 @@ function LiveQaSettings({ qa, onSave }: { qa: LiveQa | null; onSave: (qa: Record
         <h2 style={HEADING}>Monthly live Q&A</h2>
         <p style={BODY}>
           An hour a month with the trainer, open to every member with an open hub. Members see the date, can add it to their calendar, and get the join link the day
-          before. Add the recording afterwards: it shows for 90 days from the session, then it’s gone from the hub.
+          before. Say at the start that it’s being recorded. Add the recording afterwards: it shows for 90 days from the session, then it’s gone from the hub, so delete it where it’s hosted then.
         </p>
         <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
           <Input label="Title" compact value={draft.title} onChange={set('title')} />

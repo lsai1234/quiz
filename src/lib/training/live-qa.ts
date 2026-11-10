@@ -9,8 +9,10 @@
  * (and the Founders Hub says to delete it where it's hosted). Server-only.
  */
 import { kvGet, kvSet } from '@/lib/db/kv'
+import { RETENTION } from '@/lib/legal/content'
 
-export const RECORDING_DAYS = 90
+/** From the privacy notice's retention table, so the two can't drift apart. */
+export const RECORDING_DAYS = RETENTION.liveQaRecordingDays
 const DAY = 86_400_000
 const KEY = 'training-live-qa'
 
