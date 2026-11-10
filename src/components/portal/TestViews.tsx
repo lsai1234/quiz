@@ -29,6 +29,8 @@ const SWITCHES: { key: keyof TestSwitches; label: string }[] = [
   { key: 'coaching', label: 'Coaching tools: workout mode, how it felt, busy and away, live calendar' },
   { key: 'video', label: 'Video, form checks and the answers library' },
   { key: 'programmes', label: 'Programmes, goals and the progress page' },
+  { key: 'hero', label: 'Hero offer: an approved product leads the results' },
+  { key: 'gift', label: 'Free gift on qualifying first orders' },
 ]
 
 export function TestViews() {
@@ -96,6 +98,10 @@ export function TestViews() {
                   data-test-switch={s.key}
                 />
               ))}
+              <p style={META}>
+                Until a hero is approved, test views use the products you’ve switched on as a hero in Settings → Offer (or any product), counting their checks as done
+                here only. Until the gift pool has a product, any product can be the gift, still kept above your margin floor.
+              </p>
             </div>
           )}
           <div className="flex flex-wrap" style={{ gap: 'var(--space-2)' }}>

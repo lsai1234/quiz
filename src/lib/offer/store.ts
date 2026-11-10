@@ -41,9 +41,9 @@ const FILE = 'offer'
  */
 export async function getOfferSettings(): Promise<OfferSettings> {
   const live = await getLiveOfferSettings()
-  const { currentTestView, withTestSwitches, withSampleTrainerClips } = await import('@/lib/samples/session')
+  const { currentTestView, withTestSwitches, withSampleTrainerClips, withSampleOfferFor } = await import('@/lib/samples/session')
   const view = await currentTestView()
-  return view ? withSampleTrainerClips(withTestSwitches(live, view.switches), live) : live
+  return view ? withSampleOfferFor(await withSampleTrainerClips(withTestSwitches(live, view.switches), live)) : live
 }
 
 /** What's really on, whoever is asking. */

@@ -185,3 +185,57 @@ test('programmes and goals: the lighter week, a goal, the cool-down, the progres
   await expect(page.locator('[data-progress-bests] li').first()).toBeVisible()
   await shot(page, 'training-progress')
 })
+
+test('the hero and the gift in a test view, and the sample inbox’s exchange kept out of the real results page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await founderSessionViaApi(page)
+
+  // Both start off; ticking them changes this browser only.
+  await page.goto('/founderhub/settings/test-views')
+  const hero = page.locator('input[data-test-switch="hero"]')
+  const gift = page.locator('input[data-test-switch="gift"]')
+  await expect(hero).not.toBeChecked()
+  await expect(gift).not.toBeChecked()
+  // Each saves before it shows as ticked, so click and wait rather than `check()`.
+  await hero.click()
+  await expect(hero).toBeChecked()
+  await expect(gift).toBeEnabled()
+  await gift.click()
+  await expect(gift).toBeChecked()
+
+  // A sample results page: sample heroes and a gift pool reach the page, and the gift is on the rewards ladder.
+  await page.goto('/api/portal/test-views/open?view=results-gym')
+  const offer = ((await (await page.request.get('/api/offer')).json()) as { offer: { heroEnabled: boolean; heroes: object; bonus: { enabled: boolean } } }).offer
+  expect(offer.heroEnabled).toBe(true)
+  expect(Object.keys(offer.heroes).length).toBeGreaterThan(0)
+  expect(offer.bonus.enabled).toBe(true)
+  await expect(page.locator('[data-just-one]')).toBeVisible({ timeout: 60_000 })
+  // The gift comes once the box can keep the margin floor with it in: turn on what's off until it does.
+  const offs = page.locator('[data-box-row] [role="switch"][aria-checked="false"]')
+  for (let i = 0; i < 4 && (await page.locator('[data-rung="gift"]').count()) === 0 && (await offs.count()) > 0; i++) {
+    await offs.first().click()
+    await page.waitForTimeout(300)
+  }
+  await expect(page.locator('[data-rung="gift"]').first()).toBeAttached({ timeout: 30_000 })
+  await shot(page, 'results-hero-gift')
+
+  // The sample inbox: show the shared answer on the results page, in test views only.
+  await page.goto('/api/portal/test-views/open?view=trainer-video')
+  await page.goto('/founderhub/trainer?samples=1')
+  await page.locator('[data-inbox-row]', { hasText: 'trainer-video@' }).locator('button').click()
+  const actions = page.locator('[data-answer-actions]').filter({ hasText: 'They said yes to sharing' }).first()
+  await actions.locator('[data-feature]').click()
+  await actions.locator('[data-save-answer-action]').click()
+  await expect(actions).toContainText('On the results page in test views only.')
+
+  // The real inbox's content has no exchange; the test view's results page shows the sample one.
+  const live = (await (await page.request.get('/api/portal/trainer/content')).json()) as { featured: unknown }
+  expect(live.featured).toBeNull()
+  await page.goto('/api/portal/test-views/open?view=results-gym')
+  await expect(page.locator('[data-hub-proof-exchange]')).toBeVisible({ timeout: 60_000 })
+
+  // Reset sample data takes it away.
+  await page.request.delete('/api/portal/test-views')
+  const sample = (await (await page.request.get('/api/portal/trainer/content?samples=1')).json()) as { featured: unknown }
+  expect(sample.featured).toBeNull()
+})

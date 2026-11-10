@@ -350,6 +350,8 @@ export async function buildSampleMember(scenario: SampleScenario, now = new Date
 export async function resetSampleMembers(now = new Date()): Promise<number> {
   const all = await sampleMembers()
   for (const userId of Object.values(all)) await clearSample(userId)
+  // The sample trainer inbox's library entries and results-page exchange.
+  await (await import('@/lib/trainer/content')).clearSampleContent()
   void now
   return Object.keys(all).length
 }

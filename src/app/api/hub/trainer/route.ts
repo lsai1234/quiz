@@ -7,7 +7,7 @@ import { hubAccess, isOpen } from '@/lib/hub/access'
 import { sendQuestionEmail } from '@/lib/trainer/emails'
 import { firstNameOf, memberTrainerView, viewOf } from '@/lib/trainer/server'
 import { askTrainer, getThread, markMemberRead, rateAnswer, setShareOk, TrainerError } from '@/lib/trainer/store'
-import { library, withdrawFeatured } from '@/lib/trainer/content'
+import { shownLibrary, withdrawFeatured } from '@/lib/trainer/content'
 
 /**
  * Ask your trainer, for the signed-in member.
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   const coaching = coachingOn(settings, 'coaching')
   const video = coachingOn(settings, 'video')
   const viewFor = async (thread: Awaited<ReturnType<typeof getThread>>) =>
-    viewOf(thread, settings.trainer, true, true, new Date(), { coaching, video, library: video ? await library() : [] })
+    viewOf(thread, settings.trainer, true, true, new Date(), { coaching, video, library: video ? await shownLibrary() : [] })
   // Rating an answer: helpful, or not quite (which opens a follow-up on their side).
   if (body.action === 'rate') {
     if (!coaching || typeof body.messageId !== 'string' || (body.rating !== 'helpful' && body.rating !== 'not-quite')) return NextResponse.json({ error: 'Which answer?' }, { status: 400 })

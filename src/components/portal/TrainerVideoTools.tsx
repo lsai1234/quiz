@@ -30,15 +30,18 @@ const RECORD_SECONDS = 120
 
 export const TAG_LABEL: Record<TriageTag, string> = { form: 'Form', plan: 'Plan', pain: 'Pain or injury', kit: 'Kit', other: 'Other' }
 
-export async function postContent(body: Record<string, unknown>): Promise<Content> {
-  const r = await fetch('/api/portal/trainer/content', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+/** `samples`: the sample inbox, whose library entries and exchange show only in test views. */
+const contentUrl = (samples: boolean, query = '') => `/api/portal/trainer/content${samples || query ? '?' : ''}${[samples ? 'samples=1' : '', query].filter(Boolean).join('&')}`
+
+export async function postContent(body: Record<string, unknown>, samples = false): Promise<Content> {
+  const r = await fetch(contentUrl(samples), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const d = (await r.json().catch(() => null)) as (Content & { error?: string }) | null
   if (!r.ok || !d) throw new Error(d?.error ?? 'That didn’t save.')
   return d
 }
 
 async function deleteContent(query: string): Promise<Content> {
-  const r = await fetch(`/api/portal/trainer/content?${query}`, { method: 'DELETE' })
+  const r = await fetch(contentUrl(false, query), { method: 'DELETE' })
   if (!r.ok) throw new Error('That didn’t go.')
   return (await r.json()) as Content
 }
@@ -46,7 +49,7 @@ async function deleteContent(query: string): Promise<Content> {
 export function useContent(samples = false): [Content | null, (c: Content) => void] {
   const [content, setContent] = useState<Content | null>(null)
   useEffect(() => {
-    fetch(samples ? '/api/portal/trainer/content?samples=1' : '/api/portal/trainer/content')
+    fetch(contentUrl(samples))
       .then((r) => (r.ok ? r.json() : null))
       .then((c: Content | null) => c && setContent(c))
       .catch(() => {})
@@ -220,6 +223,7 @@ export function AnswerActions({
   shareOk,
   featured,
   onContent,
+  samples = false,
 }: {
   userId: string
   messageId: string
@@ -229,6 +233,8 @@ export function AnswerActions({
   shareOk: boolean | null | undefined
   featured: boolean
   onContent: (c: Content) => void
+  /** The sample inbox: what's added here shows only in test views. */
+  samples?: boolean
 }) {
   const [mode, setMode] = useState<'library' | 'feature' | null>(null)
   const [q, setQ] = useState(question)
@@ -240,8 +246,16 @@ export function AnswerActions({
   async function save() {
     setProblem(null)
     try {
-      onContent(mode === 'library' ? await postContent({ kind: 'library', about, question: q, answer: a }) : await postContent({ kind: 'featured', userId, messageId, question: q, answer: a }))
-      setDone(mode === 'library' ? 'Added to the answers library.' : 'On the results page now.')
+      onContent(mode === 'library' ? await postContent({ kind: 'library', about, question: q, answer: a }, samples) : await postContent({ kind: 'featured', userId, messageId, question: q, answer: a }, samples))
+      setDone(
+        samples
+          ? mode === 'library'
+            ? 'Added to the answers library in test views only.'
+            : 'On the results page in test views only.'
+          : mode === 'library'
+            ? 'Added to the answers library.'
+            : 'On the results page now.',
+      )
       setMode(null)
     } catch (err) {
       setProblem(err instanceof Error ? err.message : 'That didn’t save.')

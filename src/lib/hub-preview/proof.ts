@@ -26,16 +26,19 @@ let cache: { at: number; key: string; proof: HubProof | null } | null = null
 export async function hubProof(settings: OfferSettings, now = new Date()): Promise<HubProof | null> {
   const { coachingOn, trainerLive } = await import('@/lib/offer/settings')
   if (!trainerLive(settings) || !coachingOn(settings, 'video')) return null
-  const key = JSON.stringify([settings.trainer, settings.services])
+  // A test view sees the sample inbox's exchange, so it never shares the cache with customers.
+  const { currentTestView } = await import('@/lib/samples/session')
+  const testView = Boolean(await currentTestView())
+  const key = JSON.stringify([settings.trainer, settings.services, testView])
   if (cache && cache.key === key && now.getTime() - cache.at < 300_000) return cache.proof
 
-  const [{ replyStats, MEDIAN_FLOOR }, { getFeatured }, { countPlans }, { publicTrainer }] = await Promise.all([
+  const [{ replyStats, MEDIAN_FLOOR }, { shownFeatured }, { countPlans }, { publicTrainer }] = await Promise.all([
     import('@/lib/trainer/store'),
     import('@/lib/trainer/content'),
     import('@/lib/training/store'),
     import('@/lib/trainer/public'),
   ])
-  const [stats, featured, plans] = await Promise.all([replyStats(settings.trainer.replyHours, now), getFeatured(), countPlans()])
+  const [stats, featured, plans] = await Promise.all([replyStats(settings.trainer.replyHours, now), shownFeatured(testView), countPlans()])
   const t = publicTrainer(settings.trainer, settings.services.training, true)
   const proof: HubProof = {
     introVideo: t.introVideo ?? null,

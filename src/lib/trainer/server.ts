@@ -47,8 +47,8 @@ export async function memberTrainerView(user: Pick<UserRecord, 'id' | 'email'>, 
   if (coaching && isOpen(access)) await ensureWelcome({ userId: user.id, email: user.email, firstName: firstNameOf((user as { name?: string | null }).name) }, settings.trainer.welcome, now)
   const thread = await getThread(user.id)
   const video = coachingOn(settings, 'video')
-  const { library } = await import('./content')
-  return viewOf(thread, settings.trainer, true, isOpen(access), now, { coaching, stats, video, library: video ? await library() : [] })
+  const { shownLibrary } = await import('./content')
+  return viewOf(thread, settings.trainer, true, isOpen(access), now, { coaching, stats, video, library: video ? await shownLibrary() : [] })
 }
 
 export const firstNameOf = (name: string | null | undefined) => name?.trim().split(/\s+/)[0] || null

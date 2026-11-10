@@ -1,10 +1,16 @@
 /**
  * @jest-environment node
  */
-import { buildSampleMember } from '../members'
+import { buildSampleMember, resetSampleMembers } from '../members'
 import { getSampleOrders, isSampleUserId, sampleMemberIds, testCheckoutRefusal } from '../registry'
 import { isSampleEmail, SAMPLE_DOMAIN } from '../domain'
-import { DEFAULT_TEST_SWITCHES, withTestSwitches } from '../session'
+import { DEFAULT_TEST_SWITCHES, normaliseSwitches, withTestSwitches } from '../session'
+import { withSampleOffer, SAMPLE_HERO_CHECKER } from '../offer'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { activeBonusPool, activeHeroIds, claimChoicesFor, emptyHeroApproval } from '@/lib/offer/settings'
+import { offerable } from '@/lib/offer/select'
+import { publicOffer } from '@/lib/offer/public'
+import { getThread } from '@/lib/trainer/store'
 import { sampleEmails } from '../emails'
 import { TEST_VIEWS, SAMPLE_SCENARIOS } from '../views'
 import { latestPaidOrderFor, listOrders, getOrder } from '@/lib/orders/repo'
@@ -101,6 +107,101 @@ describe('test view switches', () => {
     const off = withTestSwitches(DEFAULT_OFFER, { ...DEFAULT_TEST_SWITCHES, trainer: false, hubOnSale: false })
     expect(off.services.trainer).toBe(false)
     expect(off.hubPrice.standalone).toBe(false)
+  })
+
+  it('start with the hero and the gift off, and a view opened before they existed reads them as off', () => {
+    expect(DEFAULT_TEST_SWITCHES).toMatchObject({ hero: false, gift: false })
+    const old = normaliseSwitches({ training: true, trainer: true, deals: true, checkIns: true, hubOnSale: true, coaching: true, video: true, programmes: true })
+    expect(old).toMatchObject({ hero: false, gift: false })
+    const s = withTestSwitches(DEFAULT_OFFER, { ...DEFAULT_TEST_SWITCHES, hero: true, gift: true })
+    expect(s.heroEnabled).toBe(true)
+    expect(s.bonus.enabled).toBe(true)
+    // Switched off in the test view, they're off there whatever is live.
+    const liveOn = { ...DEFAULT_OFFER, heroEnabled: true, bonus: { ...DEFAULT_OFFER.bonus, enabled: true } }
+    const offInView = withTestSwitches(liveOn, DEFAULT_TEST_SWITCHES)
+    expect(offInView.heroEnabled).toBe(false)
+    expect(offInView.bonus.enabled).toBe(false)
+  })
+})
+
+describe('the hero and the gift in a test view', () => {
+  const TODAY = '2026-11-10'
+  const on = { ...DEFAULT_OFFER, heroEnabled: true, bonus: { ...DEFAULT_OFFER.bonus, enabled: true } }
+
+  it('use any product on sale as a sample hero and gift when nothing is set', async () => {
+    const { products } = await getResolvedCatalogue()
+    const onSale = products.filter(offerable).map((p) => p.id).sort()
+    const s = withSampleOffer(on, products, TODAY)
+    expect(activeHeroIds(s, products, TODAY)).toEqual(onSale)
+    expect(activeBonusPool(s, products).sort()).toEqual(onSale)
+    for (const id of onSale) expect(s.heroes[id]).toMatchObject({ checkedBy: SAMPLE_HERO_CHECKER, claimId: 'none', checkedAt: '2026-11-09' })
+    // What the results page reads takes them, as it would real ones.
+    const shown = publicOffer(s, products, { today: TODAY, bonusShown: true })
+    expect(shown.heroEnabled).toBe(true)
+    expect(shown.bonus.enabled).toBe(true)
+    // The founders' own settings are untouched.
+    expect(on.heroes).toEqual({})
+    expect(on.bonus.pool).toEqual([])
+  })
+
+  it('use only the products a founder has switched on as a hero, keeping a claim valid for its kind', async () => {
+    const { products } = await getResolvedCatalogue()
+    const withClaim = products.filter(offerable).find((p) => claimChoicesFor(p.swapGroup).length > 0)!
+    const other = products.filter(offerable).find((p) => p.id !== withClaim.id)!
+    const claimId = claimChoicesFor(withClaim.swapGroup)[0].id
+    const started = {
+      ...on,
+      heroes: {
+        [withClaim.id]: { ...emptyHeroApproval(withClaim.id), hero: true, claimId },
+        [other.id]: { ...emptyHeroApproval(other.id), hero: true, claimId: 'not-a-claim' },
+      },
+    }
+    const s = withSampleOffer(started, products, TODAY)
+    expect(activeHeroIds(s, products, TODAY)).toEqual([withClaim.id, other.id].sort())
+    expect(s.heroes[withClaim.id].claimId).toBe(claimId)
+    expect(s.heroes[other.id].claimId).toBe('none')
+  })
+
+  it('leave real approved heroes and a real pool alone, and do nothing while switched off', async () => {
+    const { products } = await getResolvedCatalogue()
+    const p = products.filter(offerable)[0]
+    const real = {
+      ...on,
+      heroes: { [p.id]: { ...emptyHeroApproval(p.id), hero: true, legalGB: true, novelFood: 'not-novel' as const, safetyReviewed: true, claimId: 'none', checkedBy: 'A founder', checkedAt: '2026-11-01' } },
+      bonus: { ...on.bonus, pool: [p.id] },
+    }
+    expect(withSampleOffer(real, products, TODAY)).toBe(real)
+    expect(withSampleOffer(DEFAULT_OFFER, products, TODAY)).toBe(DEFAULT_OFFER)
+  })
+})
+
+describe('the sample trainer inbox’s library and exchange', () => {
+  it('show only in a test view, never reach the real ones, and go with Reset sample data', async () => {
+    const content = await import('@/lib/trainer/content')
+    const { user } = await buildSampleMember('trainer-video', NOW)
+    const answer = (await getThread(user.id))!.messages.find((m) => m.from === 'trainer' && !m.kind && m.shareOk === true)!
+    expect(answer).toBeDefined()
+
+    // A sample member's answer can't go to the real results page.
+    await expect(content.setFeatured({ userId: user.id, messageId: answer.id })).rejects.toEqual(new content.ContentError('missing'))
+    await content.setFeatured({ userId: user.id, messageId: answer.id }, NOW, 'sample')
+    expect(await content.getFeatured('live')).toBeNull()
+    expect((await content.shownFeatured(true))?.source.messageId).toBe(answer.id)
+    expect(await content.shownFeatured(false)).toBeNull()
+
+    await content.saveLibraryEntry({ question: 'Sample: how deep?', answer: 'As deep as your heels stay down.' }, NOW, 'sample')
+    expect((await content.library('live')).some((e) => e.question === 'Sample: how deep?')).toBe(false)
+    expect((await content.shownLibrary(true)).some((e) => e.question === 'Sample: how deep?')).toBe(true)
+    expect((await content.shownLibrary(false)).some((e) => e.question === 'Sample: how deep?')).toBe(false)
+
+    // A member's no takes it down wherever it is.
+    expect(await content.withdrawFeatured(user.id, answer.id)).toBe(true)
+    expect(await content.getFeatured('sample')).toBeNull()
+
+    await content.setFeatured({ userId: user.id, messageId: answer.id }, NOW, 'sample')
+    await resetSampleMembers()
+    expect(await content.getFeatured('sample')).toBeNull()
+    expect(await content.library('sample')).toEqual([])
   })
 })
 

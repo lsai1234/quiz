@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { getFounder, isPortalAuthed } from '@/lib/portal/guard'
 import { getLiveOfferSettings } from '@/lib/offer/store'
 import { hubOnSale, trainerLive } from '@/lib/offer/settings'
+import { publicOffer } from '@/lib/offer/public'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { TEST_VIEW_COOKIE } from '@/lib/samples/domain'
 import { DEFAULT_TEST_SWITCHES, getTestView, normaliseSwitches, openTestView } from '@/lib/samples/session'
 import { setTestViewCookies } from '@/lib/samples/cookies'
@@ -19,7 +21,9 @@ export const dynamic = 'force-dynamic'
 async function state() {
   const jar = await cookies()
   const view = await getTestView(jar.get(TEST_VIEW_COOKIE)?.value)
-  const live = await getLiveOfferSettings()
+  const [live, { products }] = await Promise.all([getLiveOfferSettings(), getResolvedCatalogue()])
+  // What customers really get: a switch with no approved hero, or an empty pool, shows nothing.
+  const shown = publicOffer(live, products)
   return {
     open: Boolean(view),
     switches: view?.switches ?? DEFAULT_TEST_SWITCHES,
@@ -32,6 +36,8 @@ async function state() {
       coaching: live.services.coaching,
       video: live.services.video,
       programmes: live.services.programmes,
+      hero: shown.heroEnabled,
+      gift: shown.bonus.enabled,
     },
   }
 }

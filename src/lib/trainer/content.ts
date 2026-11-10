@@ -10,6 +10,11 @@
  *   featured         `trainer-featured`: one real exchange for the results
  *                    page, only with the member's yes; it comes down if they
  *                    change their mind or their account goes
+ *
+ * The sample trainer inbox (Settings → Test views) keeps its own library and
+ * featured exchange under `sample:` keys: they show only in a test view (on top
+ * of the real ones), never to members or on the real results page, and "Reset
+ * sample data" clears them.
  */
 import { randomBytes } from 'node:crypto'
 import { kvGet, kvSet } from '@/lib/db/kv'
@@ -70,30 +75,33 @@ export { mentionsPain } from './triage'
 
 /* ── The answers library ──────────────────────────────────────────────────── */
 
-const LIBRARY = 'trainer-library'
+/** `live`: what members see. `sample`: the sample inbox's own, shown only in a test view. */
+export type ContentScope = 'live' | 'sample'
 
-export async function library(): Promise<LibraryEntry[]> {
-  return ((await kvGet<LibraryEntry[]>(LIBRARY)) ?? []).filter((e) => e && e.question && e.answer).sort((a, b) => b.at.localeCompare(a.at))
+const LIBRARY: Record<ContentScope, string> = { live: 'trainer-library', sample: 'sample:trainer-library' }
+
+export async function library(scope: ContentScope = 'live'): Promise<LibraryEntry[]> {
+  return ((await kvGet<LibraryEntry[]>(LIBRARY[scope])) ?? []).filter((e) => e && e.question && e.answer).sort((a, b) => b.at.localeCompare(a.at))
 }
 
-export async function saveLibraryEntry(input: { id?: unknown; about?: unknown; question?: unknown; answer?: unknown }, now = new Date()): Promise<LibraryEntry[]> {
+export async function saveLibraryEntry(input: { id?: unknown; about?: unknown; question?: unknown; answer?: unknown }, now = new Date(), scope: ContentScope = 'live'): Promise<LibraryEntry[]> {
   const question = cleanText(input.question)
   const answer = cleanText(input.answer)
   if (!question || !answer) throw new ContentError('empty')
   if (question.length > MEMBER_MAX || answer.length > TRAINER_MAX) throw new ContentError('too-long')
-  const all = await library()
+  const all = await library(scope)
   const had = typeof input.id === 'string' ? all.find((e) => e.id === input.id) : undefined
   const entry: LibraryEntry = { id: had?.id ?? id(), about: line(input.about, 80) || null, question, answer, at: had?.at ?? now.toISOString() }
-  await kvSet(LIBRARY, had ? all.map((e) => (e.id === entry.id ? entry : e)) : [entry, ...all].slice(0, 300))
-  return library()
+  await kvSet(LIBRARY[scope], had ? all.map((e) => (e.id === entry.id ? entry : e)) : [entry, ...all].slice(0, 300))
+  return library(scope)
 }
 
-export async function deleteLibraryEntry(entryId: string): Promise<LibraryEntry[]> {
+export async function deleteLibraryEntry(entryId: string, scope: ContentScope = 'live'): Promise<LibraryEntry[]> {
   await kvSet(
-    LIBRARY,
-    (await library()).filter((e) => e.id !== entryId),
+    LIBRARY[scope],
+    (await library(scope)).filter((e) => e.id !== entryId),
   )
-  return library()
+  return library(scope)
 }
 
 /* ── The featured exchange ────────────────────────────────────────────────── */
@@ -107,18 +115,21 @@ export interface Featured {
   source: { userId: string; messageId: string }
 }
 
-const FEATURED = 'trainer-featured'
+const FEATURED: Record<ContentScope, string> = { live: 'trainer-featured', sample: 'sample:trainer-featured' }
 
-export async function getFeatured(): Promise<Featured | null> {
-  return (await kvGet<Featured | null>(FEATURED)) ?? null
+export async function getFeatured(scope: ContentScope = 'live'): Promise<Featured | null> {
+  return (await kvGet<Featured | null>(FEATURED[scope])) ?? null
 }
 
 /**
  * Feature an answer the member said yes to sharing. The words can be tidied
  * (a name, a place), never added to. Throws `not-shared` without their yes.
+ * A sample member's answer goes only to the sample scope, and a real member's
+ * only to the live one, so sample words never reach the real results page.
  */
-export async function setFeatured(input: { userId: string; messageId: string; question?: unknown; answer?: unknown }, now = new Date()): Promise<Featured> {
-  const { getThread, questionFor } = await import('./store')
+export async function setFeatured(input: { userId: string; messageId: string; question?: unknown; answer?: unknown }, now = new Date(), scope: ContentScope = 'live'): Promise<Featured> {
+  const [{ getThread, questionFor }, { isSampleUserId }] = await Promise.all([import('./store'), import('@/lib/samples/registry')])
+  if ((await isSampleUserId(input.userId)) !== (scope === 'sample')) throw new ContentError('missing')
   const t = await getThread(input.userId)
   const m = t?.messages.find((x) => x.id === input.messageId && x.from === 'trainer' && !x.kind)
   if (!t || !m) throw new ContentError('missing')
@@ -129,18 +140,45 @@ export async function setFeatured(input: { userId: string; messageId: string; qu
   if (!question || !answer) throw new ContentError('empty')
   if (question.length > MEMBER_MAX || answer.length > TRAINER_MAX) throw new ContentError('too-long')
   const featured: Featured = { question, answer, about: q?.about ?? null, at: now.toISOString(), source: { userId: input.userId, messageId: m.id } }
-  await kvSet(FEATURED, featured)
+  await kvSet(FEATURED[scope], featured)
   return featured
 }
 
-export async function clearFeatured(): Promise<void> {
-  await kvSet(FEATURED, null)
+export async function clearFeatured(scope: ContentScope = 'live'): Promise<void> {
+  await kvSet(FEATURED[scope], null)
 }
 
-/** Take it down when it came from this member (and this answer, when named). */
+/** Take it down when it came from this member (and this answer, when named), wherever it is. */
 export async function withdrawFeatured(userId: string, messageId?: string): Promise<boolean> {
-  const f = await getFeatured()
-  if (!f || f.source.userId !== userId || (messageId && f.source.messageId !== messageId)) return false
-  await clearFeatured()
-  return true
+  let took = false
+  for (const scope of ['live', 'sample'] as const) {
+    const f = await getFeatured(scope)
+    if (!f || f.source.userId !== userId || (messageId && f.source.messageId !== messageId)) continue
+    await clearFeatured(scope)
+    took = true
+  }
+  return took
+}
+
+/* ── What a page shows ────────────────────────────────────────────────────── */
+
+async function inTestView(): Promise<boolean> {
+  const { currentTestView } = await import('@/lib/samples/session')
+  return Boolean(await currentTestView())
+}
+
+/** The library members see: in a test view, the sample inbox's entries first, then the real ones. */
+export async function shownLibrary(testView?: boolean): Promise<LibraryEntry[]> {
+  const live = await library('live')
+  return (testView ?? (await inTestView())) ? [...(await library('sample')), ...live] : live
+}
+
+/** The exchange on the results page: in a test view, the sample inbox's when it has one. */
+export async function shownFeatured(testView?: boolean): Promise<Featured | null> {
+  return ((testView ?? (await inTestView())) ? await getFeatured('sample') : null) ?? getFeatured('live')
+}
+
+/** "Reset sample data": the sample inbox's library and exchange go with the sample members. */
+export async function clearSampleContent(): Promise<void> {
+  await Promise.all([kvSet(LIBRARY.sample, []), kvSet(FEATURED.sample, null)])
 }

@@ -120,7 +120,8 @@ export function TrainerInbox() {
 
       {samples ? (
         <Note tone="attention" icon="info">
-          Sample members from Settings → Test views, in place of real ones. Answer and check them freely: nothing reaches anyone.{' '}
+          Sample members from Settings → Test views, in place of real ones. Answer and check them freely: nothing reaches anyone. What you add to the answers library or the
+          results page here shows only in test views, and Reset sample data clears it.{' '}
           <a href="/founderhub/trainer" style={{ textDecoration: 'underline' }}>
             Back to real members
           </a>
@@ -135,7 +136,7 @@ export function TrainerInbox() {
       {view.trainer.checksPlans && !openId && <PlansToCheck samples={samples} onChecked={() => void load()} />}
 
       {openId ? (
-        <ThreadView userId={openId} trainerName={view.trainer.name} content={content} onContent={setContent} onBack={() => { setOpenId(null); void load() }} />
+        <ThreadView userId={openId} trainerName={view.trainer.name} content={content} onContent={setContent} samples={samples} onBack={() => { setOpenId(null); void load() }} />
       ) : (
         <InboxList rows={view.inbox} onOpen={setOpenId} />
       )}
@@ -177,7 +178,21 @@ function InboxList({ rows, onOpen }: { rows: InboxRow[]; onOpen: (id: string) =>
   )
 }
 
-function ThreadView({ userId, trainerName, content, onContent, onBack }: { userId: string; trainerName: string; content: Content | null; onContent: (c: Content) => void; onBack: () => void }) {
+function ThreadView({
+  userId,
+  trainerName,
+  content,
+  onContent,
+  samples = false,
+  onBack,
+}: {
+  userId: string
+  trainerName: string
+  content: Content | null
+  onContent: (c: Content) => void
+  samples?: boolean
+  onBack: () => void
+}) {
   const [opened, setOpened] = useState<Opened | null>(null)
   const [missing, setMissing] = useState(false)
   const [text, setText] = useState('')
@@ -332,6 +347,7 @@ function ThreadView({ userId, trainerName, content, onContent, onBack }: { userI
                       shareOk={m.shareOk}
                       featured={content.featured?.source.messageId === m.id}
                       onContent={onContent}
+                      samples={samples}
                     />
                   )}
                   <p style={{ ...META, marginTop: 'var(--space-1)', textAlign: m.from === 'trainer' ? 'right' : 'left' }}>
