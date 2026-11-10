@@ -99,7 +99,7 @@ describe('the routes', () => {
   it('says nothing while it’s off, or while nobody is named', async () => {
     await saveServiceSettings({ trainer: false })
     mockUser.current = await member()
-    expect(((await (await memberGet()).json()) as MemberTrainerView).live).toBe(false)
+    expect(((await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView).live).toBe(false)
     expect((await memberAsk(post({ text: 'Hello' }))).status).toBe(404)
     await saveTrainerProfile({ name: '' })
     await saveServiceSettings({ trainer: true })
@@ -111,7 +111,7 @@ describe('the routes', () => {
     await saveServiceSettings({ trainer: true })
     const user = await member()
     mockUser.current = user
-    const first = (await (await memberGet()).json()) as MemberTrainerView
+    const first = (await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView
     expect(first).toMatchObject({ live: true, open: true, left: 3, trainer: { name: 'Sam', replyHours: 24 } })
     expect(JSON.stringify(first)).not.toMatch(/trainer-alerts/)
 
@@ -139,12 +139,12 @@ describe('the routes', () => {
     expect(replies).toHaveLength(1)
     expect(replies[0].rendered.subject).toBe(TRAINER_COPY.replySubject('Sam'))
 
-    const read = (await (await memberGet()).json()) as MemberTrainerView
+    const read = (await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView
     expect(read.waiting).toBe(false)
     expect(read.unread).toBe(1)
     expect(read.messages[2]).toMatchObject({ from: 'trainer', text: 'Start with the bar.', video: { url: 'https://vimeo.com/123' } })
     // Looked at: no longer new.
-    expect(((await (await memberGet()).json()) as MemberTrainerView).unread).toBe(0)
+    expect(((await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView).unread).toBe(0)
 
     // In their data export.
     const data = await exportAccount(user.id)
@@ -215,17 +215,17 @@ describe('coaching tools: context, ratings, honest signals, the welcome, plan ch
     await saveTrainerProfile({ name: 'Sam', welcome: 'Welcome in. Ask me anything about your plan.' })
     const user = await member()
     mockUser.current = user
-    const first = (await (await memberGet()).json()) as MemberTrainerView
+    const first = (await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView
     expect(first.messages.filter((m) => m.kind === 'welcome')).toHaveLength(1)
-    await memberGet()
-    expect(((await (await memberGet()).json()) as MemberTrainerView).messages.filter((m) => m.kind === 'welcome')).toHaveLength(1)
+    await memberGet(new Request('http://x/api/hub/trainer'))
+    expect(((await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView).messages.filter((m) => m.kind === 'welcome')).toHaveLength(1)
 
     const asked = (await (await memberAsk(post({ text: 'Too heavy?', about: 'Goblet squat', context: { set: 2, of: 3, kg: 20, reps: 8 } }))).json()) as MemberTrainerView
     expect(asked.messages.at(-1)?.context).toMatchObject({ set: 2, kg: 20 })
     expect(asked.readByTrainer).toBe(false)
     // A founder opens it: read.
     await threadGet(new Request('http://x'), params(user.id))
-    expect(((await (await memberGet()).json()) as MemberTrainerView).readByTrainer).toBe(true)
+    expect(((await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView).readByTrainer).toBe(true)
 
     const { thread } = (await answerMember(user.id, { text: 'Keep it there for now.', by: 'Sam' }))!
     const answer = thread.messages.at(-1)!
@@ -255,5 +255,100 @@ describe('coaching tools: context, ratings, honest signals, the welcome, plan ch
     expect(t?.messages.at(-1)).toMatchObject({ kind: 'change' })
     expect(t?.messages.at(-1)?.text).toContain('Fewer sets while your knee settles.')
     expect((await accessesForMember(user.id)).some((a) => a.kind === 'member-trainer')).toBe(true)
+  })
+})
+
+describe('video: form checks, video notes, tags, the library and sharing', () => {
+  afterEach(async () => {
+    await saveServiceSettings({ trainer: false, coaching: false, training: false, video: false })
+  })
+
+  async function clip(kind: 'form-check' | 'note', owner: string | null) {
+    const { beginUpload, putChunk, finishUpload } = await import('@/lib/media/store')
+    const m = await beginUpload({ kind, mime: 'video/mp4', size: 4, owner })
+    await putChunk(m.id, 0, Buffer.from('abcd').toString('base64'))
+    return finishUpload(m.id)
+  }
+
+  it('a question carries the member’s own form check, never someone else’s; a note becomes the member’s', async () => {
+    const who = { id: `v-${n++}`, email: 'v@example.com', firstName: 'V' }
+    const mine = await clip('form-check', who.id)
+    const theirs = await clip('form-check', 'someone-else')
+    await expect(askTrainer(who, { text: 'Check my squat?', videoId: theirs.id }, 5)).rejects.toEqual(new TrainerError('clip'))
+    const { message } = await askTrainer(who, { text: 'Check my squat?', videoId: mine.id }, 5)
+    expect(message.video).toMatchObject({ media: mine.id, url: `/api/media/${mine.id}` })
+    expect(message.video?.until).toBeTruthy()
+
+    const note = await clip('note', null)
+    const answered = await answerMember(who.id, { text: 'Here’s what I saw.', videoId: note.id, by: 'Sam' })
+    expect(answered!.message.video?.media).toBe(note.id)
+    const { getMedia } = await import('@/lib/media/store')
+    expect((await getMedia(note.id))?.owner).toBe(who.id)
+    // A note already someone else's can't be sent to another member.
+    const other = { id: `v-${n++}`, email: 'w@example.com', firstName: 'W' }
+    await askTrainer(other, { text: 'Hi' }, 5)
+    await expect(answerMember(other.id, { text: 'x', videoId: note.id, by: 'Sam' })).rejects.toEqual(new TrainerError('clip'))
+  })
+
+  it('the member route takes a form check only while video is on, and uploads only into the member’s own clip', async () => {
+    await saveServiceSettings({ trainer: true, coaching: true, training: true, video: true })
+    await saveTrainerProfile({ name: 'Sam' })
+    const user = await member()
+    mockUser.current = user
+    const { POST: media } = await import('@/app/api/hub/media/route')
+    expect((await media(post({ action: 'begin', mime: 'video/mp4', size: 4, seconds: 12 }))).status).toBe(400) // no consent
+    expect((await media(post({ action: 'begin', mime: 'video/mp4', size: 4, seconds: 45, consent: true }))).status).toBe(400) // too long
+    const begun = await (await media(post({ action: 'begin', mime: 'video/mp4', size: 4, seconds: 12, consent: true }))).json()
+    expect(begun.id).toMatch(/^m_/)
+    const someone = await clip('form-check', 'someone-else')
+    expect((await media(post({ action: 'chunk', id: someone.id, n: 0, data: 'YWJjZA==' }))).status).toBe(404)
+    expect((await media(post({ action: 'chunk', id: begun.id, n: 0, data: 'YWJjZA==' }))).status).toBe(200)
+    const done = await (await media(post({ action: 'finish', id: begun.id }))).json()
+    expect(done.until).toBeTruthy()
+    const asked = await memberAsk(post({ text: 'Form check please', videoId: begun.id }))
+    expect(asked.status).toBe(200)
+    const view = (await asked.json()) as MemberTrainerView
+    expect(view.video).toBe(true)
+    expect(view.messages.at(-1)?.video?.media).toBe(begun.id)
+
+    await saveServiceSettings({ video: false })
+    expect((await media(post({ action: 'begin', mime: 'video/mp4', size: 4, seconds: 12, consent: true }))).status).toBe(404)
+  })
+
+  it('tags stay in the Founders Hub; sharing needs the member’s yes, and a no takes it down', async () => {
+    await saveServiceSettings({ trainer: true, coaching: true, training: true, video: true })
+    await saveTrainerProfile({ name: 'Sam' })
+    const user = await member()
+    mockUser.current = user
+    await memberAsk(post({ text: 'My knee hurts on squats' }))
+    const thread = (await getThread(user.id))!
+    const q = thread.messages.at(-1)!
+    expect((await threadMark(new Request('http://x', { method: 'PATCH', body: JSON.stringify({ messageId: q.id, tag: 'pain' }) }), params(user.id))).status).toBe(200)
+    expect((await getThread(user.id))!.messages.at(-1)!.tag).toBe('pain')
+    const { mentionsPain, savedReplies, setFeatured, getFeatured, ContentError } = await import('../content')
+    expect(mentionsPain(q.text)).toBe(true)
+    expect(mentionsPain('How many sets should I do?')).toBe(false)
+    expect((await savedReplies())[0]).toMatchObject({ id: 'pain', builtIn: true, tag: 'pain' })
+
+    await threadAnswer(post({ text: 'See a GP or physio first.' }), params(user.id))
+    const view = (await (await memberGet(new Request('http://x/api/hub/trainer'))).json()) as MemberTrainerView
+    expect(view.messages.some((m) => 'tag' in m)).toBe(false)
+    const answer = view.messages.filter((m) => m.from === 'trainer' && !m.kind).at(-1)!
+    await expect(setFeatured({ userId: user.id, messageId: answer.id })).rejects.toEqual(new ContentError('not-shared'))
+    await memberAsk(post({ action: 'share', messageId: answer.id, ok: true }))
+    const f = await setFeatured({ userId: user.id, messageId: answer.id })
+    expect(f.question).toBe('My knee hurts on squats')
+    await memberAsk(post({ action: 'share', messageId: answer.id, ok: false }))
+    expect(await getFeatured()).toBeNull()
+  })
+
+  it('the library is rewritten words only, newest first', async () => {
+    const { saveLibraryEntry, library, deleteLibraryEntry } = await import('../content')
+    const a = await saveLibraryEntry({ about: 'Goblet squat', question: 'How deep?', answer: 'As deep as you can keep your heels down.' }, new Date('2026-11-01T00:00:00Z'))
+    await saveLibraryEntry({ question: 'Rest between sets?', answer: 'About two minutes.' }, new Date('2026-11-02T00:00:00Z'))
+    const all = await library()
+    expect(all[0].question).toBe('Rest between sets?')
+    await deleteLibraryEntry(a.find((e) => e.question === 'How deep?')!.id)
+    expect((await library()).some((e) => e.question === 'How deep?')).toBe(false)
   })
 })

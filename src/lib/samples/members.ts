@@ -108,6 +108,9 @@ async function clearSample(userId: string): Promise<void> {
     import('@/lib/checkin/store'),
   ])
   await Promise.all([deleteTraining(userId), deleteThread(userId), deleteHubPlan(userId), deleteCheckInsFor(userId)])
+  // Their clips (a form check, a video note).
+  const { mediaOwnedBy, deleteMedia } = await import('@/lib/media/store')
+  for (const m of await mediaOwnedBy(userId)) await deleteMedia(m.id)
   await Promise.all([kvDelete(`hub-start:${userId}`), kvDelete(`hub-today:${userId}`), kvDelete(`hub-tips:${userId}`), kvDelete(`hub-seen:${userId}`)])
 }
 
@@ -268,6 +271,25 @@ export async function buildSampleMember(scenario: SampleScenario, now = new Date
       await oneOff(12)
       await sampleTraining(user, now, { check: 'checked', doneUpTo: 7 })
       break
+    case 'trainer-video': {
+      // A form check from the member, answered with a video note, rated helpful and shared.
+      await oneOff(20)
+      await sampleTraining(user, now, { check: 'checked', doneUpTo: 7 })
+      const [{ askTrainer, answerMember, rateAnswer, setShareOk }, { storeSampleClip }] = await Promise.all([import('@/lib/trainer/store'), import('./clip')])
+      const form = await storeSampleClip('form-check', user.id)
+      await askTrainer({ id: user.id, email: user.email, firstName: 'Alex' }, { text: 'Can you check my form on this? My knees seem to come in at the bottom.', about: 'Goblet squat', videoId: form }, 5, ago(now, 1))
+      const note = await storeSampleClip('note', null, 'Video note')
+      const done = await answerMember(
+        user.id,
+        { text: 'Thanks for filming it. Push your knees out over your little toes on the way down, and slow the last third. I’ve recorded what I mean.', videoId: note, by: 'Sample trainer' },
+        new Date(now.getTime() - 3 * 3_600_000),
+      )
+      if (done) {
+        await rateAnswer(user.id, done.message.id, 'helpful')
+        await setShareOk(user.id, done.message.id, true)
+      }
+      break
+    }
     case 'trainer-waiting':
     case 'trainer-answered': {
       await oneOff(14)

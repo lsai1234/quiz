@@ -2,6 +2,7 @@
 import type { ReviewRow } from '@/lib/consult/review-pack'
 import { copyRows } from '@/lib/consult/copy-rows'
 import { TRAINER_COPY } from './copy'
+import { VIDEO_COPY } from './video-copy'
 
 export function trainerCopyRows(): ReviewRow[] {
   return copyRows(
@@ -43,5 +44,32 @@ export function trainerCopyRows(): ReviewRow[] {
       qualifications: ['Level 3 Personal Trainer'],
     },
     { medical: 'Under the question box, and in the answer email', realPerson: 'Badge beside the trainer, everywhere they appear' },
+  )
+}
+
+export function videoCopyRows(): ReviewRow[] {
+  return copyRows(
+    'Trainer video phase wording',
+    'My Hub (/myhub/trainer, /myhub/trainer/about), the Founders Hub inbox’s ready reply, and the results page’s hub. "[Name]" stands for the name set in Settings',
+    VIDEO_COPY,
+    {
+      formCheckConsent: ['[Name]'],
+      formCheckUploading: [40],
+      formCheckUntil: ['10 December'],
+      videoNote: ['[Name]'],
+      welcomeVideo: ['[Name]'],
+      introVideo: ['[Name]'],
+      aboutTitle: ['[Name]'],
+      aboutLink: ['[Name]'],
+      aboutReply: [24],
+      aboutAsk: ['[Name]'],
+      libraryLine: ['[Name]'],
+      libraryMore: [5],
+      proofQualified: ['Level 3 Personal Trainer'],
+      proofReply: [9],
+      proofReplyNote: [64],
+      proofMembers: [120],
+      proofWatch: ['[Name]'],
+    },
   )
 }

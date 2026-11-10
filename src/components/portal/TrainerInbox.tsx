@@ -5,7 +5,9 @@ import { Badge, Button, Card, Checkbox, Disclosure, Input, Note, Select, Textare
 import type { TrainerProfile } from '@/lib/offer/settings'
 import { TRAINER_COPY, TRAINER_MAX } from '@/lib/trainer/copy'
 import type { EditablePlan } from '@/lib/trainer/plan-view'
-import type { InboxRow, TrainerThread } from '@/lib/trainer/types'
+import { mentionsPain } from '@/lib/trainer/triage'
+import type { InboxRow, TriageTag, TrainerThread } from '@/lib/trainer/types'
+import { AnswerActions, SavedReplyPicker, TagSelect, TrainerContentSettings, TrainerVideoRow, VideoNoteRow, useContent, type Content, type NoteClip } from './TrainerVideoTools'
 
 /**
  * Founders Hub → Trainer: members' questions, and the answers.
@@ -72,6 +74,7 @@ export function TrainerInbox() {
 
   // `?samples=1` (Settings → Test views): the sample members, in place of real ones.
   const [samples] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('samples') === '1')
+  const [content, setContent] = useContent(samples)
 
   const load = useCallback(async () => {
     try {
@@ -123,13 +126,16 @@ export function TrainerInbox() {
           </a>
         </Note>
       ) : (
-        <ProfileSettings view={view} onSaved={setView} />
+        <>
+          <ProfileSettings view={view} onSaved={setView} video={content?.video ?? false} />
+          {content && <TrainerContentSettings content={content} onContent={setContent} />}
+        </>
       )}
 
       {view.trainer.checksPlans && !openId && <PlansToCheck samples={samples} onChecked={() => void load()} />}
 
       {openId ? (
-        <ThreadView userId={openId} trainerName={view.trainer.name} onBack={() => { setOpenId(null); void load() }} />
+        <ThreadView userId={openId} trainerName={view.trainer.name} content={content} onContent={setContent} onBack={() => { setOpenId(null); void load() }} />
       ) : (
         <InboxList rows={view.inbox} onOpen={setOpenId} />
       )}
@@ -171,10 +177,11 @@ function InboxList({ rows, onOpen }: { rows: InboxRow[]; onOpen: (id: string) =>
   )
 }
 
-function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerName: string; onBack: () => void }) {
+function ThreadView({ userId, trainerName, content, onContent, onBack }: { userId: string; trainerName: string; content: Content | null; onContent: (c: Content) => void; onBack: () => void }) {
   const [opened, setOpened] = useState<Opened | null>(null)
   const [missing, setMissing] = useState(false)
   const [text, setText] = useState('')
+  const [note, setNote] = useState<NoteClip | null>(null)
   const [videoUrl, setVideoUrl] = useState('')
   const [videoTitle, setVideoTitle] = useState('')
   const [sending, setSending] = useState(false)
@@ -194,20 +201,55 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
       const r = await fetch(`/api/portal/trainer/${encodeURIComponent(userId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, videoUrl, videoTitle }),
+        body: JSON.stringify({ text, videoUrl, videoTitle, videoId: note?.id ?? null }),
       })
       const d = (await r.json()) as { thread?: TrainerThread; error?: string }
       if (!r.ok || !d.thread) {
-        setError(d.error === 'video' ? 'Use an https link to YouTube, Vimeo or our own storage.' : d.error === 'too-long' ? `Keep it under ${TRAINER_MAX} characters.` : 'That didn’t send.')
+        setError(
+          d.error === 'video'
+            ? 'Use an https link to YouTube or Vimeo, or a video note.'
+            : d.error === 'clip'
+              ? 'That video note can’t go to this member. Record or upload it again.'
+              : d.error === 'too-long'
+                ? `Keep it under ${TRAINER_MAX} characters.`
+                : 'That didn’t send.',
+        )
         return
       }
       setOpened((o) => (o ? { ...o, thread: d.thread! } : o))
       setText('')
+      setNote(null)
       setVideoUrl('')
       setVideoTitle('')
     } finally {
       setSending(false)
     }
+  }
+
+  async function tag(messageId: string, value: TriageTag | null) {
+    const r = await fetch(`/api/portal/trainer/${encodeURIComponent(userId)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId, tag: value }) })
+    if (r.ok) {
+      const d = (await r.json()) as { thread: TrainerThread }
+      setOpened((o) => (o ? { ...o, thread: d.thread } : o))
+    }
+  }
+
+  // The questions since the last answer: what the pain reply and the library look at.
+  const lastQuestion = (() => {
+    const msgs = opened?.thread.messages ?? []
+    const out: string[] = []
+    for (let i = msgs.length - 1; i >= 0 && msgs[i].from === 'member'; i--) out.unshift(msgs[i].text)
+    return out.join('\n\n')
+  })()
+  const questionBefore = (i: number) => {
+    const msgs = opened?.thread.messages ?? []
+    const out: string[] = []
+    let about: string | null = null
+    for (let j = i - 1; j >= 0 && msgs[j].from === 'member'; j--) {
+      out.unshift(msgs[j].text)
+      about = about ?? msgs[j].about
+    }
+    return { text: out.join('\n\n'), about }
   }
 
   async function mark(waiting: boolean) {
@@ -250,7 +292,7 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
           {opened.plan && <PlanEditor userId={userId} plan={opened.plan} onChanged={(plan, thread) => setOpened((o) => (o ? { ...o, plan, thread } : o))} />}
 
           <ol className="flex flex-col" style={{ gap: 'var(--space-2)' }} aria-label="Messages">
-            {opened.thread.messages.map((m) => (
+            {opened.thread.messages.map((m, i) => (
               <li key={m.id} className={m.from === 'trainer' ? 'flex justify-end' : 'flex'}>
                 <div style={{ maxWidth: '85%' }}>
                   <Card padding="tight" tone={m.from === 'trainer' ? 'accent' : undefined} solid={m.from !== 'trainer'}>
@@ -263,14 +305,35 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
                         {m.rating === 'helpful' ? 'They found this helpful' : 'They said: not quite'}
                       </p>
                     )}
-                    {m.video && (
-                      <p style={{ ...META, marginTop: 'var(--space-2)' }}>
-                        <a href={m.video.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>
-                          {m.video.title ?? m.video.url}
-                        </a>
-                      </p>
+                    {m.video?.media ? (
+                      m.video.until && Date.parse(m.video.until) <= Date.now() ? (
+                        <p style={{ ...META, marginTop: 'var(--space-2)' }}>The clip was deleted after 30 days.</p>
+                      ) : (
+                        <video src={m.video.url} poster={`${m.video.url}?still=1`} controls playsInline preload="metadata" style={{ width: '100%', marginTop: 'var(--space-2)', borderRadius: 'var(--radius-card)' }} data-thread-clip />
+                      )
+                    ) : (
+                      m.video && (
+                        <p style={{ ...META, marginTop: 'var(--space-2)' }}>
+                          <a href={m.video.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'underline' }}>
+                            {m.video.title ?? m.video.url}
+                          </a>
+                        </p>
+                      )
                     )}
+                    {m.from === 'member' && content?.video && <TagSelect value={m.tag} onChange={(t) => void tag(m.id, t)} />}
                   </Card>
+                  {m.from === 'trainer' && !m.kind && content?.video && (
+                    <AnswerActions
+                      userId={userId}
+                      messageId={m.id}
+                      question={questionBefore(i).text}
+                      about={questionBefore(i).about}
+                      answer={m.text}
+                      shareOk={m.shareOk}
+                      featured={content.featured?.source.messageId === m.id}
+                      onContent={onContent}
+                    />
+                  )}
                   <p style={{ ...META, marginTop: 'var(--space-1)', textAlign: m.from === 'trainer' ? 'right' : 'left' }}>
                     {m.from === 'trainer' ? `${trainerName || 'Trainer'}${m.by ? ` (sent by ${m.by})` : ''}` : opened.member.firstName ?? 'Member'} · {stamp(m.at)}
                   </p>
@@ -281,11 +344,13 @@ function ThreadView({ userId, trainerName, onBack }: { userId: string; trainerNa
 
           <Card padding="normal" elevation={2}>
             <div className="flex flex-col" style={{ gap: 'var(--space-3)' }} data-answer>
+              {content?.video && <SavedReplyPicker replies={content.replies} pain={opened.thread.waiting && mentionsPain(lastQuestion)} onPick={(t) => setText((x) => (x.trim() ? `${x.trim()}\n\n${t}` : t))} />}
               <Textarea label="Your answer" rows={6} value={text} onChange={(e) => setText(e.target.value)} hint={`Goes out as ${trainerName || 'the trainer'}. Coaching, not medical advice: for pain or a condition, point them to a GP or physio.`} />
               <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
-                <Input label="Video link (optional)" placeholder="https://youtu.be/…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} hint="YouTube, Vimeo or our own storage" />
+                <Input label="Video link (optional)" placeholder="https://youtu.be/…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} hint="YouTube or Vimeo" />
                 <Input label="Video title (optional)" placeholder="Squat set-up" value={videoTitle} onChange={(e) => setVideoTitle(e.target.value)} />
               </div>
+              {content?.video && !videoUrl.trim() && <VideoNoteRow clip={note} onClip={setNote} />}
               {error && <Note tone="critical">{error}</Note>}
               <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)' }}>
                 <Button variant="primary" icon="send" disabled={!text.trim() || sending} loading={sending} onClick={() => void answer()} data-send-answer>
@@ -315,7 +380,7 @@ const withoutChecks = <T extends { checksPlans?: unknown; qualificationsConfirme
   return rest
 }
 
-function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) => void }) {
+function ProfileSettings({ view, onSaved, video }: { view: Inbox; onSaved: (v: Inbox) => void; video: boolean }) {
   const [draft, setDraft] = useState({ ...view.trainer, photoUrl: view.trainer.photoUrl ?? '', notifyEmail: view.trainer.notifyEmail ?? '', replyHours: String(view.trainer.replyHours), dailyLimit: String(view.trainer.dailyLimit) })
   const [saving, setSaving] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -389,6 +454,17 @@ function ProfileSettings({ view, onSaved }: { view: Inbox; onSaved: (v: Inbox) =
             onChange={(e) => void save(undefined, { qualificationsConfirmed: e.target.checked })}
             data-trainer-qualifications-confirmed
           />
+          {video && (
+            <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-4)' }} data-trainer-videos>
+              <TrainerVideoRow
+                label="Intro video"
+                hint="A minute on who they are and how they coach. Shows on their About page and, with Video on, on the results page."
+                id={view.trainer.introVideo}
+                onSet={(id) => save(undefined, { introVideo: id })}
+              />
+              <TrainerVideoRow label="Welcome video" hint="Plays with the welcome every new member gets." id={view.trainer.welcomeVideo} onSet={(id) => save(undefined, { welcomeVideo: id })} />
+            </div>
+          )}
           <div className="grid sm:grid-cols-3" style={{ gap: 'var(--space-3)' }}>
             <Input label="Answers within (hours)" inputMode="numeric" value={draft.replyHours} onChange={set('replyHours')} />
             <Input label="Questions a day, per member" inputMode="numeric" value={draft.dailyLimit} onChange={set('dailyLimit')} />

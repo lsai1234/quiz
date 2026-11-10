@@ -19,6 +19,8 @@ import type { Weekday } from '@/lib/training/types'
 export interface HubPreview {
   training: { sessions: { day: Weekday; title: string; minutes: number; kind: 'strength' | 'activity'; moves: string[] }[] } | null
   deals: { productId: string; short: string; line: string; total: number; normal: number; weeks: number; free: boolean }[] | null
+  /** What's true about the trainer, measured (video phase on): `./proof`. */
+  proof?: import('./proof').HubProof | null
 }
 
 export function trainingPreview(input: { day: RoutineDay | null; goals: Goal[]; training: TrainingSeed | null }): HubPreview['training'] {

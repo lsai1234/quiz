@@ -28,7 +28,8 @@ export async function POST(req: Request) {
   }
   const ids = Array.isArray(body.productIds) ? body.productIds.filter((x): x is string => typeof x === 'string').slice(0, 12) : []
   const seed = normaliseGuideSeed(body.guide)
-  const { services, memberDeals } = await getOfferSettings()
+  const settings = await getOfferSettings()
+  const { services, memberDeals } = settings
 
   const preview: HubPreview = { training: null, deals: null }
   if (services.training) preview.training = trainingPreview({ day: seed.day, goals: seed.goals, training: seed.training ?? null })
@@ -36,6 +37,14 @@ export async function POST(req: Request) {
     const { products } = await getResolvedCatalogue()
     const byId = new Map(products.map((p) => [p.id, p]))
     preview.deals = dealsPreview(ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p)), seed.day.trainDays, memberDeals)
+  }
+  // The trainer, proven rather than told (video phase on). Never allowed to sink the preview.
+  try {
+    const { hubProof } = await import('@/lib/hub-preview/proof')
+    const proof = await hubProof(settings)
+    if (proof) preview.proof = proof
+  } catch {
+    /* No proof is the same as the phase being off. */
   }
   return NextResponse.json(preview)
 }

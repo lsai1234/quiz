@@ -145,6 +145,20 @@ export async function mediaOwnedBy(userId: string): Promise<MediaRecord[]> {
 }
 
 /** Delete what's past its date (form checks after 30 days), and uploads abandoned for a day. */
+/** Whose it is: a video note becomes the member's when it's attached to their answer. */
+export async function setMediaOwner(id: string, owner: string | null): Promise<MediaRecord | null> {
+  const m = await getMedia(id)
+  if (!m) return null
+  const next = { ...m, owner }
+  await kvSet(metaKey(id), next)
+  return next
+}
+
+/** A member's form checks started since a time, for the daily cap. */
+export async function formChecksSince(owner: string, since: Date): Promise<number> {
+  return (await mediaOwnedBy(owner)).filter((m) => m.kind === 'form-check' && Date.parse(m.createdAt) >= since.getTime()).length
+}
+
 export async function sweepExpiredMedia(now = new Date()): Promise<number> {
   let n = 0
   for (const m of await listMedia()) {

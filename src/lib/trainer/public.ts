@@ -2,7 +2,10 @@
 import type { TrainerProfile } from '@/lib/offer/settings'
 import type { PublicTrainer } from './types'
 
-export function publicTrainer(p: TrainerProfile, training = true): PublicTrainer {
+const clip = (id: string | null | undefined) => (id ? `/api/media/${id}` : null)
+
+/** `video`: the video phase is on, so their own videos show. */
+export function publicTrainer(p: TrainerProfile, training = true, video = false): PublicTrainer {
   return {
     name: p.name,
     role: p.role,
@@ -13,5 +16,7 @@ export function publicTrainer(p: TrainerProfile, training = true): PublicTrainer
     answersOn: p.answersOn || null,
     // Only what they've confirmed they hold.
     qualifications: p.qualificationsConfirmed && p.qualifications ? p.qualifications : null,
+    introVideo: video ? clip(p.introVideo) : null,
+    welcomeVideo: video ? clip(p.welcomeVideo) : null,
   }
 }

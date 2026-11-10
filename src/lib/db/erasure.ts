@@ -239,7 +239,8 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   for (const m of await mediaOwnedBy(userId)) if (await deleteMedia(m.id)) videos++
   if (videos > 0) deleted.push('videos they sent')
 
-  // Ask your trainer: their questions and the answers.
+  // Ask your trainer: their questions and the answers, and an exchange of theirs on the results page.
+  await (await import('@/lib/trainer/content')).withdrawFeatured(userId)
   const { deleteThread } = await import('@/lib/trainer/store')
   if (await deleteThread(userId)) deleted.push('questions to the trainer')
 

@@ -75,11 +75,21 @@ export async function currentTestView(): Promise<TestView | null> {
 }
 
 /** A trainer to show when the live one isn't set up yet: clearly a sample. */
-export const SAMPLE_TRAINER: Pick<TrainerProfile, 'name' | 'role' | 'bio' | 'replyHours'> = {
+export const SAMPLE_TRAINER: Pick<TrainerProfile, 'name' | 'role' | 'bio' | 'replyHours' | 'welcome' | 'answersOn'> = {
   name: 'Sam',
   role: 'Personal trainer (sample profile)',
   bio: 'A sample profile for test views. Set the real one in Founders Hub → Trainer.',
   replyHours: 24,
+  welcome: 'Hello, I’m Sam, a sample profile for test views. Ask me anything about your plan: an exercise, your form, your week.',
+  answersOn: 'Monday to Friday',
+}
+
+/** The sample trainer's own videos (video on): the test pattern, made once. */
+export async function withSampleTrainerClips(settings: OfferSettings, live: OfferSettings): Promise<OfferSettings> {
+  if (live.trainer.name.trim() || !settings.services.video || !settings.services.trainer) return settings
+  const { sampleTrainerClip } = await import('./clip')
+  const clip = await sampleTrainerClip().catch(() => null)
+  return clip ? { ...settings, trainer: { ...settings.trainer, introVideo: clip, welcomeVideo: clip } } : settings
 }
 
 /** The settings as a test view sees them. Pure. */

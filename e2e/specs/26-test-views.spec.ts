@@ -119,3 +119,38 @@ test('training emails: off until turned on, and the email previews show both', a
   await page.locator('[data-stop]').click()
   await expect(page.locator('[data-stop-training-emails]')).toContainText('doesn’t work any more')
 })
+
+test('video phase: a form check and a video note, the About page, the inbox and the results page’s proof', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await founderSessionViaApi(page)
+
+  // The member's side: their clip and the trainer's note both play in place, and they said yes to sharing.
+  await page.goto('/api/portal/test-views/open?view=trainer-video')
+  await expect(page.locator('[data-trainer-thread]')).toBeVisible({ timeout: 30_000 })
+  // Their form check and the trainer's note (and the welcome's, while the sample trainer stands in).
+  await expect(page.locator('[data-trainer-thread] [data-clip]').nth(1)).toBeVisible()
+  await expect(page.locator('[data-share="yes"]')).toBeVisible()
+  await expect(page.locator('[data-form-check="pick"]')).toBeVisible()
+  await shot(page, 'trainer-video')
+
+  // The About page, with the sample trainer's intro.
+  await page.goto('/myhub/trainer/about')
+  await expect(page.locator('[data-trainer-about]')).toBeVisible({ timeout: 30_000 })
+  await shot(page, 'trainer-about')
+
+  // The founders' side: the clip, the sort, and the exchange ready to feature.
+  await page.goto('/founderhub/trainer?samples=1')
+  await page.locator('[data-inbox-row]', { hasText: 'trainer-video@' }).locator('button').click()
+  await expect(page.locator('[data-thread-clip]')).toHaveCount(2)
+  await expect(page.locator('[data-answer-actions]').first()).toContainText('They said yes to sharing')
+  await expect(page.locator('[data-tag-select]').first()).toBeVisible()
+  await expect(page.locator('[data-video-note="pick"]')).toBeVisible()
+  await shot(page, 'trainer-inbox-video')
+
+  // The results page: workout mode drawn (and the trainer's intro, when one is uploaded).
+  await page.goto('/api/portal/test-views/open?view=results-gym')
+  await expect(page.locator('[data-hub-preview-trainer]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-hub-proof-workout]')).toBeVisible({ timeout: 30_000 })
+  await page.locator('[data-hub-preview]').scrollIntoViewIfNeeded()
+  await shot(page, 'results-proof')
+})

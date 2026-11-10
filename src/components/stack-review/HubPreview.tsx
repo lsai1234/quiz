@@ -7,6 +7,9 @@ import { DEALS_COPY, HUB_PREVIEW_COPY as C } from '@/lib/deals/copy'
 import type { HubPreview as Preview } from '@/lib/hub-preview/build'
 import type { PublicTrainer } from '@/lib/trainer/types'
 import { TRAINER_COPY } from '@/lib/trainer/copy'
+import { VIDEO_COPY as V } from '@/lib/trainer/video-copy'
+import { COACHING_COPY } from '@/lib/training/coaching-copy'
+import type { HubProof } from '@/lib/hub-preview/proof'
 import { YOU_PALETTE as P } from './you-palette'
 
 /**
@@ -72,6 +75,7 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
   const training = input.training ? preview?.training : null
   const deals = input.deals && input.plan === 'oneoff' ? preview?.deals : null
   const trainer = input.trainer ?? null
+  const proof = trainer ? (preview?.proof ?? null) : null
   if (!trainer && !training && !deals && !(input.deals && input.plan === 'subscription')) return null
 
   return (
@@ -106,7 +110,7 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
             <DaysRing />
           </div>
 
-          {trainer && <TrainerPreview trainer={trainer} />}
+          {trainer && <TrainerPreview trainer={trainer} proof={proof} />}
 
           {training && (
             <div className={`${trainer ? 'mt-2.5 ' : ''}rounded-[18px] px-3.5 py-3`} style={{ background: P.nightCard, border: '1px solid rgba(255,255,255,0.07)' }} data-hub-preview-training>
@@ -159,6 +163,8 @@ export function HubPreview({ input }: { input: HubPreviewInput }) {
                   )
                 })}
               </div>
+
+              {proof?.workout && <WorkoutDrawing move={training.sessions.find((s) => s.kind === 'strength')?.moves[0] ?? null} />}
 
               <ol className="mt-3 space-y-2">
                 {training.sessions.map((s) => (
@@ -276,7 +282,7 @@ function DaysRing() {
  * person, and what to ask. No made-up conversation: their name, their line,
  * and the promise, as the hub itself shows it.
  */
-function TrainerPreview({ trainer }: { trainer: PublicTrainer }) {
+function TrainerPreview({ trainer, proof }: { trainer: PublicTrainer; proof: HubProof | null }) {
   return (
     <div
       className="relative overflow-hidden rounded-[18px] px-3.5 py-3.5"
@@ -310,10 +316,34 @@ function TrainerPreview({ trainer }: { trainer: PublicTrainer }) {
             {TRAINER_COPY.revealTitle(trainer.name)}
           </span>
           <span className="mt-0.5 block text-[12px]" style={{ color: P.nightInk3 }}>
-            {`${trainer.role} · ${TRAINER_COPY.replyWithin(trainer.replyHours)}`}
+            {`${trainer.role} · ${proof?.reply ? V.proofReply(proof.reply.medianHours) : TRAINER_COPY.replyWithin(trainer.replyHours)}`}
           </span>
         </span>
       </div>
+      {proof && (proof.qualifications || proof.reply || proof.members) && (
+        <ul className="mt-2.5 space-y-1" data-hub-proof>
+          {proof.qualifications && <ProofLine text={V.proofQualified(proof.qualifications)} />}
+          {proof.reply && <ProofLine text={V.proofReplyNote(proof.reply.answered)} />}
+          {proof.members && <ProofLine text={V.proofMembers(proof.members)} />}
+        </ul>
+      )}
+      {proof?.introVideo && (
+        <figure className="mt-3" data-hub-proof-video>
+          <video
+            src={proof.introVideo}
+            poster={`${proof.introVideo}?still=1`}
+            preload="none"
+            controls
+            playsInline
+            aria-label={V.proofWatch(trainer.name)}
+            className="w-full rounded-xl"
+            style={{ maxHeight: 280, background: 'rgba(255,255,255,0.05)' }}
+          />
+          <figcaption className="mt-1 text-[11.5px]" style={{ color: P.nightInk3 }}>
+            {V.proofWatch(trainer.name)}
+          </figcaption>
+        </figure>
+      )}
       <p className="mt-2.5 text-[12.5px] leading-snug" style={{ color: P.nightInk2 }}>
         {TRAINER_COPY.revealBody(trainer.name)}
       </p>
@@ -323,6 +353,23 @@ function TrainerPreview({ trainer }: { trainer: PublicTrainer }) {
         </span>
         {TRAINER_COPY.revealVideo}
       </p>
+      {/* A real exchange, shared with the member's yes and without their name. */}
+      {proof?.exchange && (
+        <figure className="mt-3 space-y-2" data-hub-proof-exchange>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: P.nightInk3, fontFamily: DISPLAY }}>
+            {V.proofExchange}
+          </p>
+          <blockquote className="ml-auto max-w-[88%] rounded-xl rounded-br-sm px-3 py-2 text-[12.5px] leading-snug" style={{ background: 'rgba(0,212,255,0.14)', color: P.nightInk, whiteSpace: 'pre-line' }}>
+            {proof.exchange.question}
+          </blockquote>
+          <blockquote className="max-w-[88%] rounded-xl rounded-bl-sm px-3 py-2 text-[12.5px] leading-snug" style={{ background: 'rgba(255,255,255,0.06)', color: P.nightInk, whiteSpace: 'pre-line' }}>
+            {proof.exchange.answer}
+          </blockquote>
+          <figcaption className="text-[11.5px]" style={{ color: P.nightInk3 }}>
+            {`${trainer.name} · ${V.proofExchangeNote}`}
+          </figcaption>
+        </figure>
+      )}
       {/* What asking looks like: a question box, empty, as in the hub. */}
       <div className="mt-3 flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }} aria-hidden>
         <span className="text-[12.5px]" style={{ color: P.nightInk3 }}>
@@ -335,3 +382,49 @@ function TrainerPreview({ trainer }: { trainer: PublicTrainer }) {
     </div>
   )
 }
+
+function ProofLine({ text }: { text: string }) {
+  return (
+    <li className="flex items-start gap-1.5 text-[12px] font-semibold leading-snug" style={{ color: P.nightInk }}>
+      <span aria-hidden className="mt-px" style={{ color: P.nightPositive }}>
+        <Icon name="check" size={11} />
+      </span>
+      {text}
+    </li>
+  )
+}
+
+/**
+ * Workout mode, drawn (coaching tools on): one set at a time, with the rest
+ * timer, using the first lift of their own first session. A picture of the
+ * screen, not numbers anyone logged; the line under it says what it is.
+ */
+function WorkoutDrawing({ move }: { move: string | null }) {
+  return (
+    <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }} data-hub-proof-workout>
+      <div aria-hidden className="flex items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-[10.5px] font-bold uppercase tracking-[0.14em]" style={{ color: P.accent, fontFamily: DISPLAY }}>
+            {COACHING_SET}
+          </span>
+          <span className="block truncate text-[14px] font-black" style={{ color: P.nightInk, fontFamily: DISPLAY }}>
+            {move ?? '—'}
+          </span>
+        </span>
+        <span className="relative inline-flex h-11 w-11 flex-shrink-0 items-center justify-center">
+          <svg width={44} height={44} viewBox="0 0 44 44" className="absolute inset-0">
+            <circle cx={22} cy={22} r={18} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth={4} />
+            <circle cx={22} cy={22} r={18} fill="none" stroke={P.accent} strokeWidth={4} strokeDasharray={`${2 * Math.PI * 18 * 0.65} ${2 * Math.PI * 18}`} strokeLinecap="round" transform="rotate(-90 22 22)" />
+          </svg>
+          <span className="relative text-[10.5px] font-black tabular-nums" style={{ color: P.nightInk, fontFamily: DISPLAY }}>
+            1:30
+          </span>
+        </span>
+      </div>
+      <p className="mt-1.5 text-[12px] leading-snug" style={{ color: P.nightInk2 }}>
+        {V.proofWorkout}
+      </p>
+    </div>
+  )
+}
+const COACHING_SET = COACHING_COPY.setOf(1, 3)

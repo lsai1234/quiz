@@ -1,12 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Badge, Button, Card, Note, Textarea, buttonSurface } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
 import { MEMBER_MAX, TRAINER_COPY as C } from '@/lib/trainer/copy'
 import type { MemberTrainerView, MessageContext } from '@/lib/trainer/types'
 import { body, col, eyebrow, meta, strong } from '../home/ui'
+import { VIDEO_COPY as V } from '@/lib/trainer/video-copy'
 import { RealBadge, TrainerAvatar, when } from './TrainerBits'
+import { AnswersLibrary, Clip, FormCheckPicker, MessageVideo, ShareAsk, type PickedClip } from './TrainerVideo'
 
 /**
  * Ask your trainer: who they are, the conversation so far, and a box to ask.
@@ -24,6 +27,8 @@ export function TrainerChat() {
   // From workout mode: the set it's about, with its numbers.
   const [context, setContext] = useState<MessageContext | null>(null)
   const [rated, setRated] = useState<Record<string, 'helpful' | 'not-quite'>>({})
+  // A form check, uploaded and waiting to go with the question (video on).
+  const [clip, setClip] = useState<PickedClip | null>(null)
   const composerRef = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,16 +68,17 @@ export function TrainerChat() {
     setError(null)
     setSent(false)
     try {
-      const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, about, context }) })
+      const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, about, context, videoId: clip?.id ?? null }) })
       if (res.ok) {
         setView((await res.json()) as MemberTrainerView)
         setText('')
         setAbout(null)
         setContext(null)
+        setClip(null)
         setSent(true)
       } else {
         const code = ((await res.json().catch(() => ({}))) as { error?: string }).error
-        setError(code === 'limit' ? C.limit : code === 'too-long' ? C.tooLong(MEMBER_MAX) : code === 'closed' ? C.closed : C.failed)
+        setError(code === 'limit' ? C.limit : code === 'too-long' ? C.tooLong(MEMBER_MAX) : code === 'closed' ? C.closed : code === 'clip' ? V.formCheckGone : C.failed)
       }
     } catch {
       setError(C.failed)
@@ -89,6 +95,11 @@ export function TrainerChat() {
       setText((t) => t || C.notQuitePrefill)
       composerRef.current?.scrollIntoView?.({ block: 'center' })
     }
+  }
+
+  async function share(messageId: string, ok: boolean) {
+    const res = await fetch('/api/hub/trainer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'share', messageId, ok }) }).catch(() => null)
+    if (res?.ok) setView((await res.json()) as MemberTrainerView)
   }
 
   if (failed) return <Note tone="critical">{C.failed}</Note>
@@ -144,6 +155,13 @@ export function TrainerChat() {
         </p>
         {t.bio && <p style={{ ...body, marginTop: 'var(--space-2)', whiteSpace: 'pre-line' }}>{t.bio}</p>}
         <p style={{ ...body, marginTop: 'var(--space-2)' }}>{C.intro(t.name)}</p>
+        {view.video && (
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <Link href="/myhub/trainer/about" className={buttonSurface('ghost', 'sm').className} style={buttonSurface('ghost', 'sm').style} data-trainer-about-link>
+              {V.aboutLink(t.name)} →
+            </Link>
+          </div>
+        )}
       </Card>
 
       {/* The conversation. */}
@@ -169,6 +187,7 @@ export function TrainerChat() {
                   {m.about && <p style={{ ...meta, color: 'var(--accent)', fontWeight: 'var(--weight-strong)', marginBottom: 'var(--space-1)' }}>{C.about(m.about)}</p>}
                   {m.context && <p style={{ ...meta, marginBottom: 'var(--space-1)' }} data-message-context>{C.contextLine(m.context)}</p>}
                   <p style={{ ...body, color: 'var(--ink-1)', whiteSpace: 'pre-line' }}>{m.text}</p>
+                  {m.video && <MessageVideo video={m.video} label={V.formCheckLabel} />}
                 </div>
                 <p style={{ ...meta, textAlign: 'right', marginTop: 'var(--space-1)' }}>{`${C.you} · ${when(m.at)}`}</p>
               </div>
@@ -188,7 +207,8 @@ export function TrainerChat() {
                   }}
                 >
                   <p style={{ ...body, color: 'var(--ink-1)', whiteSpace: 'pre-line' }}>{m.text}</p>
-                  {m.video && <VideoLink url={m.video.url} title={m.video.title} />}
+                  {m.video && <MessageVideo video={m.video} label={m.video.media ? V.videoNote(t.name) : undefined} />}
+                  {m.kind === 'welcome' && t.welcomeVideo && <Clip src={t.welcomeVideo} label={V.welcomeVideo(t.name)} />}
                 </div>
                 <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{`${t.name} · ${when(m.at)}`}</p>
                 {m.kind === 'welcome' && view.open && view.messages.every((x) => x.from !== 'member') && (
@@ -201,7 +221,10 @@ export function TrainerChat() {
                 {view.coaching && !m.kind && (
                   <div className="flex flex-wrap items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }} data-rate={m.id}>
                     {(m.rating ?? rated[m.id]) ? (
-                      <p style={meta}>{(m.rating ?? rated[m.id]) === 'helpful' ? C.rateThanks : C.rateNotQuiteThanks}</p>
+                      <div>
+                        <p style={meta}>{(m.rating ?? rated[m.id]) === 'helpful' ? C.rateThanks : C.rateNotQuiteThanks}</p>
+                        {view.video && (m.rating ?? rated[m.id]) === 'helpful' && <ShareAsk shareOk={m.shareOk} onAnswer={(ok) => void share(m.id, ok)} />}
+                      </div>
                     ) : (
                       <>
                         <Button variant="ghost" size="sm" icon="check" onClick={() => void rate(m.id, 'helpful')} data-rate-helpful>
@@ -232,6 +255,9 @@ export function TrainerChat() {
         )}
         <div ref={endRef} />
       </section>
+
+      {/* Asked before (video on). */}
+      {view.open && view.video && view.library && view.library.length > 0 && <AnswersLibrary entries={view.library} trainer={t.name} />}
 
       {/* Ask. */}
       {view.open ? (
@@ -277,6 +303,16 @@ export function TrainerChat() {
               error={over ? C.tooLong(MEMBER_MAX) : undefined}
               hint={`${text.length}/${MEMBER_MAX} · ${view.left > 0 ? C.left(view.left) : C.limit}`}
             />
+            {view.video && view.left > 0 && (
+              <FormCheckPicker
+                trainer={t.name}
+                clip={clip}
+                onClip={(c) => {
+                  setClip(c)
+                  if (c) setText((x) => x || V.formCheckPrefill)
+                }}
+              />
+            )}
             {error && (
               <Note tone="critical" live="assertive">
                 {error}
@@ -296,18 +332,6 @@ export function TrainerChat() {
       ) : (
         <Note tone="attention">{C.closed}</Note>
       )}
-    </div>
-  )
-}
-
-function VideoLink({ url, title }: { url: string; title: string | null }) {
-  const link = buttonSurface('secondary', 'sm')
-  return (
-    <div style={{ marginTop: 'var(--space-3)' }}>
-      <a href={url} target="_blank" rel="noopener noreferrer" className={link.className} style={link.style} data-trainer-video>
-        <Icon name="play" size={14} />
-        {title ? `${C.video}: ${title}` : C.video}
-      </a>
     </div>
   )
 }

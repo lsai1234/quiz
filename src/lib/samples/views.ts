@@ -40,6 +40,7 @@ export type SampleScenario =
   | 'plan-midweek'
   | 'trainer-waiting'
   | 'trainer-answered'
+  | 'trainer-video'
 
 export const SAMPLE_SCENARIOS: SampleScenario[] = [
   'none',
@@ -58,6 +59,7 @@ export const SAMPLE_SCENARIOS: SampleScenario[] = [
   'plan-midweek',
   'trainer-waiting',
   'trainer-answered',
+  'trainer-video',
 ]
 
 /** The sample people on the results page. */
@@ -104,6 +106,8 @@ export const TEST_VIEWS: TestViewDef[] = [
   member('training-workout', 'Training and trainer', 'Workout mode', 'Today’s session, one set at a time', 'plan-midweek', '/myhub/training?workout=next'),
   member('trainer-waiting', 'Training and trainer', 'A question waiting', 'Asked about a lift, no answer yet', 'trainer-waiting', '/myhub/trainer'),
   member('trainer-answered', 'Training and trainer', 'An answer with a video', 'The trainer has replied', 'trainer-answered', '/myhub/trainer'),
+  member('trainer-video', 'Training and trainer', 'A form check and a video note', 'Video on: the member’s clip, the trainer’s note, sharing', 'trainer-video', '/myhub/trainer'),
+  member('trainer-about', 'Training and trainer', 'About the trainer', 'Photo, qualifications, reply time and intro video', 'trainer-answered', '/myhub/trainer/about'),
 
   { id: 'shop-front', group: 'Shop', label: 'Shop front with the hub card', note: 'The shop, with the hub on sale', kind: 'link', href: '/shop' },
   { id: 'shop-join-out', group: 'Shop', label: 'Hub join page · signed out', note: 'What a visitor sees first', kind: 'link', href: '/shop/hub' },

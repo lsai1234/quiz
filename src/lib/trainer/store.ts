@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto'
 import { kvDelete, kvGet, kvListPrefix, kvSet } from '@/lib/db/kv'
 import { cleanTutorialUrl } from '@/lib/training/tutorials'
 import { MEMBER_MAX, TRAINER_MAX } from './copy'
-import type { InboxRow, MessageContext, TrainerMessage, TrainerThread, TrainerVideo } from './types'
+import { TRIAGE_TAGS, type InboxRow, type MessageContext, type TriageTag, type TrainerMessage, type TrainerThread, type TrainerVideo } from './types'
 
 const PREFIX = 'trainer-thread:'
 const key = (userId: string) => PREFIX + userId
@@ -17,7 +17,7 @@ export const MAX_MESSAGES = 300
 const DAY = 86_400_000
 
 export class TrainerError extends Error {
-  constructor(public code: 'empty' | 'too-long' | 'limit' | 'video') {
+  constructor(public code: 'empty' | 'too-long' | 'limit' | 'video' | 'clip') {
     super(code)
   }
 }
@@ -73,10 +73,28 @@ export function unreadForMember(t: TrainerThread | null): number {
   return t.messages.filter((m) => m.from === 'trainer' && Date.parse(m.at) > since).length
 }
 
+/**
+ * A clip from our own storage, for a message: a member's own finished form
+ * check, or a video note the founders uploaded (which becomes the member's,
+ * so they can play it). Throws `TrainerError('clip')` for anything else.
+ */
+async function clipFor(raw: unknown, want: 'form-check' | 'note', member: string): Promise<TrainerVideo | null> {
+  if (raw == null || raw === '') return null
+  const { getMedia, mediaUrl, setMediaOwner } = await import('@/lib/media/store')
+  const m = typeof raw === 'string' ? await getMedia(raw) : null
+  if (!m || m.state !== 'ready' || m.kind !== want) throw new TrainerError('clip')
+  if (want === 'form-check' && m.owner !== member) throw new TrainerError('clip')
+  if (want === 'note') {
+    if (m.owner && m.owner !== member) throw new TrainerError('clip')
+    if (!m.owner) await setMediaOwner(m.id, member)
+  }
+  return { url: mediaUrl(m.id), title: m.title, media: m.id, until: m.expiresAt }
+}
+
 /** A member's question. Throws `TrainerError` for an empty or long one, or past today's limit. */
 export async function askTrainer(
   who: { id: string; email: string; firstName: string | null },
-  input: { text?: unknown; about?: unknown; context?: unknown },
+  input: { text?: unknown; about?: unknown; context?: unknown; videoId?: unknown },
   dailyLimit: number,
   now = new Date(),
 ): Promise<{ thread: TrainerThread; message: TrainerMessage }> {
@@ -85,9 +103,10 @@ export async function askTrainer(
   if (text.length > MEMBER_MAX) throw new TrainerError('too-long')
   const had = await getThread(who.id)
   if (askedToday(had, now) >= dailyLimit) throw new TrainerError('limit')
+  const video = await clipFor(input.videoId, 'form-check', who.id)
   const at = now.toISOString()
   const context = cleanContext(input.context)
-  const message: TrainerMessage = { id: id(), from: 'member', text, at, about: cleanAbout(input.about), video: null, ...(context ? { context } : {}) }
+  const message: TrainerMessage = { id: id(), from: 'member', text, at, about: cleanAbout(input.about), video, ...(context ? { context } : {}) }
   const thread: TrainerThread = had ?? { v: 1, userId: who.id, email: who.email, firstName: who.firstName, messages: [], waiting: false, lastAt: at, memberReadAt: null, trainerReadAt: null }
   thread.email = who.email
   thread.firstName = who.firstName ?? thread.firstName
@@ -101,7 +120,7 @@ export async function askTrainer(
 /** A founder's answer. Throws `TrainerError` for an empty or long one, or a video link we wouldn't show. */
 export async function answerMember(
   userId: string,
-  input: { text?: unknown; videoUrl?: unknown; videoTitle?: unknown; by: string },
+  input: { text?: unknown; videoUrl?: unknown; videoTitle?: unknown; videoId?: unknown; by: string },
   now = new Date(),
 ): Promise<{ thread: TrainerThread; message: TrainerMessage } | null> {
   const thread = await getThread(userId)
@@ -115,6 +134,8 @@ export async function answerMember(
     if (!url) throw new TrainerError('video')
     video = { url, title: typeof input.videoTitle === 'string' && input.videoTitle.trim() ? input.videoTitle.trim().slice(0, 80) : null }
   }
+  // A video note in place of a link.
+  if (!video && input.videoId) video = await clipFor(input.videoId, 'note', userId)
   const at = now.toISOString()
   const message: TrainerMessage = { id: id(), from: 'trainer', text, at, about: null, video, by: input.by.slice(0, 120) }
   thread.messages.push(message)
@@ -228,6 +249,34 @@ export async function rateAnswer(userId: string, messageId: string, rating: 'hel
   if (!t || !m) return null
   m.rating = rating
   return save(t)
+}
+
+/** The trainer sorts a member's question. Null when there's no such question. */
+export async function tagQuestion(userId: string, messageId: string, tag: TriageTag | null): Promise<TrainerThread | null> {
+  const t = await getThread(userId)
+  const m = t?.messages.find((x) => x.id === messageId && x.from === 'member')
+  if (!t || !m || (tag !== null && !TRIAGE_TAGS.includes(tag))) return null
+  m.tag = tag
+  return save(t)
+}
+
+/** The member says yes (or no) to showing an answer and its question, without their name. */
+export async function setShareOk(userId: string, messageId: string, ok: boolean): Promise<TrainerThread | null> {
+  const t = await getThread(userId)
+  const m = t?.messages.find((x) => x.id === messageId && x.from === 'trainer' && !x.kind)
+  if (!t || !m) return null
+  m.shareOk = ok
+  return save(t)
+}
+
+/** The question an answer was to: the member's messages just before it, joined. */
+export function questionFor(t: TrainerThread, answerId: string): { text: string; about: string | null } | null {
+  const i = t.messages.findIndex((m) => m.id === answerId)
+  if (i <= 0) return null
+  const asked: TrainerMessage[] = []
+  for (let j = i - 1; j >= 0 && t.messages[j].from === 'member'; j--) asked.unshift(t.messages[j])
+  if (!asked.length) return null
+  return { text: asked.map((m) => m.text).join('\n\n'), about: asked.find((m) => m.about)?.about ?? null }
 }
 
 /** The trainer has opened the thread since the member's last question. */

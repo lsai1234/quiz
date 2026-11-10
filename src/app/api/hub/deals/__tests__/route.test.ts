@@ -74,3 +74,28 @@ describe('/api/hub-preview', () => {
     expect(p.deals).toBeNull()
   })
 })
+
+describe('/api/hub-preview: the trainer, proven (video phase)', () => {
+  const ask = (body: unknown) =>
+    preview(new Request('http://x/api/hub-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
+  const guide = { day: { trainWeekdays: [0, 2, 4], trainDays: 3, trainAt: 1080 }, goals: ['muscle'], training: { types: ['strength'], experience: 'new', focus: 'hypertrophy' } }
+  afterAll(async () => {
+    const { saveServiceSettings } = await import('@/lib/offer/store')
+    await saveServiceSettings({ training: false, trainer: false, coaching: false, video: false })
+  })
+  it('adds only what is true: no measured reply or member count below their floors', async () => {
+    const { saveServiceSettings, saveTrainerProfile } = await import('@/lib/offer/store')
+    const { forgetProof } = await import('@/lib/hub-preview/proof')
+    await saveTrainerProfile({ name: 'Sam', qualifications: 'Level 3 Personal Trainer', qualificationsConfirmed: false })
+    await saveServiceSettings({ training: true, trainer: true, coaching: true, video: false })
+    forgetProof()
+    expect((await (await ask({ productIds: [], plan: 'oneoff', guide })).json()).proof).toBeUndefined()
+    await saveServiceSettings({ video: true })
+    forgetProof()
+    const proof = (await (await ask({ productIds: [], plan: 'oneoff', guide })).json()).proof
+    expect(proof).toMatchObject({ qualifications: null, reply: null, members: null, workout: true })
+    await saveTrainerProfile({ qualificationsConfirmed: true })
+    forgetProof()
+    expect((await (await ask({ productIds: [], plan: 'oneoff', guide })).json()).proof.qualifications).toBe('Level 3 Personal Trainer')
+  })
+})

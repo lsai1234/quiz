@@ -10,7 +10,8 @@ import { rollWeek } from '@/lib/training/edit'
 import { coachingOn } from '@/lib/offer/settings'
 import { editablePlan } from '@/lib/trainer/plan-view'
 import { sendReplyEmail } from '@/lib/trainer/emails'
-import { answerMember, getThread, markTrainerRead, setWaiting, TrainerError } from '@/lib/trainer/store'
+import { answerMember, getThread, markTrainerRead, setWaiting, tagQuestion, TrainerError } from '@/lib/trainer/store'
+import { TRIAGE_TAGS } from '@/lib/trainer/types'
 
 /**
  * Founders Hub → Trainer → one member's questions.
@@ -19,8 +20,10 @@ import { answerMember, getThread, markTrainerRead, setWaiting, TrainerError } fr
  *          (focus, days, length, kit, experience, areas to work around)
  *          and whether their hub is open. Opening it is logged as an access
  *          to their record.
- *   POST   { text, videoUrl?, videoTitle? }  an answer; emails them
+ *   POST   { text, videoUrl?, videoTitle?, videoId? }  an answer; emails them
+ *          (videoId: a video note uploaded to /api/portal/media, which becomes theirs)
  *   PATCH  { waiting: boolean }  answered some other way, or back on the list
+ *          { messageId, tag }    sort a question (form, plan, pain, kit, other, or null)
  */
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +65,7 @@ export async function POST(req: Request, { params }: Params) {
   const founder = await getFounder()
   if (!founder || !(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { userId } = await params
-  let body: { text?: unknown; videoUrl?: unknown; videoTitle?: unknown }
+  let body: { text?: unknown; videoUrl?: unknown; videoTitle?: unknown; videoId?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -83,11 +86,18 @@ export async function POST(req: Request, { params }: Params) {
 export async function PATCH(req: Request, { params }: Params) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { userId } = await params
-  let body: { waiting?: unknown }
+  let body: { waiting?: unknown; messageId?: unknown; tag?: unknown }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+  }
+  if (typeof body.messageId === 'string') {
+    const tag = body.tag === null ? null : (TRIAGE_TAGS.find((t) => t === body.tag) ?? undefined)
+    if (tag === undefined) return NextResponse.json({ error: 'Which tag?' }, { status: 400 })
+    const tagged = await tagQuestion(userId, body.messageId, tag)
+    if (!tagged) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ thread: tagged })
   }
   if (typeof body.waiting !== 'boolean') return NextResponse.json({ error: 'waiting: boolean' }, { status: 400 })
   const thread = await setWaiting(userId, body.waiting)

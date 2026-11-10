@@ -1,9 +1,26 @@
 /** Ask your trainer: a thread per member, a real person answering. */
 
 export interface TrainerVideo {
-  /** https, on YouTube, Vimeo or our own storage (`cleanTutorialUrl`). */
+  /** https on YouTube or Vimeo (`cleanTutorialUrl`), or `/api/media/<id>` for our own storage. */
   url: string
   title: string | null
+  /** Our own storage (`lib/media`): a member's form check or the trainer's video note. */
+  media?: string | null
+  /** A form check is deleted after this. */
+  until?: string | null
+}
+
+/** What a question is about, as the trainer sorts it. "pain" offers the ready reply that points to a GP or physio. */
+export type TriageTag = 'form' | 'plan' | 'pain' | 'kit' | 'other'
+export const TRIAGE_TAGS: TriageTag[] = ['form', 'plan', 'pain', 'kit', 'other']
+
+/** A question and answer the trainer rewrote without anything that could identify the member, shown before asking. */
+export interface LibraryEntry {
+  id: string
+  about: string | null
+  question: string
+  answer: string
+  at: string
 }
 
 /**
@@ -35,6 +52,10 @@ export interface TrainerMessage {
   rating?: 'helpful' | 'not-quite' | null
   /** A message the trainer wrote once for everyone, or about a change to the plan. */
   kind?: 'welcome' | 'plan-note' | 'change' | null
+  /** The trainer's sorting of a question (Founders Hub only). */
+  tag?: TriageTag | null
+  /** On an answer: the member said yes to showing this question and answer, without their name. */
+  shareOk?: boolean | null
 }
 
 export interface TrainerThread {
@@ -63,6 +84,9 @@ export interface PublicTrainer {
   answersOn?: string | null
   /** The qualifications they actually hold, once confirmed. */
   qualifications?: string | null
+  /** Their own videos (video phase on): a short intro, and the welcome on a member's first visit. */
+  introVideo?: string | null
+  welcomeVideo?: string | null
 }
 
 /** `GET /api/hub/trainer`. */
@@ -85,6 +109,10 @@ export interface MemberTrainerView {
   replyStat?: { medianHours: number; answered: number } | null
   /** The coaching tools are on: ratings and context. */
   coaching?: boolean
+  /** Video is on: they can send a form check, and see the answers library. */
+  video?: boolean
+  /** Questions answered before, rewritten without anyone's details (video on). */
+  library?: LibraryEntry[]
 }
 
 /** A row of the Founders Hub's inbox. */
