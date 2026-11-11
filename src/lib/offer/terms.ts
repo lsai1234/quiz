@@ -170,7 +170,7 @@ export function memberHubTerms(input: { freeOver: number; /** While the hub is o
         'Each product you buy gets its own member price in your hub. It opens about a week before that product is due to run out, worked out from the pack size and how you said you use it, and stays open until your hub closes.',
         'A member price is for you only, through your hub, signed in. One use each: once you’ve bought it, that product’s next member price follows your new pack.',
         'Member prices don’t combine with discount codes, the free gift or any other offer.',
-        `A top-up box of member prices ships free to the UK mainland at £${input.freeOver.toFixed(2)} or more; the Highlands and Islands surcharge still applies. Products not yet due can join a box with one that is, if they’re due within 30 days.`,
+        `A top-up box of member prices ships free at £${input.freeOver.toFixed(2)} or more, anywhere in the UK we deliver (not Northern Ireland, Guernsey or Jersey). Products not yet due can join a box with one that is, if they’re due within 30 days.`,
         'On a monthly plan, your plan’s own products come at your monthly price. Member prices are for products you buy on top.',
         'We set member prices product by product and may change them; the price shown in your hub when you check out is the price you pay. We may end member prices, but never for an order you’ve already placed.',
       ],

@@ -223,15 +223,15 @@ test.describe('the shop', () => {
 
   test('a basket with nothing near a session stack gets the delivery ladder instead', async ({ page }) => {
     await openShop(page)
-    await addProductToBasket(page, 'CHRGD Whey Protein')
-    // One product is a long way under the free-delivery line, and holding one of
+    await addProductToBasket(page, 'CHRGD Electrolyte Mix')
+    // One £17.99 product is under the £20 free-delivery line, and holding one of
     // a three-product session stack is an advert rather than a near-miss.
     await expect(page.getByText(/from free delivery/i).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('a suggestion can be waved away', async ({ page }) => {
     await openShop(page)
-    await addProductToBasket(page, 'CHRGD Whey Protein')
+    await addProductToBasket(page, 'CHRGD Electrolyte Mix')
     const dismiss = page.getByRole('button', { name: 'Dismiss suggestion' }).first()
     await expect(dismiss).toBeVisible({ timeout: 10_000 })
     await dismiss.click()
@@ -445,7 +445,7 @@ test.describe('the shop', () => {
   })
 })
 
-test.describe('the £15 minimum', () => {
+test.describe('the order minimum', () => {
   /**
    * Checked against the API rather than the UI. The button can be disabled and
    * the rule still be missing — the refusal has to hold for anything that posts

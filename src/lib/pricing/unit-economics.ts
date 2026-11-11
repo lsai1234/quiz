@@ -8,9 +8,10 @@
  * subtraction hides four separate leaks, every one of which is real money:
  *
  *   1. VAT      — up to 20% of the shelf price was never ours (see ./vat.ts).
- *   2. Delivery — PowerBody charge £3.25–£5.17 per order, by weight, with no
- *                 free threshold for dropshippers. On a £20 tub that is a fifth
- *                 of the price.
+ *   2. Delivery — PowerBody charge £3.25 (Royal Mail, up to 7 kg) or £5.17
+ *                 (DPD, up to 30 kg) per parcel, plus VAT, with no free
+ *                 threshold for dropshippers. On a £20 tub that is a fifth of
+ *                 the price.
  *   3. Card fees— 1.5% + 20p of the gross, and no VAT to reclaim on it.
  *   4. Returns  — the goods come back but the shipping never does, so a 2%
  *                 return rate is a real per-order cost on the other 98%.
@@ -27,7 +28,7 @@
  * Pure. Every function takes its config, so the hub previews unsaved rules.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { blendedCustomerCharge, blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
+import { blendedCustomerCharge, blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, selectService, shipmentWeight } from './delivery'
 import { costFromSupplierPrice, revenueFromShelfPrice, supplierVatIsCost, vatRateFor } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -89,8 +90,10 @@ export interface EconomicsInput {
   shelfPrice: number
   /** What we pay the supplier for the goods, ex VAT (£). Null = estimate it. */
   supplierCost?: number | null
-  /** Shipped weight of the goods (g). Null = use the configured default. */
+  /** Shipped weight of one unit (g). Null = from `size`, else the configured default. */
   grams?: number | null
+  /** The size on the label ("1kg"), for a weight when `grams` is unknown. */
+  size?: string | null
   /** VAT rate for these goods (0–1). Null = standard rate. */
   vatRate?: number | null
   /**
@@ -124,10 +127,10 @@ export interface EconomicsInput {
   /**
    * How many products share the parcel this line ships in.
    *
-   * PowerBody charge per parcel on its total wholesale value, so a product in a
-   * three-item stack carries a third of one delivery — and a bigger parcel may
-   * clear their free line and carry none. Default 1 (ships alone), which is the
-   * worst case and not how the quiz actually sells.
+   * PowerBody charge per parcel, so a product in a three-item stack carries a
+   * third of one delivery. The parcel is taken to weigh this line's weight
+   * times the items in it. Default 1 (ships alone), which is the worst case and
+   * not how the quiz actually sells.
    */
   sharedParcelItems?: number
 }
@@ -148,7 +151,7 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   // ── Revenue ──
   const shelfPrice = round(input.shelfPrice * quantity)
   const { grams, weightKnown } = shipmentWeight(
-    [{ weightGrams: input.grams ?? null, quantity }],
+    [{ weightGrams: input.grams ?? null, size: input.size ?? null, quantity }],
     config,
   )
   const deliveryCharged =
@@ -175,13 +178,14 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   const supplierExVat = costKnown
     ? input.supplierCost! * quantity
     : round((netRevenue - revenueFromShelfPrice(deliveryCharged, config.vat.standardRate, config)) * config.defaultCostRatio)
-  const productCost = costFromSupplierPrice(supplierExVat, config)
+  // PowerBody's VAT on the goods is the product's own rate (0% on a few foods).
+  const productCost = costFromSupplierPrice(supplierExVat, config, vatRate)
 
-  // PowerBody band delivery on what WE pay them for the whole PARCEL, so a
-  // product sharing a parcel carries only its share — and a big enough parcel
-  // clears their free line and carries none.
+  // PowerBody charge per PARCEL, by its weight, so a product sharing a parcel
+  // carries only its share of one delivery.
   const shareOfParcel = Math.max(1, input.sharedParcelItems ?? 1)
-  const deliveryCost = round(blendedDeliveryCost(supplierExVat * shareOfParcel, config) / shareOfParcel)
+  const parcelGrams = grams * shareOfParcel
+  const deliveryCost = round(blendedDeliveryCost(parcelGrams, config) / shareOfParcel)
   const paymentFee = round(grossRevenue * config.paymentFees.percent + config.paymentFees.fixed)
 
   // A return refunds the goods but never the shipping, so what a return costs
@@ -193,30 +197,14 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
 
   const contribution = round(netRevenue - productCost - deliveryCost - paymentFee - returnsProvision)
 
-  // Read the bands off the whole PARCEL — the shortfall a founder can act on is
-  // "how much more stock goes in the box", not "how much more of this one line".
-  const parcelValue = round(supplierExVat * shareOfParcel)
-  const free = toFreeShipping(parcelValue, config.delivery.defaultZone, config)
-
-  /**
-   * The delivery line, said in terms of the box rather than the line.
-   *
-   * The free line gets a mention but not the emphasis: £99 of wholesale is a
-   * ~£190 basket and almost nothing reaches it, so leading with it is a
-   * counsel of perfection. The next band down usually is reachable, and that is
-   * what belongs in front of someone building a bundle.
-   */
+  /** The delivery line, said in terms of the parcel rather than the line. */
   function deliveryNote(): string {
-    const box =
-      shareOfParcel > 1
-        ? `£${parcelValue.toFixed(2)} of wholesale in a ${shareOfParcel}-item parcel, split ${shareOfParcel} ways`
-        : `£${parcelValue.toFixed(2)} of wholesale in this order`
-    if (deliveryCost === 0) return `Free — the ${box} clears PowerBody's £${free.threshold} line.`
-    const step = free.next
-      ? ` £${free.next.shortfall.toFixed(2)} more of stock drops it to £${free.next.price.toFixed(2)}` +
-        (free.next.price === 0 ? '.' : `, and £${(free.shortfall ?? 0).toFixed(2)} more ships it free.`)
-      : ''
-    return `Banded on the ${box}.${step}`
+    const service = selectService(parcelGrams, config.delivery.defaultZone, config)
+    const kg = `${(parcelGrams / 1000).toFixed(parcelGrams < 1000 ? 2 : 1)} kg`
+    const parcel = shareOfParcel > 1 ? `a ${kg} parcel of ${shareOfParcel} items, split ${shareOfParcel} ways` : `a ${kg} parcel`
+    const guessed = weightKnown ? '' : ' The weight is estimated from the label, or 1 kg.'
+    if (!service) return `No service takes ${parcel}.${guessed}`
+    return `${service.name} for ${parcel}, blended with the Highlands rate on ${Math.round(config.delivery.zone2SharePct * 100)}% of orders.${guessed}`
   }
 
   // ── The waterfall ──
@@ -338,7 +326,7 @@ export function priceForMargin(
   const netDivisor = config.vat.registered ? 1 + vatRate : 1
   const stdDivisor = config.vat.registered ? 1 + config.vat.standardRate : 1
   // In step with `costFromSupplierPrice`, which grosses up by the same factor.
-  const costMultiplier = supplierVatIsCost(config) ? 1 + config.vat.standardRate : 1
+  const costMultiplier = supplierVatIsCost(config) ? 1 + vatRate : 1
 
   const perPound =
     (1 - m) / netDivisor -
@@ -347,31 +335,16 @@ export function priceForMargin(
 
   if (perPound <= 0) return null
 
-  // Delivery bands on OUR wholesale cost, so when that cost is itself a share of
-  // the price we are solving for, delivery depends on the answer. Rather than
-  // inverting a step function, start from a guess and iterate: solve, re-read
-  // which band the resulting cost lands in, solve again. It settles in two or
-  // three passes because the bands are coarse and the cost moves smoothly.
-  //
-  // Seeded from the DEAREST band rather than from zero when the cost is unknown.
-  // A zero seed makes the first pass believe delivery is free, which produced a
-  // nonsense first price — and on the postage-charged branch a negative one,
-  // because the postage we collect outweighed a cost base of almost nothing.
-  const dearestBand = Math.max(
-    0,
-    ...config.delivery.services.filter((sv) => sv.zone === config.delivery.defaultZone).map((sv) => sv.price),
-  )
-  // A line sharing a parcel carries only its share of one delivery — and the
-  // band is read from the WHOLE parcel's wholesale value, not this line's.
+  // Delivery is priced on the parcel's weight, which the price doesn't move. A
+  // line sharing a parcel carries only its share of one delivery.
   const parcelItems = Math.max(1, input.sharedParcelItems ?? 1)
-  let deliveryCost = costKnown
-    ? round(blendedDeliveryCost(input.supplierCost! * quantity * parcelItems, config) / parcelItems)
-    : round(costFromSupplierPrice(dearestBand, config) / parcelItems)
+  const { grams } = shipmentWeight([{ weightGrams: input.grams ?? null, size: input.size ?? null, quantity }], config)
+  const deliveryCost = round(blendedDeliveryCost(grams * parcelItems, config) / parcelItems)
 
   const solve = (deliveryCharged: number): number => {
     const returnsProvision = round(config.returns.ratePct * deliveryCost * config.returns.costMultipleOfDelivery)
     const base =
-      (costKnown ? costFromSupplierPrice(input.supplierCost! * quantity, config) : 0) +
+      (costKnown ? costFromSupplierPrice(input.supplierCost! * quantity, config, vatRate) : 0) +
       deliveryCost +
       config.paymentFees.fixed +
       returnsProvision +
@@ -381,25 +354,14 @@ export function priceForMargin(
     return Math.ceil((base / perPound) * 100) / 100
   }
 
-  /** Re-read the delivery band from the price a solve produced. */
-  const settleDelivery = (price: number): boolean => {
-    if (costKnown || price <= 0) return true
-    const estimatedCost = (price / netDivisor) * config.defaultCostRatio
-    const next = round(blendedDeliveryCost(estimatedCost * parcelItems, config) / parcelItems)
-    if (next === deliveryCost) return true
-    deliveryCost = next
-    return false
-  }
-
   const freeAbove = config.freeDeliveryThreshold
   /**
-   * What the member pays for delivery — which now depends on the answer, the
-   * same way the supplier's band does.
+   * What the member pays for delivery, which depends on the answer.
    *
    * It used to be one number, so the solver could take it as a constant. On a
    * ladder it is a step function of the very price being solved for: seed from
    * the dearest rung, solve, re-read which rung the answer lands on, solve
-   * again. `settleCharge` below closes that loop alongside `settleDelivery`.
+   * again. `settleCharge` below closes that loop.
    * Without it a price solved at the £4.95 rung but landing in the £2.95 band
    * would be under-priced by the difference — silently, and only on the baskets
    * near a rung boundary.
@@ -444,15 +406,10 @@ export function priceForMargin(
   // actually clear it. Bounded because a config where a penny never helps
   // (fees ≥ margin) should return null, not spin.
   let price = chooseBranch()
-  // Settle the delivery band first — a price solved against the wrong band is
-  // out by pounds, and the penny-nudge below only fixes rounding.
+  // Settle the member's delivery rung first — a price solved against the wrong
+  // rung is out by pounds, and the penny-nudge below only fixes rounding.
   for (let pass = 0; pass < 6; pass++) {
-    // Both bands have to settle: the supplier's (on our wholesale cost) and the
-    // member's (on the shelf price). Each re-solve can move the other, so they
-    // are settled together rather than one after the next.
-    const settled = settleDelivery(price)
-    const charged = settleCharge(price)
-    if (settled && charged) break
+    if (settleCharge(price)) break
     price = chooseBranch()
   }
 

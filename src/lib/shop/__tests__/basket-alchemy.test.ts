@@ -213,7 +213,7 @@ describe('deliveryNudge', () => {
   })
 
   it('rounds to the penny rather than showing floating-point change', () => {
-    expect(deliveryNudge(33.33, config)?.remaining).toBe(config.freeDeliveryThreshold - 33.33)
+    expect(deliveryNudge(13.33, config)?.remaining).toBe(6.67)
   })
 })
 
@@ -226,7 +226,8 @@ describe('bestNudge', () => {
   })
 
   it('falls back to the delivery bar for a basket holding one of a three-product bundle', () => {
-    const nudge = bestNudge({ ...base, resolved: [line(WHEY)], subtotal: 34.99 })
+    // Under the £20 free-delivery line, so there is a delivery bar to show.
+    const nudge = bestNudge({ ...base, resolved: [line(WHEY)], subtotal: 14.99 })
     expect(nudge?.kind).toBe('delivery')
   })
 
@@ -243,16 +244,17 @@ describe('bestNudge', () => {
   })
 
   it('respects a dismissal, and moves on to the next thing worth saying', () => {
+    // Two products under the £20 free-delivery line, so the bar is still due.
     const resolved = [line(WHEY), line(CREATINE)]
-    const first = bestNudge({ ...base, resolved, subtotal: 60 })
+    const first = bestNudge({ ...base, resolved, subtotal: 18 })
     expect(first?.key).toBe('bundle:recovery-stack')
 
-    const next = bestNudge({ ...base, resolved, subtotal: 60, dismissed: new Set([first!.key]) })
+    const next = bestNudge({ ...base, resolved, subtotal: 18, dismissed: new Set([first!.key]) })
     // The recovery bundle is out; the delivery bar is what is left.
     expect(next?.kind).toBe('delivery')
 
     const nothing = bestNudge({
-      ...base, resolved, subtotal: 60, dismissed: new Set([first!.key, 'delivery']),
+      ...base, resolved, subtotal: 18, dismissed: new Set([first!.key, 'delivery']),
     })
     expect(nothing).toBeNull()
   })

@@ -107,7 +107,7 @@ describe('it never sells at a loss', () => {
   })
 
   it('makes no deal on a product that does not pay its way at full price', () => {
-    const q = quoteOffer({ price: 11.99, supplierCost: 6 }, config)
+    const q = quoteOffer({ price: 9.99, supplierCost: 6 }, config)
     expect(q.viable).toBe(false)
     expect(q.totalSaving).toBe(0)
   })
@@ -211,14 +211,16 @@ describe('what the checkout bills', () => {
     expect(priced.partnerPct).toBe(0)
   })
 
-  it('offers its own delivery: the deal on the mainland, plus the surcharge up north', () => {
-    const surcharge = config.delivery.zone2Surcharge
-    const [mainland, highlands] = offerDeliveryOptions(free)
-    expect(mainland).toMatchObject({ id: 'uk-mainland', price: 0, label: 'Free UK mainland delivery' })
-    expect(highlands).toMatchObject({ id: 'uk-highlands', price: surcharge })
-    const [m2, h2] = offerDeliveryOptions(cut)
-    expect(m2.price).toBe(cut.deliveryCharge)
-    expect(h2.price).toBe(r2(cut.deliveryCharge + surcharge))
+  it('offers its own delivery: one UK rate while the Highlands pay the same', () => {
+    expect(offerDeliveryOptions(free)).toEqual([{ id: 'uk-mainland', zone: 'uk-1', price: 0, label: 'Free UK delivery' }])
+    expect(offerDeliveryOptions(cut).map((o) => o.price)).toEqual([cut.deliveryCharge])
+  })
+
+  it('adds a Highlands surcharge up north when one is set', () => {
+    const surcharged = { ...config, delivery: { ...config.delivery, zone2Surcharge: 1.95 } }
+    const [mainland, highlands] = offerDeliveryOptions(cut, surcharged)
+    expect(mainland).toMatchObject({ id: 'uk-mainland', price: cut.deliveryCharge })
+    expect(highlands).toMatchObject({ id: 'uk-highlands', price: r2(cut.deliveryCharge + 1.95) })
   })
 
   it('sends a browser the deal but none of our own figures', () => {

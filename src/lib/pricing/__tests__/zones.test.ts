@@ -95,37 +95,38 @@ describe('a postcode beats an assumed zone', () => {
   const c = PRICING_CONFIG
 
   it('prices a Highlands postcode at the Highlands rate', () => {
-    const mainland = quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, c)
-    const highlands = quoteDelivery({ supplierValue: 30, postcode: 'IV30 1AA' }, c)
-    // Rate-card prices, as PowerBody quote them (ex VAT).
-    expect(mainland.supplierPriceExVat).toBe(6.5)
-    expect(highlands.supplierPriceExVat).toBe(7.99)
+    const mainland = quoteDelivery({ grams: 1150, postcode: 'M1 1AA' }, c)
+    const highlands = quoteDelivery({ grams: 1150, postcode: 'IV30 1AA' }, c)
+    // Rate-card prices, as PowerBody quote them (ex VAT): Royal Mail both ways.
+    expect(mainland.supplierPriceExVat).toBe(3.25)
+    expect(highlands.supplierPriceExVat).toBe(4.49)
+    expect(highlands.service?.carrier).toBe('royal-mail')
     expect(highlands.zone).toBe('uk-2')
   })
 
   it('costs their VAT in while we are not registered', () => {
     // Pinned to PowerBody charging us VAT (`supplierChargesVat`, as shipped):
     // this is about what that VAT costs an unregistered business, so
-    // their £6.50 really costs us £7.80.
+    // their £3.25 really costs us £3.90.
     const charged = { ...c, vat: { ...c.vat, registered: false, supplierChargesVat: true } }
-    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, charged).supplierCost).toBeCloseTo(7.8, 2)
+    expect(quoteDelivery({ grams: 1150, postcode: 'M1 1AA' }, charged).supplierCost).toBeCloseTo(3.9, 2)
     const registered = { ...charged, vat: { ...charged.vat, registered: true } }
-    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, registered).supplierCost).toBe(6.5)
+    expect(quoteDelivery({ grams: 1150, postcode: 'M1 1AA' }, registered).supplierCost).toBe(3.25)
   })
 
   it('costs delivery at their quoted price when their invoices carry no VAT', () => {
-    // Switched off, £6.50 is £6.50.
+    // Switched off, £3.25 is £3.25.
     const none = { ...c, vat: { ...c.vat, registered: false, supplierChargesVat: false } }
-    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, none).supplierCost).toBe(6.5)
+    expect(quoteDelivery({ grams: 1150, postcode: 'M1 1AA' }, none).supplierCost).toBe(3.25)
   })
 
   it('overrides an explicitly-passed zone when a postcode is given', () => {
-    const q = quoteDelivery({ supplierValue: 30, zone: 'uk-1', postcode: 'IV30 1AA' }, c)
+    const q = quoteDelivery({ grams: 1150, zone: 'uk-1', postcode: 'IV30 1AA' }, c)
     expect(q.zone).toBe('uk-2')
   })
 
   it('refuses to price an excluded address instead of quoting a cost', () => {
-    const q = quoteDelivery({ supplierValue: 30, postcode: 'BT1 5GS' }, c)
+    const q = quoteDelivery({ grams: 1150, postcode: 'BT1 5GS' }, c)
     expect(q.service).toBeNull()
     expect(q.supplierCost).toBe(0)
     expect(q.unavailableReason).toContain('Northern Ireland')

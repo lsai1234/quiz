@@ -90,14 +90,19 @@ export function supplierVatIsCost(config: PricingConfig = getPricingConfig()): b
  *
  * When their VAT is a cost (`supplierVatIsCost`: they charge it and we are not
  * registered to reclaim it), the cost is what we actually pay them — the ex-VAT
- * price plus VAT at the standard rate. Otherwise it is the ex-VAT figure we were
- * quoted: registered, we reclaim their VAT; with `supplierChargesVat` off, there
- * is none to pay. PowerBody's rate card is quoted ex VAT throughout, so this
- * applies to delivery as much as to goods.
+ * price plus VAT. Otherwise it is the ex-VAT figure we were quoted: registered,
+ * we reclaim their VAT; with `supplierChargesVat` off, there is none to pay.
+ * PowerBody's rate card is quoted ex VAT throughout, so this applies to
+ * delivery as much as to goods.
+ *
+ * `rate` is the product's own VAT rate (their API gives one per product, and a
+ * few foods are 0%); null or absent means the standard rate, which is also what
+ * delivery carries.
  */
 export function costFromSupplierPrice(
   exVat: number,
   config: PricingConfig = getPricingConfig(),
+  rate?: number | null,
 ): number {
-  return supplierVatIsCost(config) ? round(exVat * (1 + config.vat.standardRate)) : round(exVat)
+  return supplierVatIsCost(config) ? round(exVat * (1 + (rate ?? config.vat.standardRate))) : round(exVat)
 }

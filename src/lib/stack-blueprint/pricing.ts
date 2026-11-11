@@ -16,40 +16,45 @@ const DAYS_PER_MONTH = 30
  */
 export type DeliveryZone = 'uk-1' | 'uk-2' | 'eu'
 
+/** Which PowerBody service a rate-card line is: what `createOrder`'s
+ *  `transport_code` asks for. */
+export type DeliveryCarrier = 'royal-mail' | 'dpd' | 'ups'
+
 /**
  * One line of the supplier's delivery rate card.
  *
- * Banded on the ORDER VALUE — specifically what WE pay PowerBody for that
- * order, not what the member pays us. Their site prices delivery this way, so
- * cheaper stock means a cheaper parcel and a bigger basket eventually ships
- * free. That is the opposite shape to a weight-banded card and it changes what
- * a good order looks like: bundle up, ship less often, cross the free line.
+ * Banded on the parcel's WEIGHT, per zone, as PowerBody's Dropshipping Guide
+ * prices it: Royal Mail Tracked 48 up to 7 kg, DPD Two Day up to 30 kg. A
+ * parcel goes with the cheapest service that can carry it, which in practice
+ * is Royal Mail for almost every box we send.
+ *
+ * It used to be banded on what we spend with them per order, from their public
+ * site. That card isn't the dropship one: the guide says free delivery isn't
+ * available to dropshippers, and the value bands assumed £6.50–£7.80 a parcel
+ * against a real £3.90.
  */
 export interface DeliveryService {
   id: string
   name: string
   zone: DeliveryZone
-  /**
-   * Upper bound of the band — our wholesale value for the order (£, ex VAT).
-   * null means "and above", i.e. the open-ended top band.
-   */
-  maxOrderValue: number | null
-  /** What the supplier charges us, ex VAT (£). 0 for the free band. */
+  /** The heaviest parcel this service takes (g). null means no limit. */
+  maxGrams: number | null
+  /** What the supplier charges us, ex VAT (£). */
   price: number
+  carrier: DeliveryCarrier
 }
 
 /**
  * One rung of the ladder WE charge the member — the mirror image of
  * `DeliveryService` above, and deliberately a separate shape.
  *
- * The two ladders band on different money and cannot be merged. The supplier's
- * bands on our WHOLESALE spend (ex VAT); ours bands on the RETAIL total the
- * member can actually see (inc VAT). At cost × 2 those are roughly a factor of
- * two apart, which is exactly the sort of thing that gets conflated once and
- * then quietly charges the wrong people.
+ * The two ladders band on different things and cannot be merged. The
+ * supplier's bands on the parcel's weight; ours bands on the RETAIL total the
+ * member can actually see (inc VAT).
  *
- * Read first-fit, tightest ceiling first, same as the supplier's — see
- * `eligibleServices` for why cheapest-qualifying would be wrong.
+ * Read first-fit, tightest ceiling first: a £15 order fits under £20 and stops
+ * there. Cheapest-qualifying would hand everything the free band, because "no
+ * ceiling" qualifies everything.
  */
 export interface CustomerDeliveryRate {
   /** Upper bound of the band — the member's order total (£, inc VAT, at our
@@ -124,11 +129,9 @@ export const PRICING_CONFIG = {
    * beats it by a widening margin (+4.5 / +7 / +12 points). See
    * docs/PRICING_STRATEGY.md §7.1.
    *
-   * Set BELOW `freeDeliveryThreshold` on purpose, so growing a basket keeps
-   * paying: 8% off at £50, a cheaper postage rung at £40, then free delivery at
-   * £100. What must never happen is the discount starting ABOVE the
-   * free-delivery line, which would leave a band where postage is free but the
-   * basket has earned nothing — an offer that appears to go backwards.
+   * Free delivery starts at £20, well below this, so a basket earns free
+   * delivery first and 8% off at £50. Either order is fine as long as each step
+   * up the ladder adds something.
    */
   bundleTiers: [
     { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.08 },
@@ -166,18 +169,15 @@ export const PRICING_CONFIG = {
   /**
    * Minimum flat monthly value for the subscription to be offered (£).
    *
-   * The real floor is about £21.60 — the point at which a plan covers its goods
-   * and postage across its whole life including the average scratch card.
-   * `lib/pricing/thresholds.ts` computes it and the hub flags this setting if it
-   * ever drops below.
-   *
-   * This briefly sat at 40, from a calculation that assumed we ABSORB the
-   * postage on every subscription. We don't: a plan under `freeDeliveryThreshold`
-   * is charged its rung of `delivery.customerRates` like any other order, and
-   * only plans above it ship free. Assuming the worst case on the wrong side of
-   * our own rule turned away subscriptions that make money.
+   * A safety floor, not a sales rule: nothing in the catalogue is cheap enough
+   * to reach it. With Royal Mail at £3.90 a parcel and £2 postage under £20, a
+   * plan pays its way across its whole life (scratch card included) from about
+   * £7.75 a month, or £9.77 in the worst case, where rounding to .99 leaves
+   * PowerBody's price just over half ours. `lib/pricing/thresholds.ts` computes
+   * it and the hub flags this setting if it ever drops below. It was £25 while
+   * the model assumed £6.60–£7.80 a parcel.
    */
-  minSubscriptionMonthly: 25,
+  minSubscriptionMonthly: 10,
 
   /**
    * The exit settlement — the balance owed on goods already sent when a member
@@ -250,13 +250,15 @@ export const PRICING_CONFIG = {
   /**
    * Smallest order we will take at all (£ inc VAT).
    *
-   * A one-off order has nothing behind it — no renewal, no second chance — so if
-   * the checkout lets someone buy a £6 tub we simply lose the difference between
-   * what they pay and what the parcel costs. The measured break-even is £11.50;
-   * £15 is that with a little headroom. Cheap products aren't banned — they just
-   * can't be the WHOLE order (see `minQuizProductPrice`).
+   * A safety floor, not a sales rule. A one-off order has nothing behind it, so
+   * it has to pay for its own parcel. With £2 postage under £20, a single
+   * product pays its way from £5.95, or £7.49 in the worst case (rounding to .99
+   * can leave PowerBody's price up to 50p over half ours). Our cheapest product
+   * is £11.99, so no customer meets this; it stops a cheaper product added later
+   * from going out alone at a loss. It was £15 while the model assumed £6.60–
+   * £7.80 a parcel. `lib/pricing/thresholds.ts` checks it against the break-even.
    */
-  minOrderValue: 15,
+  minOrderValue: 8,
 
   /**
    * The last-chance offer at the foot of the results page: one product from the
@@ -335,7 +337,19 @@ export const PRICING_CONFIG = {
    * out is a basket that promises free delivery and then bills for it — so
    * `deriveFreeDeliveryThreshold()` computes it and a test holds them together.
    */
-  freeDeliveryThreshold: 100,
+  freeDeliveryThreshold: 20,
+
+  /**
+   * Which delivery model saved Pricing settings were made under.
+   *
+   * The Pricing page saves the whole config, so settings saved before the
+   * weight-based rate card would otherwise keep the old value bands, £4.95 and
+   * £2.95 postage, the Highlands surcharge and the £15 and £25 minimums forever.
+   * Settings older than 2 have those fields dropped where saved settings are
+   * loaded (`withCurrentDeliveryModel`, `lib/portal/store.ts`); every save
+   * writes 2.
+   */
+  deliveryModel: 2,
 
   /**
    * VAT. The single biggest thing a UK retail margin gets wrong.
@@ -397,14 +411,14 @@ export const PRICING_CONFIG = {
   },
 
   /**
-   * PowerBody's dropship delivery rate card — the real one, from their
-   * Dropshipping Guide (June 2026), ex VAT.
+   * PowerBody's dropship delivery rate card, from their Dropshipping Guide
+   * (June 2026), ex VAT.
    *
-   * Priced by WEIGHT and ZONE, not per parcel: a 500g tub and a 5kg order cost
-   * different amounts to send, and the Highlands cost more than London. The
-   * charge covers picking, packaging, invoice printing, labour, storage and
-   * shipping — it is a fulfilment fee, not postage, which is why it is
-   * substantial relative to a £20 tub.
+   * Priced by WEIGHT and ZONE: Royal Mail Tracked 48 takes anything up to 7 kg
+   * for £3.25, DPD Two Day anything up to 30 kg for £5.17. The charge covers
+   * picking, packing, the invoice and the postage. Every order is sent with the
+   * cheapest service that can carry it, by its code (`transport_code`), so it is
+   * Royal Mail for almost every box and DPD only over 7 kg.
    *
    * Note what is NOT here: there is no free-shipping threshold, because
    * "Next Day Delivery and Free Delivery are not available to Dropshippers".
@@ -416,27 +430,15 @@ export const PRICING_CONFIG = {
      * weight in the destination zone wins.
      */
     services: [
-      // UK mainland, from powerbody.com. BANDED ON WHAT WE SPEND WITH THEM in
-      // one parcel — not on weight, and NOT on what the customer pays us.
-      //
-      // Worth stating in retail money, because that is where this gets misread:
-      // pricing at ×2 makes our spend about half the shelf price, so their £50
-      // and £99 bands land at roughly £100 and £198 OF RETAIL. Free shipping
-      // needs a ~£200 basket, not a £99 one.
-      //
-      // Our own free line is cut to match: `delivery.customerRates` stops
-      // charging at £100 of retail, which is exactly where the £50 wholesale
-      // band ends and their price steps down. It used to sit at £60, leaving a
-      // stretch where we collected nothing and still paid the full charge — the
-      // worst basket in the business was one that had just earned free delivery.
-      // See docs/PRICING_GUIDE.md §2.
-      { id: 'z1-50', name: 'Standard', zone: 'uk-1', maxOrderValue: 50, price: 6.5 },
-      { id: 'z1-99', name: 'Standard', zone: 'uk-1', maxOrderValue: 99, price: 5.5 },
-      { id: 'z1-free', name: 'Free over £99', zone: 'uk-1', maxOrderValue: null, price: 0 },
-      // Highlands & Islands.
-      { id: 'z2-300', name: 'Standard', zone: 'uk-2', maxOrderValue: 300, price: 7.99 },
-      { id: 'z2-free', name: 'Free over £300', zone: 'uk-2', maxOrderValue: null, price: 0 },
-      { id: 'eu', name: 'UPS International', zone: 'eu', maxOrderValue: null, price: 8.6 },
+      // Zone 1: England, Wales and southern Scotland.
+      { id: 'z1-rm48', name: 'Royal Mail Tracked 48', zone: 'uk-1', maxGrams: 7000, price: 3.25, carrier: 'royal-mail' },
+      { id: 'z1-dpd-2kg', name: 'DPD Two Day', zone: 'uk-1', maxGrams: 1990, price: 4.75, carrier: 'dpd' },
+      { id: 'z1-dpd', name: 'DPD Two Day', zone: 'uk-1', maxGrams: 30000, price: 5.17, carrier: 'dpd' },
+      // Zone 2: the Highlands. No service over 7 kg; those orders are held.
+      // The guide's with-VAT column prints £5.59, where 20% on £4.49 is £5.39:
+      // one for PowerBody to confirm.
+      { id: 'z2-rm48', name: 'Royal Mail Tracked 48', zone: 'uk-2', maxGrams: 7000, price: 4.49, carrier: 'royal-mail' },
+      { id: 'eu', name: 'UPS International', zone: 'eu', maxGrams: 30000, price: 8.6, carrier: 'ups' },
     ] as DeliveryService[],
     /**
      * The zone to assume when we're pricing rather than shipping — i.e. on the
@@ -445,49 +447,38 @@ export const PRICING_CONFIG = {
      * by pricing everything at the worst zone.
      */
     defaultZone: 'uk-1' as DeliveryZone,
-    /** Share of orders going to a Highlands/Islands (Zone 2) address, 0–1.
+    /** Share of orders going to a Highlands (Zone 2) address, 0–1.
      *  Used to blend a realistic average delivery cost. */
     zone2SharePct: 0.04,
     /**
-     * What WE charge the member, as a ladder that mirrors the supplier's.
+     * What WE charge the member: £2 under £20, free from £20.
      *
-     * A single charge with one free-delivery cliff was the shape before, and it
-     * put the cliff in the worst possible place: free delivery started at £60 of
-     * retail while our own cost did not drop until ~£100 of retail and did not
-     * vanish until ~£198. Every order in between shipped free and cost us the
-     * full £7.80 — the single worst basket in the business was one that had just
-     * earned free delivery.
-     *
-     * These rungs are lined up with the supplier's instead. The £100 free line
-     * is where their band steps down to £5.50, so the point we stop charging is
-     * the point it starts costing us less. What we still carry between £100 and
-     * ~£198 is a deliberate, bounded absorption rather than an accident of two
-     * thresholds having been set independently.
+     * A parcel costs us £3.90 with Royal Mail. The £2 is what lets a single
+     * cheap product pay its own way, which is what lets the minimum order go;
+     * from £20 the goods carry the parcel and delivery is free.
      *
      * Banded on the RETAIL total inc VAT — what the member sees in the basket.
      */
     customerRates: [
-      { maxOrderValue: 40, price: 4.95 },
-      { maxOrderValue: 100, price: 2.95 },
+      { maxOrderValue: 20, price: 2 },
       { maxOrderValue: null, price: 0 },
     ] as CustomerDeliveryRate[],
     /**
      * Added to every Zone 2 order, free-delivery band included (£, inc VAT).
      *
-     * The Highlands, Islands, Isle of Man and Scilly cost us £9.59 a parcel and
-     * — unlike the mainland — never reach a free band in practice: PowerBody's
-     * Zone 2 free line is £300 of WHOLESALE, roughly a £600 basket. Absorbing
-     * that silently made ~4% of orders the least profitable ones we take, and
-     * made them invisible by putting the cost in a blended average.
-     *
-     * It applies on top of the free band on purpose. "Free UK mainland delivery,
-     * Highlands & Islands surcharge applies" is the ordinary shape of this in UK
-     * retail, and it is honest: our cost genuinely does not fall there.
+     * 0: the Highlands get the same rule as everywhere else, so "free UK
+     * delivery" is true wherever we deliver. A Highlands parcel costs us £5.59
+     * rather than £3.90; at about 4% of orders that is roughly 8p across an
+     * average order. A surcharge here shows as a second delivery choice at
+     * checkout.
      */
-    zone2Surcharge: 2.95,
-    /** Assumed shipped weight when a product has none recorded (g). A 1kg tub
-     *  plus packaging is the typical single-item supplement parcel. */
+    zone2Surcharge: 0,
+    /** Assumed shipped weight when a product has neither a weight nor a size
+     *  we can read (g). A 1 kg tub is the typical single-item parcel. */
     defaultProductGrams: 1000,
+    /** Packaging on top of the size printed on the label, when that is all we
+     *  know (0–1): a 1 kg tub ships as about 1.15 kg. */
+    packagingAllowancePct: 0.15,
   },
 
   /**
@@ -924,44 +915,72 @@ export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
 let _overrides: PricingOverrides = {}
 let _current: PricingConfig = PRICING_CONFIG
 
+/** The delivery fields the weight-based model replaced (see `deliveryModel`). */
+const DELIVERY_MODEL_1_FIELDS = ['freeDeliveryThreshold', 'minOrderValue', 'minSubscriptionMonthly'] as const
+const DELIVERY_MODEL_1_DELIVERY_FIELDS = ['services', 'customerRates', 'zone2Surcharge'] as const
+
+/**
+ * Saved settings with the delivery fields of an older model taken out, so the
+ * defaults apply. Anything else saved stays as it is.
+ */
+export function withCurrentDeliveryModel(overrides: PricingOverrides): PricingOverrides {
+  if ((overrides.deliveryModel ?? 1) >= PRICING_CONFIG.deliveryModel) return overrides
+  const next: PricingOverrides = { ...overrides }
+  for (const k of DELIVERY_MODEL_1_FIELDS) delete next[k]
+  if (next.delivery) {
+    const delivery = { ...next.delivery }
+    for (const k of DELIVERY_MODEL_1_DELIVERY_FIELDS) delete delivery[k]
+    next.delivery = delivery
+  }
+  return next
+}
+
+/** A saved rate card is used only if every line is a weight-banded one. */
+function savedServices(services: DeliveryService[] | undefined): DeliveryService[] | null {
+  if (!Array.isArray(services) || services.length === 0) return null
+  return services.every((s) => s && typeof s === 'object' && 'maxGrams' in s && typeof s.price === 'number') ? services : null
+}
+
 function recomputeConfig() {
+  const overrides = _overrides
   _current = {
     ...PRICING_CONFIG,
-    ..._overrides,
-    introOffer: { ...PRICING_CONFIG.introOffer, ...(_overrides.introOffer ?? {}) },
+    ...overrides,
+    deliveryModel: PRICING_CONFIG.deliveryModel,
+    introOffer: { ...PRICING_CONFIG.introOffer, ...(overrides.introOffer ?? {}) },
     delivery: {
       ...PRICING_CONFIG.delivery,
-      ...(_overrides.delivery ?? {}),
+      ...(overrides.delivery ?? {}),
       // A rate card is replaced wholesale or not at all — merging two lists of
       // services by key would silently resurrect a carrier that was removed.
-      services: _overrides.delivery?.services ?? PRICING_CONFIG.delivery.services,
+      services: savedServices(overrides.delivery?.services) ?? PRICING_CONFIG.delivery.services,
     },
-    goodPricing: { ...PRICING_CONFIG.goodPricing, ...(_overrides.goodPricing ?? {}) },
-    vat: { ...PRICING_CONFIG.vat, ...(_overrides.vat ?? {}) },
-    paymentFees: { ...PRICING_CONFIG.paymentFees, ...(_overrides.paymentFees ?? {}) },
-    returns: { ...PRICING_CONFIG.returns, ...(_overrides.returns ?? {}) },
-    supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
-    partners: { ...PRICING_CONFIG.partners, ...(_overrides.partners ?? {}) },
-    listPricing: { ...PRICING_CONFIG.listPricing, ...(_overrides.listPricing ?? {}) },
-    lastChance: { ...PRICING_CONFIG.lastChance, ...(_overrides.lastChance ?? {}) },
+    goodPricing: { ...PRICING_CONFIG.goodPricing, ...(overrides.goodPricing ?? {}) },
+    vat: { ...PRICING_CONFIG.vat, ...(overrides.vat ?? {}) },
+    paymentFees: { ...PRICING_CONFIG.paymentFees, ...(overrides.paymentFees ?? {}) },
+    returns: { ...PRICING_CONFIG.returns, ...(overrides.returns ?? {}) },
+    supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(overrides.supplierAccount ?? {}) },
+    partners: { ...PRICING_CONFIG.partners, ...(overrides.partners ?? {}) },
+    listPricing: { ...PRICING_CONFIG.listPricing, ...(overrides.listPricing ?? {}) },
+    lastChance: { ...PRICING_CONFIG.lastChance, ...(overrides.lastChance ?? {}) },
     orderMix: {
       ...PRICING_CONFIG.orderMix,
-      ...(_overrides.orderMix ?? {}),
-      levelMix: { ...PRICING_CONFIG.orderMix.levelMix, ...(_overrides.orderMix?.levelMix ?? {}) },
+      ...(overrides.orderMix ?? {}),
+      levelMix: { ...PRICING_CONFIG.orderMix.levelMix, ...(overrides.orderMix?.levelMix ?? {}) },
     },
-    bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
-    subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
-    budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,
+    bundleTiers: overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
+    subscriptionTiers: overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
+    budgetCaps: overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,
     levelSubscriptionDiscount: {
       ...PRICING_CONFIG.levelSubscriptionDiscount,
-      ...(_overrides.levelSubscriptionDiscount ?? {}),
+      ...(overrides.levelSubscriptionDiscount ?? {}),
     },
     // Per LEVEL, not per field. A band whose ceiling was overridden and whose
     // target was not is not a band, it is two settings from different eras
     // sitting in one object — and `min > target > max` is the invariant the
     // fill relies on.
-    tierBands: { ...PRICING_CONFIG.tierBands, ...(_overrides.tierBands ?? {}) },
-    tierSizes: { ...PRICING_CONFIG.tierSizes, ...(_overrides.tierSizes ?? {}) },
+    tierBands: { ...PRICING_CONFIG.tierBands, ...(overrides.tierBands ?? {}) },
+    tierSizes: { ...PRICING_CONFIG.tierSizes, ...(overrides.tierSizes ?? {}) },
   }
 }
 
@@ -1154,13 +1173,22 @@ export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>
 }
 
 /**
- * Apply a discount to a unit price, but never below the margin floor
- * (cost × (1+floor)). The floor is capped at the list price, so a product whose
- * cost is already above the floor simply gets no discount (never a markup).
+ * Apply a discount to a unit price, but never below the margin floor: what the
+ * product really costs us, plus `marginFloorPct`. The floor is capped at the
+ * list price, so a product whose cost is already above the floor simply gets no
+ * discount (never a markup).
+ *
+ * `cost` is PowerBody's price, ex VAT. The floor counts VAT on it, because the
+ * shelf price it is compared with does: unregistered, we pay their VAT and
+ * can't reclaim it; registered, the shelf price carries VAT we hand over. Only
+ * unregistered with `supplierChargesVat` off is the ex-VAT price the whole cost.
+ * `vatRate` is the product's own rate (null for the standard rate), so a
+ * zero-rated food isn't held to a floor 20% too high.
  */
-export function discountWithFloor(unitPrice: number, rate: number, cost: number, config = getPricingConfig()): number {
+export function discountWithFloor(unitPrice: number, rate: number, cost: number, config = getPricingConfig(), vatRate?: number | null): number {
   const discounted = unitPrice * (1 - rate)
-  const floor = Math.min(unitPrice, cost * (1 + config.marginFloorPct))
+  const vat = config.vat.registered || config.vat.supplierChargesVat ? (vatRate ?? config.vat.standardRate) : 0
+  const floor = Math.min(unitPrice, cost * (1 + vat) * (1 + config.marginFloorPct))
   return Math.max(discounted, floor)
 }
 

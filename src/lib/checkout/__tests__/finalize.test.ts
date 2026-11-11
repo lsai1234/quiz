@@ -447,7 +447,7 @@ describe('when the payment cannot be started', () => {
     expect(result).toEqual({ checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_2', mock: false })
   })
 
-  it('asks for ONE delivery rate, not the pair a one-off basket offers', async () => {
+  it('asks for at most ONE delivery rate, not the choice a one-off basket offers', async () => {
     // A subscription Session carrying `shipping_options` is refused by Stripe
     // outright — payment mode only — and that refusal is what every member met
     // at the end of the journey. Postage rides as a recurring line instead, at
@@ -462,8 +462,8 @@ describe('when the payment cannot be started', () => {
       delivery?: { id: string; price: number } | null
     }
     expect(opts.shippingOptions).toBeUndefined()
-    // £42/mo sits on the middle rung of the ladder.
-    expect(opts.delivery).toMatchObject({ id: 'uk-mainland', price: 2.95 })
+    // £42/mo clears the £20 line, so there is no postage line at all.
+    expect(opts.delivery).toBeNull()
   })
 })
 

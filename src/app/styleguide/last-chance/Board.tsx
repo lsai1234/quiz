@@ -51,8 +51,8 @@ const BASE: LastChanceViewProps = {
   claim: null,
   servings: 30,
   packMonths: 1.5,
-  deal: deal(29.99, 15, 4.95, 0, 'free'),
-  remoteSurcharge: 2.95,
+  deal: deal(17.99, 15, 2, 0, 'free'),
+  remoteSurcharge: 0,
   status: 'idle',
   message: null,
   phase: 'static',
@@ -62,16 +62,16 @@ const BASE: LastChanceViewProps = {
 
 const STATES: Array<[string, Partial<LastChanceViewProps>]> = [
   ['free-delivery-and-percent', {}],
-  ['free-delivery-only', { deal: deal(29.99, 0, 4.95, 0, 'free') }],
-  ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: TYPE.creatine, formats: ['powder'], deal: deal(19.99, 0, 4.95, 1.49, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
-  ['with-claim', { title: 'CHRGD Whey Protein', role: TYPE['protein-whey'], formats: ['powder'], goalLine: 'One of the 5 products we picked for you.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 5, 4.95, 0, 'free'), packMonths: 1 }],
+  ['free-delivery-only', { deal: deal(17.99, 0, 2, 0, 'free') }],
+  ['reduced-delivery', { title: 'CHRGD Creatine Monohydrate', role: TYPE.creatine, formats: ['powder'], deal: deal(14.99, 0, 2, 0.99, 'reduced'), claim: 'Creatine increases physical performance in successive bursts of short-term, high intensity exercise', packMonths: 2 }],
+  ['with-claim', { title: 'CHRGD Whey Protein', role: TYPE['protein-whey'], formats: ['powder'], goalLine: 'One of the 5 products we picked for you.', claim: 'Protein contributes to a growth in muscle mass', deal: deal(34.99, 15, 0, 0, 'included'), packMonths: 1 }],
   ['delivery-already-free', { title: 'CHRGD Mass Builder', role: TYPE['protein-mass'], formats: ['powder'], deal: deal(109.99, 24, 0, 0, 'included', 101.19), packMonths: 1, claim: 'Protein contributes to a growth in muscle mass' }],
   ['long-name-no-facts', { title: 'Collagen Hydrolysed Type I & III, Unflavoured — 300g', role: TYPE.collagen, formats: ['powder'], packMonths: null, servings: null }],
   ['loading', { status: 'loading' }],
   ['redirecting', { status: 'redirecting' }],
   ['blocked', { blocked: true }],
   ['error', { status: 'error', message: 'Unable to reach the store. Check your connection and try again.' }],
-  ['deal-changed', { status: 'changed', message: 'This deal has changed: it’s now £26.99 delivered.', deal: deal(29.99, 10, 4.95, 0, 'free') }],
+  ['deal-changed', { status: 'changed', message: 'This deal has changed: it’s now £16.19 delivered.', deal: deal(17.99, 10, 2, 0, 'free') }],
 ]
 
 export function Board() {

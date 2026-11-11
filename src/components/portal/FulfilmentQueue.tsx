@@ -296,6 +296,14 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                             </span>
                           )}
                           {o.supplierCost != null && ` · costs us ${money(o.supplierCost, o.currency)}`}
+                          {o.deliveryService && (
+                            <span data-delivery-service>
+                              {' '}
+                              · {o.deliveryService.sent ? 'Sent' : 'Goes'} {o.deliveryService.name}
+                              {o.deliveryService.weightKg != null && `, ${o.deliveryService.weightKg} kg`}
+                              {o.deliveryService.sent && !o.deliveryService.code && ' (no code: PowerBody chose)'}
+                            </span>
+                          )}
                         </p>
                         {/* What the member is actually on. The box's own value
                             (shown on the right) is not the plan's price — on a

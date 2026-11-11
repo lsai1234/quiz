@@ -9,11 +9,9 @@ import { Button, Input } from '@/components/system'
  * What WE charge the member for delivery, editable — the mirror of `RateCard`,
  * which is what PowerBody charge US.
  *
- * Shown as its own ladder next to theirs rather than as a single number, because
- * the whole point of the shape is that the two ladders line up. A founder
- * setting the free line at £60 while our own cost does not drop until £100 of
- * retail cannot see the mistake in a lone "£3.95" input; they can see it in two
- * tables side by side, which is what this is for.
+ * Shown as its own ladder next to theirs, so what a basket pays and what its
+ * parcel costs us sit side by side: £2 under £20 against a £3.90 parcel, and
+ * free from £20.
  *
  * The live basket preview under it prices a real order through both ladders, so
  * "what do we actually absorb here" is answered on the page.
@@ -106,10 +104,10 @@ export function CustomerRates({
 
       <div className="flex items-center gap-1.5 rounded-lg px-2 py-1.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
         <span className="flex-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
-          Highlands &amp; Islands surcharge
+          Highlands surcharge (0 for the same rule everywhere)
         </span>
         <Input
-          label="Highlands and Islands surcharge, inc VAT"
+          label="Highlands surcharge, inc VAT"
           compact
           align="right"
           prefix="£"
@@ -129,8 +127,8 @@ export function CustomerRates({
         <p className="text-[10px] text-[var(--ink-3)] leading-snug">
           Free delivery above <strong>£{freeAbove.toFixed(2)}</strong> — derived from the last paid band, and what the
           storefront advertises. Banded on the basket SUBTOTAL before any discount, so a basket can&apos;t lose the perk
-          by earning one. The surcharge applies on top of every band, the free one included: PowerBody&apos;s Zone 2
-          free line is £300 of wholesale, so our cost never actually goes away up there.
+          by earning one. A Highlands surcharge, if set, applies on top of every band, the free one included, and shows
+          as a second delivery choice at checkout.
         </p>
       ) : (
         <p className="text-[10px] leading-snug" style={{ color: 'var(--tone-critical)' }}>

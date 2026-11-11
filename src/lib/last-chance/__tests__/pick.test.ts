@@ -65,9 +65,11 @@ it('takes the best-fitting product the business can sell on its own', () => {
 it('puts a real deal on the card, delivery first', () => {
   const hero = pickHeroOffer([slot('a'), slot('b', { confidenceScore: 10 })], [product('a'), product('b')])
   expect(hero?.quote.totalSaving).toBeGreaterThan(0)
-  expect(hero?.quote.deliveryCharge).toBeLessThan(hero!.quote.standardDelivery)
-  // A percentage only ever comes on top of free delivery.
-  if (hero!.quote.discountPct > 0) expect(hero?.quote.deliveryCharge).toBe(0)
+  // £34.99 ships free anyway, so the deal is a percentage — and a percentage
+  // only ever comes on top of free delivery.
+  expect(hero?.quote.deliveryDeal).toBe('included')
+  expect(hero?.quote.discountPct).toBeGreaterThan(0)
+  expect(hero?.quote.deliveryCharge).toBe(0)
 })
 
 it('says what it does only in register wording, verbatim — or not at all', () => {

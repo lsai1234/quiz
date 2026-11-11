@@ -127,26 +127,29 @@ describe('the getProductInfo trap', () => {
 })
 
 describe('delivery services', () => {
-  it('treats one service as an answer, not a failure', async () => {
+  it('warns when Royal Mail and DPD can’t be found by name, and says where to choose them', async () => {
     const report = await runSupplierDiagnostics(
       await providerWith({ shippingMethods: async () => [{ code: 'STD', name: 'Standard', price: null }] }),
     )
     const methods = check(report, 'shipping-methods')
     expect(methods.status).toBe('warn')
-    expect(methods.detail).toMatch(/prices we set/)
+    expect(methods.detail).toMatch(/Royal Mail and DPD couldn't be found[\s\S]*Delivery services/)
+    expect(methods.evidence).toBe('Standard (STD)')
   })
 
-  it('passes when the account really has a choice', async () => {
+  it('reads the Royal Mail and DPD codes off the account, and keeps them for every order', async () => {
     const report = await runSupplierDiagnostics(
       await providerWith({
         shippingMethods: async () => [
-          { code: 'STD', name: 'Standard', price: null },
-          { code: 'EXP', name: 'Express', price: 4.95 },
+          { code: 'DPD_2DAY', name: 'DPD Two Day', price: 5.17 },
+          { code: 'RM_T48', name: 'Royal Mail Tracked 48', price: 3.25 },
         ],
       }),
     )
     expect(check(report, 'shipping-methods').status).toBe('pass')
-    expect(check(report, 'shipping-methods').detail).toMatch(/transport_code/)
+    expect(check(report, 'shipping-methods').detail).toMatch(/Royal Mail is RM_T48 and DPD is DPD_2DAY/)
+    const { getTransportCodes } = await import('@/lib/supplier/transport')
+    expect((await getTransportCodes()).codes['royal-mail']).toEqual({ code: 'RM_T48', source: 'detected' })
   })
 
   it('records a refusal as the answer it is', async () => {

@@ -18,6 +18,7 @@
 import {
   approveOrderForSupplier,
   createOrderFromCheckout,
+  orderParcel,
   orderWeightKg,
   submitOrderToSupplier,
 } from '@/lib/orders/service'
@@ -172,14 +173,18 @@ describe('orderWeightKg', () => {
     ).toBe(2)
   })
 
-  it('gives up entirely when one line has none', () => {
-    // Not a partial sum: that is a real number in the right units describing
-    // only part of the parcel, and it would pick a delivery band confidently and
-    // wrongly. Nothing sent means PowerBody weigh it.
-    expect(orderWeightKg([{ productId: 'creatine', quantity: 1 }, { productId: 'bar', quantity: 1 }], catalogue)).toBeNull()
+  it('estimates a line with no weight rather than sending none', () => {
+    // Every order asks for a service by weight — Royal Mail up to 7 kg — so a
+    // product with no weight counts as 1 kg (no label size to read here).
+    expect(orderWeightKg([{ productId: 'creatine', quantity: 1 }, { productId: 'bar', quantity: 1 }], catalogue)).toBe(1.5)
+    expect(orderWeightKg([{ productId: 'ghost', quantity: 1 }], catalogue)).toBe(1)
+    expect(orderWeightKg([], catalogue)).toBeNull()
   })
 
-  it('gives up on a product it has never heard of', () => {
-    expect(orderWeightKg([{ productId: 'ghost', quantity: 1 }], catalogue)).toBeNull()
+  it('reads the size on the label, plus packaging, before falling back to 1 kg', () => {
+    const products = [{ id: 'tub', weightGrams: null, variants: [{ sku: 'TUB-2KG', size: '2kg' }] }] as never
+    expect(orderParcel([{ productId: 'tub', sku: 'TUB-2KG', quantity: 1 }], products)).toEqual({ grams: 2300, known: false })
+    // A line's own snapshot beats everything.
+    expect(orderParcel([{ productId: 'tub', sku: 'TUB-2KG', quantity: 1, weightGrams: 2100 }], products)).toEqual({ grams: 2100, known: true })
   })
 })

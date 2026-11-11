@@ -1,3 +1,4 @@
+import type { DeliveryCarrier } from '@/lib/stack-blueprint/pricing'
 /**
  * Supplier provider contract (PowerBody dropship).
  *
@@ -237,15 +238,20 @@ export interface SupplierOrderInput {
   /** What we charged the customer for delivery — also printed on their invoice. */
   shippingPrice?: number | null
   /**
-   * Total shipped weight in kilograms, or null when we don't know it.
-   *
-   * Null is the normal case and not a defect: PowerBody's API does not publish a
-   * weight on either `getProductList` or `getProductInfo`, so unless someone has
-   * typed one in at import review we genuinely have no figure. Null is sent as
-   * an absent weight rather than a zero-that-looks-like-a-measurement, and they
-   * weigh the parcel their end. See `orderWeightKg`.
+   * Total shipped weight in kilograms. Estimated where a product has no weight
+   * of its own (`weightEstimated`): its label size plus packaging, or 1 kg. See
+   * `orderParcel`.
    */
   weightKg?: number | null
+  /** True when any unit's weight was estimated rather than known. */
+  weightEstimated?: boolean
+  /**
+   * The delivery service asked for, by the supplier's own code (`transport_code`).
+   * Null leaves the choice to the supplier. See `lib/supplier/transport.ts`.
+   */
+  transportCode?: string | null
+  /** The service that code is, by our rate card: Royal Mail up to 7 kg, DPD above. */
+  service?: { name: string; carrier: DeliveryCarrier } | null
   /** Free-text note on the order, visible to PowerBody. */
   comment?: string | null
 }
@@ -371,15 +377,12 @@ export interface SupplierProvider {
   /**
    * The delivery services this account can ask for, if any.
    *
-   * `createOrder` takes a `transport_code` and we send it empty, letting
-   * PowerBody choose — which is fine, and is why nothing depended on this. It
-   * exists to answer a question their guide does not: whether the account has
-   * more than one service to offer at all. Their rate card reads as one service
-   * per zone, so until this returns two, "delivery options" can only mean
-   * prices we set, not speeds we buy.
+   * `createOrder` takes the service as a `transport_code`, and every order asks
+   * for one: Royal Mail Tracked 48 up to 7 kg, DPD above. The codes are the
+   * account's own, read from this (`lib/supplier/transport.ts`).
    *
-   * Optional on the interface because the answer is diagnostic, not something
-   * the order path needs.
+   * Optional on the interface: without it an order is sent with the code empty
+   * and the supplier chooses.
    */
   shippingMethods?(): Promise<SupplierShippingMethod[]>
   /**

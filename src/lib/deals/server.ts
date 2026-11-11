@@ -21,8 +21,10 @@ export async function dealsFor(user: Pick<UserRecord, 'id' | 'email'>, now = new
   const { getOfferSettings } = await import('@/lib/offer/store')
   const settings = await getOfferSettings()
   const enabled = settings.services.deals
-  const { hubValue } = await import('@/lib/offer/settings')
-  if (!enabled) return { enabled, deals: [], hubEndsOn: null, freeOver: settings.memberDeals.topUpFreeOver, hubValue: hubValue(settings) }
+  const { hubValue, effectiveTopUpFreeOver } = await import('@/lib/offer/settings')
+  const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
+  const freeOver = effectiveTopUpFreeOver(settings.memberDeals, getPricingConfig().freeDeliveryThreshold)
+  if (!enabled) return { enabled, deals: [], hubEndsOn: null, freeOver, hubValue: hubValue(settings) }
 
   const { listPaidOrdersFor } = await import('@/lib/orders/repo')
   const since = new Date(now.getTime() - HUB_DAYS * 86_400_000).toISOString()
@@ -41,5 +43,5 @@ export async function dealsFor(user: Pick<UserRecord, 'id' | 'email'>, now = new
   const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
   const { products } = await getResolvedCatalogue()
   const { deals, hubEndsOn } = memberDeals({ purchases, products, answers, planProductIds, now, sizes: settings.memberDeals })
-  return { enabled, deals, hubEndsOn, freeOver: settings.memberDeals.topUpFreeOver, hubValue: hubValue(settings) }
+  return { enabled, deals, hubEndsOn, freeOver, hubValue: hubValue(settings) }
 }

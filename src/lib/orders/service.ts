@@ -17,10 +17,11 @@ import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
 import { sendEvidenceOf } from '@/lib/supplier/errors'
 import { deliverability } from '@/lib/pricing/zones'
-import { recurringDeliveryOption } from '@/lib/pricing/delivery'
+import { quoteDelivery, recurringDeliveryOption, shipmentWeight } from '@/lib/pricing/delivery'
+import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { shipsAtCycle } from '@/lib/recharge/clock'
 import { cycleIsSkipped, removedLinesAtCycle } from '@/lib/recharge/schedule'
-import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
+import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput, SupplierProvider } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -638,7 +639,7 @@ export async function updateShippingAddress(
     const supplier = await supplierForOrdering(order.supplierSimulated === true)
     try {
       await supplier.updateOrder(
-        await supplierOrderInputFor({ ...order, shippingAddress: address }, fulfilable),
+        await supplierOrderInputFor({ ...order, shippingAddress: address }, fulfilable, supplier),
       )
     } catch (err) {
       // Their faults arrive as raw PHP — "Call to a member function
@@ -783,25 +784,42 @@ async function supplierForOrdering(simulated: boolean) {
 }
 
 /**
- * Total shipped weight in kilograms, or null when any line's weight is unknown.
+ * The parcel's weight in grams, line by line, best figure first: the weight
+ * snapshotted on the line, the product's own weight (PowerBody's, or one typed
+ * in at import review), the size on the label plus packaging (a 1 kg tub ships
+ * as about 1.15 kg), then `delivery.defaultProductGrams`.
  *
- * All-or-nothing on purpose. PowerBody publish no weight on either product call,
- * so most catalogue products carry none unless a founder typed one in at import
- * review — and a partial sum is worse than no sum: it is a real number, in the
- * right units, describing only some of the parcel, and it would pick a delivery
- * band confidently and wrongly. Sending nothing lets them weigh it.
+ * Always a figure, because the weight picks the service — Royal Mail up to
+ * 7 kg, DPD above — and every order asks for one. `known` says whether every
+ * unit had a real weight rather than an estimate.
  */
+export function orderParcel(
+  lines: (Pick<OrderLine, 'productId' | 'quantity'> & Partial<Pick<OrderLine, 'sku' | 'variantTitle' | 'weightGrams'>>)[],
+  catalogue: (Pick<CatalogueProduct, 'id' | 'weightGrams'> & Partial<Pick<CatalogueProduct, 'variants'>>)[],
+  config = getPricingConfig(),
+): { grams: number; known: boolean } {
+  const { grams, weightKnown } = shipmentWeight(
+    lines.map((line) => {
+      const product = catalogue.find((p) => p.id === line.productId)
+      const variant = line.sku ? product?.variants?.find((v) => v.sku === line.sku) : undefined
+      return {
+        weightGrams: line.weightGrams ?? product?.weightGrams ?? null,
+        size: variant?.size ?? line.variantTitle ?? null,
+        quantity: line.quantity,
+      }
+    }),
+    config,
+  )
+  return { grams: Math.round(grams), known: weightKnown }
+}
+
+/** The parcel's weight in kilograms, or null for an order with no lines. See `orderParcel`. */
 export function orderWeightKg(
   lines: Pick<OrderLine, 'productId' | 'quantity'>[],
   catalogue: Pick<CatalogueProduct, 'id' | 'weightGrams'>[],
 ): number | null {
-  let grams = 0
-  for (const line of lines) {
-    const product = catalogue.find((p) => p.id === line.productId)
-    const each = product?.weightGrams
-    if (each == null || !(each > 0)) return null
-    grams += each * line.quantity
-  }
+  if (!lines.length) return null
+  const { grams } = orderParcel(lines, catalogue)
   return grams > 0 ? Math.round(grams) / 1000 : null
 }
 
@@ -814,7 +832,12 @@ export function orderWeightKg(
  * comes off the order itself; the catalogue is consulted only for the two facts
  * an order line doesn't carry (VAT rate and shipped weight).
  */
-export async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<SupplierOrderInput> {
+export async function supplierOrderInputFor(
+  order: Order,
+  lines: OrderLine[],
+  /** The supplier being sent to, so a service code not yet known can be read off the account. */
+  supplier?: Pick<SupplierProvider, 'shippingMethods'> | null,
+): Promise<SupplierOrderInput> {
   const address = order.shippingAddress!
   let catalogue: CatalogueProduct[] = []
   try {
@@ -827,8 +850,16 @@ export async function supplierOrderInputFor(order: Order, lines: OrderLine[]): P
   }
 
   const { vatRateFor } = await import('@/lib/pricing/vat')
-  const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
   const config = getPricingConfig()
+
+  // The service: the cheapest that carries this weight to this postcode —
+  // Royal Mail Tracked 48 up to 7 kg, DPD above — asked for by its code.
+  const parcel = orderParcel(lines, catalogue, config)
+  const service = quoteDelivery({ grams: parcel.grams, postcode: address.postcode }, config).service
+  const { transportCodeFor } = await import('@/lib/supplier/transport')
+  const transportCode = service
+    ? await transportCodeFor(service.carrier, supplier?.shippingMethods ? () => supplier.shippingMethods!() : null)
+    : null
 
   return {
     reference: order.id,
@@ -840,7 +871,10 @@ export async function supplierOrderInputFor(order: Order, lines: OrderLine[]): P
       email: address.email ?? order.email ?? null,
     },
     shippingPrice: order.shipping,
-    weightKg: orderWeightKg(lines, catalogue),
+    weightKg: parcel.grams / 1000,
+    weightEstimated: !parcel.known,
+    transportCode,
+    service: service ? { name: service.name, carrier: service.carrier } : null,
     comment: orderReference(order),
     lines: lines.map((line) => {
       const product = catalogue.find((p) => p.id === line.productId)
@@ -934,12 +968,16 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   // proof of what was sent last Tuesday.
   const sentAddress = oneLineAddress(address)
   try {
-    const result = await supplier.placeOrder(await supplierOrderInputFor(order, fulfilable))
+    const input = await supplierOrderInputFor(order, fulfilable, supplier)
+    const result = await supplier.placeOrder(input)
     return updateOrder(id, (o) => {
       o.supplierOrderId = result.supplierOrderId
       o.supplierStatus = result.status
       o.supplierSimulated = simulated
       o.status = 'submitted_to_supplier'
+      o.deliveryService = input.service
+        ? { name: input.service.name, carrier: input.service.carrier, code: input.transportCode ?? null, weightKg: input.weightKg ?? null, weightEstimated: input.weightEstimated === true }
+        : null
       o.lastSupplierAttempt = {
         at: now(),
         ok: true,

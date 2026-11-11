@@ -136,13 +136,13 @@ test.describe('delivery is charged and consistent', () => {
    */
   test('the postage on the receipt is the postage on the order', async ({ page }) => {
     await openShop(page)
-    await addProductToBasket(page, 'CHRGD Whey Protein')
+    await addProductToBasket(page, 'CHRGD Electrolyte Mix')
     await openBasket(page)
     await page.getByRole('button', { name: /Checkout/ }).click()
     await expect(page.getByRole('heading', { name: /Your order is confirmed/i })).toBeVisible({ timeout: 30_000 })
 
-    /* A £34.99 basket sits under the free-delivery line, so postage is charged
-       and printed. The figure on the receipt and the figure on the order used to
+    /* A £17.99 basket sits under the £20 free-delivery line, so £2 postage is
+       charged and printed. The figure on the receipt and the figure on the order used to
        come from different places — this is the check that they agree. */
     const receipt = await page.locator('main').innerText()
     const shown = receipt.match(/Delivery\s*£(\d+\.\d{2})/)?.[1]

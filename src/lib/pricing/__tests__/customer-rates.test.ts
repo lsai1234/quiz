@@ -1,13 +1,10 @@
 /**
- * What WE charge the member for delivery.
+ * What WE charge the member for delivery: £2 under £20, free from £20, the
+ * Highlands included.
  *
- * The thing this ladder replaced was a single charge with one free-delivery
- * cliff, and the cliff was in the wrong place: free delivery started at £60 of
- * retail while our own cost did not drop until ~£100 and did not vanish until
- * ~£198. The worst basket in the business was one that had just earned free
- * delivery. These tests pin the alignment, because it is the whole point of the
- * shape — a future edit that moves our free line below the supplier's step-down
- * should fail here rather than in a month's margin figures.
+ * A parcel costs us £3.90 with Royal Mail. The £2 is what lets a single cheap
+ * product pay its own way; from £20 the goods carry the parcel. These tests pin
+ * that shape, and that a cheap order sent alone still makes money.
  */
 import {
   blendedCustomerCharge,
@@ -25,12 +22,10 @@ import { PRICING_CONFIG, getPricingConfig, qualifiesForFreeDelivery } from '@/li
 const config = getPricingConfig()
 
 describe('the customer delivery ladder', () => {
-  it('reads first-fit, tightest band first', () => {
-    expect(customerDeliveryCharge(20, 'uk-1', config)).toBe(4.95)
-    expect(customerDeliveryCharge(39.99, 'uk-1', config)).toBe(4.95)
-    expect(customerDeliveryCharge(40, 'uk-1', config)).toBe(2.95)
-    expect(customerDeliveryCharge(99.99, 'uk-1', config)).toBe(2.95)
-    expect(customerDeliveryCharge(100, 'uk-1', config)).toBe(0)
+  it('reads first-fit, tightest band first: £2 under £20, free from £20', () => {
+    expect(customerDeliveryCharge(8, 'uk-1', config)).toBe(2)
+    expect(customerDeliveryCharge(19.99, 'uk-1', config)).toBe(2)
+    expect(customerDeliveryCharge(20, 'uk-1', config)).toBe(0)
     expect(customerDeliveryCharge(250, 'uk-1', config)).toBe(0)
   })
 
@@ -39,12 +34,16 @@ describe('the customer delivery ladder', () => {
     expect(customerDeliveryCharge(0, 'uk-1', config)).toBe(0)
   })
 
-  it('surcharges Zone 2 on every band, the free one included', () => {
-    const surcharge = config.delivery.zone2Surcharge
-    expect(customerDeliveryCharge(20, 'uk-2', config)).toBe(4.95 + surcharge)
-    // The one that matters: PowerBody's Zone 2 free line is £300 of WHOLESALE,
-    // roughly a £600 basket, so our cost up there never actually goes away.
-    expect(customerDeliveryCharge(250, 'uk-2', config)).toBe(surcharge)
+  it('charges the Highlands the same as everywhere else', () => {
+    expect(config.delivery.zone2Surcharge).toBe(0)
+    expect(customerDeliveryCharge(15, 'uk-2', config)).toBe(2)
+    expect(customerDeliveryCharge(25, 'uk-2', config)).toBe(0)
+  })
+
+  it('surcharges Zone 2 on every band, the free one included, when a surcharge is set', () => {
+    const surcharged = { ...config, delivery: { ...config.delivery, zone2Surcharge: 1.95 } }
+    expect(customerDeliveryCharge(15, 'uk-2', surcharged)).toBe(3.95)
+    expect(customerDeliveryCharge(250, 'uk-2', surcharged)).toBe(1.95)
   })
 
   it('advertises the same threshold it charges', () => {
@@ -55,15 +54,13 @@ describe('the customer delivery ladder', () => {
     expect(customerDeliveryCharge(config.freeDeliveryThreshold, 'uk-1', config)).toBe(0)
   })
 
-  it('stops charging at the point the supplier starts charging us less', () => {
-    // The alignment the ladder exists for. Our free line, converted to wholesale
-    // at the configured markup, must not sit BELOW the supplier band it is meant
-    // to line up with — that gap is money we hand over for nothing.
-    const freeAtWholesale = config.freeDeliveryThreshold * config.defaultCostRatio
-    const stepDown = config.delivery.services
-      .filter((s) => s.zone === 'uk-1' && s.maxOrderValue != null)
-      .sort((a, b) => (a.maxOrderValue ?? 0) - (b.maxOrderValue ?? 0))[0]
-    expect(freeAtWholesale).toBeGreaterThanOrEqual(stepDown.maxOrderValue!)
+  it('keeps a single product sent alone in profit on both sides of the free line', () => {
+    // Our cheapest product, and one just over the line where delivery goes free.
+    // Goods at half the shelf price, which is how the shelf price is set.
+    for (const shelfPrice of [11.99, 19.99, 20, 24.99]) {
+      const e = unitEconomics({ shelfPrice, supplierCost: shelfPrice / 2 }, config)
+      expect(e.contribution).toBeGreaterThan(0)
+    }
   })
 
   it('never collects more than the parcel costs', () => {
@@ -71,10 +68,7 @@ describe('the customer delivery ladder', () => {
     // than the supplier charges, it is a margin decision that deserves saying
     // out loud rather than hiding in a postage line.
     for (const basket of [20, 45, 75, 120, 250]) {
-      const quote = quoteDelivery(
-        { supplierValue: basket * config.defaultCostRatio, zone: 'uk-1', orderValue: basket },
-        config,
-      )
+      const quote = quoteDelivery({ grams: 1150, zone: 'uk-1', orderValue: basket }, config)
       expect(quote.customerCharge).toBeLessThanOrEqual(quote.supplierCost)
     }
   })
@@ -82,28 +76,27 @@ describe('the customer delivery ladder', () => {
   it('still absorbs something on every paid band', () => {
     // The plan is to pass SOME on, not all of it. A ladder that fully recovered
     // postage would price the small baskets out.
-    const quote = quoteDelivery({ supplierValue: 10, zone: 'uk-1', orderValue: 20 }, config)
+    const quote = quoteDelivery({ grams: 1150, zone: 'uk-1', orderValue: 15 }, config)
     expect(quote.absorbed).toBeGreaterThan(0)
     expect(quote.customerCharge).toBeGreaterThan(0)
   })
 
   it('entry charge is the first rung, for the price solver', () => {
-    expect(entryDeliveryCharge(config)).toBe(4.95)
+    expect(entryDeliveryCharge(config)).toBe(2)
   })
 })
 
 describe('checkout delivery options', () => {
-  it('offers a mainland and a Highlands rate for the basket', () => {
-    const options = deliveryOptions(45, config)
-    expect(options.map((o) => o.id)).toEqual(['uk-mainland', 'uk-highlands'])
-    expect(options[0].price).toBe(2.95)
-    expect(options[1].price).toBe(2.95 + config.delivery.zone2Surcharge)
+  it('offers one UK rate while the Highlands pay the same', () => {
+    expect(deliveryOptions(15, config)).toEqual([{ id: 'uk-mainland', zone: 'uk-1', label: 'UK delivery', price: 2 }])
+    expect(deliveryOptions(45, config)).toEqual([{ id: 'uk-mainland', zone: 'uk-1', label: 'UK delivery', price: 0 }])
   })
 
-  it('still offers both when delivery is free, because Zone 2 is not', () => {
-    const options = deliveryOptions(150, config)
-    expect(options[0].price).toBe(0)
-    expect(options[1].price).toBe(config.delivery.zone2Surcharge)
+  it('offers a mainland and a Highlands rate once there is a surcharge, even when delivery is free', () => {
+    const surcharged = { ...config, delivery: { ...config.delivery, zone2Surcharge: 1.95 } }
+    const options = deliveryOptions(150, surcharged)
+    expect(options.map((o) => o.id)).toEqual(['uk-mainland', 'uk-highlands'])
+    expect(options.map((o) => o.price)).toEqual([0, 1.95])
   })
 })
 
@@ -112,13 +105,13 @@ describe('the one rate a subscription can bill', () => {
   // no choice of zone — it gets a line item at one rate. That rate has to be the
   // mainland one, because it is what the plan receipt quoted on the way in.
   it('bills the mainland rate the receipt already quoted', () => {
-    expect(recurringDeliveryOption(45, config)).toMatchObject({ id: 'uk-mainland', price: 2.95 })
-    expect(recurringDeliveryOption(20, config)).toMatchObject({ price: 4.95 })
+    expect(recurringDeliveryOption(15, config)).toMatchObject({ id: 'uk-mainland', price: 2 })
   })
 
   it('bills nothing at all above the free line', () => {
     // Null rather than a £0.00 line: an invoice that itemises nothing every
     // month is worse than one that stays quiet about it.
+    expect(recurringDeliveryOption(20, config)).toBeNull()
     expect(recurringDeliveryOption(150, config)).toBeNull()
   })
 })
@@ -147,18 +140,18 @@ describe('the margin model and the ladder', () => {
     expect(blendedCustomerCharge(30, config)).toBeCloseTo(expected, 2)
   })
 
-  it('still collects the surcharge share above the free line', () => {
-    // Free delivery is a mainland promise. Zone 2 never reaches PowerBody's own
-    // free band, so a few pence of surcharge survives on every basket.
-    expect(customerDeliveryCharge(250, 'uk-1', config)).toBe(0)
-    expect(blendedCustomerCharge(250, config)).toBeGreaterThan(0)
+  it('collects the surcharge share above the free line when there is one', () => {
+    const surcharged = { ...config, delivery: { ...config.delivery, zone2Surcharge: 1.95 } }
+    expect(customerDeliveryCharge(250, 'uk-1', surcharged)).toBe(0)
+    expect(blendedCustomerCharge(250, surcharged)).toBeGreaterThan(0)
+    expect(blendedCustomerCharge(250, config)).toBe(0)
   })
 
   it('solves a target price against the rung that price lands on', () => {
     /**
      * The solver used to take the delivery charge as a constant. On a ladder it
      * is a step function of the very price being solved for, so a price solved
-     * at the £4.95 rung but landing in the £2.95 band would be under-priced by
+     * at the £2 rung but landing in the free band would be under-priced by
      * the difference — silently, and only near a rung boundary.
      *
      * Checked by asking the waterfall: whatever price comes back must actually
@@ -178,7 +171,7 @@ describe('the margin model and the ladder', () => {
   })
 
   it('reports the position rung by rung, not just the entry one', () => {
-    const impact = freeDeliveryImpact(20, config)
+    const impact = freeDeliveryImpact(1150, config)
     expect(impact.bands).toHaveLength(config.delivery.customerRates.length)
     // The free rung is the one that costs us the whole parcel.
     const free = impact.bands.find((b) => b.charge === 0)!

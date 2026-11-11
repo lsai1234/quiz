@@ -155,8 +155,10 @@ export function priceAtFounderTerms(
 export function founderDeliveryOptions(
   kind: FounderCodeKind,
   order: {
-    /** What we pay PowerBody for the goods, ex VAT (£) — what their bands read. */
+    /** What we pay PowerBody for the goods, ex VAT (£). */
     supplierValue: number
+    /** The parcel's weight (g), which picks the service. Null: one product's default. */
+    grams?: number | null
     /** What the member is being charged for the goods, inc VAT (£). */
     orderValue: number
   },
@@ -166,10 +168,18 @@ export function founderDeliveryOptions(
   if (kind === 'free') {
     return deliveryOptions(order.orderValue, config).map((o) => ({ ...o, price: 0 }))
   }
-  return deliveryOptions(order.orderValue, config).map((o) => ({
-    ...o,
-    price: round(quoteDelivery({ supplierValue: order.supplierValue, zone: o.zone }, config).supplierCost),
-  }))
+  // At cost, each zone pays what its parcel costs us — the Highlands more —
+  // so both are offered even while the customer rates are the same everywhere.
+  const atCost = (zone: DeliveryOption['zone']) => round(quoteDelivery({ grams: order.grams, zone }, config).supplierCost)
+  const mainland = atCost('uk-1')
+  const highlands = atCost('uk-2')
+  if (highlands <= 0 || highlands === mainland) {
+    return deliveryOptions(order.orderValue, config).map((o) => ({ ...o, price: o.zone === 'uk-2' ? highlands : mainland }))
+  }
+  return [
+    { id: 'uk-mainland', zone: 'uk-1', label: 'UK mainland', price: mainland },
+    { id: 'uk-highlands', zone: 'uk-2', label: 'Highlands', price: highlands },
+  ]
 }
 
 /**

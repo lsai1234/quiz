@@ -390,11 +390,20 @@ export interface MemberDealSettings {
   defaultPct: number
   /** Sizes by product kind (0–1). */
   pct: Partial<Record<SwapGroup, number>>
-  /** A top-up box ships free to the UK mainland at or over this (£, inc VAT). */
+  /**
+   * A top-up box ships free at or over this (£, inc VAT). Never above the
+   * store-wide free-delivery line (`effectiveTopUpFreeOver`), which every
+   * basket gets anyway.
+   */
   topUpFreeOver: number
 }
 
-export const DEFAULT_MEMBER_DEALS: MemberDealSettings = { defaultPct: 0.15, pct: {}, topUpFreeOver: 40 }
+export const DEFAULT_MEMBER_DEALS: MemberDealSettings = { defaultPct: 0.15, pct: {}, topUpFreeOver: 20 }
+
+/** The top-up box's free line as it applies: the lower of its own and the store's. */
+export function effectiveTopUpFreeOver(deals: Pick<MemberDealSettings, 'topUpFreeOver'>, freeDeliveryThreshold: number): number {
+  return freeDeliveryThreshold > 0 ? Math.min(deals.topUpFreeOver, freeDeliveryThreshold) : deals.topUpFreeOver
+}
 
 export function normaliseMemberDeals(raw: unknown): MemberDealSettings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof MemberDealSettings, unknown>>

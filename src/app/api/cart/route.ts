@@ -27,7 +27,7 @@ import {
   starterForSession,
 } from '@/lib/partner-starter/redeem'
 import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
-import { deliveryOptions } from '@/lib/pricing/delivery'
+import { basketGrams, deliveryOptions } from '@/lib/pricing/delivery'
 import {
   describeDeal,
   offerDeliveryOptions,
@@ -825,7 +825,7 @@ export async function POST(req: Request) {
   const options = starter
     ? starterDeliveryOptions(priced.total, config)
     : founder
-    ? founderDeliveryOptions(founder.kind, { supplierValue, orderValue: priced.total }, config)
+    ? founderDeliveryOptions(founder.kind, { supplierValue, grams: basketGrams(matched, config), orderValue: priced.total }, config)
     : lastChance
     ? offerDeliveryOptions(lastChance.quote, config)
     : memberDeal

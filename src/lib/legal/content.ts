@@ -167,6 +167,16 @@ export function getTermsDocument(
   entity = LEGAL_ENTITY,
 ): LegalDocument {
   const noticeDays = Math.max(0, config.priceChangeNoticeDays)
+  // The delivery charge, read off the rates checkout charges.
+  const freeFrom = config.freeDeliveryThreshold
+  const entry = [...config.delivery.customerRates].sort((a, b) => (a.maxOrderValue ?? Infinity) - (b.maxOrderValue ?? Infinity))[0]?.price ?? 0
+  const gbp = (n: number) => `£${Number.isInteger(n) ? n : n.toFixed(2)}`
+  const deliveryCharge =
+    freeFrom > 0 && entry > 0
+      ? `Delivery is ${gbp(entry)} on an order under ${gbp(freeFrom)} and free from ${gbp(freeFrom)}, the Highlands included. A monthly plan follows the same rule on its monthly amount, so a plan of ${gbp(freeFrom)} a month or more has no delivery charge.`
+      : entry > 0
+        ? `Delivery is ${gbp(entry)} an order.`
+        : 'Delivery is free.'
 
   return {
     id: 'terms',
@@ -224,6 +234,7 @@ export function getTermsDocument(
         heading: 'Deliveries, skips and pauses',
         body: [
           'You choose which day of the month your deliveries land, and you can move a delivery, skip one, or ask for something early from your account.',
+          `${deliveryCharge} Parcels go tracked, by Royal Mail Tracked 48 (DPD Two Day over 7 kg), which aims to arrive in 2 working days. We can't deliver to Northern Ireland, Guernsey or Jersey.`,
           'Skipping a box does not cost you a payment — the value of the skipped box is credited against your next one.',
           'You can pause your plan for up to three months. Pausing stops billing and deliveries, your plan stays exactly as it is, and there is nothing to settle — it is not a cancellation.',
         ],

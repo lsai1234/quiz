@@ -100,8 +100,9 @@ describe('the scenario check', () => {
   it('qualifies free delivery on the basket’s worth, not its discounted price', () => {
     // A basket just over the free-delivery line earns a discount that drops it
     // back under. Qualifying on the discounted figure would charge postage the
-    // customer was promised they'd avoid.
-    const c = cfg()
+    // customer was promised they'd avoid. The shipped 8% starts at £50, well
+    // above the £20 line, so a tier at the line makes the case.
+    const c = cfg({ bundleTiers: [{ id: 'at-line', label: 'At the line', minSubtotal: PRICING_CONFIG.freeDeliveryThreshold, discountPct: 0.15 }] })
     const listPrice = c.freeDeliveryThreshold + 2
     const oneOff = checkScenarios({ listPrice, supplierCost: listPrice / 2, sharedParcelItems: 1 }, c)
       .scenarios.find((x) => x.id === 'one-off')!
@@ -112,10 +113,8 @@ describe('the scenario check', () => {
     const shared = { supplierCost: listPrice / 2, sharedParcelItems: 1 }
     const onWorth = unitEconomics({ shelfPrice: oneOff.paid, ...shared, freeDeliveryBasis: listPrice }, c)
     const onDiscounted = unitEconomics({ shelfPrice: oneOff.paid, ...shared }, c)
-    // Qualified on the list value, so the mainland rate is free — what is left
-    // is the Highlands surcharge blended over the share of orders that pay one,
-    // which no free-delivery offer removes (PowerBody's Zone 2 free line is
-    // £300 of wholesale).
+    // Qualified on the list value, so the mainland rate is free — and with no
+    // Highlands surcharge set, nothing is left at all.
     expect(onWorth.deliveryCharged).toBe(blendedCustomerCharge(listPrice, c))
     expect(customerDeliveryCharge(listPrice, 'uk-1', c)).toBe(0)
     // Qualified on the discounted price instead, it pays a real postage rung —

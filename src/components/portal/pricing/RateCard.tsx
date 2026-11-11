@@ -1,28 +1,29 @@
 'use client'
 
-import { ZONE_LABELS, selectService } from '@/lib/pricing/delivery'
-import type { PricingConfig, DeliveryService, DeliveryZone } from '@/lib/stack-blueprint/pricing'
-import { Button, Input } from '@/components/system'
+import { CARRIER_LABELS, ZONE_LABELS, selectService } from '@/lib/pricing/delivery'
+import type { PricingConfig, DeliveryCarrier, DeliveryService, DeliveryZone } from '@/lib/stack-blueprint/pricing'
+import { Button, Input, Select } from '@/components/system'
 
 
 const ZONES: DeliveryZone[] = ['uk-1', 'uk-2', 'eu']
+const CARRIERS = Object.keys(CARRIER_LABELS) as DeliveryCarrier[]
 
 /**
  * PowerBody's delivery rate card, editable.
  *
- * Shown as a table of weight bands rather than a list of numbers because that
- * is what it is: the thing that decides which row applies is the parcel's
- * weight, and a founder needs to see the cliff between £3.25 and £5.17 to
- * understand why a 7kg order prices differently.
+ * Shown as a table of services by weight because that is what it is: each
+ * service takes parcels up to a weight, and a parcel goes with the cheapest
+ * one that can carry it. The service it goes with is marked for the parcel
+ * being modelled, so the step from Royal Mail to DPD over 7 kg is visible.
  */
 export function RateCard({
   config,
-  supplierValue,
+  grams,
   onChange,
 }: {
   config: PricingConfig
-  /** The wholesale order value being modelled, so the applicable band is marked. */
-  supplierValue: number
+  /** The parcel weight being modelled (g), so the service it goes with is marked. */
+  grams: number
   onChange: (services: DeliveryService[]) => void
 }) {
   const update = (id: string, patch: Partial<DeliveryService>) =>
@@ -33,24 +34,26 @@ export function RateCard({
   const add = () =>
     onChange([
       ...config.delivery.services,
-      { id: `svc-${Date.now()}`, name: 'New band', zone: 'uk-1', maxOrderValue: 100, price: 0 },
+      { id: `svc-${Date.now()}`, name: 'New service', zone: 'uk-1', maxGrams: 7000, price: 0, carrier: 'royal-mail' },
     ])
+
+  const kg = (g: number) => `${(g / 1000).toFixed(g < 1000 ? 2 : 1)} kg`
 
   return (
     <div className="space-y-3">
       {ZONES.map((zone) => {
         const services = config.delivery.services.filter((s) => s.zone === zone)
-        const applicable = selectService(supplierValue, zone, config)
+        const applicable = selectService(grams, zone, config)
         return (
           <div key={zone}>
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <p className="text-[11px] font-bold text-[var(--ink-1)]">{ZONE_LABELS[zone]}</p>
               {applicable ? (
                 <p className="text-[10px]" style={{ color: 'var(--accent)' }}>
-                  £{supplierValue.toFixed(2)} wholesale → {applicable.price === 0 ? 'free' : `£${applicable.price.toFixed(2)}`}
+                  {kg(grams)} parcel → {applicable.name}, £{applicable.price.toFixed(2)}
                 </p>
               ) : (
-                <p className="text-[10px]" style={{ color: 'var(--tone-critical)' }}>no band covers £{supplierValue.toFixed(2)}</p>
+                <p className="text-[10px]" style={{ color: 'var(--tone-critical)' }}>nothing takes {kg(grams)}</p>
               )}
             </div>
 
@@ -62,7 +65,7 @@ export function RateCard({
                 return (
                   <div
                     key={s.id}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
+                    className="flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1.5"
                     style={{
                       background: isApplicable ? `var(--accent-fill)` : 'var(--surface-2)',
                       border: `1px solid ${isApplicable ? `var(--accent-line)` : 'var(--edge)'}`,
@@ -75,19 +78,32 @@ export function RateCard({
                       value={s.name}
                       onChange={(e) => update(s.id, { name: e.target.value })}
                     />
+                    <Select
+                      label={`Which PowerBody service ${s.name || 'this'} is`}
+                      compact
+                      value={s.carrier}
+                      onChange={(e) => update(s.id, { carrier: e.target.value as DeliveryCarrier })}
+                    >
+                      {CARRIERS.map((c) => (
+                        <option key={c} value={c}>
+                          {CARRIER_LABELS[c]}
+                        </option>
+                      ))}
+                    </Select>
                     <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>up to</span>
                     <Input
-                      label={`Maximum order value for ${s.name || 'this service'} — blank for no limit`}
+                      label={`Heaviest parcel ${s.name || 'this service'} takes, in kg — blank for no limit`}
                       compact
                       align="right"
-                      prefix="£"
+                      suffix="kg"
                       className="w-24"
                       type="number"
-                      value={s.maxOrderValue ?? ''}
+                      step="0.01"
+                      value={s.maxGrams == null ? '' : s.maxGrams / 1000}
                       placeholder="∞"
-                      onChange={(e) => update(s.id, { maxOrderValue: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => update(s.id, { maxGrams: e.target.value === '' ? null : Math.round((parseFloat(e.target.value) || 0) * 1000) })}
                     />
-                    <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>wholesale · costs</span>
+                    <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>costs</span>
                     <Input
                       label={`What ${s.name || 'this service'} costs us, ex VAT`}
                       compact
@@ -112,9 +128,8 @@ export function RateCard({
         Add a service
       </Button>
       <p className="text-[10px] text-[var(--ink-3)] leading-snug">
-        Banded on what <strong>we</strong> pay PowerBody for the order, ex VAT — not on weight, and not on what the
-        member pays us. Leave the limit blank for the open-ended top band. The cheapest band an order qualifies for is
-        the one they charge, so a basket that clears the free line costs nothing to deliver.
+        From PowerBody&apos;s Dropshipping Guide, ex VAT. Each parcel goes with the cheapest service that can carry its weight, and
+        every order asks PowerBody for that service by its code (Settings → Supplier). Leave the weight blank for no limit.
       </p>
     </div>
   )

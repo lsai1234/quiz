@@ -161,32 +161,28 @@ describe('pause and resume', () => {
  * anything: a plan that qualified for free delivery at signup has no postage
  * item at all.
  *
- * The rate ladder these lean on: up to £40 → £4.95, up to £100 → £2.95, above
- * £100 → free.
+ * The rate ladder these lean on: under £20 → £2, from £20 → free.
  */
 describe('postage on a plan that changes size', () => {
-  it('drops the rate when the plan grows into a cheaper band', async () => {
-    // £38 → £45. Was billed £4.95 forever; owes £2.95.
-    await syncSubscriptionToStripe(sub({ flatMonthly: 38 }), sub({ flatMonthly: 45 }))
-    expect(updateSubscriptionDelivery).toHaveBeenCalledWith(
-      'sub_stripe_1',
-      expect.objectContaining({ price: 2.95 }),
-    )
+  it('leaves postage alone while the plan stays on the same side of the line', async () => {
+    // £12 → £15: still £2.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 12 }), sub({ flatMonthly: 15 }))
+    expect(updateSubscriptionDelivery).not.toHaveBeenCalled()
   })
 
   it('removes postage when the plan grows past the free-delivery line', async () => {
-    // £90 → £110. Was billed £2.95 forever; owes nothing.
-    await syncSubscriptionToStripe(sub({ flatMonthly: 90 }), sub({ flatMonthly: 110 }))
+    // £15 → £25. Was billed £2 forever; owes nothing.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 15 }), sub({ flatMonthly: 25 }))
     expect(updateSubscriptionDelivery).toHaveBeenCalledWith('sub_stripe_1', null)
   })
 
   it('starts charging postage when the plan shrinks below the free line', async () => {
-    // £110 → £90. The leak: no postage item was ever created for this plan, and
+    // £25 → £15. The leak: no postage item was ever created for this plan, and
     // nothing outside checkout could add one, so it shipped free indefinitely.
-    await syncSubscriptionToStripe(sub({ flatMonthly: 110 }), sub({ flatMonthly: 90 }))
+    await syncSubscriptionToStripe(sub({ flatMonthly: 25 }), sub({ flatMonthly: 15 }))
     expect(updateSubscriptionDelivery).toHaveBeenCalledWith(
       'sub_stripe_1',
-      expect.objectContaining({ price: 2.95 }),
+      expect.objectContaining({ price: 2 }),
     )
   })
 

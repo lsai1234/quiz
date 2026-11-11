@@ -13,7 +13,7 @@
 import { reviewStateOf } from './service'
 import { neverPaid } from './unpaid'
 import { deliverability } from '@/lib/pricing/zones'
-import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { customerDeliveryCharge, quoteDelivery, shipmentWeight } from '@/lib/pricing/delivery'
 import type { Order, OrderReviewState } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -118,6 +118,11 @@ export interface QueueOrder {
    * into a monthly margin figure.
    */
   deliveryShortfall: number | null
+  /**
+   * The delivery service: the one it was sent with, or for an order not yet
+   * sent, the one it will go with by weight (Royal Mail up to 7 kg, DPD above).
+   */
+  deliveryService: { name: string; code: string | null; weightKg: number | null; sent: boolean } | null
   review: OrderReviewState
   reviewNote: string | null
   /** The plan behind this box, on subscription orders that carry one. */
@@ -281,6 +286,20 @@ function shortfallOn(order: Order, zone: string | null): number | null {
   return short > 0 ? short : null
 }
 
+/** The service an order went with, or will go with by its weight. */
+function serviceOf(order: Order, postcode: string | null): QueueOrder['deliveryService'] {
+  if (order.deliveryService) {
+    const s = order.deliveryService
+    return { name: s.name, code: s.code, weightKg: s.weightKg, sent: true }
+  }
+  if (!postcode || order.lines.length === 0) return null
+  const { grams } = shipmentWeight(
+    order.lines.map((l) => ({ weightGrams: l.weightGrams ?? null, size: l.variantTitle ?? null, quantity: l.quantity })),
+  )
+  const service = quoteDelivery({ grams, postcode }).service
+  return service ? { name: service.name, code: null, weightKg: Math.round(grams) / 1000, sent: false } : null
+}
+
 function toQueueOrder(order: Order): QueueOrder {
   const costKnown = order.lines.every((l) => l.supplierCost != null)
   const reach = order.shippingAddress ? deliverability(order.shippingAddress) : null
@@ -288,6 +307,7 @@ function toQueueOrder(order: Order): QueueOrder {
     undeliverableReason: reach?.excluded ? reach.reason : null,
     deliveryZone: reach?.zone ?? null,
     deliveryShortfall: shortfallOn(order, reach?.zone ?? null),
+    deliveryService: serviceOf(order, reach?.excluded ? null : order.shippingAddress?.postcode ?? null),
     id: order.id,
     reference: order.reference ?? null,
     kind: queueKindOf(order),

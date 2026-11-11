@@ -517,9 +517,22 @@ describe('pricing rules — margin floor & cost', () => {
   })
 
   it('never discounts below the margin floor, never above list price', () => {
-    expect(discountWithFloor(100, 0.15, 35)).toBe(85)        // floor 40.25 doesn't bind
-    expect(discountWithFloor(20, 0.5, 18)).toBe(20)          // floor 20.7 capped to list price → no discount
-    expect(discountWithFloor(20, 0.15, 15)).toBe(20 * 0.85 < 15 * 1.15 ? 17.25 : 17)
+    // The floor is what the product really costs us — PowerBody's price plus
+    // the VAT we pay on it — plus 15%: £35 → £48.30.
+    expect(discountWithFloor(100, 0.15, 35)).toBe(85)        // floor 48.30 doesn't bind
+    expect(discountWithFloor(100, 0.6, 35)).toBeCloseTo(48.3, 2)
+    expect(discountWithFloor(20, 0.5, 18)).toBe(20)          // floor 24.84 capped to list price → no discount
+    expect(discountWithFloor(20, 0.15, 15)).toBe(20)         // floor 20.70 capped too
+  })
+
+  it('counts VAT in the floor unless nobody charges any', () => {
+    const noSupplierVat = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, supplierChargesVat: false } }
+    expect(discountWithFloor(100, 0.6, 35, noSupplierVat)).toBeCloseTo(40.25, 2)
+    // Registered, the shelf price carries VAT we hand over, so it counts again.
+    const registered = { ...noSupplierVat, vat: { ...noSupplierVat.vat, registered: true } }
+    expect(discountWithFloor(100, 0.6, 35, registered)).toBeCloseTo(48.3, 2)
+    // A zero-rated product is held to its own rate.
+    expect(discountWithFloor(100, 0.6, 35, PRICING_CONFIG, 0)).toBeCloseTo(40.25, 2)
   })
 })
 
@@ -562,12 +575,12 @@ describe('pricing rules — subscription profit guardrails', () => {
     const paid = calculatePricing(bp, [a], null, base)
     expect(paid.subscriptionFirstMonth).toBe(round2(paid.subscriptionTotal * 0.1))
 
-    // On: the floor caps it at cost plus the markup.
+    // On: the floor caps it at cost (with the VAT we pay on it) plus the markup.
     const floored = calculatePricing(bp, [a], null, {
       ...base,
       introOffer: { ...base.introOffer, respectMarginFloor: true },
     })
-    expect(floored.subscriptionFirstMonth).toBe(round2(10 * (1 + PRICING_CONFIG.marginFloorPct)))
+    expect(floored.subscriptionFirstMonth).toBe(round2(10 * (1 + PRICING_CONFIG.vat.standardRate) * (1 + PRICING_CONFIG.marginFloorPct)))
     expect(floored.subscriptionFirstMonth).toBeGreaterThan(paid.subscriptionFirstMonth)
   })
 

@@ -229,19 +229,20 @@ describe('what a subscription order records for delivery', () => {
   it('records the postage the plan is actually billed', async () => {
     const order = await createSubscriptionOrder({
       id: 'ord_post_1',
-      sub: plan(45),
+      sub: plan(15),
       catalogue: CATALOGUE,
       cycle: 0,
     })
-    expect(order.shipping).toBeCloseTo(2.95, 2)
+    // £2 postage on a plan under £20.
+    expect(order.shipping).toBeCloseTo(2, 2)
     // And it reaches the total, which is what the ledger and the queue read.
-    expect(order.total).toBeCloseTo(order.subtotal + 2.95, 2)
+    expect(order.total).toBeCloseTo(order.subtotal + 2, 2)
   })
 
   it('records nothing for a plan that ships free', async () => {
     const order = await createSubscriptionOrder({
       id: 'ord_post_2',
-      sub: plan(150),
+      sub: plan(20),
       catalogue: CATALOGUE,
       cycle: 0,
     })
@@ -253,11 +254,11 @@ describe('what a subscription order records for delivery', () => {
     const { recurringDeliveryOption } = await import('@/lib/pricing/delivery')
     const order = await createSubscriptionOrder({
       id: 'ord_post_3',
-      sub: plan(30),
+      sub: plan(12),
       catalogue: CATALOGUE,
       cycle: 0,
     })
-    expect(order.shipping).toBeCloseTo(recurringDeliveryOption(30)!.price, 2)
+    expect(order.shipping).toBeCloseTo(recurringDeliveryOption(12)!.price, 2)
   })
 })
 

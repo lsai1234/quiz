@@ -1,6 +1,7 @@
 import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
 import { OrderSendingToggle } from '@/components/portal/OrderSendingToggle'
 import { SupplierDiagnostics } from '@/components/portal/SupplierDiagnostics'
+import { DeliveryServiceCodes } from '@/components/portal/DeliveryServiceCodes'
 import { SettingsDetail, sectionBySlug } from '@/components/portal/SettingsNav'
 
 const SECTION = sectionBySlug('supplier')!
@@ -57,6 +58,15 @@ export default function SupplierSettingsPage() {
           setting above, so the catalogue can run fully live while orders are still simulated.
         </p>
         <OrderSendingToggle />
+      </section>
+
+      <section>
+        <h2 style={heading}>Delivery services</h2>
+        <p style={blurb}>
+          Every order asks PowerBody for a service by its code, chosen by the parcel&apos;s weight: Royal Mail Tracked 48 up
+          to 7 kg, DPD Two Day above. The codes are read from the account; choose one here if they aren&apos;t found.
+        </p>
+        <DeliveryServiceCodes />
       </section>
 
       <section>

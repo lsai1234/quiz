@@ -39,6 +39,8 @@ import {
   getPricingOverrides,
   getPricingConfig,
   resetPricingOverrides,
+  withCurrentDeliveryModel,
+  PRICING_CONFIG,
   type PricingConfig,
 } from '@/lib/stack-blueprint/pricing'
 import { normaliseRoster } from './top-products'
@@ -215,7 +217,7 @@ export async function syncPortalRuntime(force = false): Promise<void> {
   if (!force && Date.now() - lastSyncedAt < SYNC_TTL_MS) return
   try {
     const settings = await loadSettings()
-    setPricingOverrides(settings.pricingOverrides ?? {})
+    setPricingOverrides(withCurrentDeliveryModel(settings.pricingOverrides ?? {}))
     setDataSourceOverride(settings.dataSourceMode ?? null)
     setSupplierOverride(settings.supplierMode ?? null)
     setOrderingOverride(settings.orderingMode ?? null)
@@ -353,11 +355,14 @@ export async function setStripeEnvironmentSetting(env: StripeEnvironment): Promi
 // ── Pricing ──
 export async function getPortalPricingOverrides(): Promise<Partial<PricingConfig>> {
   const settings = await loadSettings()
-  return settings.pricingOverrides ?? {}
+  return withCurrentDeliveryModel(settings.pricingOverrides ?? {}) as Partial<PricingConfig>
 }
 export async function setPortalPricingOverrides(overrides: Partial<PricingConfig>): Promise<void> {
-  await saveSettings({ pricingOverrides: overrides })
-  setPricingOverrides(overrides)
+  // Stamped, so a save made under this delivery model is never taken for an
+  // older one and has its delivery settings dropped.
+  const stamped = { ...overrides, deliveryModel: PRICING_CONFIG.deliveryModel }
+  await saveSettings({ pricingOverrides: stamped })
+  setPricingOverrides(stamped)
   lastSyncedAt = Date.now()
 }
 export async function resetPortalPricing(): Promise<void> {

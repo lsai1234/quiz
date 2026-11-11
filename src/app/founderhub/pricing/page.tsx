@@ -200,7 +200,7 @@ export default function PricingPage() {
         <div>
           <Section title="What we charge" desc="One rule for the whole catalogue: double what PowerBody charge us. Nothing here reads the brand's RRP — that is a suggestion, it varies, and some products don't have one.">
             <Num label="Multiply what we pay by" value={draft.listPricing.markupOnCost} suffix="×" onChange={(n) => setNested('listPricing', { markupOnCost: n })}
-              help={`A £10 product sells for ${money(listPriceFor(10, draft))}. Below about 1.9× the margin gets thin enough that one bad delivery band wipes it out.`} />
+              help={`A £10 product sells for ${money(listPriceFor(10, draft))}. Below about 1.9× the margin gets thin enough that the parcel wipes it out.`} />
             <Toggle label="Round to .99" value={draft.listPricing.roundTo99} onChange={(v) => setNested('listPricing', { roundTo99: v })}
               help="Rounds DOWN, never up — rounding up can turn a saving into a markup on a discounted line." />
           </Section>
@@ -209,7 +209,7 @@ export default function PricingPage() {
             <Num label="Smallest order we accept" value={draft.minOrderValue} suffix="£" onChange={(n) => set({ minOrderValue: n })}
               help="A one-off has nothing behind it, so it must pay on its own. Enforced at the checkout and in the cart API, not just advised." />
             <Num label="Cheapest product the quiz may pick" value={draft.minQuizProductPrice} suffix="£" onChange={(n) => set({ minQuizProductPrice: n })}
-              help="Even sharing a box three ways a stack line carries ~£2.60 of postage. Below this there isn't the margin to cover it — such products are add-ons, not slots." />
+              help="Sharing a box three ways a stack line still carries ~£1.30 of postage. Below this there isn't the margin to cover it — such products are add-ons, not slots." />
             <Num label="Minimum to subscribe" value={draft.minSubscriptionMonthly} suffix="£/mo" onChange={(n) => set({ minSubscriptionMonthly: n })}
               help="A plan smaller than this doesn't cover its goods and postage over its life. The Overview tab computes the floor and flags this if it drops below." />
             <Num label="Never sell below this markup" value={pct(draft.marginFloorPct)} suffix="%" onChange={(n) => set({ marginFloorPct: n / 100 })}
@@ -218,8 +218,8 @@ export default function PricingPage() {
               help="Share of the price a product costs when no cost is on file. Should match 1 ÷ the markup above." />
           </Section>
 
-          <Section title="Delivery" desc="Two different numbers: what PowerBody charge US (banded on our spend in the box) and what we charge the MEMBER (banded on their basket).">
-            <RateCard config={draft} supplierValue={assetPrice * parcelItems} onChange={(services: DeliveryService[]) => setNested('delivery', { services })} />
+          <Section title="Delivery" desc="Two different numbers: what PowerBody charge US (by the parcel's weight) and what we charge the MEMBER (by their basket).">
+            <RateCard config={draft} grams={draft.delivery.defaultProductGrams * parcelItems} onChange={(services: DeliveryService[]) => setNested('delivery', { services })} />
             <div className="mt-4">
               <CustomerRates
                 config={draft}
@@ -235,9 +235,10 @@ export default function PricingPage() {
               />
             </div>
             <div className="mt-3">
-              <Num label="Orders to the Highlands & Islands" value={pct(draft.delivery.zone2SharePct)} suffix="%" onChange={(n) => setNested('delivery', { zone2SharePct: n / 100 })}
+              <Num label="Orders to the Highlands" value={pct(draft.delivery.zone2SharePct)} suffix="%" onChange={(n) => setNested('delivery', { zone2SharePct: n / 100 })}
                 help="Used to blend one honest delivery cost rather than pricing everything at the mainland or the worst rate." />
-              <Num label="Assumed weight when unset" value={draft.delivery.defaultProductGrams} suffix="g" onChange={(n) => setNested('delivery', { defaultProductGrams: n })} help="PowerBody's order call needs a weight even though they don't price on it." />
+              <Num label="Assumed weight when unset" value={draft.delivery.defaultProductGrams} suffix="g" onChange={(n) => setNested('delivery', { defaultProductGrams: n })} help="For a product with no weight and no size on its label. The weight picks the service: Royal Mail up to 7 kg, DPD above." />
+              <Num label="Packaging on a label weight" value={pct(draft.delivery.packagingAllowancePct)} suffix="%" onChange={(n) => setNested('delivery', { packagingAllowancePct: n / 100 })} help="Added to the size on the label when PowerBody give no weight: a 1 kg tub ships as about 1.15 kg." />
               <Num label="Longest gap between deliveries" value={draft.maxDeliveryMonths} suffix="mo" onChange={(n) => set({ maxDeliveryMonths: n })} help="However big the tub." />
             </div>
           </Section>

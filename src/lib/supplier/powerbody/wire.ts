@@ -342,11 +342,12 @@ export function toCreateOrderPayload(order: SupplierOrderInput, context: CreateO
     id: order.reference,
     status: 'pending',
     currency_rate: 1,
-    transport_code: context.transportCode ?? '',
-    // Empty rather than 0 when we don't know it. Their API publishes no weight
-    // on either product call, so for most orders we genuinely have none — and a
-    // zero is a measurement that reads as "this parcel weighs nothing", which
-    // lands it in the wrong delivery band rather than in no band at all.
+    // The service by its code: Royal Mail Tracked 48 up to 7 kg, DPD above
+    // (`lib/supplier/transport.ts`). Empty leaves the choice to PowerBody.
+    transport_code: order.transportCode ?? context.transportCode ?? '',
+    // Always set for an order with lines: the product's weight, else its label
+    // size plus packaging, else 1 kg (`orderParcel`). Empty rather than 0 when
+    // a caller has none — a zero reads as "this parcel weighs nothing".
     weight: weightKg ?? '',
     date_add: context.dateAdd ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
     comment: order.comment ?? context.comment ?? '',

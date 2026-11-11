@@ -6,26 +6,24 @@ const config = getPricingConfig()
 const gift = { title: 'Vitamin C + Zinc', minimum: 40 }
 
 describe('build your stack: the rewards ladder', () => {
-  it('lists the gift, the delivery bands, the bundle discount and free delivery, in order', () => {
-    const l = rewardLadder({ plan: 'oneoff', listSubtotal: 94.95, monthly: 72.21, gift, config })
+  it('lists free delivery, the gift and the bundle discount, in order', () => {
+    const l = rewardLadder({ plan: 'oneoff', listSubtotal: 44.95, monthly: 38.21, gift, config })
     expect(l.rungs.map((r) => [r.at, r.label, r.reached])).toEqual([
-      [40, 'Delivery £2.95, not £4.95', true],
+      [20, 'Free delivery', true],
       [40, 'Free Vitamin C + Zinc', true],
-      [50, '8% off', true],
-      [100, 'Free delivery', false],
+      [50, '8% off', false],
     ])
-    expect(l.next).toMatchObject({ kind: 'free-delivery', toGo: 5.05 })
-    expect(l.progress).toBeCloseTo(0.95, 2)
+    expect(l.next).toMatchObject({ kind: 'bundle', toGo: 5.05 })
   })
 
-  it('agrees with checkout: delivery drops exactly where customerDeliveryCharge says it does', () => {
-    for (const value of [39.99, 40, 99.99, 100]) {
+  it('agrees with checkout: delivery goes free exactly where customerDeliveryCharge says it does', () => {
+    for (const value of [12.99, 19.99, 20, 34.99]) {
       const l = rewardLadder({ plan: 'oneoff', listSubtotal: value, monthly: 0, gift: null, config })
       const free = l.rungs.find((r) => r.kind === 'free-delivery')!
-      const cheaper = l.rungs.find((r) => r.kind === 'delivery')!
       const charge = customerDeliveryCharge(value, 'uk-1', config)
       expect([value, free.reached]).toEqual([value, charge === 0])
-      expect([value, cheaper.reached]).toEqual([value, charge < 4.95])
+      // £2 under £20, free from £20: one line, no cheaper postage rung.
+      expect(l.rungs.some((r) => r.kind === 'delivery')).toBe(false)
     }
   })
 
@@ -35,9 +33,9 @@ describe('build your stack: the rewards ladder', () => {
   })
 
   it('subscribed: delivery on the monthly total, no one-off bundle discount, the gift as before', () => {
-    const l = rewardLadder({ plan: 'subscription', listSubtotal: 94.95, monthly: 72.21, gift, config })
+    const l = rewardLadder({ plan: 'subscription', listSubtotal: 44.95, monthly: 14.5, gift, config })
     expect(l.rungs.some((r) => r.kind === 'bundle')).toBe(false)
-    expect(l.rungs.find((r) => r.kind === 'free-delivery')).toMatchObject({ condition: 'from £100.00 a month', toGo: 27.79 })
+    expect(l.rungs.find((r) => r.kind === 'free-delivery')).toMatchObject({ condition: 'from £20.00 a month', toGo: 5.5 })
     expect(l.rungs.find((r) => r.kind === 'gift')?.reached).toBe(true)
   })
 

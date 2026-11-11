@@ -98,7 +98,9 @@ test.describe('swapping a product', () => {
     await page.goto('/myhub')
     await expect(page.getByText('YOUR SUBSCRIPTION')).toBeVisible({ timeout: 20_000 })
     const body = await page.locator('body').innerText()
-    const plan = Number(body.match(/Monthly plan\s*£(\d+\.\d{2})/)?.[1])
+    // The breakdown row shows only when something rides with the plan (postage
+    // under £20 a month, extras, a credit); otherwise the headline is the plan.
+    const plan = Number((body.match(/Monthly plan\s*£(\d+\.\d{2})/) ?? body.match(/£(\d+\.\d{2})\/mo/))?.[1])
     expect(plan).toBeCloseTo(quoted.to, 2)
   })
 })

@@ -78,12 +78,12 @@ describe('money windows', () => {
     expect(w.aov).toBe(40)
   })
 
-  it('counts goods, PowerBody’s value-banded delivery and card fees', () => {
+  it('counts goods, PowerBody’s delivery by weight and card fees', () => {
     const w = moneyWindow(ago(24), [order(), order()], REGISTERED)
     expect(w.cogs).toBe(24)
-    // £12 of wholesale per order sits in PowerBody's cheapest band (£6.50),
-    // blended across zones, on each of the two orders.
-    expect(w.delivery).toBeCloseTo(13.1, 1)
+    // A product with no weight counts as 1 kg: Royal Mail at £3.25, blended
+    // with the Highlands' £4.49 across zones, on each of the two orders.
+    expect(w.delivery).toBeCloseTo(6.6, 1)
     expect(w.paymentFees).toBeCloseTo(80 * 0.015 + 0.4, 2)
     expect(w.grossProfit).toBeCloseTo(w.netRevenue - w.cogs - w.delivery - w.paymentFees, 1)
     // The naive "£80 − £24 = 70% margin" is nowhere near the truth.
@@ -98,19 +98,14 @@ describe('money windows', () => {
     expect(withPostage.revenue).toBe(43.95)
   })
 
-  it('gets nearly-free delivery once our wholesale clears PowerBody’s line', () => {
-    // £150 of wholesale ships free to the mainland (over £99) but NOT to the
-    // Highlands, whose free line is £300 — so the blend keeps a sliver rather
-    // than dropping to zero. The whole argument for bigger baskets in one number.
-    const big = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 1, unitPrice: 300, supplierCost: 150 }] })
-    const small = order()
-    const bigDelivery = moneyWindow(ago(24), [big], REGISTERED).delivery
-    expect(bigDelivery).toBeLessThan(1)
-    expect(bigDelivery).toBeLessThan(moneyWindow(ago(24), [small], REGISTERED).delivery)
-
-    // Clear the Highlands line too and it really is free everywhere.
-    const huge = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 1, unitPrice: 700, supplierCost: 350 }] })
-    expect(moneyWindow(ago(24), [huge], REGISTERED).delivery).toBe(0)
+  it('costs a parcel by its weight, and by its postcode when it has one', () => {
+    // Two 4 kg tubs and more: over Royal Mail's 7 kg, so DPD at £5.17, which
+    // nothing goes to the Highlands at — the mainland figure is the whole cost.
+    const heavy = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 2, unitPrice: 40, supplierCost: 20, weightGrams: 4000 }] })
+    expect(moneyWindow(ago(24), [heavy], REGISTERED).delivery).toBeCloseTo(5.17, 2)
+    // A Highlands postcode is costed at the Highlands rate, not the blend.
+    const north = order({ shippingAddress: { name: 'A', line1: '1 St', city: 'Elgin', postcode: 'IV30 1AA', country: 'GB' } })
+    expect(moneyWindow(ago(24), [north], REGISTERED).delivery).toBeCloseTo(4.49, 2)
   })
 
   it('leaves orders it cannot cost out of the margin, and says how many', () => {

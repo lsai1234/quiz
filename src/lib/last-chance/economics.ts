@@ -4,16 +4,17 @@
  *
  * ── Why it is worked out ────────────────────────────────────────────────────
  * A single product ships alone, and alone is the worst case this business has:
- * PowerBody charge us £6.50 to post an order under £50 of wholesale, whatever
+ * PowerBody charge us £3.90 to post it (Royal Mail, with their VAT), whatever
  * we charge the customer. Run through `unitEconomics` — the goods, both sides
  * of delivery, card fees, the returns provision and (when the switch in
- * settings says we pay it) VAT — a £29.99 product makes a healthy margin with
- * postage charged, a £19.99 one makes a few pounds, and a £12.99 one almost
- * nothing. A flat "25% off" would sell the cheap end at a loss.
+ * settings says we pay it) VAT — a £34.99 product makes a healthy margin, a
+ * £19.99 one a few pounds, and an £11.99 one almost nothing. A flat "25% off"
+ * would sell the cheap end at a loss.
  *
  * ── The order the levers are pulled in ──────────────────────────────────────
  * 1. Delivery goes first. Free delivery is the easiest thing to say yes to and
- *    the thing that most often stops a small order, so it is the lead.
+ *    the thing that most often stops a small order, so it is the lead. From
+ *    £20 delivery is free anyway (`included`), and the deal is the percentage.
  * 2. Then a percentage off the product: the deepest whole percent that still
  *    clears the floor, up to `maxDiscountPct`. Below `minDiscountPct` it is
  *    left off — "free delivery" reads as a deal, "free delivery and 2% off"
@@ -289,9 +290,9 @@ export function priceOfferOrder(q: OfferQuote): OneOffPricing {
 }
 
 /**
- * The delivery choices on an offer order: the deal's mainland charge, and the
- * same plus the Highlands surcharge up there — our cost in Zone 2 never goes
- * away, which is why the surcharge applies to the free band everywhere else too.
+ * The delivery choices on an offer order: the deal's charge, plus the
+ * Highlands surcharge up there when one is set (it is 0 today, and then there
+ * is one UK option).
  */
 export function offerDeliveryOptions(q: OfferQuote, config: PricingConfig = getPricingConfig()): DeliveryOption[] {
   return deliveryOptions(q.listPrice, config).map((o) => {
@@ -299,7 +300,7 @@ export function offerDeliveryOptions(q: OfferQuote, config: PricingConfig = getP
     return {
       ...o,
       price,
-      label: o.zone === 'uk-1' && price === 0 ? 'Free UK mainland delivery' : o.label,
+      label: o.zone === 'uk-1' && price === 0 ? (o.label === 'UK delivery' ? 'Free UK delivery' : 'Free UK mainland delivery') : o.label,
     }
   })
 }

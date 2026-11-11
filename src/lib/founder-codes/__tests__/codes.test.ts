@@ -164,7 +164,8 @@ describe('what a code does to the money', () => {
     // exactly why this asserts the rule rather than today's arithmetic.)
     setPricingOverrides({ marginFloorPct: 0.9 })
     expect(priceAtFounderTerms('cost', lines).lines[0].discountedUnitPrice).toBe(costFromSupplierPrice(10))
-    expect(priceOneOffLines(lines, undefined, 1).lines[0].discountedUnitPrice).toBe(19)
+    // The ordinary floor counts the VAT we pay on cost: £10 × 1.2 × 1.9.
+    expect(priceOneOffLines(lines, undefined, 1).lines[0].discountedUnitPrice).toBe(22.8)
   })
 
   it('leaves an unlock code pricing exactly like no code at all', () => {
@@ -180,7 +181,7 @@ describe('what a code does to the money', () => {
 })
 
 describe('what a code does to delivery', () => {
-  const order = { supplierValue: 24, orderValue: 60 }
+  const order = { supplierValue: 24, grams: 1150, orderValue: 60 }
 
   it('ships a free order for nothing, in every zone', () => {
     expect(founderDeliveryOptions('free', order).every((o) => o.price === 0)).toBe(true)
@@ -189,7 +190,7 @@ describe('what a code does to delivery', () => {
   it('raises a cost-price order to what the supplier actually charges us', () => {
     const options = founderDeliveryOptions('cost', order)
     for (const option of options) {
-      expect(option.price).toBe(quoteDelivery({ supplierValue: 24, zone: option.zone }).supplierCost)
+      expect(option.price).toBe(quoteDelivery({ grams: 1150, zone: option.zone }).supplierCost)
     }
     // The direction that matters: our own rate on a £60 basket is cheaper than
     // the parcel costs, and selling goods at cost on subsidised postage would
@@ -202,7 +203,12 @@ describe('what a code does to delivery', () => {
     expect(options[0].price).toBe(customerDeliveryCharge(60, 'uk-1'))
   })
 
-  it('still offers both zones, because Stripe fixes shipping before the postcode exists', () => {
-    expect(founderDeliveryOptions('cost', order).map((o) => o.zone)).toEqual(['uk-1', 'uk-2'])
+  it('offers both zones at cost, because Stripe fixes shipping before the postcode exists', () => {
+    // The Highlands parcel costs more, so a cost-price order there pays more,
+    // even while the customer rates are the same everywhere.
+    const options = founderDeliveryOptions('cost', order)
+    expect(options.map((o) => o.zone)).toEqual(['uk-1', 'uk-2'])
+    expect(options[1].price).toBeGreaterThan(options[0].price)
+    expect(founderDeliveryOptions('unlock', order).map((o) => o.zone)).toEqual(['uk-1'])
   })
 })

@@ -91,13 +91,16 @@ describe('the contribution guard', () => {
     // £100, so the same order now keeps £3.02 more — £2.95 of postage plus the
     // Highlands surcharge blended over the orders that pay one. The cap still
     // binds — the guard is doing its job either way — it just binds less hard.
+    //
+    // £5.74 → £6.78 with Royal Mail (Nov 2026): the parcel costs £3.90, not
+    // £7.80, and from £20 the order ships free rather than paying £2.95.
     const thin = order([{ unitPrice: 60, supplierCost: 40 }])
     const calc = commissionFor(thin, 0.15, supplierVat())
 
     expect(calc.contribution).toBeGreaterThan(0)
     expect(calc.uncapped).toBeGreaterThan(calc.contribution)
     expect(calc.capped).toBe(true)
-    expect(calc.amount).toBe(5.45) // 95% of £5.74
+    expect(calc.amount).toBe(6.44) // 95% of £6.78
     expect(calc.amount).toBeLessThanOrEqual(calc.contribution * PRICING_CONFIG.partners.maxShareOfContribution + 0.01)
   })
 

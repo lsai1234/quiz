@@ -1,3 +1,4 @@
+import type { DeliveryCarrier } from '@/lib/stack-blueprint/pricing'
 /**
  * Order domain types.
  *
@@ -347,6 +348,18 @@ export interface Order {
    * fall back to the bands.
    */
   deliveryDue?: Partial<Record<'uk-1' | 'uk-2', number>> | null
+  /**
+   * The delivery service the order was sent with: Royal Mail Tracked 48 up to
+   * 7 kg, DPD above, by the supplier's code (null when none was known and the
+   * supplier chose). Absent on orders sent before every order named one.
+   */
+  deliveryService?: {
+    name: string
+    carrier: DeliveryCarrier
+    code: string | null
+    weightKg: number | null
+    weightEstimated: boolean
+  } | null
   /** The last-chance deal this order was sold on — see `LastChanceSnapshot`. */
   lastChance?: LastChanceSnapshot | null
   /** A member's deal or top-up box from their hub (`lib/deals/box`): what was sold at what. */

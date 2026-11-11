@@ -14,18 +14,18 @@ export const DEALS_COPY = {
   eyebrow: 'Member prices',
   heading: 'Your member prices',
   intro: 'A price on each product you’ve bought, here in your hub. Each opens about a week before that product is due to run out, so the next one arrives in time.',
-  /** "15% off and free UK mainland delivery": the condition rides in the line, so no "free" goes out without it. */
+  /** "15% off and free UK delivery": where we deliver rides beside it (`freeDeliveryCondition`), so no "free" goes out without it. */
   dealLine: (q: Pick<PublicOfferQuote, 'discountPct' | 'deliveryDeal' | 'deliveryCharge' | 'standardDelivery'>) => {
     const parts: string[] = []
     if (q.discountPct > 0) parts.push(`${q.discountPct}% off`)
-    if (q.deliveryDeal === 'free') parts.push('free UK mainland delivery')
+    if (q.deliveryDeal === 'free') parts.push('free UK delivery')
     if (q.deliveryDeal === 'reduced') parts.push(`delivery ${gbp(q.deliveryCharge)} (usually ${gbp(q.standardDelivery)})`)
     if (q.deliveryDeal === 'included' && parts.length === 0) parts.push('delivery included')
     const s = parts.join(' and ')
     return s.charAt(0).toUpperCase() + s.slice(1)
   },
   /** Beside every free delivery. */
-  freeDeliveryCondition: 'Free delivery is to the UK mainland; the Highlands and Islands surcharge still applies.',
+  freeDeliveryCondition: 'Free delivery is to anywhere in the UK we deliver: everywhere but Northern Ireland, Guernsey and Jersey.',
   price: (total: number, normal: number) => `${gbp(total)} delivered, instead of ${gbp(normal)}`,
   openUntil: (date: string) => `Open until ${date}`,
   opensIn: (days: number, date: string) => (days <= 1 ? `Opens tomorrow, ${date}` : `Opens in ${days} days, on ${date}`),
@@ -41,9 +41,9 @@ export const DEALS_COPY = {
   addEarly: 'Add to my box early',
   boxTitle: (n: number) => `Your top-up box · ${n} product${n === 1 ? '' : 's'}`,
   boxSaving: (saving: number, normal: number) => `You save ${gbp(saving)} on ${gbp(normal)}, delivered`,
-  boxFreeDelivery: 'Free UK mainland delivery',
-  boxDelivery: (charge: number, freeOver: number) => `Delivery ${gbp(charge)}. A box of ${gbp(freeOver)} or more ships free to the UK mainland.`,
-  boxFreeOver: (freeOver: number) => `A top-up box of ${gbp(freeOver)} or more ships free to the UK mainland; the Highlands and Islands surcharge still applies.`,
+  boxFreeDelivery: 'Free UK delivery',
+  boxDelivery: (charge: number, freeOver: number) => `Delivery ${gbp(charge)}. A box of ${gbp(freeOver)} or more ships free.`,
+  boxFreeOver: (freeOver: number) => `A top-up box of ${gbp(freeOver)} or more ships free anywhere in the UK we deliver.`,
   boxQuoting: 'Working out your box…',
   boxNone: 'That box isn’t available at a member price right now.',
   boxEmpty: 'Tick an open price to build your box',
@@ -51,8 +51,8 @@ export const DEALS_COPY = {
   boxAddsHub: (total: number) => `This box adds 90 days to your hub, ${gbp(total)} on its own, included.`,
   termsLink: 'Member hub terms',
   howTitle: 'How member prices work',
-  freeShort: 'Free delivery to the UK mainland; the Highlands and Islands surcharge still applies.',
-  freeShortTail: 'The Highlands and Islands surcharge still applies.',
+  freeShort: 'Free delivery anywhere in the UK we deliver: everywhere but Northern Ireland, Guernsey and Jersey.',
+  freeShortTail: 'Not to Northern Ireland, Guernsey or Jersey, where we don’t deliver.',
   empty: 'Your member prices appear here after your first order.',
   hubOpen: (date: string) => `Your hub is open until ${date}. Any order adds 90 days, and a new price for what it brings.`,
   changed: 'This price has changed since the page loaded. Here is the new one.',

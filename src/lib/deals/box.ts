@@ -21,7 +21,7 @@ import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
 import { revenueFromShelfPrice, vatRateFor } from '@/lib/pricing/vat'
 import { getPricingConfig, type OneOffPricing, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { DEFAULT_MEMBER_DEALS, type MemberDealSettings } from '@/lib/offer/settings'
+import { DEFAULT_MEMBER_DEALS, effectiveTopUpFreeOver, type MemberDealSettings } from '@/lib/offer/settings'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -119,7 +119,7 @@ export function quoteBox(
   config: PricingConfig = getPricingConfig(),
 ): BoxQuote {
   const quotes = items.map((i) => ({ ...i, quote: memberQuote(i.product, i.variant, deals, config) }))
-  const freeOver = deals.topUpFreeOver
+  const freeOver = effectiveTopUpFreeOver(deals, config.freeDeliveryThreshold)
   const lines = (pctOff: boolean): BoxLine[] =>
     quotes.map((q) => ({
       productId: q.product.id,

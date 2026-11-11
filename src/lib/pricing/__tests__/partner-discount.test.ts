@@ -227,9 +227,15 @@ describe('what an attributed order actually costs us', () => {
     // cheaper per attributed order, which moves D2 in the safe direction — the
     // pin is here so the next move gets looked at rather than absorbed.
     //
+    // −£3.00 → −£1.96 with Royal Mail (Pricing and delivery model, Nov 2026):
+    // the parcel really costs £3.90, not £7.80, and the box now ships free
+    // from £20 rather than paying £2.95. Still a loss, still one rate's worth,
+    // and smaller — the safe direction for D2. Partner-code one-offs were kept
+    // as a cost of a new customer, to review after a month of real orders.
+    //
     // Pinned to the old VAT treatment (`signedOff`): with `supplierChargesVat`
-    // off, as shipped, this reads +£7.36 — D2 to revisit, not a quiet update.
-    expect(keeps(CODE) - commission(CODE)).toBeCloseTo(-3.00, 1)
+    // off, this reads positive — D2 to revisit, not a quiet update.
+    expect(keeps(CODE) - commission(CODE)).toBeCloseTo(-1.96, 1)
 
     // Undiscounted and unattributed, the same box pays perfectly well — so the
     // cost is the programme's, not the product's.

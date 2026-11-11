@@ -265,16 +265,22 @@ export async function runSupplierDiagnostics(
   } else {
     const methods = await timed(() => provider.shippingMethods!())
     const list = methods.value ?? []
+    // Every order asks for Royal Mail up to 7 kg and DPD above, by the
+    // account's own codes: read them off this answer and keep them.
+    const { rememberShippingMethods } = await import('./transport')
+    const kept = methods.error ? null : await rememberShippingMethods(list).catch(() => null)
+    const rm = kept?.codes['royal-mail'].code ?? null
+    const dpd = kept?.codes.dpd.code ?? null
     add({
       id: 'shipping-methods',
       title: 'Delivery services offered',
-      status: methods.error ? 'warn' : list.length > 1 ? 'pass' : 'warn',
+      status: methods.error ? 'warn' : rm && dpd ? 'pass' : 'warn',
       detail: methods.error
-        ? `Not callable on this account: ${methods.error}. That is an answer in itself — their published card is the whole story, and delivery options can only be prices we set.`
-        : list.length > 1
-          ? `${list.length} services. Real speed options are possible, and transport_code is worth wiring up.`
-          : `${list.length} service. Delivery options can only be prices we set, not speeds we buy.`,
-      evidence: list.map((m) => m.name ?? m.code).join(' · ') || undefined,
+        ? `Not callable on this account: ${methods.error}. Orders go with the service code empty and PowerBody choose. Ask PowerBody to enable dropshipping.getShippingMethod, or choose the codes under Delivery services above.`
+        : rm && dpd
+          ? `Royal Mail is ${rm} and DPD is ${dpd}. Every order now asks for one of them by weight.`
+          : `${list.length} service${list.length === 1 ? '' : 's'}, but ${[!rm && 'Royal Mail', !dpd && 'DPD'].filter(Boolean).join(' and ')} couldn't be found by name. Choose the code${rm || dpd ? '' : 's'} under Delivery services above.`,
+      evidence: list.map((m) => `${m.name} (${m.code})`).join(' · ') || undefined,
       ms: methods.ms,
     })
   }

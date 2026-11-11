@@ -359,46 +359,45 @@ async function alreadyThereCheck(supplier: SupplierProvider, order: Order): Prom
   }
 }
 
-// ─── The two fields we send empty ────────────────────────────────────────────
+// ─── The weight and the service ──────────────────────────────────────────────
 
-function weightCheck(weightKg: number | null): SendCheck {
+function weightCheck(weightKg: number | null, estimated: boolean): SendCheck {
   const base = { id: 'weight', title: 'Parcel weight' }
-  if (weightKg != null) return { ...base, status: 'pass', detail: `Sent as ${weightKg} kg.` }
+  if (weightKg == null) return { ...base, status: 'warn', detail: 'Sent empty, so PowerBody weigh the parcel themselves.' }
   return {
     ...base,
-    status: 'warn',
-    detail:
-      'Sent empty. PowerBody publish no weights, so unless one was typed in at import review we have none, and they weigh the parcel themselves. If their reason mentions weight, this is it: open each product from Products, add its weight under Supplier, and send again.',
+    status: 'pass',
+    detail: estimated
+      ? `Sent as ${weightKg} kg, estimated: a product without a weight counts its label size plus 15% for packaging, or 1 kg. Add a weight under Products → Supplier to make it exact.`
+      : `Sent as ${weightKg} kg.`,
   }
 }
 
-async function deliveryServiceCheck(supplier: SupplierProvider): Promise<SendCheck> {
+async function deliveryServiceCheck(
+  sent: { transportCode: string | null; service: { name: string } | null },
+  supplier: SupplierProvider,
+): Promise<SendCheck> {
   const base = { id: 'delivery-service', title: 'Delivery service' }
-  if (typeof supplier.shippingMethods !== 'function') {
-    return { ...base, status: 'skip', detail: 'This supplier does not offer a list of delivery services.' }
+  if (sent.transportCode) {
+    return { ...base, status: 'pass', detail: `Sent as ${sent.service?.name ?? 'the service'} (code ${sent.transportCode}).` }
   }
-  try {
-    const methods = await supplier.shippingMethods()
-    if (methods.length === 0) {
-      return {
-        ...base,
-        status: 'pass',
-        detail: 'Sent empty, so PowerBody choose — and the account lists no services to choose between.',
-      }
+  if (!sent.service) {
+    return { ...base, status: 'warn', detail: 'No service on our rate card takes this parcel to this address, so the code is sent empty.' }
+  }
+  let evidence: string | undefined
+  if (typeof supplier.shippingMethods === 'function') {
+    try {
+      const methods = await supplier.shippingMethods()
+      evidence = methods.map((m) => `${m.name} (${m.code})`).join(' · ') || undefined
+    } catch {
+      // The detail below says what to do either way.
     }
-    return {
-      ...base,
-      status: 'warn',
-      detail:
-        'Sent empty (transport_code), so PowerBody choose. Their account lists the services below. If their reason mentions transport or shipping, this is it — the code needs wiring into the order.',
-      evidence: methods.map((m) => `${m.name} (${m.code})`).join(' · '),
-    }
-  } catch (err) {
-    return {
-      ...base,
-      status: 'skip',
-      detail: `Could not ask which services the account has: ${err instanceof Error ? err.message : String(err)}`,
-    }
+  }
+  return {
+    ...base,
+    status: 'warn',
+    detail: `Should go ${sent.service.name}, but we don't have its code yet, so it was sent empty and PowerBody choose. Run the checks in Settings → Supplier to read the codes, or choose one there.`,
+    ...(evidence ? { evidence } : {}),
   }
 }
 
@@ -495,13 +494,13 @@ export async function diagnoseSupplierSend(
   // ── The payload, and the address inside it ──
   const fulfilable = order.lines.filter((l) => l.sku)
   let payload: ReturnType<typeof toCreateOrderPayload> | null = null
-  let weightKg: number | null = null
+  let sent: { transportCode: string | null; service: { name: string } | null } | null = null
   if (order.shippingAddress && fulfilable.length > 0) {
     const input = await supplierOrderInputFor(order, fulfilable)
-    weightKg = input.weightKg ?? null
+    sent = { transportCode: input.transportCode ?? null, service: input.service ?? null }
     payload = toCreateOrderPayload(input)
     checks.push(addressCheck(payload.address))
-    checks.push(weightCheck(weightKg))
+    checks.push(weightCheck(input.weightKg ?? null, input.weightEstimated === true))
   }
 
   // ── Live reads ──
@@ -534,7 +533,7 @@ export async function diagnoseSupplierSend(
       const { found, error } = await lookUpItems(supplier, order, catalogue)
       checks.push(...itemChecks(order, found, error))
       checks.push(await alreadyThereCheck(supplier, order))
-      checks.push(await deliveryServiceCheck(supplier))
+      if (sent) checks.push(await deliveryServiceCheck(sent, supplier))
     }
   }
 

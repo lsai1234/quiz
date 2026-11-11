@@ -101,10 +101,11 @@ describe('nextChargeBreakdown', () => {
     // used to return the plan alone, so the hub told someone on a £53.25 plan
     // that their next charge was £53.25 while Stripe took £56.20 — on the one
     // screen whose whole job is answering "what am I actually charged?".
-    const s = sub()
+    // A plan under £20 a month pays £2 postage; from £20 it ships free.
+    const s = { ...sub(), flatMonthly: 15 }
     const c = nextChargeBreakdown(s, schedule(s))
     expect(c.plan).toBe(s.flatMonthly)
-    expect(c.delivery).toBeGreaterThan(0)
+    expect(c.delivery).toBe(2)
     expect(c.extras).toBe(0)
     expect(c.credits).toBe(0)
     expect(c.net).toBeCloseTo(s.flatMonthly + c.delivery, 2)

@@ -3,7 +3,7 @@ import type { ReviewRow } from '@/lib/consult/review-pack'
 import { copyRows } from '@/lib/consult/copy-rows'
 import { HUB_COPY } from './copy'
 
-const line = '15% off and free UK mainland delivery'
+const line = '15% off and free UK delivery'
 
 export function hubCopyRows(): ReviewRow[] {
   return copyRows('Member hub wording', 'My Hub (/myhub), the order confirmation and the hub emails', HUB_COPY, {

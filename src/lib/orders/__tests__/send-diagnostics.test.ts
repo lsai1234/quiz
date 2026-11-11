@@ -243,14 +243,30 @@ describe('diagnoseSupplierSend', () => {
   it('shows exactly what a send would carry', async () => {
     const id = await failedOrder()
     const diagnosis = await diagnoseSupplierSend(id, { supplier: supplier().provider })
+    // No code known for Royal Mail yet: the field goes empty and PowerBody
+    // choose. The weight is always there, estimated when the product has none.
     expect(diagnosis?.payload).toMatchObject({
       id,
-      weight: '',
       transport_code: '',
       address: { name: 'Sam', surname: 'Taylor', postcode: 'M43 7YG', country_code: 'GB' },
       products: [{ sku: SKU, qty: 1, price: 19.31 }],
     })
-    expect(check(diagnosis, 'weight')).toMatchObject({ status: 'warn' })
+    expect(typeof (diagnosis?.payload as { weight?: unknown } | null)?.weight).toBe('number')
+    expect(check(diagnosis, 'weight')).toMatchObject({ status: 'pass' })
+    expect(check(diagnosis, 'delivery-service').detail).toMatch(/Should go Royal Mail Tracked 48[\s\S]*Settings → Supplier/)
+  })
+
+  it('asks for the service by its code once the code is known', async () => {
+    const { setTransportCode } = await import('@/lib/supplier/transport')
+    await setTransportCode('royal-mail', 'RM_T48')
+    try {
+      const id = await failedOrder()
+      const diagnosis = await diagnoseSupplierSend(id, { supplier: supplier().provider })
+      expect(diagnosis?.payload).toMatchObject({ transport_code: 'RM_T48' })
+      expect(check(diagnosis, 'delivery-service')).toMatchObject({ status: 'pass' })
+    } finally {
+      await setTransportCode('royal-mail', null)
+    }
   })
 
   it('reads an old unreadable reply as unreadable, not as a code', async () => {

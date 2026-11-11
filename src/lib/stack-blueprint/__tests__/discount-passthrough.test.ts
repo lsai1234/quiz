@@ -90,12 +90,13 @@ describe('regime 1 — one-off bundle tiers reach the charged price', () => {
 
 describe('regime 2 — the margin floor still caps the discount', () => {
   it('never discounts a line below cost plus the floor', () => {
-    // Cost £50 against a £60 price: the tier discount would go under the floor.
+    // Cost £42 against a £60 price: £42 plus the VAT we pay on it, plus 15%, is
+    // £57.96, so the tier discount would go under the floor.
     const t = tierFor(120, 2)
-    const priced = priceOneOffLines([{ price: 60, cost: 50, quantity: 1 }, { price: 60, cost: 18, quantity: 1 }])
+    const priced = priceOneOffLines([{ price: 60, cost: 42, quantity: 1 }, { price: 60, cost: 18, quantity: 1 }])
     const floored = priced.lines[0]
     expect(floored.discountedUnitPrice).toBeGreaterThan(round2(60 * (1 - t)))
-    expect(floored.discountedUnitPrice).toBe(round2(50 * (1 + PRICING_CONFIG.marginFloorPct)))
+    expect(floored.discountedUnitPrice).toBe(round2(42 * (1 + PRICING_CONFIG.vat.standardRate) * (1 + PRICING_CONFIG.marginFloorPct)))
     // The unconstrained line still gets the full tier.
     expect(priced.lines[1].discountedUnitPrice).toBe(round2(60 * (1 - t)))
   })
@@ -203,8 +204,13 @@ describe('regime 4 — the first-month intro discount', () => {
 
 describe('regime 5 — a partner’s code, on the same displayed figures', () => {
   const CODE = PRICING_CONFIG.partners.codeDiscountPct
+  // The sample products carry no cost, so it is estimated. At the pricing
+  // rule's half of the shelf price, the margin floor (with the VAT we pay on
+  // cost) sits at 69% of it and 25% off clears it; at the deliberately
+  // pessimistic 55% estimate it would bind, which is a different test.
+  const atRule = { ...PRICING_CONFIG, defaultCostRatio: 1 / PRICING_CONFIG.listPricing.markupOnCost }
   const priceWith = (partnerDiscountPct: number | null) =>
-    calculatePricing(MOCK_BLUEPRINT, MOCK_CATALOGUE as CatalogueProduct[], null, undefined, {
+    calculatePricing(MOCK_BLUEPRINT, MOCK_CATALOGUE as CatalogueProduct[], null, atRule, {
       level: 'complete',
       partnerDiscountPct,
     })
@@ -252,12 +258,9 @@ describe('an empty or single-line order still prices sanely', () => {
     expect(priced.total).toBe(10)
   })
 
-  it('the shipped tiers still start at the free-delivery threshold', () => {
-    // The discount must not start ABOVE the free-delivery line — that would
-    // leave a band where postage is free but the basket has earned nothing,
-    // which reads as the offer going backwards. Starting BELOW is fine and is
-    // what we do now: 8% at £50, free delivery at £60, so growing the basket
-    // pays twice rather than once.
-    expect(PRICING_CONFIG.bundleTiers[0].minSubtotal).toBeLessThanOrEqual(PRICING_CONFIG.freeDeliveryThreshold)
+  it('the shipped ladder earns free delivery first, then the bundle discount', () => {
+    // Free delivery at £20, 8% at £50: each step up the basket adds something.
+    expect(PRICING_CONFIG.freeDeliveryThreshold).toBe(20)
+    expect(PRICING_CONFIG.bundleTiers[0].minSubtotal).toBeGreaterThan(PRICING_CONFIG.freeDeliveryThreshold)
   })
 })

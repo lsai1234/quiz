@@ -8,6 +8,7 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { defaultAnswers } from '@/lib/quiz-answers'
 import type { QuizAnswers } from '@/lib/types'
 import { resetOfferSettings } from '@/hooks/useOfferSettings'
+import { resetPricingOverrides, setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 import { publicOffer } from '@/lib/offer/public'
 import { DEFAULT_OFFER, type OfferSettings } from '@/lib/offer/settings'
 import { allOn } from '@/lib/offer/__tests__/fixtures'
@@ -221,6 +222,8 @@ it('keeps the box honest when everything is switched off: no order, and it says 
 })
 
 it('says why monthly is off on a small box, and what turns it on', async () => {
+  // The shipped £10 floor is under every product, so raise it to see the message.
+  setPricingOverrides({ minSubscriptionMonthly: 25 })
   offer = everything()
   render(<StackReviewPage reducedMotion />)
   const box = await screen.findByRole('region', { name: 'Your box' })
@@ -233,6 +236,7 @@ it('says why monthly is off on a small box, and what turns it on', async () => {
   expect(monthly).toBeDisabled()
   expect(monthly).toHaveTextContent('From £25.00 a month')
   expect(box.querySelector('[data-monthly-min]')).toHaveTextContent(/^Monthly starts at £25\.00 a month, and this box comes to £\d+\.\d\d\. Switch on another product to choose it\.$/)
+  resetPricingOverrides()
 })
 
 it('says what the box comes with, and the monthly rate its size earns', async () => {

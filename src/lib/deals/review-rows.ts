@@ -8,8 +8,8 @@ export function dealCopyRows(): ReviewRow[] {
   const reveal = 'Results page (both quizzes): "Your hub, for 90 days", under "Your box comes with"'
   const s = 'Member deals wording'
   const ex = 'Example'
-  const free = { discountPct: 12, deliveryDeal: 'free' as const, deliveryCharge: 0, standardDelivery: 4.95 }
-  const reduced = { discountPct: 0, deliveryDeal: 'reduced' as const, deliveryCharge: 0.99, standardDelivery: 4.95 }
+  const free = { discountPct: 12, deliveryDeal: 'free' as const, deliveryCharge: 0, standardDelivery: 2 }
+  const reduced = { discountPct: 0, deliveryDeal: 'reduced' as const, deliveryCharge: 0.99, standardDelivery: 2 }
   return [
     [s, hub, D.heading, 'Heading'],
     [s, hub, D.intro, 'Under the heading'],
@@ -43,8 +43,8 @@ export function dealCopyRows(): ReviewRow[] {
       {
         boxTitle: [2],
         boxSaving: [6.4, 44.93],
-        boxDelivery: [3.99, 40],
-        boxFreeOver: [40],
+        boxDelivery: [2, 20],
+        boxFreeOver: [20],
         emailSubject: ['Creatine'],
         emailPreheader: ['Creatine'],
         emailHeading: ['Creatine'],

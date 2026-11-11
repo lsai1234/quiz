@@ -62,7 +62,17 @@ const ZINC = {
   basePrice: 11.99,
   variants: [{ id: 'v-zinc', title: '60 tabs', flavour: null, size: '60 tabs', price: 11.99, compareAtPrice: null, available: true, sku: 'Z1', cost: 6 }],
 }
-jest.mock('@/lib/catalogue/resolve', () => ({ getResolvedCatalogue: async () => ({ products: [WHEY, ZINC, BIG, REFILL, SHAKER] }) }))
+// Under £20, so it carries the £2 delivery a deal can waive or cut.
+const CREATINE = {
+  id: 'creatine',
+  title: 'CHRGD Creatine',
+  cost: 6,
+  basePrice: 17.99,
+  weightGrams: 300,
+  swapGroup: 'creatine',
+  variants: [{ id: 'v-creatine', title: '250g', flavour: null, size: '250g', price: 17.99, compareAtPrice: null, available: true, sku: 'C1', cost: 6 }],
+}
+jest.mock('@/lib/catalogue/resolve', () => ({ getResolvedCatalogue: async () => ({ products: [WHEY, ZINC, BIG, REFILL, SHAKER, CREATINE] }) }))
 
 import { POST } from '../route'
 import { describeDeal, offerProductFor, quoteOffer } from '@/lib/last-chance/economics'
@@ -71,6 +81,7 @@ import { unitEconomics } from '@/lib/pricing/unit-economics'
 import { getPricingConfig, getPricingOverrides, setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 
 const quote = quoteOffer(offerProductFor(WHEY as never, WHEY.variants[0]))
+const creatine = quoteOffer(offerProductFor(CREATINE as never, CREATINE.variants[0]))
 const offerFor = (q: typeof quote, variantId: string) => ({ variantId, expectedPrice: q.offerPrice, expectedDelivery: q.deliveryCharge })
 
 afterEach(() => {
@@ -86,8 +97,10 @@ const line = (variantId: string, quantity = 1) => ({
 })
 
 it('bills the server’s own deal — price and delivery — and records it on the order', async () => {
+  // £34.99 ships free anyway, so the deal is a percentage off.
   expect(quote.viable).toBe(true)
-  expect(quote.deliveryDeal).toBe('free')
+  expect(quote.deliveryDeal).toBe('included')
+  expect(quote.discountPct).toBeGreaterThan(0)
   const res = await buy({ lines: [line('v-whey')], lastChance: offerFor(quote, 'v-whey') })
   expect(res.status).toBe(200)
   const { orderId } = await res.json()
@@ -96,23 +109,29 @@ it('bills the server’s own deal — price and delivery — and records it on t
   expect(order?.channel).toBe('quiz')
   expect(order?.shipping).toBe(0)
   expect(order?.total).toBe(quote.total)
-  expect(order?.lastChance).toMatchObject({ listPrice: 34.99, offerPrice: quote.offerPrice, deliveryDeal: 'free', standardDelivery: 4.95, deliveryCharge: 0 })
-  const surcharge = getPricingConfig().delivery.zone2Surcharge
-  expect(order?.deliveryDue).toEqual({ 'uk-1': 0, 'uk-2': surcharge })
+  expect(order?.lastChance).toMatchObject({ listPrice: 34.99, offerPrice: quote.offerPrice, deliveryDeal: 'included', standardDelivery: 0, deliveryCharge: 0 })
+  expect(order?.deliveryDue).toEqual({ 'uk-1': 0 })
   const note = order?.events.find((e) => e.type === 'offer')?.detail ?? ''
   expect(note).toContain(describeDeal(quote))
 })
 
-it('hands Stripe the deal’s own delivery: free on the mainland, the surcharge up north', async () => {
+it('waives the £2 delivery on a product under £20', async () => {
+  expect(creatine.viable).toBe(true)
+  expect(creatine.deliveryDeal).toBe('free')
+  expect(creatine.standardDelivery).toBe(2)
+  const res = await buy({ lines: [line('v-creatine')], lastChance: offerFor(creatine, 'v-creatine') })
+  const order = await getOrder((await res.json()).orderId)
+  expect(order?.shipping).toBe(0)
+  expect(order?.lastChance).toMatchObject({ deliveryDeal: 'free', standardDelivery: 2, deliveryCharge: 0 })
+})
+
+it('hands Stripe the deal’s own delivery: one free UK rate', async () => {
   mockSource.value = 'stripe'
   const res = await buy({ lines: [line('v-whey')], lastChance: offerFor(quote, 'v-whey') })
   expect(res.status).toBe(200)
   const sent = mockSession.mock.calls[0][0] as { lines: Array<{ unitPrice: number }>; shippingOptions: Array<{ id: string; price: number; label: string }> }
   expect(sent.lines).toEqual([expect.objectContaining({ unitPrice: quote.offerPrice, quantity: 1 })])
-  expect(sent.shippingOptions).toEqual([
-    expect.objectContaining({ id: 'uk-mainland', price: 0, label: 'Free UK mainland delivery' }),
-    expect.objectContaining({ id: 'uk-highlands', price: getPricingConfig().delivery.zone2Surcharge }),
-  ])
+  expect(sent.shippingOptions).toEqual([expect.objectContaining({ id: 'uk-mainland', price: 0, label: 'Free UK delivery' })])
 })
 
 it('stops rather than charge more than the customer was shown, and shows only the deal', async () => {
@@ -135,23 +154,23 @@ it('holds a request that never said what delivery it was shown to the ordinary c
 
 describe('when free delivery would lose money', () => {
   const before = getPricingOverrides()
-  // A floor set between what free delivery and £3.99 delivery would make:
+  // A floor set between what free delivery and £1.49 delivery would make:
   // free fails, a reduced charge clears.
   beforeAll(() => {
-    const at = (d: number) => unitEconomics({ shelfPrice: 34.99, supplierCost: 12, grams: 1000, customerDelivery: d }).contribution
-    setPricingOverrides({ ...before, lastChance: { ...getPricingConfig().lastChance, minContribution: (at(0) + at(3.99)) / 2, minMarginPct: 0 } })
+    const at = (d: number) => unitEconomics({ shelfPrice: 17.99, supplierCost: 6, grams: 300, customerDelivery: d }).contribution
+    setPricingOverrides({ ...before, lastChance: { ...getPricingConfig().lastChance, minContribution: (at(0) + at(1.49)) / 2, minMarginPct: 0 } })
   })
   afterAll(() => setPricingOverrides(before))
 
   it('cuts delivery instead, and stops if the browser was shown less than the server will charge', async () => {
-    const cut = quoteOffer(offerProductFor(WHEY as never, WHEY.variants[0]))
+    const cut = quoteOffer(offerProductFor(CREATINE as never, CREATINE.variants[0]))
     expect(cut.deliveryDeal).toBe('reduced')
     expect(cut.discountPct).toBe(0)
-    const stale = await buy({ lines: [line('v-whey')], lastChance: { ...offerFor(cut, 'v-whey'), expectedDelivery: 0 } })
+    const stale = await buy({ lines: [line('v-creatine')], lastChance: { ...offerFor(cut, 'v-creatine'), expectedDelivery: 0 } })
     expect(stale.status).toBe(409)
-    const res = await buy({ lines: [line('v-whey')], lastChance: offerFor(cut, 'v-whey') })
+    const res = await buy({ lines: [line('v-creatine')], lastChance: offerFor(cut, 'v-creatine') })
     const order = await getOrder((await res.json()).orderId)
-    expect(order?.lines[0].unitPrice).toBe(34.99)
+    expect(order?.lines[0].unitPrice).toBe(17.99)
     expect(order?.shipping).toBe(cut.deliveryCharge)
     expect(order?.deliveryDue?.['uk-1']).toBe(cut.deliveryCharge)
   })
@@ -175,7 +194,7 @@ it('is an offer for one product on its own — nothing else gets the discount', 
 })
 
 it('refuses the offer on a product with no deal it can afford — and says the deal is gone', async () => {
-  const res = await buy({ lines: [line('v-zinc')], lastChance: { variantId: 'v-zinc', expectedPrice: 11.99, expectedDelivery: 4.95 } })
+  const res = await buy({ lines: [line('v-zinc')], lastChance: { variantId: 'v-zinc', expectedPrice: 11.99, expectedDelivery: 2 } })
   expect(res.status).toBe(409)
   const body = await res.json()
   // The card reads `viable: false` as "stand down", not as a new price to show.

@@ -63,7 +63,7 @@ export interface LastChanceViewProps {
   servings: number | null
   packMonths: number | null
   deal: LastChanceDeal
-  /** What Highlands, Islands and Isle of Man addresses pay on top (£). 0 hides the line. */
+  /** What Highlands addresses pay on top (£). 0, as today, hides the line. */
   remoteSurcharge: number
   status: 'idle' | 'loading' | 'redirecting' | 'error' | 'changed'
   message?: string | null
@@ -236,24 +236,24 @@ export function LastChanceView(p: LastChanceViewProps) {
 
   const deliveryLine = (() => {
     if (deal.deliveryDeal === 'included') {
-      return { label: 'Free delivery', sub: 'UK mainland — always free at this price', was: null, now: 'Free', sr: 'Free delivery to the UK mainland.' }
+      return { label: 'Free delivery', sub: 'UK, always free at this price', was: null, now: 'Free', sr: 'Free UK delivery.' }
     }
     if (deal.deliveryDeal === 'free') {
       return {
         label: 'Free delivery',
-        sub: 'UK mainland, on us',
+        sub: 'UK, on us',
         was: formatGBP(deal.standardDelivery),
         now: 'Free',
-        sr: `Free delivery to the UK mainland, instead of ${formatGBP(deal.standardDelivery)}.`,
+        sr: `Free UK delivery, instead of ${formatGBP(deal.standardDelivery)}.`,
       }
     }
     // The words say what it was, so the figure is not struck through as well.
     return {
       label: `Delivery ${formatGBP(deal.deliveryCharge)} instead of ${formatGBP(deal.standardDelivery)}`,
-      sub: 'UK mainland',
+      sub: 'UK',
       was: null,
       now: formatGBP(deal.deliveryCharge),
-      sr: `Delivery to the UK mainland ${formatGBP(deal.deliveryCharge)}, instead of ${formatGBP(deal.standardDelivery)}.`,
+      sr: `UK delivery ${formatGBP(deal.deliveryCharge)}, instead of ${formatGBP(deal.standardDelivery)}.`,
     }
   })()
 
@@ -549,7 +549,7 @@ export function LastChanceView(p: LastChanceViewProps) {
             {p.remoteSurcharge > 0 && (
               <>
                 <br />
-                Highlands, Islands &amp; Isle of Man add {formatGBP(p.remoteSurcharge)}.
+                The Highlands add {formatGBP(p.remoteSurcharge)}.
               </>
             )}
           </p>

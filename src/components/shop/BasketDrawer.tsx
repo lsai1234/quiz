@@ -7,7 +7,7 @@ import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
-import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { basketGrams, customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { founderDeliveryOptions } from '@/lib/founder-codes/codes'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from '@/components/stack-review/ProductTile'
@@ -112,7 +112,7 @@ export function BasketDrawer({
   // rate. Read from the same function `/api/cart` books the shipping line from,
   // so the two cannot disagree.
   const deliveryCharge = founderKind
-    ? founderDeliveryOptions(founderKind, { supplierValue, orderValue: priced.total }, config)[0]?.price ?? 0
+    ? founderDeliveryOptions(founderKind, { supplierValue, grams: basketGrams(resolved, config), orderValue: priced.total }, config)[0]?.price ?? 0
     : customerDeliveryCharge(subtotal, 'uk-1', config)
   const progress = threshold > 0 ? Math.min(1, subtotal / threshold) : 1
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
