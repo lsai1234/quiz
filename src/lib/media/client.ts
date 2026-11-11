@@ -44,6 +44,42 @@ async function stillOf(file: File): Promise<string | null> {
   }
 }
 
+/**
+ * A few small stills spread through the clip, for an AI draft of a form check
+ * (only while AI drafts are on). 512 wide, so the form shows without sending
+ * more of the picture than it needs. Empty when the browser can't.
+ */
+export async function framesOf(file: File, count = 8): Promise<string[]> {
+  const out: string[] = []
+  try {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.muted = true
+    video.playsInline = true
+    video.src = url
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve()
+      video.onerror = () => reject(new Error('unreadable'))
+    })
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1
+    const w = 512
+    const h = Math.round((video.videoHeight / Math.max(1, video.videoWidth)) * w) || 288
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    for (let i = 0; i < count; i++) {
+      video.currentTime = (duration * (i + 0.5)) / count
+      await new Promise<void>((resolve) => (video.onseeked = () => resolve()))
+      canvas.getContext('2d')?.drawImage(video, 0, 0, w, h)
+      out.push(canvas.toDataURL('image/jpeg', 0.6))
+    }
+    URL.revokeObjectURL(url)
+  } catch {
+    // Whatever was taken stands; none is fine too.
+  }
+  return out
+}
+
 /** How long the clip is, in seconds; null when it can't be read. */
 export async function durationOf(file: File): Promise<number | null> {
   try {
@@ -72,7 +108,16 @@ function base64(blob: Blob): Promise<string> {
 
 export async function uploadVideo(
   file: File,
-  opts: { endpoint: string; kind: string; title?: string | null; extra?: Record<string, unknown>; maxBytes: number; onProgress?: (fraction: number) => void },
+  opts: {
+    endpoint: string
+    kind: string
+    title?: string | null
+    extra?: Record<string, unknown>
+    maxBytes: number
+    onProgress?: (fraction: number) => void
+    /** Send a few stills with it, for an AI draft (form checks, AI drafts on). */
+    frames?: boolean
+  },
 ): Promise<Uploaded> {
   const mime = file.type || (file.name.toLowerCase().endsWith('.mov') ? 'video/quicktime' : '')
   if (!TYPES.includes(mime)) throw new UploadProblem('That isn’t a video we can play. Use an MP4 or a MOV from your phone.')
@@ -83,7 +128,16 @@ export async function uploadVideo(
     if (!res.ok) throw new UploadProblem(typeof data?.error === 'string' ? data.error : 'The upload didn’t go through. Try again.')
     return data ?? {}
   }
-  const begun = await post({ action: 'begin', kind: opts.kind, mime, size: file.size, title: opts.title ?? null, still: await stillOf(file), ...opts.extra })
+  const begun = await post({
+    action: 'begin',
+    kind: opts.kind,
+    mime,
+    size: file.size,
+    title: opts.title ?? null,
+    still: await stillOf(file),
+    ...(opts.frames ? { frames: await framesOf(file) } : {}),
+    ...opts.extra,
+  })
   const id = String(begun.id)
   const chunks = Math.ceil(file.size / CHUNK)
   for (let n = 0; n < chunks; n++) {

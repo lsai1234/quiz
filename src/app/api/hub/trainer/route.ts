@@ -77,6 +77,11 @@ export async function POST(req: Request) {
       settings.trainer.dailyLimit,
     )
     await sendQuestionEmail(thread, message, settings.trainer, wasWaiting)
+    // AI drafts on: a draft waits for the fitness expert, made once this response has gone.
+    if (settings.trainer.aiDrafts) {
+      const { draftLater } = await import('@/lib/trainer/drafts')
+      await draftLater(user.id, message.id)
+    }
     return NextResponse.json(await viewFor(thread))
   } catch (err) {
     if (err instanceof TrainerError) return NextResponse.json({ error: err.code }, { status: err.code === 'limit' ? 429 : 400 })

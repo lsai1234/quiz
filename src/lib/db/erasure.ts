@@ -241,6 +241,7 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
 
   // Ask your trainer: their questions and the answers, and an exchange of theirs on the results page.
   await (await import('@/lib/trainer/content')).withdrawFeatured(userId)
+  await (await import('@/lib/trainer/drafts')).clearDraft(userId)
   const { deleteThread } = await import('@/lib/trainer/store')
   if (await deleteThread(userId)) deleted.push('questions to the trainer')
 

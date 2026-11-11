@@ -34,6 +34,7 @@ export function viewOf(
     coaching: Boolean(extra.coaching),
     video: Boolean(extra.video),
     library: extra.video ? (extra.library ?? []) : [],
+    aiDrafts: Boolean(extra.video && profile.aiDrafts),
   }
 }
 

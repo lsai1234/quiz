@@ -45,6 +45,13 @@ test('a founder opens test views and leaves', async ({ page }) => {
   await page.goto('/api/portal/test-views/open?view=trainer-waiting')
   await page.goto('/founderhub/trainer?samples=1')
   await expect(page.locator('[data-trainer-inbox]')).toContainText('Sample members')
+  // Its question has an AI draft waiting: badged on the row, and in the answer box to check before anything is sent.
+  const waitingRow = page.locator('[data-inbox-row]', { hasText: 'trainer-waiting@' })
+  await expect(waitingRow).toContainText('Draft ready')
+  await waitingRow.locator('button').click()
+  await expect(page.locator('[data-ai-draft="saved"]')).toBeVisible()
+  await expect(page.locator('[data-answer] textarea')).toHaveValue(/Keep the weight for now/)
+  await shot(page, 'trainer-draft')
 
   // Every email, drawn and never sent.
   await page.goto('/founderhub/settings/test-views/emails')

@@ -30,7 +30,7 @@ import { DEFAULT_BONUS } from '@/lib/offer/settings'
 import { bonusTermRows, boxCopyRows, freeGiftTermRows, guaranteeTermRows, levelCopyRows, memberHubTermRows, offerCopyRows, planCopyRows } from '@/lib/offer/review-rows'
 import { hubCopyRows } from '@/lib/hub/review-rows'
 import { tipRows } from '@/lib/tips/review-rows'
-import { trainerCopyRows, videoCopyRows } from '@/lib/trainer/review-rows'
+import { draftCopyRows, trainerCopyRows, videoCopyRows } from '@/lib/trainer/review-rows'
 import { hubPlanCopyRows } from '@/lib/hub-plan/review-rows'
 import { coachingCopyRows, programmeCopyRows, trainingEmailCopyRows } from '@/lib/training/coaching-review-rows'
 import { guideCopyRows } from '@/lib/guide/review-rows'
@@ -300,6 +300,7 @@ export function reviewPackRows(input: { engineSource: string; rosterCsv: string 
     // Ask your trainer: a real person answering in the hub.
     ...trainerCopyRows(),
     ...videoCopyRows(),
+    ...draftCopyRows(),
     ...hubPlanCopyRows(),
     ...coachingCopyRows(),
     ...trainingEmailCopyRows(),

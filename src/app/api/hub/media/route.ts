@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
 import { rateLimiter } from '@/lib/consult/ai/guard'
 import { hubAccess, isOpen } from '@/lib/hub/access'
-import { beginUpload, finishUpload, formChecksSince, getMedia, mediaUrl, MediaError, putChunk } from '@/lib/media/store'
+import { beginUpload, finishUpload, formChecksSince, getMedia, mediaUrl, MediaError, putChunk, setFrames } from '@/lib/media/store'
 import { getOfferSettings } from '@/lib/offer/store'
 import { coachingOn, trainerLive } from '@/lib/offer/settings'
 
 /**
  * POST /api/hub/media  (the signed-in member, while their hub is open)
- *   { action: 'begin', size, mime, seconds, consent: true, still? } → { id }
+ *   { action: 'begin', size, mime, seconds, consent: true, still?, frames? } → { id }
+ *     (frames: a few stills for an AI draft, kept only while AI drafts are on)
  *   { action: 'chunk', id, n, data }                                 → { ok }
  *   { action: 'finish', id }                                         → { id, url, until }
  *
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
       if (!Number.isFinite(seconds) || seconds <= 0 || seconds > FORM_CHECK_SECONDS + 0.5) return NextResponse.json({ error: 'That clip is longer than 30 seconds.', code: 'long' }, { status: 400 })
       if ((await formChecksSince(user.id, new Date(Date.now() - 86_400_000))) >= FORM_CHECKS_A_DAY) return NextResponse.json({ error: 'That’s three form checks today.', code: 'limit' }, { status: 429 })
       const m = await beginUpload({ kind: 'form-check', mime: String(body.mime ?? ''), size: Number(body.size), owner: user.id, title: null, still: typeof body.still === 'string' ? body.still : null })
+      // Stills for an AI draft only while AI drafts are on: the consent they ticked said so.
+      if (settings.trainer.aiDrafts) await setFrames(m.id, body.frames)
       return NextResponse.json({ id: m.id })
     }
     // Chunks and the finish only into their own upload.

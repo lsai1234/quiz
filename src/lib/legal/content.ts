@@ -392,7 +392,7 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
     id: 'privacy',
     title: 'Privacy notice',
     version: PRIVACY_VERSION,
-    effectiveFrom: '2026-11-10',
+    effectiveFrom: '2026-11-11',
     summary:
       'What we collect, why, who else sees it, how long we keep it, and how to get it back or have it deleted.',
     sections: [
@@ -459,6 +459,8 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
           'What is sent: your goals, age band, sex, diet, lifestyle answers and any free-text follow-ups. What is never sent: your name, your email, your address, and your safety-screen answers.',
           'The model can only choose from options our own engine has already decided are suitable and safe for you. It cannot add a product, invent a question, or change what an option means, and nothing it writes is a medical claim.',
           'No decision here has a legal or similarly significant effect on you — you can change, swap or ignore anything we suggest — so this is not the kind of automated decision-making you have a specific right to object to. If you would rather a person looked at your plan, email us and we will.',
+          'In the training plan, OpenAI can choose your exercises from a list our own rules have already made for you. What is sent: your training days, session length, focus, kit, experience and other activities. What is never sent: your name, your email, your readiness-check answers and the areas you are working around.',
+          'When you ask our fitness expert a question, OpenAI may help them prepare an answer by picking one of the answers they have already written. What is sent: the words of your question, with any email address, phone number or link taken out. A question that mentions pain or looks medical is never sent. If you send a form check, a few stills from your clip are sent too, so it can tick which of that exercise’s common mistakes it can see. Nothing reaches you until our fitness expert has read it and pressed send.',
           'OpenAI processes this in the United States. That transfer is covered by the UK Addendum to the European Commission’s standard contractual clauses.',
         ],
       },

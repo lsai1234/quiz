@@ -306,6 +306,7 @@ export function TrainerChat() {
             {view.video && view.left > 0 && (
               <FormCheckPicker
                 trainer={t.name}
+                ai={Boolean(view.aiDrafts)}
                 clip={clip}
                 onClip={(c) => {
                   setClip(c)

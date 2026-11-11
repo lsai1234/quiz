@@ -7,6 +7,8 @@ import { TRAINER_COPY, TRAINER_MAX } from '@/lib/trainer/copy'
 import type { EditablePlan } from '@/lib/trainer/plan-view'
 import { mentionsPain } from '@/lib/trainer/triage'
 import type { InboxRow, TriageTag, TrainerThread } from '@/lib/trainer/types'
+import { DRAFT_COPY } from '@/lib/trainer/draft-copy'
+import type { TrainerDraft } from '@/lib/trainer/drafts'
 import { AnswerActions, SavedReplyPicker, TagSelect, TrainerContentSettings, TrainerVideoRow, VideoNoteRow, useContent, type Content, type NoteClip } from './TrainerVideoTools'
 
 /**
@@ -51,12 +53,31 @@ interface Opened {
   training: { setup: string; sessions: number; done: number; checked: 'waiting' | 'checked' | null } | null
   /** Their week for the plan editor, while the coaching tools are on. */
   plan?: EditablePlan | null
+  /** An AI draft for their newest question, waiting for the fitness expert. */
+  draft?: TrainerDraft | null
 }
 
 const HEADING = { fontSize: 'var(--text-title)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
 const META = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' } as const
 const BODY = { fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' } as const
 const STRONG = { fontSize: 'var(--text-body)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' } as const
+
+/** Where a draft's words came from, for the fitness expert. */
+function draftFrom(d: TrainerDraft): string {
+  const f = DRAFT_COPY
+  switch (d.kind) {
+    case 'pain':
+      return f.fromPain
+    case 'saved':
+      return f.fromSaved(d.from ?? '')
+    case 'library':
+      return f.fromLibrary(d.from ?? '')
+    case 'form':
+      return f.fromForm(d.from ?? 'exercise')
+    case 'unclear':
+      return f.fromUnclear
+  }
+}
 
 function ago(at: string, now = Date.now()): string {
   const mins = Math.max(0, Math.round((now - Date.parse(at)) / 60_000))
@@ -163,6 +184,7 @@ function InboxList({ rows, onOpen }: { rows: InboxRow[]; onOpen: (id: string) =>
                   <p style={STRONG}>{r.firstName ?? r.email}</p>
                   {r.waiting && <Badge tone="attention">{r.waitingSince ? `Waiting ${ago(r.waitingSince)}` : 'Waiting'}</Badge>}
                   {r.unread && <Badge tone="accent" dot>New</Badge>}
+                  {r.waiting && r.drafted && <Badge tone="info">{DRAFT_COPY.badge}</Badge>}
                 </div>
                 <p style={{ ...META, marginTop: 'var(--space-1)' }}>{`${r.email} · ${r.messages} message${r.messages === 1 ? '' : 's'} · ${stamp(r.lastAt)}`}</p>
                 <p style={{ ...BODY, marginTop: 'var(--space-2)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.preview}</p>
@@ -205,7 +227,11 @@ function ThreadView({
   useEffect(() => {
     fetch(`/api/portal/trainer/${encodeURIComponent(userId)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
-      .then((o: Opened) => setOpened(o))
+      .then((o: Opened) => {
+        setOpened(o)
+        // A draft waiting: it goes in the box, to check, edit or clear. Nothing is sent until Answer.
+        if (o.draft) setText((t) => t || o.draft!.text)
+      })
       .catch(() => setMissing(true))
   }, [userId])
 
@@ -231,7 +257,7 @@ function ThreadView({
         )
         return
       }
-      setOpened((o) => (o ? { ...o, thread: d.thread! } : o))
+      setOpened((o) => (o ? { ...o, thread: d.thread!, draft: null } : o))
       setText('')
       setNote(null)
       setVideoUrl('')
@@ -361,6 +387,28 @@ function ThreadView({
           <Card padding="normal" elevation={2}>
             <div className="flex flex-col" style={{ gap: 'var(--space-3)' }} data-answer>
               {content?.video && <SavedReplyPicker replies={content.replies} pain={opened.thread.waiting && mentionsPain(lastQuestion)} onPick={(t) => setText((x) => (x.trim() ? `${x.trim()}\n\n${t}` : t))} />}
+              {opened.draft && opened.thread.waiting && (
+                <div data-ai-draft={opened.draft.kind}>
+                  <Note tone="info" icon="info">
+                    <span style={{ display: 'block', fontWeight: 'var(--weight-strong)' }}>{DRAFT_COPY.noteTitle}</span>
+                    <span style={{ display: 'block' }}>{draftFrom(opened.draft)}</span>
+                    <span style={{ display: 'block' }}>{DRAFT_COPY.noteNothingSent}</span>
+                    <span style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (text === opened.draft?.text) setText('')
+                          setOpened((o) => (o ? { ...o, draft: null } : o))
+                        }}
+                        data-ai-draft-clear
+                      >
+                        {DRAFT_COPY.discard}
+                      </Button>
+                    </span>
+                  </Note>
+                </div>
+              )}
               <Textarea label="Your answer" rows={6} value={text} onChange={(e) => setText(e.target.value)} hint={`Goes out as ${trainerName || 'the trainer'}. Coaching, not medical advice: for pain or a condition, point them to a GP or physio.`} />
               <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
                 <Input label="Video link (optional)" placeholder="https://youtu.be/…" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} hint="YouTube or Vimeo" />
@@ -391,8 +439,8 @@ function ThreadView({
 }
 
 // Switches and uploads save on their own; the form's copy of them may be stale.
-const withoutChecks = <T extends { checksPlans?: unknown; qualificationsConfirmed?: unknown; welcomeVideo?: unknown; introVideo?: unknown }>(d: T) => {
-  const { checksPlans: _a, qualificationsConfirmed: _b, welcomeVideo: _c, introVideo: _d, ...rest } = d
+const withoutChecks = <T extends { checksPlans?: unknown; qualificationsConfirmed?: unknown; welcomeVideo?: unknown; introVideo?: unknown; aiDrafts?: unknown }>(d: T) => {
+  const { checksPlans: _a, qualificationsConfirmed: _b, welcomeVideo: _c, introVideo: _d, aiDrafts: _e, ...rest } = d
   return rest
 }
 
@@ -444,6 +492,14 @@ function ProfileSettings({ view, onSaved, video }: { view: Inbox; onSaved: (v: I
             disabled={saving}
             onChange={(e) => void save(undefined, { checksPlans: e.target.checked })}
             data-trainer-checks
+          />
+          <Checkbox
+            label={DRAFT_COPY.settingLabel}
+            hint={DRAFT_COPY.settingHint}
+            checked={view.trainer.aiDrafts}
+            disabled={saving}
+            onChange={(e) => void save(undefined, { aiDrafts: e.target.checked })}
+            data-trainer-ai-drafts
           />
           <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
             <Input label="Name members see" value={draft.name} onChange={set('name')} placeholder="Your first name" data-trainer-name />

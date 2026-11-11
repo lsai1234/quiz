@@ -113,6 +113,8 @@ export interface MemberTrainerView {
   video?: boolean
   /** Questions answered before, rewritten without anyone's details (video on). */
   library?: LibraryEntry[]
+  /** AI drafts are on (video on): a form check sends a few stills, and the consent says so. */
+  aiDrafts?: boolean
 }
 
 /** A row of the Founders Hub's inbox. */
@@ -128,4 +130,6 @@ export interface InboxRow {
   messages: number
   /** New from the member since a founder last opened it. */
   unread: boolean
+  /** An AI draft is waiting for the fitness expert (AI drafts on). */
+  drafted?: boolean
 }

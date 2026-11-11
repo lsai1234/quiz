@@ -50,6 +50,11 @@ export const FORM_CHECK_DAYS = RETENTION.formCheckDays
 const STILL_MAX = 200_000
 
 const metaKey = (id: string) => `media:${id}`
+/** A form check's stills for an AI draft: their own key, so the record stays small. Deleted with the clip. */
+const framesKey = (id: string) => `media-frames:${id}`
+/** The most stills a form check keeps for an AI draft. */
+export const FRAMES_MAX = 8
+const FRAME = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/
 const chunkKey = (id: string, n: number) => `media-chunk:${id}:${n}`
 const SHAPE = /^m_[A-Za-z0-9_-]{22}$/
 
@@ -133,8 +138,28 @@ export async function deleteMedia(id: string): Promise<boolean> {
   const record = await getMedia(id)
   if (!record) return false
   for (let n = 0; n < record.chunks; n++) await kvDelete(chunkKey(id, n))
+  await kvDelete(framesKey(id))
   await kvDelete(metaKey(id))
   return true
+}
+
+/**
+ * A few stills spread through a member's form check, taken in their browser
+ * while AI drafts are on (`lib/trainer/drafts`). Only JPEG data URIs of a
+ * still's size, at most `FRAMES_MAX`; anything else is dropped. Returns how
+ * many were kept.
+ */
+export async function setFrames(id: string, raw: unknown): Promise<number> {
+  const record = await getMedia(id)
+  if (!record || record.kind !== 'form-check' || !Array.isArray(raw)) return 0
+  const frames = raw.filter((f): f is string => typeof f === 'string' && f.length <= STILL_MAX && FRAME.test(f)).slice(0, FRAMES_MAX)
+  if (frames.length) await kvSet(framesKey(id), frames)
+  return frames.length
+}
+
+export async function getFrames(id: string): Promise<string[]> {
+  if (!isMediaId(id)) return []
+  return (await kvGet<string[]>(framesKey(id))) ?? []
 }
 
 export async function listMedia(limit = 5000): Promise<MediaRecord[]> {

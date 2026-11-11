@@ -3,6 +3,7 @@ import type { ReviewRow } from '@/lib/consult/review-pack'
 import { copyRows } from '@/lib/consult/copy-rows'
 import { TRAINER_COPY } from './copy'
 import { VIDEO_COPY } from './video-copy'
+import { DRAFT_COPY } from './draft-copy'
 
 export function trainerCopyRows(): ReviewRow[] {
   return copyRows(
@@ -70,6 +71,20 @@ export function videoCopyRows(): ReviewRow[] {
       proofReplyNote: [64],
       proofMembers: [120],
       proofWatch: ['[Name]'],
+    },
+  )
+}
+
+export function draftCopyRows(): ReviewRow[] {
+  return copyRows(
+    'AI drafts wording',
+    'The Founders Hub inbox (a draft waiting beside a question), Founders Hub → Trainer’s switch, and the member’s form-check consent while AI drafts are on. A form-check draft is these lines with the exercise’s own cues and mistakes from the library. "[Name]" stands for the name set in Settings',
+    DRAFT_COPY,
+    {
+      fromSaved: ['Squat depth'],
+      fromLibrary: ['How deep should I squat?'],
+      fromForm: ['Goblet squat'],
+      consentAi: ['[Name]'],
     },
   )
 }

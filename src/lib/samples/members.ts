@@ -108,6 +108,7 @@ async function clearSample(userId: string): Promise<void> {
     import('@/lib/checkin/store'),
   ])
   await Promise.all([deleteTraining(userId), deleteThread(userId), deleteHubPlan(userId), deleteCheckInsFor(userId)])
+  await (await import('@/lib/trainer/drafts')).clearDraft(userId)
   // Their clips (a form check, a video note).
   const { mediaOwnedBy, deleteMedia } = await import('@/lib/media/store')
   for (const m of await mediaOwnedBy(userId)) await deleteMedia(m.id)
@@ -327,7 +328,18 @@ export async function buildSampleMember(scenario: SampleScenario, now = new Date
       const lift = first && first.type === 'strength' ? first.exercises[0]?.id : null
       const { exerciseById } = await import('@/lib/training/library')
       const name = (lift && exerciseById(lift)?.name) || 'Goblet squat'
-      await askTrainer({ id: user.id, email: user.email, firstName: 'Alex' }, { text: `My lower back feels tight at the bottom of the ${name.toLowerCase()}. Should I go lighter, or change how I set up?`, about: name }, 5, ago(now, 1))
+      const asked = await askTrainer({ id: user.id, email: user.email, firstName: 'Alex' }, { text: `My lower back feels tight at the bottom of the ${name.toLowerCase()}. Should I go lighter, or change how I set up?`, about: name }, 5, ago(now, 1))
+      if (scenario === 'trainer-waiting') {
+        // An AI draft waiting for the fitness expert, as one picked from their saved replies would look.
+        const { saveDraft } = await import('@/lib/trainer/drafts')
+        await saveDraft(user.id, {
+          messageId: asked.message.id,
+          kind: 'saved',
+          text: 'Good question. Keep the weight for now and stop each rep just above where it tightens. Brace before you go down and keep your chest up. If it still feels tight next week, swap to the easier version in your plan.',
+          from: 'Tightness at the bottom of a lift (sample)',
+          at: ago(now, 1).toISOString(),
+        })
+      }
       if (scenario === 'trainer-answered') {
         await answerMember(
           user.id,

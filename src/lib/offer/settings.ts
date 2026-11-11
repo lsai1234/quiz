@@ -281,6 +281,13 @@ export interface TrainerProfile {
   /** Their welcome video (hub) and their intro for the results page: uploaded media ids (Phase 2). */
   welcomeVideo: string | null
   introVideo: string | null
+  /**
+   * AI drafts (`lib/trainer/drafts`): a draft answer waits with each new
+   * question, picked from their own saved replies and answers library, or built
+   * from the library's cues for a form check. Nothing is sent until they press
+   * Answer. Off until a founder turns it on.
+   */
+  aiDrafts: boolean
 }
 
 export const DEFAULT_TRAINER: TrainerProfile = {
@@ -298,6 +305,7 @@ export const DEFAULT_TRAINER: TrainerProfile = {
   qualificationsConfirmed: false,
   welcomeVideo: null,
   introVideo: null,
+  aiDrafts: false,
 }
 
 const text = (v: unknown, max: number, fallback: string) => (typeof v === 'string' ? v.trim().slice(0, max) : fallback)
@@ -321,6 +329,7 @@ export function normaliseTrainer(raw: unknown): TrainerProfile {
     qualificationsConfirmed: r.qualificationsConfirmed === true,
     welcomeVideo: typeof r.welcomeVideo === 'string' && /^m_[A-Za-z0-9_-]{22}$/.test(r.welcomeVideo) ? r.welcomeVideo : null,
     introVideo: typeof r.introVideo === 'string' && /^m_[A-Za-z0-9_-]{22}$/.test(r.introVideo) ? r.introVideo : null,
+    aiDrafts: r.aiDrafts === true,
   }
 }
 
