@@ -6,16 +6,17 @@
  *
  *   pain     a question with pain words: the ready GP-or-physio reply, no AI
  *   medical  a question that looks medical: no draft, and nothing is sent
- *   form     a form check with stills: AI ticks which of the exercise's own
- *            listed mistakes it can see, and which of its cues fit; the draft
- *            is the scripted lines in `./draft-copy` with those library words
- *   unclear  the stills don't show enough: the scripted ask for another clip
+ *   form     a form check: AI watches the whole clip (2 frames a second, in
+ *            order, no sound) and ticks which of the exercise's own listed
+ *            mistakes it can see, and which of its cues fit; the draft is the
+ *            scripted lines in `./draft-copy` with those library words
+ *   unclear  the clip doesn't show enough: the scripted ask for another one
  *   saved    any other question: AI picks the closest of the expert's own
  *   library  saved replies or answers-library entries, or none at all
  *
  * Sent to OpenAI: the question's words with emails, phone numbers and links
- * taken out; for a form check, the stills and the exercise's mistakes and
- * cues. Never the member's name or email. Nothing is kept there
+ * taken out; for a form check, the clip as frames and the exercise's
+ * mistakes and cues. Never the member's name or email. Nothing is kept there
  * (`store: false`). Nothing reaches the member until the expert presses Answer.
  */
 import OpenAI from 'openai'
@@ -97,9 +98,9 @@ const PICK_SYSTEM = [
 ].join(' ')
 
 const FORM_SYSTEM = [
-  'You look at stills from a short video of one person doing one exercise.',
-  'Using ONLY the numbered lists given, say which common mistakes you can clearly see, and which cues would help most.',
-  'List a mistake only if it is clearly visible in the stills. If you cannot see the person’s whole body or the movement clearly, set visible to false.',
+  'You watch a short video of one person doing one exercise, given as its frames in order, 2 a second.',
+  'Follow the movement through every rep. Using ONLY the numbered lists given, say which common mistakes you can clearly see, and which cues would help most.',
+  'List a mistake only if it is clearly visible in the video. If you cannot see the person’s whole body or the movement clearly, set visible to false.',
   'Never comment on anything else about the person. Return only the JSON asked for.',
 ].join(' ')
 
@@ -169,11 +170,12 @@ export interface FormVerdict {
   cues: number[]
 }
 
-/** What the stills show, in the exercise's own listed words: indexes only, checked. */
+/** What the video shows, in the exercise's own listed words: indexes only, checked. */
 export async function checkForm(frames: readonly string[], exercise: Pick<Exercise, 'name' | 'mistakes' | 'cues'>, create?: CreateFn): Promise<FormVerdict | null> {
   if (!frames.length || !exercise.mistakes.length || !exercise.cues.length) return null
   const lists = [
     `Exercise: ${exercise.name}`,
+    `Video: ${frames.length} frames, in order, 2 a second.`,
     'Common mistakes:',
     ...exercise.mistakes.map((m, i) => `${i}. ${m}`),
     'Cues:',

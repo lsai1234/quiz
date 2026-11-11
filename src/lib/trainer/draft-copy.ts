@@ -23,17 +23,17 @@ export const DRAFT_COPY = {
   fromPain: 'The ready reply for a question that mentions pain. No AI was used.',
   fromSaved: (title: string) => `Your saved reply “${title}”, picked by AI.`,
   fromLibrary: (question: string) => `Your answers-library entry “${question}”, picked by AI.`,
-  fromForm: (exercise: string) => `Built from the ${exercise} cues and mistakes in the library, ticked by AI from stills of the clip.`,
-  fromUnclear: 'AI couldn’t see enough in the stills, so this asks for another clip.',
+  fromForm: (exercise: string) => `Built from the ${exercise} cues and mistakes in the library, ticked by AI after watching the clip.`,
+  fromUnclear: 'AI couldn’t see enough in the clip, so this asks for another one.',
   noteNothingSent: 'Nothing has been sent. Edit it, or write your own, then press Answer.',
   discard: 'Clear the draft',
 
   /* ── Settings → Trainer ── */
   settingLabel: 'AI drafts',
   settingHint:
-    'AI prepares a draft for each new question from your saved replies and answers library, and for each form check from the exercise’s cues and mistakes. It never writes its own advice, and nothing is sent until you press Answer. Questions that mention pain get the ready GP-or-physio reply instead; questions that look medical get no draft.',
+    'AI prepares a draft for each new question from your saved replies and answers library, and for each form check by watching the video against the exercise’s cues and mistakes. It never writes its own advice, and nothing is sent until you press Answer. Questions that mention pain get the ready GP-or-physio reply instead; questions that look medical get no draft.',
 
   /* ── The member's form-check consent, while AI drafts are on ── */
   consentAi: (name: string) =>
-    `Only ${name} and the team who run your hub can watch it. It’s deleted after 30 days. A few stills from it go to our AI provider to help ${name} prepare an answer.`,
+    `Only ${name} and the team who run your hub can watch it. It’s deleted after 30 days. The video, without sound, goes to our AI provider to help ${name} prepare an answer.`,
 }

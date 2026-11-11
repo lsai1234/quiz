@@ -44,12 +44,18 @@ async function stillOf(file: File): Promise<string | null> {
   }
 }
 
+/** Frames a second of video for an AI draft, the most a clip sends, and how many go in one request. */
+const FRAMES_PER_SECOND = 2
+const FRAMES_MAX = 60
+const FRAMES_BATCH = 10
+
 /**
- * A few small stills spread through the clip, for an AI draft of a form check
- * (only while AI drafts are on). 512 wide, so the form shows without sending
- * more of the picture than it needs. Empty when the browser can't.
+ * The whole clip as frames for an AI draft of a form check (only while AI
+ * drafts are on): 2 a second from start to finish, in order, without sound,
+ * so every rep is seen. 384 wide: enough to see the form, and small enough
+ * that a 30-second clip is about a megabyte. Empty when the browser can't.
  */
-export async function framesOf(file: File, count = 8): Promise<string[]> {
+export async function framesOf(file: File): Promise<string[]> {
   const out: string[] = []
   try {
     const url = URL.createObjectURL(file)
@@ -62,8 +68,9 @@ export async function framesOf(file: File, count = 8): Promise<string[]> {
       video.onerror = () => reject(new Error('unreadable'))
     })
     const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1
-    const w = 512
-    const h = Math.round((video.videoHeight / Math.max(1, video.videoWidth)) * w) || 288
+    const count = Math.min(FRAMES_MAX, Math.max(1, Math.ceil(duration * FRAMES_PER_SECOND)))
+    const w = 384
+    const h = Math.round((video.videoHeight / Math.max(1, video.videoWidth)) * w) || 216
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
@@ -71,7 +78,7 @@ export async function framesOf(file: File, count = 8): Promise<string[]> {
       video.currentTime = (duration * (i + 0.5)) / count
       await new Promise<void>((resolve) => (video.onseeked = () => resolve()))
       canvas.getContext('2d')?.drawImage(video, 0, 0, w, h)
-      out.push(canvas.toDataURL('image/jpeg', 0.6))
+      out.push(canvas.toDataURL('image/jpeg', 0.55))
     }
     URL.revokeObjectURL(url)
   } catch {
@@ -115,7 +122,7 @@ export async function uploadVideo(
     extra?: Record<string, unknown>
     maxBytes: number
     onProgress?: (fraction: number) => void
-    /** Send a few stills with it, for an AI draft (form checks, AI drafts on). */
+    /** Send the clip as frames too, for an AI draft (form checks, AI drafts on). */
     frames?: boolean
   },
 ): Promise<Uploaded> {
@@ -135,10 +142,16 @@ export async function uploadVideo(
     size: file.size,
     title: opts.title ?? null,
     still: await stillOf(file),
-    ...(opts.frames ? { frames: await framesOf(file) } : {}),
     ...opts.extra,
   })
   const id = String(begun.id)
+  if (opts.frames) {
+    // The clip as frames, a batch a request; a draft without them is still fine, so a failure here stops nothing.
+    const frames = await framesOf(file)
+    for (let b = 0; b * FRAMES_BATCH < frames.length; b++) {
+      await post({ action: 'frames', id, batch: b, frames: frames.slice(b * FRAMES_BATCH, (b + 1) * FRAMES_BATCH) }).catch(() => null)
+    }
+  }
   const chunks = Math.ceil(file.size / CHUNK)
   for (let n = 0; n < chunks; n++) {
     await post({ action: 'chunk', id, n, data: await base64(file.slice(n * CHUNK, Math.min(file.size, (n + 1) * CHUNK))) })

@@ -107,7 +107,7 @@ describe('a form-check draft is the library’s own words', () => {
     expect(exerciseFor(null, 'Can you check this?')).toBeNull()
   })
 
-  it('ticks the mistakes it can see and the cues that fit, and sends the stills at low detail', async () => {
+  it('watches the whole clip in order, ticks the mistakes it can see and the cues that fit', async () => {
     const create = stub({ visible: true, mistakes: [0], cues: [1] })
     const d = await makeDraft({ question: question('Can you check my form?', 'Goblet squat'), replies, library, frames: [STILL, STILL] }, NOW, create)
     expect(d?.kind).toBe('form')
@@ -181,10 +181,13 @@ describe('in the inbox', () => {
     expect(await getDraft(user.id)).toBeNull()
   })
 
-  it('reads a form check’s stills, kept with the clip and deleted with it', async () => {
+  it('reads a form check’s frames, kept with the clip and deleted with it', async () => {
     const user = await member()
     const m = await beginUpload({ kind: 'form-check', mime: 'video/mp4', size: 1000, owner: user.id })
-    expect(await setFrames(m.id, [STILL, 'not an image', STILL, 42])).toBe(2)
+    expect(await setFrames(m.id, 0, [STILL, 'not an image', STILL, 42])).toBe(2)
+    expect(await setFrames(m.id, 1, [STILL])).toBe(1)
+    expect(await setFrames(m.id, 6, [STILL])).toBe(0)
+    expect(await getFrames(m.id)).toHaveLength(3)
     const create = stub({ visible: true, mistakes: [1], cues: [0] })
     const { message } = await askTrainer({ id: user.id, email: user.email, firstName: 'Jo' }, { text: 'Can you check my goblet squat?', about: 'Goblet squat' }, 5, NOW)
     // The clip on the question (askTrainer only links a finished upload): point the draft at it directly.

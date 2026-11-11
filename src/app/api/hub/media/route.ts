@@ -8,8 +8,9 @@ import { coachingOn, trainerLive } from '@/lib/offer/settings'
 
 /**
  * POST /api/hub/media  (the signed-in member, while their hub is open)
- *   { action: 'begin', size, mime, seconds, consent: true, still?, frames? } → { id }
- *     (frames: a few stills for an AI draft, kept only while AI drafts are on)
+ *   { action: 'begin', size, mime, seconds, consent: true, still? } → { id }
+ *   { action: 'frames', id, batch, frames }   the clip as frames, 2 a second, for an AI
+ *     draft: 10 a request, kept only while AI drafts are on (the consent says so)
  *   { action: 'chunk', id, n, data }                                 → { ok }
  *   { action: 'finish', id }                                         → { id, url, until }
  *
@@ -49,13 +50,16 @@ export async function POST(req: Request) {
       if (!Number.isFinite(seconds) || seconds <= 0 || seconds > FORM_CHECK_SECONDS + 0.5) return NextResponse.json({ error: 'That clip is longer than 30 seconds.', code: 'long' }, { status: 400 })
       if ((await formChecksSince(user.id, new Date(Date.now() - 86_400_000))) >= FORM_CHECKS_A_DAY) return NextResponse.json({ error: 'That’s three form checks today.', code: 'limit' }, { status: 429 })
       const m = await beginUpload({ kind: 'form-check', mime: String(body.mime ?? ''), size: Number(body.size), owner: user.id, title: null, still: typeof body.still === 'string' ? body.still : null })
-      // Stills for an AI draft only while AI drafts are on: the consent they ticked said so.
-      if (settings.trainer.aiDrafts) await setFrames(m.id, body.frames)
       return NextResponse.json({ id: m.id })
     }
     // Chunks and the finish only into their own upload.
     const m = await getMedia(String(body.id ?? ''))
     if (!m || m.owner !== user.id || m.kind !== 'form-check') return NextResponse.json({ error: MESSAGES.missing }, { status: 404 })
+    if (body.action === 'frames') {
+      // The clip as frames for an AI draft, only while AI drafts are on: the consent they ticked said so.
+      const kept = settings.trainer.aiDrafts ? await setFrames(m.id, body.batch, body.frames) : 0
+      return NextResponse.json({ kept })
+    }
     if (body.action === 'chunk') {
       await putChunk(m.id, Number(body.n), String(body.data ?? ''))
       return NextResponse.json({ ok: true })
