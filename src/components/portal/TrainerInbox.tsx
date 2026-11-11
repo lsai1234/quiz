@@ -72,10 +72,6 @@ function draftFrom(d: TrainerDraft): string {
       return f.fromSaved(d.from ?? '')
     case 'library':
       return f.fromLibrary(d.from ?? '')
-    case 'form':
-      return f.fromForm(d.from ?? 'exercise')
-    case 'unclear':
-      return f.fromUnclear
   }
 }
 

@@ -2,15 +2,13 @@ import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
 import { rateLimiter } from '@/lib/consult/ai/guard'
 import { hubAccess, isOpen } from '@/lib/hub/access'
-import { beginUpload, finishUpload, formChecksSince, getMedia, mediaUrl, MediaError, putChunk, setFrames } from '@/lib/media/store'
+import { beginUpload, finishUpload, formChecksSince, getMedia, mediaUrl, MediaError, putChunk } from '@/lib/media/store'
 import { getOfferSettings } from '@/lib/offer/store'
 import { coachingOn, trainerLive } from '@/lib/offer/settings'
 
 /**
  * POST /api/hub/media  (the signed-in member, while their hub is open)
  *   { action: 'begin', size, mime, seconds, consent: true, still? } → { id }
- *   { action: 'frames', id, batch, frames }   the clip as frames, 2 a second, for an AI
- *     draft: 10 a request, kept only while AI drafts are on (the consent says so)
  *   { action: 'chunk', id, n, data }                                 → { ok }
  *   { action: 'finish', id }                                         → { id, url, until }
  *
@@ -55,11 +53,6 @@ export async function POST(req: Request) {
     // Chunks and the finish only into their own upload.
     const m = await getMedia(String(body.id ?? ''))
     if (!m || m.owner !== user.id || m.kind !== 'form-check') return NextResponse.json({ error: MESSAGES.missing }, { status: 404 })
-    if (body.action === 'frames') {
-      // The clip as frames for an AI draft, only while AI drafts are on: the consent they ticked said so.
-      const kept = settings.trainer.aiDrafts ? await setFrames(m.id, body.batch, body.frames) : 0
-      return NextResponse.json({ kept })
-    }
     if (body.action === 'chunk') {
       await putChunk(m.id, Number(body.n), String(body.data ?? ''))
       return NextResponse.json({ ok: true })

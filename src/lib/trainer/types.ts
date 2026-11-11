@@ -113,8 +113,6 @@ export interface MemberTrainerView {
   video?: boolean
   /** Questions answered before, rewritten without anyone's details (video on). */
   library?: LibraryEntry[]
-  /** AI drafts are on (video on): a form check sends a few stills, and the consent says so. */
-  aiDrafts?: boolean
 }
 
 /** A row of the Founders Hub's inbox. */

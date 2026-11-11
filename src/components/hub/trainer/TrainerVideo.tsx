@@ -6,7 +6,6 @@ import { Button, Card, Checkbox, Input, Note, buttonSurface } from '@/components
 import { Icon } from '@/components/ui/Icon'
 import { durationOf, uploadVideo } from '@/lib/media/client'
 import { TRAINER_COPY } from '@/lib/trainer/copy'
-import { DRAFT_COPY } from '@/lib/trainer/draft-copy'
 import type { LibraryEntry, TrainerVideo } from '@/lib/trainer/types'
 import { VIDEO_COPY as V } from '@/lib/trainer/video-copy'
 import { body, col, meta, strong } from '../home/ui'
@@ -64,18 +63,7 @@ export interface PickedClip {
 }
 
 /** Send a form check: their yes first, then a clip of up to 30 seconds, uploaded before they send. */
-export function FormCheckPicker({
-  trainer,
-  clip,
-  onClip,
-  ai = false,
-}: {
-  trainer: string
-  clip: PickedClip | null
-  onClip: (c: PickedClip | null) => void
-  /** AI drafts are on: a few stills go with it, and the consent says so. */
-  ai?: boolean
-}) {
+export function FormCheckPicker({ trainer, clip, onClip }: { trainer: string; clip: PickedClip | null; onClip: (c: PickedClip | null) => void }) {
   const [agree, setAgree] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -96,7 +84,6 @@ export function FormCheckPicker({
         // Unreadable length (some phones' files): the size cap still holds it.
         extra: { consent: true, seconds: seconds ?? FORM_CHECK_SECONDS },
         onProgress: setProgress,
-        frames: ai,
       })
       onClip(up)
     } catch (err) {
@@ -123,7 +110,7 @@ export function FormCheckPicker({
     <div style={col('var(--space-2)')} data-form-check="pick">
       <p style={{ ...strong, fontSize: 'var(--text-body-sm)' }}>{V.formCheck}</p>
       <p style={meta}>{V.formCheckHint}</p>
-      <Checkbox label={V.formCheckAgree} hint={ai ? DRAFT_COPY.consentAi(trainer) : V.formCheckConsent(trainer)} checked={agree} onChange={(e) => setAgree(e.target.checked)} data-form-check-agree />
+      <Checkbox label={V.formCheckAgree} hint={V.formCheckConsent(trainer)} checked={agree} onChange={(e) => setAgree(e.target.checked)} data-form-check-agree />
       <div>
         <FilePickButton
           accept="video/mp4,video/quicktime,video/webm"

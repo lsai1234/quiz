@@ -44,49 +44,6 @@ async function stillOf(file: File): Promise<string | null> {
   }
 }
 
-/** Frames a second of video for an AI draft, the most a clip sends, and how many go in one request. */
-const FRAMES_PER_SECOND = 2
-const FRAMES_MAX = 60
-const FRAMES_BATCH = 10
-
-/**
- * The whole clip as frames for an AI draft of a form check (only while AI
- * drafts are on): 2 a second from start to finish, in order, without sound,
- * so every rep is seen. 384 wide: enough to see the form, and small enough
- * that a 30-second clip is about a megabyte. Empty when the browser can't.
- */
-export async function framesOf(file: File): Promise<string[]> {
-  const out: string[] = []
-  try {
-    const url = URL.createObjectURL(file)
-    const video = document.createElement('video')
-    video.muted = true
-    video.playsInline = true
-    video.src = url
-    await new Promise<void>((resolve, reject) => {
-      video.onloadeddata = () => resolve()
-      video.onerror = () => reject(new Error('unreadable'))
-    })
-    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1
-    const count = Math.min(FRAMES_MAX, Math.max(1, Math.ceil(duration * FRAMES_PER_SECOND)))
-    const w = 384
-    const h = Math.round((video.videoHeight / Math.max(1, video.videoWidth)) * w) || 216
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    for (let i = 0; i < count; i++) {
-      video.currentTime = (duration * (i + 0.5)) / count
-      await new Promise<void>((resolve) => (video.onseeked = () => resolve()))
-      canvas.getContext('2d')?.drawImage(video, 0, 0, w, h)
-      out.push(canvas.toDataURL('image/jpeg', 0.55))
-    }
-    URL.revokeObjectURL(url)
-  } catch {
-    // Whatever was taken stands; none is fine too.
-  }
-  return out
-}
-
 /** How long the clip is, in seconds; null when it can't be read. */
 export async function durationOf(file: File): Promise<number | null> {
   try {
@@ -115,16 +72,7 @@ function base64(blob: Blob): Promise<string> {
 
 export async function uploadVideo(
   file: File,
-  opts: {
-    endpoint: string
-    kind: string
-    title?: string | null
-    extra?: Record<string, unknown>
-    maxBytes: number
-    onProgress?: (fraction: number) => void
-    /** Send the clip as frames too, for an AI draft (form checks, AI drafts on). */
-    frames?: boolean
-  },
+  opts: { endpoint: string; kind: string; title?: string | null; extra?: Record<string, unknown>; maxBytes: number; onProgress?: (fraction: number) => void },
 ): Promise<Uploaded> {
   const mime = file.type || (file.name.toLowerCase().endsWith('.mov') ? 'video/quicktime' : '')
   if (!TYPES.includes(mime)) throw new UploadProblem('That isn’t a video we can play. Use an MP4 or a MOV from your phone.')
@@ -135,23 +83,8 @@ export async function uploadVideo(
     if (!res.ok) throw new UploadProblem(typeof data?.error === 'string' ? data.error : 'The upload didn’t go through. Try again.')
     return data ?? {}
   }
-  const begun = await post({
-    action: 'begin',
-    kind: opts.kind,
-    mime,
-    size: file.size,
-    title: opts.title ?? null,
-    still: await stillOf(file),
-    ...opts.extra,
-  })
+  const begun = await post({ action: 'begin', kind: opts.kind, mime, size: file.size, title: opts.title ?? null, still: await stillOf(file), ...opts.extra })
   const id = String(begun.id)
-  if (opts.frames) {
-    // The clip as frames, a batch a request; a draft without them is still fine, so a failure here stops nothing.
-    const frames = await framesOf(file)
-    for (let b = 0; b * FRAMES_BATCH < frames.length; b++) {
-      await post({ action: 'frames', id, batch: b, frames: frames.slice(b * FRAMES_BATCH, (b + 1) * FRAMES_BATCH) }).catch(() => null)
-    }
-  }
   const chunks = Math.ceil(file.size / CHUNK)
   for (let n = 0; n < chunks; n++) {
     await post({ action: 'chunk', id, n, data: await base64(file.slice(n * CHUNK, Math.min(file.size, (n + 1) * CHUNK))) })

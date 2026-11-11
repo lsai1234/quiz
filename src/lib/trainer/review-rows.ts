@@ -78,13 +78,11 @@ export function videoCopyRows(): ReviewRow[] {
 export function draftCopyRows(): ReviewRow[] {
   return copyRows(
     'AI drafts wording',
-    'The Founders Hub inbox (a draft waiting beside a question), Founders Hub → Trainer’s switch, and the member’s form-check consent while AI drafts are on. A form-check draft is these lines with the exercise’s own cues and mistakes from the library. "[Name]" stands for the name set in Settings',
+    'The Founders Hub inbox (a draft waiting beside a question) and Founders Hub → Trainer’s switch',
     DRAFT_COPY,
     {
       fromSaved: ['Squat depth'],
       fromLibrary: ['How deep should I squat?'],
-      fromForm: ['Goblet squat'],
-      consentAi: ['[Name]'],
     },
   )
 }
