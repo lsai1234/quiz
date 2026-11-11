@@ -4,8 +4,8 @@ import type { DealsState } from '@/lib/deals/server'
 
 const quote = {
   listPrice: 34.99, basePrice: 34.99, offerPrice: 29.74, discountPct: 15, rate: 0.15, saving: 5.25,
-  standardDelivery: 4.95, deliveryCharge: 0, deliveryDeal: 'free' as const, deliverySaving: 4.95,
-  normalTotal: 39.94, total: 29.74, totalSaving: 10.2, viable: true,
+  standardDelivery: 2, deliveryCharge: 0, deliveryDeal: 'free' as const, deliverySaving: 2,
+  normalTotal: 36.99, total: 29.74, totalSaving: 10.2, viable: true,
 }
 const state: DealsState = {
   enabled: true,
@@ -39,13 +39,14 @@ describe('member prices in the hub', () => {
   it('puts open prices in a top-up box, priced by the server, with what is coming and the conditions', async () => {
     render(<DealsCard />)
     expect(await screen.findByText('Your member prices')).toBeInTheDocument()
-    expect(screen.getAllByText('15% off and free UK mainland delivery').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('15% off and free UK delivery').length).toBeGreaterThan(0)
     expect(await screen.findByRole('button', { name: 'Buy for £29.74' })).toBeInTheDocument()
     expect(screen.getByText(/You save £10.20/)).toBeInTheDocument()
     // Whey is due within 30 days: it can join the box early.
     expect(screen.getByRole('checkbox', { name: 'Add to my box early' })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'In my box' })).toBeChecked()
-    expect(screen.getAllByText(/UK mainland/).length).toBeGreaterThan(0)
+    // Where free delivery goes rides beside it.
+    expect(screen.getAllByText(/Northern Ireland/).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /How member prices work/ }))
     expect(screen.getByRole('link', { name: 'Member hub terms' })).toHaveAttribute('href', '/legal/member-hub')
     expect(screen.getByRole('checkbox', { name: /Email me when a member price opens/ })).toBeChecked()
