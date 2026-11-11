@@ -107,7 +107,7 @@ describe('the routes', () => {
   })
 
   it('a member asks; the founders see it, answer with a video; the member reads it and is emailed', async () => {
-    await saveTrainerProfile({ name: 'Sam', role: 'Co-founder · personal trainer', replyHours: 24, dailyLimit: 3, notifyEmail: 'trainer-alerts@example.com' })
+    await saveTrainerProfile({ name: 'Sam', role: 'Co-founder · fitness expert', replyHours: 24, dailyLimit: 3, notifyEmail: 'trainer-alerts@example.com' })
     await saveServiceSettings({ trainer: true })
     const user = await member()
     mockUser.current = user

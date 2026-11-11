@@ -447,7 +447,7 @@ function ProfileSettings({ view, onSaved, video }: { view: Inbox; onSaved: (v: I
           />
           <div className="grid sm:grid-cols-2" style={{ gap: 'var(--space-3)' }}>
             <Input label="Name members see" value={draft.name} onChange={set('name')} placeholder="Your first name" data-trainer-name />
-            <Input label="One line under it" value={draft.role} onChange={set('role')} placeholder="Co-founder · personal trainer" />
+            <Input label="One line under it" value={draft.role} onChange={set('role')} placeholder="Co-founder · fitness expert" />
           </div>
           <Textarea label="About them, in their own words" rows={3} value={draft.bio} onChange={set('bio')} hint="Shown at the top of the chat. Who they are and how they train; nothing about products or health." />
           <Input label="Photo (https link or a path on this site)" value={draft.photoUrl} onChange={set('photoUrl')} placeholder="https://…" />

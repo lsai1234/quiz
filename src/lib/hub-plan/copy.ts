@@ -14,7 +14,7 @@ export const HUB_PLAN_COPY = {
   /* ── The shop ───────────────────────────────────────────────────────── */
   shopEyebrow: 'Member hub',
   shopTitle: 'The member hub, on its own',
-  shopLine: 'Your training plan, a real personal trainer to ask, and member prices.',
+  shopLine: 'Your training plan, a real fitness expert to ask, and member prices.',
   shopPrice: (monthly: number) => `${gbp(monthly)} a month`,
   shopCta: 'See what’s inside',
   shopFree: 'Free for 90 days with any stack',
@@ -27,7 +27,7 @@ export const HUB_PLAN_COPY = {
   price: (monthly: number) => `${gbp(monthly)} a month`,
   priceSub: 'Paid by card each month. Cancel any time in your hub.',
   includesTitle: 'What’s inside',
-  includeTrainer: (name: string) => `Ask ${name}, our in-house personal trainer, and get answers from a real person, with videos where they help`,
+  includeTrainer: (name: string) => `Ask ${name}, our in-house fitness expert, and get answers from a real person, with videos where they help`,
   includeTrainerChecks: (name: string) => `Your plan checked by ${name}`,
   includeTraining: 'A weekly training plan built from your answers, and yours to change',
   includeWorkout: 'Workout mode: log your lifts and see what you did last time',

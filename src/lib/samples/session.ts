@@ -103,7 +103,7 @@ export async function currentTestView(): Promise<TestView | null> {
 /** A trainer to show when the live one isn't set up yet: clearly a sample. */
 export const SAMPLE_TRAINER: Pick<TrainerProfile, 'name' | 'role' | 'bio' | 'replyHours' | 'welcome' | 'answersOn'> = {
   name: 'Sam',
-  role: 'Personal trainer (sample profile)',
+  role: 'Fitness expert (sample profile)',
   bio: 'A sample profile for test views. Set the real one in Founders Hub → Trainer.',
   replyHours: 24,
   welcome: 'Hello, I’m Sam, a sample profile for test views. Ask me anything about your plan: an exercise, your form, your week.',

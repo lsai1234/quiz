@@ -92,7 +92,7 @@ export const HUB_PREVIEW_COPY = {
   cardDays: '90 days',
   cardSub: 'Comes with your box, one-off or monthly. Sign in with the email you order with, and any order adds 90 days.',
   cardTrainer: (name: string) => `Ask ${name}`,
-  cardTrainerLine: 'A real personal trainer, not a bot',
+  cardTrainerLine: 'A real fitness expert, not a bot',
   cardTraining: 'Your training plan',
   cardTrainingLine: 'A week built from your answers',
   cardTrainingChecked: (name: string) => `Built from your answers, checked by ${name}`,

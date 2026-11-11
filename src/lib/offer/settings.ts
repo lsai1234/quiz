@@ -254,7 +254,7 @@ export function coachingOn(settings: Pick<OfferSettings, 'services'>, phase: 'co
 export interface TrainerProfile {
   /** Their name as members see it ("Sam", say). Empty: nobody is named, and the trainer stays off. */
   name: string
-  /** One line under the name ("Co-founder · personal trainer"). */
+  /** One line under the name ("Co-founder · fitness expert"). */
   role: string
   /** A few lines in their own words: who they are and how they train. */
   bio: string
@@ -285,7 +285,7 @@ export interface TrainerProfile {
 
 export const DEFAULT_TRAINER: TrainerProfile = {
   name: '',
-  role: 'Personal trainer',
+  role: 'Fitness expert',
   bio: '',
   photoUrl: null,
   replyHours: 48,

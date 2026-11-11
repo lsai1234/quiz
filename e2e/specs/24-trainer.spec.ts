@@ -43,7 +43,7 @@ test('a member asks the trainer; the founders answer with a video', async ({ pag
   await page.setViewportSize({ width: 390, height: 844 })
   await founderSessionViaApi(page)
   const set = await page.request.post('/api/portal/trainer', {
-    data: { on: true, trainer: { name: 'Sam', role: 'Co-founder · personal trainer', bio: 'I train five days a week and coach the plan in your hub.', replyHours: 24, dailyLimit: 5 } },
+    data: { on: true, trainer: { name: 'Sam', role: 'Co-founder · fitness expert', bio: 'I train five days a week and coach the plan in your hub.', replyHours: 24, dailyLimit: 5 } },
   })
   expect(set.status()).toBe(200)
   expect((await page.request.post('/api/portal/offer', { data: { services: { training: true } } })).status()).toBe(200)
@@ -57,7 +57,7 @@ test('a member asks the trainer; the founders answer with a video', async ({ pag
   await expect(card.locator('[data-hub-card-trainer]')).toContainText('Ask Sam')
   await expect(card.locator('[data-hub-card-trainer]')).toContainText('Real person')
   await expect(box.locator('[data-box-services] [data-service="trainer"]')).toBeVisible()
-  await expect(box.locator('[data-hub-preview-trainer]')).toContainText('Ask Sam, a real personal trainer')
+  await expect(box.locator('[data-hub-preview-trainer]')).toContainText('Ask Sam, a real fitness expert')
   await expect(box.locator('[data-rewards-track]')).toBeVisible()
   // The box this feature owns; the page's landmarks and viewport tag are the layout's.
   await audit(page, 'results', '[data-box]')
