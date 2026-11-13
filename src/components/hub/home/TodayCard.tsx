@@ -2,17 +2,18 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { Button, Card, buttonSurface } from '@/components/system'
+import { Card, TickRow, buttonSurface } from '@/components/system'
 import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { HUB_COPY as C } from '@/lib/hub/copy'
 import type { HubHome, TodayItem } from '@/lib/hub/home-types'
-import { body, eyebrow, meta, Ring, strong } from './ui'
+import { body, ChargeRing, eyebrow, meta, strong } from './ui'
 
 /**
- * Today: their products on their day, as a timeline. Products taken at the
- * same moment sit together under it; each is one tick away from taken. The
- * next untaken one is called out at the top and its moment lit on the line; a
- * ring counts them off. Ticks save straight away and last the day.
+ * Today: the hub's centrepiece. A charge ring with a segment for each product
+ * lights as they're taken, over the next one to take; under it, their day as a
+ * timeline. Products taken at the same moment sit together, each a row to tap
+ * (`TickRow`), and the next moment is lit on the line. Ticks save straight
+ * away and last the day; the last one fills the ring.
  */
 interface Moment {
   key: string
@@ -54,8 +55,12 @@ export function TodayCard({ items: initial, session = null }: { items: TodayItem
   const moments = useMemo(() => momentsOf(items), [items])
 
   async function toggle(item: TodayItem) {
+    // One save at a time per product; the row stays live, so a tick never dims.
+    if (busy === item.productId) return
     setBusy(item.productId)
     const want = !item.done
+    // A small buzz under the thumb, where the phone has one.
+    if (want && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(8)
     setItems((xs) => xs.map((x) => (x.productId === item.productId ? { ...x, done: want } : x)))
     const res = await fetch('/api/hub/today', {
       method: 'POST',
@@ -82,42 +87,47 @@ export function TodayCard({ items: initial, session = null }: { items: TodayItem
   }
 
   const allDone = done === items.length
+  const [count, ...ofTotal] = C.todayProgress(done, items.length).split(' ')
+  const date = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 
   return (
     <div data-today className="h-full">
-      <Card padding="roomy" elevation={2} className="h-full">
-        <div className="flex items-center justify-between" style={{ gap: 'var(--space-4)' }}>
-          <div className="min-w-0">
-            <p style={eyebrow}>{C.todayTitle}</p>
-            <p
-              style={{
-                ...strong,
-                fontSize: 'var(--text-title)',
-                fontFamily: 'var(--font-display)',
-                letterSpacing: 'var(--tracking-title)',
-                lineHeight: 'var(--leading-tight)',
-                marginTop: 'var(--space-2)',
-              }}
-              aria-live="polite"
-            >
-              {next ? C.todayNext(next.time, next.title) : C.todayAllDone}
-            </p>
-            {next && <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{`${next.moment} · ${next.amount}`}</p>}
-          </div>
-          <Ring value={items.length ? done / items.length : 0} size={68} stroke={6} label={C.todayProgress(done, items.length)}>
-            <span className="hub-figure" style={{ fontSize: 'var(--text-lead)', color: allDone ? 'var(--accent)' : 'var(--ink-1)' }}>
-              {C.todayProgress(done, items.length)}
+      <Card padding="roomy" elevation={2} glow="accent" className="h-full">
+        <div className="flex items-baseline justify-between" style={{ gap: 'var(--space-3)' }}>
+          <p style={eyebrow}>{C.todayTitle}</p>
+          <p style={meta}>{date}</p>
+        </div>
+
+        <div className="flex flex-col items-center text-center" style={{ marginTop: 'var(--space-5)' }}>
+          <ChargeRing done={done} total={items.length} size={156} stroke={12} label={C.todayProgress(done, items.length)}>
+            <span className="hub-figure" style={{ fontSize: 'var(--text-hero)', color: allDone ? 'var(--accent)' : 'var(--ink-1)' }}>
+              {count}
             </span>
-          </Ring>
+            <span style={{ ...meta, fontSize: 'var(--text-body-sm)', marginTop: 'calc(var(--space-1) * -1)' }}>{ofTotal.join(' ')}</span>
+          </ChargeRing>
+          <p
+            style={{
+              ...strong,
+              fontSize: 'var(--text-title)',
+              fontFamily: 'var(--font-display)',
+              letterSpacing: 'var(--tracking-title)',
+              lineHeight: 'var(--leading-tight)',
+              marginTop: 'var(--space-5)',
+            }}
+            aria-live="polite"
+          >
+            {next ? C.todayNext(next.time, next.title) : C.todayAllDone}
+          </p>
+          {next && <p style={{ ...meta, fontSize: 'var(--text-body-sm)', marginTop: 'var(--space-1)' }}>{`${next.moment} · ${next.amount}`}</p>}
         </div>
 
         {session && (
-          <div style={{ marginTop: 'var(--space-4)' }}>
+          <div style={{ marginTop: 'var(--space-5)' }}>
             <SessionRow session={session} />
           </div>
         )}
 
-        <ol className="hub-timeline" style={{ marginTop: 'var(--space-5)' }}>
+        <ol className="hub-timeline" style={{ marginTop: 'var(--space-6)' }}>
           {moments.map((m) => {
             const lit = m.items.some((i) => i.productId === next?.productId)
             const over = m.items.every((i) => i.done)
@@ -132,20 +142,12 @@ export function TodayCard({ items: initial, session = null }: { items: TodayItem
                 </p>
                 <ul style={{ marginTop: 'var(--space-2)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {m.items.map((item) => (
-                    <li key={item.productId} className="hub-today-row flex items-center" style={{ gap: 'var(--space-3)' }} data-today-item={item.productId} data-done={item.done}>
-                      <span className="min-w-0" style={{ flex: 1 }}>
-                        <span style={{ ...strong, display: 'block', color: item.done ? 'var(--ink-3)' : 'var(--ink-1)', textDecoration: item.done ? 'line-through' : 'none' }}>
-                          {item.title}
-                        </span>
-                        <span style={{ ...meta, display: 'block' }}>{item.amount}</span>
-                      </span>
-                      <Button
-                        size="sm"
-                        variant={item.done ? 'primary' : 'secondary'}
-                        icon="check"
-                        aria-pressed={item.done}
-                        aria-label={item.done ? C.todayUntick(item.title) : C.todayTick(item.title)}
-                        disabled={busy === item.productId}
+                    <li key={item.productId} data-today-item={item.productId} data-done={item.done}>
+                      <TickRow
+                        label={item.title}
+                        sub={item.amount}
+                        done={item.done}
+                        name={item.done ? C.todayUntick(item.title) : C.todayTick(item.title)}
                         onClick={() => void toggle(item)}
                       />
                     </li>

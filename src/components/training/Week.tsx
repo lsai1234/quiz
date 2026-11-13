@@ -60,15 +60,18 @@ export function Week({
         <p style={{ ...body, marginTop: 'var(--space-2)' }}>{C.intro}</p>
       </header>
 
-      {coaching && state.trainer && !plan.introSeen && <MeetTrainerCard trainer={state.trainer} plan={plan} act={act} busy={busy} />}
-
-      {state.trainer && plan.check && <PlanCheckCard trainer={state.trainer} check={plan.check} />}
-
+      {/* What changes the next session comes before it; then the session itself,
+          one tap from starting; then the week it sits in. Setting the plan up
+          (programme, goal, calendar, emails) follows the week. */}
       {coaching && backAfterGap(plan) && <BackAfterGapCard next={nextSession(plan, today as Session['day'])} act={act} busy={busy} />}
 
       {programmes && <MissedCard plan={plan} act={act} busy={busy} />}
 
-      <Card padding="roomy" glow="accent">
+      <Up plan={plan} today={today} onOpen={setOpenId} onStart={coaching ? onStart : undefined} />
+
+      {coaching && state.trainer && !plan.introSeen && <MeetTrainerCard trainer={state.trainer} plan={plan} act={act} busy={busy} />}
+
+      <Card padding="roomy">
         <div style={stack('var(--space-3)')}>
           <ChargeMeter label={C.progressLabel} value={planned ? (done / planned) * 100 : 0} showValue valueText={C.progress(done, planned)} tone="positive" />
           <WeekStrip plan={plan} today={today} />
@@ -94,10 +97,7 @@ export function Week({
         </div>
       </Card>
 
-      {programmes && <ProgrammeCard plan={plan} trainer={state.trainer?.checksPlans ? state.trainer.name : null} act={act} busy={busy} />}
-      {programmes && <GoalCard plan={plan} act={act} busy={busy} />}
-
-      <Up plan={plan} today={today} onOpen={setOpenId} onStart={coaching ? onStart : undefined} />
+      {state.trainer && plan.check && <PlanCheckCard trainer={state.trainer} check={plan.check} />}
 
       {coaching && <WeekModeCard plan={plan} act={act} busy={busy} />}
 
@@ -147,6 +147,9 @@ export function Week({
           )
         })}
       </ol>
+
+      {programmes && <ProgrammeCard plan={plan} trainer={state.trainer?.checksPlans ? state.trainer.name : null} act={act} busy={busy} />}
+      {programmes && <GoalCard plan={plan} act={act} busy={busy} />}
 
       {coaching ? (
         <>
@@ -263,24 +266,24 @@ function Up({ plan, today, onOpen, onStart }: { plan: TrainingPlan; today: numbe
   const isToday = next.day === today
   return (
     <div data-up={next.id}>
-      <Card padding="normal" tone={isToday ? 'accent' : undefined}>
-        <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }}>
-          <div className="min-w-0">
-            <p style={eyebrow}>{isToday ? C.todayTitle : C.nextTitle(WEEKDAY_LONG[next.day])}</p>
-            <p style={{ ...strong, marginTop: 'var(--space-1)' }}>{sessionTitle(next)}</p>
-            <p style={meta}>{sessionSummary(next)}</p>
-          </div>
+      <Card padding="roomy" elevation={2} glow="accent">
+        <p style={eyebrow}>{isToday ? C.todayTitle : C.nextTitle(WEEKDAY_LONG[next.day])}</p>
+        <p style={{ ...display, letterSpacing: 'var(--tracking-display)', marginTop: 'var(--space-2)' }}>{sessionTitle(next)}</p>
+        <p style={{ ...meta, fontSize: 'var(--text-body-sm)', marginTop: 'var(--space-1)' }}>{sessionSummary(next)}</p>
+        <div className="flex items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-5)' }}>
           {onStart && next.type === 'strength' ? (
-            <div className="flex shrink-0 flex-col items-end" style={{ gap: 'var(--space-2)' }}>
-              <Button variant="primary" icon="play" onClick={() => onStart(next.id)} data-start-workout>
-                {W.start}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onOpen(next.id)} data-start>
+            <>
+              <div className="min-w-0" style={{ flex: 1 }}>
+                <Button variant="primary" size="lg" fullWidth icon="play" onClick={() => onStart(next.id)} data-start-workout>
+                  {W.start}
+                </Button>
+              </div>
+              <Button variant="secondary" size="lg" onClick={() => onOpen(next.id)} data-start>
                 {C.open}
               </Button>
-            </div>
+            </>
           ) : (
-            <Button variant="primary" iconRight="chevron-right" onClick={() => onOpen(next.id)} data-start>
+            <Button variant="primary" size="lg" fullWidth iconRight="chevron-right" onClick={() => onOpen(next.id)} data-start>
               {C.start}
             </Button>
           )}

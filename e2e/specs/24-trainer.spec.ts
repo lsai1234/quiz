@@ -69,7 +69,8 @@ test('a member asks the trainer; the founders answer with a video', async ({ pag
   await page.goto('/myhub')
   const trainerCard = page.locator('[data-trainer-card]')
   await expect(trainerCard).toBeVisible({ timeout: 20_000 })
-  await expect(page.locator('[data-hub-nav="trainer"]')).toBeVisible()
+  // On a phone the hub's places are in the tab bar at the thumb.
+  await expect(page.locator('[data-hub-tab="trainer"]')).toBeVisible()
   await trainerCard.locator('[data-trainer-open]').click()
   const chat = page.locator('[data-trainer-chat]')
   await expect(chat).toBeVisible()

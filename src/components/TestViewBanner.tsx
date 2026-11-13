@@ -24,7 +24,8 @@ export function TestViewBanner() {
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: 'calc(env(safe-area-inset-bottom) + var(--space-3))',
+        // Clear of the member hub's tab bar where there is one (`--bottom-chrome`).
+        bottom: 'calc(env(safe-area-inset-bottom) + var(--space-3) + var(--bottom-chrome, 0px))',
         transform: 'translateX(-50%)',
         zIndex: 9999,
         display: 'flex',
@@ -38,13 +39,16 @@ export function TestViewBanner() {
         fontWeight: 'var(--weight-strong)',
         boxShadow: 'var(--shadow-raised)',
         whiteSpace: 'nowrap',
+        // Only "Leave" takes a tap: the label never sits between a thumb and
+        // the page's own controls.
+        pointerEvents: 'none',
       }}
     >
       <span>Test view · sample data</span>
       <button
         type="button"
         onClick={() => void leave()}
-        style={{ borderRadius: '999px', padding: 'var(--space-1) var(--space-3)', background: 'color-mix(in srgb, black 18%, transparent)', color: 'inherit', fontWeight: 'inherit', fontSize: 'inherit' }}
+        style={{ borderRadius: '999px', padding: 'var(--space-1) var(--space-3)', background: 'color-mix(in srgb, black 18%, transparent)', color: 'inherit', fontWeight: 'inherit', fontSize: 'inherit', pointerEvents: 'auto' }}
       >
         Leave
       </button>

@@ -66,8 +66,13 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
     return (
       <div className="mx-auto max-w-2xl" style={col('var(--stack)')}>
         <div style={col('var(--stack)')} aria-busy="true" data-hub-loading>
-          <Skeleton width="100%" height="calc(var(--space-8) * 4)" radius="var(--radius-card)" />
-          <Skeleton width="100%" height="calc(var(--space-8) * 6)" radius="var(--radius-card)" />
+          {/* The shape of what's coming: the greeting, the pass, the day's card. */}
+          <div style={{ ...col('var(--space-3)'), paddingTop: 'var(--space-2)', paddingBottom: 'var(--space-2)' }}>
+            <Skeleton width="40%" height="var(--space-3)" />
+            <Skeleton width="75%" height="var(--space-8)" />
+          </div>
+          <Skeleton width="100%" height="calc(var(--space-8) * 2)" radius="var(--radius-card)" />
+          <Skeleton width="100%" height="calc(var(--space-8) * 12)" radius="var(--radius-card)" />
           <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)' }}>
             <Skeleton width="100%" height="calc(var(--space-8) * 4)" radius="var(--radius-card)" />
             <Skeleton width="100%" height="calc(var(--space-8) * 4)" radius="var(--radius-card)" />

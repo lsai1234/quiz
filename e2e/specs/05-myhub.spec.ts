@@ -50,14 +50,14 @@ test.describe('the dashboard', () => {
 
     await expect(page.getByText(/YOUR NEXT BOX/i)).toBeVisible()
     await expect(page.getByText(/HOW YOU’RE BILLED/i)).toBeVisible()
-    // Postage is its own line rather than folded into the plan price.
-    await expect(page.getByText(/Delivery/).first()).toBeVisible()
     await expect(page.getByText(/Next charge/i)).toBeVisible()
 
-    // The three figures have to add up: plan + delivery = next charge.
+    // The figures have to add up: plan + delivery = next charge. Postage is its
+    // own line when there is any (a plan under £20 a month); a plan of £20 or
+    // more ships free, and then the headline figure is the plan on its own.
     const billing = await page.locator('body').innerText()
-    const plan = Number(billing.match(/Monthly plan\s*£(\d+\.\d{2})/)?.[1])
-    const delivery = Number(billing.match(/Delivery\s*\+?£(\d+\.\d{2})/)?.[1] ?? 0)
+    const plan = Number((billing.match(/Monthly plan\s*£(\d+\.\d{2})/) ?? billing.match(/£(\d+\.\d{2})\/mo/))?.[1])
+    const delivery = Number(billing.match(/Delivery\s*\+£(\d+\.\d{2})/)?.[1] ?? 0)
     const next = Number(billing.match(/Next charge\s*£(\d+\.\d{2})/)?.[1])
     expect(plan, `couldn't read the plan figure from:\n${billing.slice(0, 800)}`).toBeGreaterThan(0)
     expect((plan + delivery).toFixed(2)).toBe(next.toFixed(2))

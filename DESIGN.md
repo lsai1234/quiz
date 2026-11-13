@@ -170,6 +170,7 @@ hierarchy collapses into two.
 | `Textarea` | The same box, opened up. `rows`; no `compact` — a paragraph does not fit a table row. |
 | `Checkbox` | The one control whose name sits beside it. Drawn box, real `<input type="checkbox">` underneath. |
 | `OptionRow` | "Pick one of these", as a list. `role="radio"` when it is one; a chevron when it navigates. |
+| `TickRow` | "Done, or not yet." A row you tap anywhere to tick: a toggle button, with a mark that fills and pops. `name` is what a screen reader hears when the visible words don't say what pressing does. |
 | `Segmented` | "Pick one of these", as a row. For options a word long. Real radiogroup. |
 | `Disclosure` | A collapsible section, with `aria-expanded` and a panel it actually points at. |
 | `Note` | An aside. `tone`, and `live="polite" \| "assertive"` when it appeared because of an action. |
@@ -220,6 +221,36 @@ dense desktop tool — it puts the second button in a dialog footer off the edge
 the panel. Opt in.
 
 ---
+
+## My Hub on a phone is an app
+
+`HubShell` draws two kinds of chrome and only ever one at a time. Below `md`
+the header is just the brand mark and scrolls away with the page, and the
+places a member goes (Home, Training, Trainer) sit in a floating glass tab bar
+at the thumb (`.hub-tabbar`). From `md` up the header is sticky glass with the
+same places as links, and the tab bar is gone. That swap is what keeps the hub
+inside the three-blur budget: tab bar, sheet panel, scrim.
+
+Two more things follow from "it's an app":
+
+- **The type sits a step up on a phone.** `body:has(.hub-app)` re-points the
+  type roles one size larger below `md` (`--text-body` 15px, `--text-meta`
+  12px, and so on). Same roles, same components; the Founders Hub and wide
+  screens keep the scale in `tokens.css`. It is set on the body because sheets
+  are drawn there, outside the shell.
+- **The home has one hero, and it is the day.** The greeting is set straight
+  on the ground; the first card is Today, a charge ring (`ChargeRing`, in
+  `hub/home/ui.tsx`) with a segment for each product, lit as they're ticked
+  off with `TickRow`. The last tick fills the ring, swells its halo once and
+  lets a burst of sparks go. All of it holds still under reduced motion.
+- **Each screen leads with the thing to do.** Training opens on the next
+  session and its Start button; the week, then the plan's settings, follow.
+- **Workout mode is three parts** (`.hub-workout`): the session's bar at the
+  top (a segment per exercise, filling a set at a time), the screen for this
+  moment in the middle (the only part that scrolls), and the dock at the
+  bottom, holding the one thing to press where the thumb already is. The rest
+  between sets is a ring that runs down with the clock; finishing lights a
+  `ChargeRing` with a part for each exercise.
 
 ## Tokens
 

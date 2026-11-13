@@ -84,6 +84,8 @@ export function Ring({ value, size, stroke, label, children }: { value: number; 
   )
 }
 
+export { ChargeRing } from '../ChargeRing'
+
 /** A small round mark: ticked or not. */
 export function Dot({ on }: { on: boolean }) {
   return (

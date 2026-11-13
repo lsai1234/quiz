@@ -771,6 +771,198 @@
   .system-lever::after { display: none; }
 }
 
+/* ── TickRow ──────────────────────────────────────────────────────────────
+   The mark on a row you tap to tick: empty until done, then filled with the
+   accent. A tick just made (`data-fresh`) pops on the spring and lets a ring
+   of light go once; one already there on load simply is. */
+.system-tick {
+  position: relative;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--edge-strong);
+  color: var(--ink-on-accent);
+  transition:
+    background var(--duration-fast) var(--ease-settle),
+    border-color var(--duration-fast) var(--ease-settle),
+    transform var(--duration-fast) var(--ease-settle);
+}
+.system-tick[data-done='true'] {
+  background: var(--fill-accent);
+  border-color: transparent;
+  box-shadow: var(--glow-accent);
+}
+.system-tick[data-done='true'][data-fresh='true'] {
+  animation: system-tick-pop var(--duration-slow) var(--ease-spring);
+}
+.system-tick[data-done='true'][data-fresh='true']::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--accent);
+  pointer-events: none;
+  animation: system-tick-ring calc(var(--duration-slow) * 1.5) var(--ease-settle) forwards;
+}
+.system-tick-row:active:not(:disabled) .system-tick {
+  transform: scale(0.88);
+}
+@keyframes system-tick-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes system-tick-ring {
+  from { opacity: 0.75; transform: scale(1); }
+  to { opacity: 0; transform: scale(2.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-tick { transition: none; }
+  .system-tick[data-done='true'][data-fresh='true'] { animation: none; }
+  .system-tick[data-done='true'][data-fresh='true']::after { display: none; }
+}
+
+/* ── Member hub: the shell ────────────────────────────────────────────────
+   On a phone the hub is an app. The header is only the brand mark and scrolls
+   away with the page; the places a member goes sit in a floating glass tab
+   bar at the thumb. From `md` up the header is the chrome instead: sticky,
+   glass, with the same places as links. Only one of the two ever blurs, which
+   keeps the hub inside the three-blur budget with a sheet open. */
+.hub-header {
+  position: relative;
+  z-index: 30;
+}
+.hub-header-nav {
+  display: none;
+}
+.hub-main {
+  padding: var(--space-3) var(--gutter) var(--space-8);
+}
+/* Room for the tab bar, and for the thumb that rests on it. */
+.hub-main-tabbed {
+  padding-bottom: calc(var(--space-8) + var(--space-6) + var(--control-lg) + env(safe-area-inset-bottom));
+}
+.hub-app .hub-tabbar {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
+  transform: translateX(-50%);
+  width: min(calc(100% - var(--gutter) * 2), calc(var(--control-lg) * 7));
+  display: grid;
+  grid-template-columns: repeat(var(--tabs), minmax(0, 1fr));
+  padding: var(--space-1);
+  border-radius: var(--radius-sheet);
+  border: 1px solid var(--edge-strong);
+  background: var(--surface-2);
+  -webkit-backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
+  backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
+  box-shadow: var(--shadow-panel);
+}
+/* The light under the current tab. It slides between tabs on the spring. */
+.hub-tabbar-light {
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: var(--space-1);
+  width: calc((100% - var(--space-1) * 2) / var(--tabs));
+  border-radius: calc(var(--radius-sheet) - var(--space-1));
+  background: var(--accent-fill);
+  border: 1px solid var(--accent-line);
+  box-shadow: var(--glow-accent);
+  transform: translateX(calc(var(--tab-at) * 100%));
+  transition: transform var(--duration-slow) var(--ease-spring);
+  pointer-events: none;
+}
+.hub-tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--space-1) / 2);
+  min-height: var(--control-lg);
+  border-radius: calc(var(--radius-sheet) - var(--space-1));
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-title);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--duration-base) var(--ease-settle),
+    transform var(--duration-fast) var(--ease-settle);
+}
+.hub-tab[data-on='true'] {
+  color: var(--accent);
+}
+.hub-tab svg {
+  transition: transform var(--duration-slow) var(--ease-spring);
+}
+.hub-tab[data-on='true'] svg {
+  transform: translateY(calc(var(--space-1) / -4)) scale(1.08);
+}
+.hub-tab:active {
+  transform: scale(0.94);
+}
+/* On a phone the hub is read at arm's length, mid-set or with a shaker in the
+   other hand, so its type sits a step up from the dense tools: the same roles,
+   a size larger. On the body, because sheets are drawn there, outside the
+   shell. The Founders Hub and wide screens keep the scale in `tokens.css`. */
+@media (max-width: 767px) {
+  body:has(.hub-app) {
+    --text-meta: 12px;
+    --text-body-sm: 13px;
+    --text-body: 15px;
+    --text-lead: 17px;
+    --text-title: 21px;
+    --text-display: 28px;
+  }
+  /* The tab bar is the way home; a second link to it is clutter. */
+  .hub-app .hub-back-top {
+    display: none;
+  }
+}
+/* A founder's test-view banner sits clear of the tab bar. */
+body:has([data-hub-tabbar]) {
+  --bottom-chrome: calc(var(--control-lg) + var(--space-4));
+}
+@media (min-width: 768px) {
+  .hub-header {
+    position: sticky;
+    top: 0;
+    background: var(--surface-2);
+    -webkit-backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
+    backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
+    border-bottom: 1px solid var(--edge);
+  }
+  .hub-header-nav {
+    display: flex;
+  }
+  .hub-main,
+  .hub-main-tabbed {
+    padding: var(--space-6) var(--gutter) var(--space-8);
+  }
+  .hub-app .hub-tabbar {
+    display: none;
+  }
+  body:has([data-hub-tabbar]) {
+    --bottom-chrome: 0px;
+  }
+}
+/* In workout mode the banner sits above the dock, where the one thing to
+   press is. After the rules above, so it holds at every width. */
+body:has([data-workout]) {
+  --bottom-chrome: calc(var(--control-lg) * 2 + var(--space-8));
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-tabbar-light,
+  .hub-tab,
+  .hub-tab svg {
+    transition: none;
+  }
+}
+
 /* ── Member hub ───────────────────────────────────────────────────────────
    Shapes the hub's screens share; colours come from the component.
    `.hub-rise` brings a card in on the spring, staggered by `--rise-i`. */
@@ -815,6 +1007,181 @@
   stroke: var(--accent);
   transition: stroke-dashoffset var(--duration-slow) var(--ease-spring);
   filter: drop-shadow(0 0 var(--space-1) var(--accent-glow));
+}
+/* The charge ring: today, as a ring of segments, one per thing to take. Each
+   lights as it's ticked, with the accent's gradient and a glow; a halo behind
+   the ring brightens as it fills (`--charge`, 0–1). Full, the halo swells once
+   and a burst of sparks leaves the ring. */
+.hub-charge-ring {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+.hub-charge-halo {
+  position: absolute;
+  inset: calc(var(--space-6) * -1);
+  border-radius: var(--radius-pill);
+  background: radial-gradient(closest-side, var(--accent-glow), transparent 72%);
+  opacity: calc(0.12 + var(--charge, 0) * 0.5);
+  transition: opacity var(--duration-slow) var(--ease-settle);
+  pointer-events: none;
+}
+.hub-charge-ring[data-full='true'][data-fresh='true'] .hub-charge-halo {
+  animation: hub-charge-full calc(var(--duration-slow) * 2.4) var(--ease-settle);
+}
+.hub-charge-track {
+  stroke: var(--edge-strong);
+}
+.hub-charge-lit {
+  transition: stroke-dasharray var(--duration-slow) var(--ease-settle);
+  filter: drop-shadow(0 0 var(--space-2) var(--accent-glow));
+}
+.hub-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hub-burst > span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--space-1);
+  height: var(--space-1);
+  margin: calc(var(--space-1) / -2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-bright);
+  box-shadow: 0 0 var(--space-2) var(--accent-glow);
+  opacity: 0;
+  animation: hub-burst calc(var(--duration-slow) * 1.8) var(--ease-settle) forwards;
+  animation-delay: calc(var(--i) * 18ms);
+}
+@keyframes hub-burst {
+  0% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--ring-r) * -0.82)) scale(0.6); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--ring-r) * -1.5)) scale(0.3); }
+}
+@keyframes hub-charge-full {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.22); opacity: 0.95; }
+  100% { transform: scale(1); }
+}
+/* Workout mode: full screen, lit from above. The top and the dock hold still;
+   only the middle scrolls. */
+.hub-workout {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 50% at 50% -8%, var(--accent-fill), transparent 72%),
+    var(--ground-base);
+}
+.hub-workout-top {
+  padding: calc(env(safe-area-inset-top) + var(--space-3)) var(--space-4) var(--space-3);
+}
+.hub-workout-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+.hub-workout-dock {
+  padding: var(--space-3) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-4));
+  border-top: 1px solid var(--edge);
+  background: var(--ground-base);
+}
+/* A bar per exercise; each fills a set at a time. */
+.hub-workout-steps {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: var(--space-1);
+}
+.hub-workout-steps > span {
+  height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.hub-workout-steps > span > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fill-accent);
+  transform-origin: left center;
+  transition: transform var(--duration-slow) var(--ease-settle);
+}
+/* A row in the workout: a warm-up move, the weight, the reps. */
+.hub-workout-row {
+  min-height: calc(var(--control-lg) + var(--space-3));
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--surface-1);
+  border: 1px solid var(--edge);
+}
+.hub-workout-count {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  font-size: var(--text-meta);
+}
+.hub-workout-value {
+  min-width: calc(var(--space-8) * 3);
+  text-align: center;
+  white-space: nowrap;
+}
+/* The sets of this exercise as dots: done, this one, to come. */
+.hub-set-dots {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.hub-set-dots > span {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--edge-strong);
+  transition: background var(--duration-base) var(--ease-settle), box-shadow var(--duration-base) var(--ease-settle);
+}
+.hub-set-dots > span[data-on='true'] {
+  background: var(--accent);
+}
+.hub-set-dots > span[data-now='true'] {
+  background: var(--accent-bright);
+  box-shadow: 0 0 0 var(--space-1) var(--accent-fill), 0 0 var(--space-2) var(--accent-glow);
+}
+/* The rest ring's arc: it runs down with the clock, so it moves evenly. */
+.hub-rest-arc {
+  transition: stroke-dashoffset 250ms linear;
+  filter: drop-shadow(0 0 var(--space-2) var(--accent-glow));
+}
+/* The tick in the finished ring: it lands once the ring is lit. */
+.hub-finish-mark {
+  display: inline-flex;
+  color: var(--accent);
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity var(--duration-base) var(--ease-settle),
+    transform var(--duration-slow) var(--ease-spring);
+}
+.hub-finish-mark[data-on='true'] {
+  opacity: 1;
+  transform: none;
+}
+/* A tile is pressed through the link stretched over it, so the card under it
+   gives under the thumb from there. */
+[data-tile]:has([data-tile-link]:active) > .system-card-interactive {
+  transform: scale(0.975);
+  transition-duration: var(--duration-fast);
 }
 /* Big tabular numerals for counts and days. */
 .hub-figure {
@@ -913,6 +1280,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hub-workout-steps > span > span,
+  .hub-set-dots > span,
+  .hub-rest-arc,
+  .hub-finish-mark {
+    transition: none;
+  }
+  .hub-charge-halo,
+  .hub-charge-lit {
+    transition: none;
+  }
+  .hub-charge-ring[data-full='true'][data-fresh='true'] .hub-charge-halo {
+    animation: none;
+  }
+  .hub-burst {
+    display: none;
+  }
   .hub-rise {
     animation: none;
   }

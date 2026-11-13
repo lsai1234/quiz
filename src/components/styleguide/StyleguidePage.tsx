@@ -24,6 +24,7 @@ import {
   SkeletonText,
   Tabs,
   Textarea,
+  TickRow,
 } from '@/components/system'
 
 /**
@@ -42,6 +43,7 @@ export function StyleguidePage() {
   const [usage, setUsage] = useState('normal')
   const [day, setDay] = useState(15)
   const [rating, setRating] = useState<number | null>(4)
+  const [ticked, setTicked] = useState<Record<string, boolean>>({ creatine: true })
 
   return (
     <Ground>
@@ -313,6 +315,27 @@ export function StyleguidePage() {
               ariaLabel: `${d} of the month`,
             }))}
           />
+        </Section>
+
+        <Section
+          title="Ticking something off"
+          note="One thing, done or not. The whole row is the control, so a thumb lands anywhere on it; a tick just made pops and lets a ring of light go once. The member hub's Today is built from these."
+        >
+          <div className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+            {[
+              { id: 'whey', label: 'Whey Protein', sub: '1 serving' },
+              { id: 'creatine', label: 'Creatine Monohydrate', sub: '1 serving' },
+            ].map((row) => (
+              <TickRow
+                key={row.id}
+                label={row.label}
+                sub={row.sub}
+                done={ticked[row.id] === true}
+                name={ticked[row.id] ? `Mark ${row.label} as not taken` : `Mark ${row.label} as taken`}
+                onClick={() => setTicked((t) => ({ ...t, [row.id]: !t[row.id] }))}
+              />
+            ))}
+          </div>
         </Section>
 
         <Section

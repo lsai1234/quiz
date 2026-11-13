@@ -36,7 +36,7 @@ export function TrainerPage() {
   const back = buttonSurface('ghost', 'sm')
   return (
     <HubShell onSignOut={logout} nav="trainer">
-      <div style={{ marginBottom: 'var(--space-4)' }}>
+      <div className="hub-back-top" style={{ marginBottom: 'var(--space-4)' }}>
         <Link href="/myhub" className={back.className} style={back.style} data-back-hub>
           ← {C.backToHub}
         </Link>

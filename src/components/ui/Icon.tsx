@@ -98,6 +98,8 @@ const GLYPHS = {
   dot: <circle cx="12" cy="12" r="2.5" />,
   lock: <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
   'log-out': <><path d="M9.5 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4.5" /><path d="M16 8l4 4-4 4" /><path d="M20 12H9.5" /></>,
+  // The member hub's tab bar: home.
+  home: <><path d="M3.5 10.5 12 3.5l8.5 7" /><path d="M5.5 9.5V20h13V9.5" /><path d="M10 20v-5.5h4V20" /></>,
 
   // ── Subscription / delivery ──
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
