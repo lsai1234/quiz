@@ -155,6 +155,21 @@ async function sampleTraining(user: UserRecord, now: Date, how: { check: 'waitin
         : s,
     ),
   }
+  // Late in the week every strength session can fall before today. A test view
+  // still needs one to come, so workout mode always has a session to open: the
+  // last one not done moves to today.
+  if (!plan.sessions.some((s) => s.type === 'strength' && !s.done && s.day >= today)) {
+    const last = [...plan.sessions].reverse().find((s) => s.type === 'strength' && !s.done)
+    const moved = last ?? [...plan.sessions].reverse().find((s) => s.type === 'strength')
+    if (moved) {
+      plan = {
+        ...plan,
+        sessions: plan.sessions.map((s) =>
+          s.id === moved.id && s.type === 'strength' ? { ...s, day: today as typeof s.day, done: false, exercises: s.exercises.map((e) => ({ ...e, doneSets: 0 })) } : s,
+        ),
+      }
+    }
+  }
   // A week of history behind each lift, so "last time" and the next step show.
   for (const s of plan.sessions) {
     if (s.type !== 'strength') continue

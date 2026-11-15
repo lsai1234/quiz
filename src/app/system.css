@@ -854,7 +854,12 @@
   padding: var(--space-1);
   border-radius: var(--radius-sheet);
   border: 1px solid var(--edge-strong);
-  background: var(--surface-2);
+  /* Glass over a dark base. The page scrolls under this bar, bold figures and
+     all, and where a browser blurs weakly (or not at all) the base is what
+     keeps the labels readable. */
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)),
+    color-mix(in srgb, var(--ground-base) 78%, transparent);
   -webkit-backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
   backdrop-filter: blur(var(--blur-nav)) saturate(var(--blur-saturate));
   box-shadow: var(--shadow-panel);
