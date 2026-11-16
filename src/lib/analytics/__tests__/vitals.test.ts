@@ -44,7 +44,7 @@ describe('the pieces', () => {
   })
 
   it('names the part of the site from the path', () => {
-    expect(['/quizv2', '/consult', '/', '/shop/x', '/product/y', '/myhub', null].map(areaOf)).toEqual(['consult', 'consult', 'quiz', 'shop', 'shop', 'other', 'other'])
+    expect(['/quizv2', '/consult', '/quiz', '/', '/shop/x', '/product/y', '/myhub', null].map(areaOf)).toEqual(['consult', 'consult', 'quiz', 'shop', 'shop', 'shop', 'other', 'other'])
   })
 
   it('takes a nearest-rank percentile', () => {

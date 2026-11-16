@@ -154,7 +154,7 @@ export function TrainingPage() {
       ) : !state.access.enabled ? (
         <Closed title={C.offTitle} body={C.offBody} />
       ) : !state.access.allowed ? (
-        <Closed title={C.noAccessTitle} body={C.noAccessBody} cta={{ href: '/', label: C.noAccessCta }} />
+        <Closed title={C.noAccessTitle} body={C.noAccessBody} cta={{ href: '/quiz', label: C.noAccessCta }} />
       ) : !state.readiness ? (
         <Readiness busy={busy === 'ready:'} onCleared={() => void act({ action: 'ready' })} />
       ) : !state.plan ? (

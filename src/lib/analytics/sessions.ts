@@ -162,7 +162,8 @@ export function patchFromEvent(input: {
 
   switch (event) {
     case 'page_view':
-      if (input.path === '/') patch.landing_at = at
+      // The quiz's own landing: `/quiz` (and `/` before the shop took the main address).
+      if (input.path === '/quiz') patch.landing_at = at
       break
     case 'shop_view':
       patch.shop_at = at

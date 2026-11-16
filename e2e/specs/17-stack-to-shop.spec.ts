@@ -17,11 +17,13 @@ import { completeQuiz, REVEAL_HEADING } from '../support/quiz'
  */
 
 test('the landing page offers the shop to somebody who does not want a quiz', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/quiz')
   const link = page.getByRole('link', { name: /browse the whole shop/i })
   await expect(link).toBeVisible()
   await link.click()
-  await expect(page).toHaveURL(/\/shop/)
+  // The shop is the main address now.
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('combobox').first()).toBeVisible()
 })
 
 test.describe('the door out of a stack', () => {

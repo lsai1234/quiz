@@ -56,7 +56,7 @@ import type { CodeKind } from '@/components/checkout/PartnerCodeBox'
 import { formatGBP, getPricingConfig, resolveTier, type DiscountTier } from '@/lib/stack-blueprint/pricing'
 
 /** Where the shop's "back to your stack" link goes. */
-export const STACK_RETURN_HREF = '/#stack'
+export const STACK_RETURN_HREF = '/quiz#stack'
 
 /**
  * The hash that reopens the reveal.

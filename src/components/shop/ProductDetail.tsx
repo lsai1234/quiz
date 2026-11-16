@@ -74,7 +74,7 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
           cupboard full of shakers — and the offer reads as one we would honour. */}
       {product.subscriptionEligible && !isAccessory(product) && (
         <Link
-          href="/"
+          href="/quiz"
           data-interactive
           className="flex items-center"
           style={{ gap: 'var(--space-3)', background: 'var(--surface)', borderRadius: 'var(--r-card)', padding: 'var(--space-4)' }}

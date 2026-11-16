@@ -64,7 +64,7 @@ export async function shareAssetsFor(
         code: code.code,
         discountPct: Number(code.discountPct) || 0,
         encoded: encodeSharePayload(sampleFor(code.code)),
-        link: `${origin}/?ref=${encodeURIComponent(code.code)}`,
+        link: `${origin}/quiz?ref=${encodeURIComponent(code.code)}`,
         cardsCreated: cards.length,
         cardViews: cards.reduce((n, c) => n + c.viewCount, 0),
       }

@@ -505,7 +505,7 @@ function TermsTab({ data }: { data: Data }) {
 
 function ShareLink({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
-  const url = typeof window === 'undefined' ? `/?ref=${code}` : `${window.location.origin}/?ref=${code}`
+  const url = typeof window === 'undefined' ? `/quiz?ref=${code}` : `${window.location.origin}/quiz?ref=${code}`
 
   return (
     <div>

@@ -494,7 +494,7 @@ function ShareLink({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
   // Read at render rather than hard-coded: the hub runs on preview domains too,
   // and a link to the wrong host is worse than no link.
-  const url = typeof window === 'undefined' ? `/?ref=${code}` : `${window.location.origin}/?ref=${code}`
+  const url = typeof window === 'undefined' ? `/quiz?ref=${code}` : `${window.location.origin}/quiz?ref=${code}`
 
   return (
     <div className="mb-3">

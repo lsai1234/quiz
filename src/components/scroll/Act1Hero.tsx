@@ -187,7 +187,7 @@ export function Act1Hero({ onEnterQuiz, onEnterConsult, offer = 'quiz-only', red
         */}
         <div className="flex justify-center mt-5">
           <Link
-            href="/shop"
+            href="/"
             data-interactive
             className="text-[11px] text-white/45 hover:text-white/80 underline underline-offset-4 decoration-white/20 transition-colors"
           >

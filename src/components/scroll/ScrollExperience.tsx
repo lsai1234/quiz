@@ -149,7 +149,7 @@ export function ScrollExperience() {
     }
 
     /*
-      `/#stack` reopens the reveal.
+      `/quiz#stack` reopens the reveal.
 
       This experience is one route with five acts and no URL of its own, so
       anything outside it — the shop, in this case — has nowhere to point when

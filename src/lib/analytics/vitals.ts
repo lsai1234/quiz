@@ -46,8 +46,8 @@ export const AREA_LABEL: Record<Area, string> = { all: 'Everywhere', consult: 'C
 export function areaOf(path: string | null): Exclude<Area, 'all'> {
   if (!path) return 'other'
   if (path.startsWith('/quizv2') || path.startsWith('/consult')) return 'consult'
-  if (path === '/' || path.startsWith('/quiz')) return 'quiz'
-  if (path.startsWith('/shop') || path.startsWith('/product') || path.startsWith('/bundles')) return 'shop'
+  if (path.startsWith('/quiz')) return 'quiz'
+  if (path === '/' || path.startsWith('/shop') || path.startsWith('/product') || path.startsWith('/bundles')) return 'shop'
   return 'other'
 }
 

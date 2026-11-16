@@ -9,8 +9,8 @@ const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://getchrgd.co.uk').repl
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
-    { url: `${BASE}/`, changeFrequency: 'weekly', priority: 1 },
-    { url: `${BASE}/shop`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE}/`, changeFrequency: 'daily', priority: 1 },
+    { url: `${BASE}/quiz`, changeFrequency: 'weekly', priority: 0.9 },
   ]
 
   let bundleRoutes: MetadataRoute.Sitemap = []

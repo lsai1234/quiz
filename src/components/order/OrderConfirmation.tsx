@@ -198,7 +198,7 @@ function PrimaryCta({ href, label, cta, icon }: { href: string; label: string; c
 function QuizInvitation() {
   return (
     <Link
-      href="/"
+      href="/quiz"
       onClick={() => track('confirmation_cta', { cta: 'take_quiz' })}
       className={[
         'flex items-center gap-3 w-full mt-3 rounded-2xl px-4 py-4',

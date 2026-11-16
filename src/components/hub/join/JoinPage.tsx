@@ -141,7 +141,7 @@ export function JoinPage() {
               <Note tone="info">{C.offSale}</Note>
               <div style={{ marginTop: "var(--space-3)" }}>
                 <Link
-                  href="/"
+                  href="/quiz"
                   className={quizLink.className}
                   style={quizLink.style}
                 >
@@ -307,7 +307,7 @@ export function JoinPage() {
               </p>
               <div style={{ marginTop: "var(--space-3)" }}>
                 <Link
-                  href="/"
+                  href="/quiz"
                   className={quizLink.className}
                   style={quizLink.style}
                 >

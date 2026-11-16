@@ -213,12 +213,12 @@ test('a partner claims their stack from a link, with no account and nothing to t
     signed up to make.
   */
   await expect(page.getByText(publicCode).first()).toBeVisible()
-  await expect(page.getByText(new RegExp(`/\\?ref=${publicCode}`))).toBeVisible()
+  await expect(page.getByText(new RegExp(`/quiz\\?ref=${publicCode}`))).toBeVisible()
   await expect(page.getByRole('link', { name: /your assets/i })).toBeVisible()
 
   // ── The quiz ──────────────────────────────────────────────────────────────
   await page.getByRole('button', { name: /claim my free stack/i }).click()
-  await expect(page).toHaveURL(/\/$|\/\?/)
+  await expect(page).toHaveURL(/\/quiz(\?|$)/)
 
   await completeQuiz(page)
 
@@ -316,7 +316,7 @@ test('a partner claims their stack from a link, with no account and nothing to t
 test('the claim flag alone buys nothing, and promises nothing on screen', async ({ page }) => {
   const { code } = seed('flagonly')
 
-  await page.goto('/')
+  await page.goto('/quiz')
   await page.evaluate(() => sessionStorage.setItem('chrgd.claiming-starter', '1'))
   await completeQuiz(page)
 
@@ -356,7 +356,7 @@ test('a partner who has not signed the agreement is not shown a free stack', asy
   const session = signIn(id)
   await page.context().addCookies([{ name: 'partner_session', value: session, url: page.url() }])
 
-  await page.goto('/')
+  await page.goto('/quiz')
   await page.evaluate(() => sessionStorage.setItem('chrgd.claiming-starter', '1'))
   await completeQuiz(page)
 

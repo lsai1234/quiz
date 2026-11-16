@@ -225,7 +225,7 @@ export function BundleLandingPage({ bundle }: Props) {
             getCHRGD
           </span>
           <Link
-            href="/"
+            href="/quiz"
             className="text-xs font-semibold active:opacity-70 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
           >

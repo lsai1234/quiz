@@ -53,7 +53,7 @@ const money = (n: number) => `£${n.toFixed(2)}`
  * the dashboard's `ShareLink` builds it.
  */
 function shareLink(code: string): string {
-  return typeof window === 'undefined' ? `/?ref=${code}` : `${window.location.origin}/?ref=${code}`
+  return typeof window === 'undefined' ? `/quiz?ref=${code}` : `${window.location.origin}/quiz?ref=${code}`
 }
 
 /**
@@ -425,7 +425,7 @@ export function StarterStack({ token }: Props = {}) {
                 iconRight="arrow-right"
                 onClick={() => {
                   markClaimingStarter()
-                  window.location.href = '/'
+                  window.location.href = '/quiz'
                 }}
               >
                 Claim my free stack

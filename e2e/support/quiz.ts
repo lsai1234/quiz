@@ -35,7 +35,7 @@ export type Track = 'performance' | 'wellbeing'
 
 /** Act 1 — choose a track and enter the questions. */
 export async function startQuiz(page: Page, track: Track = 'performance'): Promise<void> {
-  await page.goto('/')
+  await page.goto('/quiz')
   const entry = {
     performance: /Performance \+ wellness/,
     wellbeing: /Everyday wellness/,

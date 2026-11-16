@@ -26,18 +26,18 @@ import {
 const T = (min: number) => new Date(Date.UTC(2026, 9, 1, 12, min)).toISOString()
 
 const JOURNEY: { event: string; props: EventProps; path: string; at: string }[] = [
-  { event: 'page_view', props: { arm: 'v1' }, path: '/', at: T(0) },
-  { event: 'quiz_start', props: { arm: 'v1' }, path: '/', at: T(1) },
-  { event: 'quiz_step_view', props: { arm: 'v2', stepId: 'goals', index: 0 }, path: '/', at: T(1) },
-  { event: 'quiz_step_view', props: { arm: 'v2', stepId: 'personal', index: 2, track: 'performance' }, path: '/', at: T(2) },
-  { event: 'quiz_profile', props: { arm: 'v2', ageBracket: '25-34', gender: 'female' }, path: '/', at: T(2) },
-  { event: 'quiz_complete', props: { arm: 'v2', msTotal: 154_000, primaryGoal: 'muscle' }, path: '/', at: T(4) },
-  { event: 'stack_reveal_view', props: { arm: 'v2' }, path: '/', at: T(5) },
-  { event: 'checkout_start', props: { arm: 'v2', source: 'quiz' }, path: '/', at: T(7) },
+  { event: 'page_view', props: { arm: 'v1' }, path: '/quiz', at: T(0) },
+  { event: 'quiz_start', props: { arm: 'v1' }, path: '/quiz', at: T(1) },
+  { event: 'quiz_step_view', props: { arm: 'v2', stepId: 'goals', index: 0 }, path: '/quiz', at: T(1) },
+  { event: 'quiz_step_view', props: { arm: 'v2', stepId: 'personal', index: 2, track: 'performance' }, path: '/quiz', at: T(2) },
+  { event: 'quiz_profile', props: { arm: 'v2', ageBracket: '25-34', gender: 'female' }, path: '/quiz', at: T(2) },
+  { event: 'quiz_complete', props: { arm: 'v2', msTotal: 154_000, primaryGoal: 'muscle' }, path: '/quiz', at: T(4) },
+  { event: 'stack_reveal_view', props: { arm: 'v2' }, path: '/quiz', at: T(5) },
+  { event: 'checkout_start', props: { arm: 'v2', source: 'quiz' }, path: '/quiz', at: T(7) },
   { event: 'purchase', props: { arm: 'v2', value: 39.99, journey_variant: 'quiz_subscription' }, path: '/order/confirmation', at: T(9) },
 ]
 
-const CTX = { land: '/', utm_source: 'instagram', utm_medium: 'paid' }
+const CTX = { land: '/quiz', utm_source: 'instagram', utm_medium: 'paid' }
 const DEVICE = { device: 'mobile' as const, os: 'iOS', browser: 'Instagram app', bot: false }
 
 function patches(list = JOURNEY) {
@@ -62,7 +62,7 @@ describe('patchFromEvent + applyPatch', () => {
       last_seen: T(9),
       events: 9,
       internal: 0,
-      landing_path: '/',
+      landing_path: '/quiz',
       source: 'Instagram',
       channel: 'Paid',
       device: 'mobile',
@@ -90,7 +90,7 @@ describe('patchFromEvent + applyPatch', () => {
   })
 
   it('does not let an old client with no context fix the source as "Direct"', () => {
-    const p = patchFromEvent({ event: 'page_view', props: {}, path: '/', at: T(0), ctx: {}, device: DEVICE })
+    const p = patchFromEvent({ event: 'page_view', props: {}, path: '/quiz', at: T(0), ctx: {}, device: DEVICE })
     expect('source' in p).toBe(false)
   })
 
@@ -119,15 +119,15 @@ describe('the upsert', () => {
   })
 
   it('keeps a visit internal once any of it came from a signed-in founder', async () => {
-    await recordSessionEvent('s2', patchFromEvent({ event: 'page_view', props: {}, path: '/', at: T(0), internal: true }))
-    await recordSessionEvent('s2', patchFromEvent({ event: 'quiz_start', props: {}, path: '/', at: T(1), internal: false }))
+    await recordSessionEvent('s2', patchFromEvent({ event: 'page_view', props: {}, path: '/quiz', at: T(0), internal: true }))
+    await recordSessionEvent('s2', patchFromEvent({ event: 'quiz_start', props: {}, path: '/quiz', at: T(1), internal: false }))
     const [row] = await listSessions(null, T(60))
     expect(row.internal).toBe(1)
   })
 
   it('lists visits by when they began, within the window', async () => {
-    await recordSessionEvent('early', patchFromEvent({ event: 'page_view', props: {}, path: '/', at: T(0) }))
-    await recordSessionEvent('late', patchFromEvent({ event: 'page_view', props: {}, path: '/', at: T(30) }))
+    await recordSessionEvent('early', patchFromEvent({ event: 'page_view', props: {}, path: '/quiz', at: T(0) }))
+    await recordSessionEvent('late', patchFromEvent({ event: 'page_view', props: {}, path: '/quiz', at: T(30) }))
     expect((await listSessions(T(10), T(60))).map((r) => r.session_id)).toEqual(['late'])
     expect((await listSessions(null, T(60))).map((r) => r.session_id)).toEqual(['late', 'early'])
   })

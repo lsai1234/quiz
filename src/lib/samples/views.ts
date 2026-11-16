@@ -68,15 +68,15 @@ export const SAMPLE_SCENARIOS: SampleScenario[] = [
 export type SamplePerson = 'gym' | 'runner' | 'wellbeing' | 'vegan' | 'consult'
 export const SAMPLE_PEOPLE: SamplePerson[] = ['gym', 'runner', 'wellbeing', 'vegan', 'consult']
 
-const results = (person: SamplePerson, plan: 'oneoff' | 'monthly') => `/?test=results&person=${person}&plan=${plan}`
+const results = (person: SamplePerson, plan: 'oneoff' | 'monthly') => `/quiz?test=results&person=${person}&plan=${plan}`
 const member = (id: string, group: string, label: string, note: string, scenario: SampleScenario, href = '/myhub'): TestViewDef => ({ id, group, label, note, kind: 'member', href, scenario })
 
 export const TEST_VIEWS: TestViewDef[] = [
-  { id: 'quiz-performance', group: 'Quiz', label: 'Classic quiz · performance', note: 'From the first question, on the performance track', kind: 'link', href: '/?quizArm=v1&test=quiz&track=performance' },
-  { id: 'quiz-wellbeing', group: 'Quiz', label: 'Classic quiz · everyday wellness', note: 'From the first question, on the wellness track', kind: 'link', href: '/?quizArm=v1&test=quiz&track=wellbeing' },
-  { id: 'quiz-adaptive', group: 'Quiz', label: 'Adaptive quiz', note: 'The newer quiz, from the first question', kind: 'link', href: '/?quizArm=v2&test=quiz' },
+  { id: 'quiz-performance', group: 'Quiz', label: 'Classic quiz · performance', note: 'From the first question, on the performance track', kind: 'link', href: '/quiz?quizArm=v1&test=quiz&track=performance' },
+  { id: 'quiz-wellbeing', group: 'Quiz', label: 'Classic quiz · everyday wellness', note: 'From the first question, on the wellness track', kind: 'link', href: '/quiz?quizArm=v1&test=quiz&track=wellbeing' },
+  { id: 'quiz-adaptive', group: 'Quiz', label: 'Adaptive quiz', note: 'The newer quiz, from the first question', kind: 'link', href: '/quiz?quizArm=v2&test=quiz' },
   { id: 'quiz-consult', group: 'Quiz', label: 'Amp Consult', note: 'The consult, founders only', kind: 'link', href: '/quizv2' },
-  { id: 'quiz-hub', group: 'Quiz', label: 'Quiz after joining the hub', note: 'Ends in the hub, not the results page; nothing is saved', kind: 'link', href: '/?then=hub&test=quiz' },
+  { id: 'quiz-hub', group: 'Quiz', label: 'Quiz after joining the hub', note: 'Ends in the hub, not the results page; nothing is saved', kind: 'link', href: '/quiz?then=hub&test=quiz' },
 
   { id: 'results-gym', group: 'Results page', label: 'Gym-goer · one-off', note: 'Muscle and strength, trains four days', kind: 'link', href: results('gym', 'oneoff') },
   { id: 'results-gym-monthly', group: 'Results page', label: 'Gym-goer · monthly', note: 'The same stack on the monthly plan', kind: 'link', href: results('gym', 'monthly') },
@@ -113,7 +113,7 @@ export const TEST_VIEWS: TestViewDef[] = [
   member('trainer-video', 'Training and trainer', 'A form check and a video note', 'Video on: the member’s clip, the trainer’s note, sharing', 'trainer-video', '/myhub/trainer'),
   member('trainer-about', 'Training and trainer', 'About the trainer', 'Photo, qualifications, reply time and intro video', 'trainer-answered', '/myhub/trainer/about'),
 
-  { id: 'shop-front', group: 'Shop', label: 'Shop front with the hub card', note: 'The shop, with the hub on sale', kind: 'link', href: '/shop' },
+  { id: 'shop-front', group: 'Shop', label: 'Shop front with the hub card', note: 'The shop, with the hub on sale', kind: 'link', href: '/' },
   { id: 'shop-join-out', group: 'Shop', label: 'Hub join page · signed out', note: 'What a visitor sees first', kind: 'link', href: '/shop/hub' },
   member('shop-join-in', 'Shop', 'Hub join page · signed in', 'Ready to join, as a sample member', 'none', '/shop/hub'),
   member('shop-deal', 'Shop', 'Basket with a member price', 'Member prices open, ready to add', 'deals-open', '/myhub#deals'),

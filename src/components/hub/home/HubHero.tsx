@@ -75,7 +75,7 @@ export function HubHero({ home, name }: { home: HubHome; name: string | null }) 
         <div style={{ marginTop: 'var(--space-4)' }}>
           <p style={body}>{a.state === 'ended' ? C.endedBody : C.noneBody}</p>
           <div style={{ marginTop: 'var(--space-4)' }}>
-            <Link href="/" className={cta.className} style={cta.style}>
+            <Link href="/quiz" className={cta.className} style={cta.style}>
               {a.state === 'ended' ? C.endedCta : C.noneCta}
             </Link>
           </div>

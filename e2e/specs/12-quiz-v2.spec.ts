@@ -50,7 +50,7 @@ async function answerOne(page: Page, prefer?: string): Promise<string> {
 
 /** Open v2 and choose goals. */
 async function startV2(page: Page, goal = 'More energy') {
-  await page.goto('/?quizArm=v2')
+  await page.goto('/quiz?quizArm=v2')
   const track = page.getByRole('button', { name: /Performance \+ wellness/ })
   await expect(track).toBeVisible()
   // The page is server-rendered, so the button is clickable a moment before
@@ -202,7 +202,7 @@ test.describe('when the AI steer fails', () => {
 
 test.describe('the experiment switch', () => {
   test('the homepage serves v1 while the experiment is off', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     await page.getByRole('button', { name: /Performance \+ wellness/ }).click()
     await expect(page.getByRole('button', { name: 'Build muscle' })).toBeVisible()
     // v1's goals step is followed by its own copy; v2's opening question is not
@@ -211,7 +211,7 @@ test.describe('the experiment switch', () => {
   })
 
   test('?quizArm=v2 pins the new quiz without switching it on for anyone else', async ({ page }) => {
-    await page.goto('/?quizArm=v2')
+    await page.goto('/quiz?quizArm=v2')
     const track = page.getByRole('button', { name: /Performance \+ wellness/ })
     // Same hydration race as the v1 helper guards against: the hero is
     // server-rendered, so the card is clickable before React has attached and a

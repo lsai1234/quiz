@@ -120,14 +120,15 @@ export function surfaceForPath(path: string | null | undefined): Surface {
   if (!path) return 'unknown'
   if (path.startsWith('/founderhub')) return 'hub'
   if (path.startsWith('/myhub')) return 'myhub'
-  if (path.startsWith('/shop')) return 'shop'
+  // The main address is the shop; the quiz is at /quiz.
+  if (path === '/' || path.startsWith('/shop')) return 'shop'
   if (path.startsWith('/order')) return 'checkout'
   if (path.startsWith('/api/webhooks')) return 'webhook'
   if (path.startsWith('/api/cron')) return 'cron'
   if (path.startsWith('/api/checkout')) return 'checkout'
   if (path.startsWith('/api')) return 'api'
-  // The quiz is the root scroll experience plus the bundle and share routes it
-  // hands off to; everything customer-facing that isn't the shop or the hub.
-  if (path === '/' || path.startsWith('/bundles') || path.startsWith('/s/')) return 'quiz'
+  // The quiz, plus the bundle and share routes it hands off to; everything
+  // customer-facing that isn't the shop or the hub.
+  if (path.startsWith('/quiz') || path.startsWith('/bundles') || path.startsWith('/s/')) return 'quiz'
   return 'unknown'
 }

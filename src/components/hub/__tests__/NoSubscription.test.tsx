@@ -56,7 +56,7 @@ describe('the no-plan hub', () => {
   it('makes the quiz the way in', () => {
     render(<NoSubscription name="Sam" />)
     const build = screen.getByRole('link', { name: /build your stack/i })
-    expect(build).toHaveAttribute('href', '/')
+    expect(build).toHaveAttribute('href', '/quiz')
   })
 
   it('offers the shop too, because a plan is not the only way to buy', () => {

@@ -176,7 +176,7 @@ function FallbackMasthead({ products }: { products: CatalogueProduct[] }) {
 
   return (
     <Link
-      href="/"
+      href="/quiz"
       data-interactive
       className="relative flex flex-col justify-end overflow-hidden"
       style={{ borderRadius: 'var(--r-card)', background: 'var(--surface)', minHeight: 132, padding: 'var(--space-5)' }}

@@ -108,7 +108,7 @@ describe('joining (mock payments)', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     // No answers on record yet: the quiz in hub mode, not the results page.
-    expect(body).toMatchObject({ ok: true, mock: true, checkoutUrl: '/?then=hub' })
+    expect(body).toMatchObject({ ok: true, mock: true, checkoutUrl: '/quiz?then=hub' })
 
     const plan = await getHubPlan(u.id)
     expect(plan).toMatchObject({ status: 'active', monthly: 10 })

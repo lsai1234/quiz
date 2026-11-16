@@ -48,8 +48,21 @@ const NINETY_DAYS_SECONDS = 90 * 24 * 60 * 60
 /** Codes are `[A-Z0-9-]` after normalising; anything else is not one of ours. */
 const PLAUSIBLE = /^[A-Za-z0-9-]{2,32}$/
 
+/**
+ * ── The quiz moved to /quiz ─────────────────────────────────────────────────
+ * The main address is the shop now. Links already out in the world that came
+ * to `/` for the quiz still carry something only the quiz reads: a partner's
+ * `?ref=`, the hub's `?then=hub`, a pinned arm, a test view. Those are sent on
+ * to `/quiz` with everything they carried; a plain `/` is the shop. A code on
+ * a shop link is `/shop?ref=…`, which stays in the shop.
+ */
+const QUIZ_PARAMS = ['ref', 'then', 'test', 'quizArm', 'consultArm', 'person', 'track']
+
 export function proxy(req: NextRequest) {
-  const response = NextResponse.next()
+  const toQuiz = req.nextUrl.pathname === '/' && QUIZ_PARAMS.some((k) => req.nextUrl.searchParams.has(k))
+  const response = toQuiz
+    ? NextResponse.redirect(new URL(`/quiz${req.nextUrl.search}`, req.url), 307)
+    : NextResponse.next()
 
   const ref = req.nextUrl.searchParams.get('ref')
   if (ref && PLAUSIBLE.test(ref)) {

@@ -243,7 +243,7 @@ export function BasketDrawer({
 
               {/* Subscribe-&-save nudge → the personalised quiz */}
               <Link
-                href="/"
+                href="/quiz"
                 className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-medium active:scale-[0.99] transition-transform"
                 style={{ color: 'var(--text)', background: 'var(--surface)' }}
               >

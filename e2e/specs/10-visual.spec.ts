@@ -45,14 +45,14 @@ async function settle(page: import('@playwright/test').Page) {
 
 test.describe('the storefront', () => {
   test('the quiz hero', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await settle(page)
     await expect(page).toHaveScreenshot('quiz-hero.png', STILL)
   })
 
   test('the first question', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     const entry = page.getByRole('button', { name: /Performance \+ wellness/ })
     await expect(entry).toBeVisible()
     await expect

@@ -84,7 +84,7 @@ export function NoSubscription({
           invitation rather than a third grey pill: a glyph in a tinted disc, a
           headline, one line of why. */}
       <Link
-        href="/"
+        href="/quiz"
         className={[
           // `items-start`, not centre: the copy runs to three lines on a phone,
           // and a glyph floating level with the middle of a paragraph reads as

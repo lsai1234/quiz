@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { ShopShell } from '@/components/shop/ShopShell'
 
 export const metadata: Metadata = {
+  // The shop's own address is `/`; this one stays for every link already out there.
+  alternates: { canonical: '/' },
   title: 'Shop — CHRGD',
   description: 'Shop the full CHRGD range — protein, performance, hydration, everyday health and more. Swipe the shelves, add to basket, or take the quiz for a stack built around your goals.',
   openGraph: {

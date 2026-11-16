@@ -26,8 +26,8 @@ export function ConsultPage({ aiConfigured }: Props) {
       <AmpConsult
         reopen={reopen}
         ai={aiConfigured}
-        onExit={() => router.push('/')}
-        onHandoff={() => router.push('/#stack')}
+        onExit={() => router.push('/quiz')}
+        onHandoff={() => router.push('/quiz#stack')}
       />
     </>
   )

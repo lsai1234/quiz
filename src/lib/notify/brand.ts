@@ -133,7 +133,7 @@ export function defaultMarketing(base: string, audience: MarketingAudience = 'pr
       'One box, one payment, on your own rhythm. Monthly, or every other month for the things that last.',
       'Swap, pause or cancel any of it yourself, any time, from your hub. No email to write and nobody to ask.',
     ],
-    cta: { label: 'Take the quiz', url: `${base}/` },
+    cta: { label: 'Take the quiz', url: `${base}/quiz` },
   }
 }
 

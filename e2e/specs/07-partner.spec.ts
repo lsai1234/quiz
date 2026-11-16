@@ -102,7 +102,7 @@ test.describe('the portal', () => {
   })
 
   test('the portal is closed to anyone not signed in', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     const res = await page.request.get('/api/partner/me')
     expect(res.status()).toBe(401)
   })

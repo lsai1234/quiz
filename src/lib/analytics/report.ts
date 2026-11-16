@@ -499,7 +499,7 @@ const LABELS: Partial<Record<DimensionKey, Record<string, string>>> = {
   track: { performance: 'Performance', wellbeing: 'Wellbeing' },
   arm: { v1: 'Original quiz', v2: 'Adaptive quiz' },
   door: { quiz: 'Quiz', consult: 'Amp Consult' },
-  landing_path: { '/': 'Home page (the quiz)', '/s/*': 'A shared stack card', '/shop': 'Shop' },
+  landing_path: { '/': 'Home page (the shop)', '/quiz': 'The quiz', '/s/*': 'A shared stack card', '/shop': 'Shop' },
   weekday: Object.fromEntries(WEEKDAYS.map((d, i) => [String(i), d])),
   hour: Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h), `${pad(h)}:00`])),
 }

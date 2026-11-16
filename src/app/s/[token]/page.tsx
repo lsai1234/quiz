@@ -74,7 +74,7 @@ export default async function SharedCardPage({ params }: Props) {
   await recordShareCardView(card.token).catch(() => {})
 
   const view = buildShareCardView(card.payload, 'story')
-  const cta = card.payload.code ? `/?ref=${encodeURIComponent(card.payload.code)}` : '/'
+  const cta = card.payload.code ? `/quiz?ref=${encodeURIComponent(card.payload.code)}` : '/quiz'
 
   return (
     <main

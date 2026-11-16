@@ -19,7 +19,7 @@ it('names a partner’s discount waiting on the stack, without claiming the stac
   expect(await screen.findByText('Your stack')).toBeInTheDocument()
   expect(screen.getByText('3 products · 20% off there')).toBeInTheDocument()
   expect(screen.queryByText(/saved|full price/i)).not.toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /back to it/i })).toHaveAttribute('href', '/#stack')
+  expect(screen.getByRole('link', { name: /back to it/i })).toHaveAttribute('href', '/quiz#stack')
 })
 
 it('names no discount when nothing was left behind', async () => {

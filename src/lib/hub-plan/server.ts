@@ -104,7 +104,7 @@ export async function joinState(user: Pick<UserRecord, 'id' | 'email'> | null, n
 export async function startHubPlan(user: Who, origin: string, now = new Date()): Promise<{ checkoutUrl: string; mock: boolean }> {
   const state = await joinState(user, now)
   if (state.refusal) throw new HubPlanRefused(state.refusal)
-  const next = (await hasAnswers(user)) ? '/myhub?joined=1' : '/?then=hub'
+  const next = (await hasAnswers(user)) ? '/myhub?joined=1' : '/quiz?then=hub'
   const had = await getHubPlan(user.id)
   const plan: HubPlan = {
     ...newHubPlan({ userId: user.id, email: user.email, monthly: state.monthly }, now),

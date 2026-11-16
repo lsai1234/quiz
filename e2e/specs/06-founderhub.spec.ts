@@ -35,7 +35,7 @@ test.describe('the gate', () => {
   })
 
   test('an unauthenticated API call is refused', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     const res = await page.request.get('/api/portal/dashboard')
     expect(res.status()).toBe(401)
   })
@@ -414,7 +414,7 @@ test.describe('the supplier integration check', () => {
   })
 
   test('the API refuses anyone who is not a founder', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     const res = await page.request.post('/api/portal/supplier/diagnostics')
     expect(res.status()).toBe(401)
   })

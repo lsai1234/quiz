@@ -120,7 +120,7 @@ test.describe('re-consent', () => {
 
 test.describe('the exit is a charge, so it is guarded like one', () => {
   test('cancelling while signed out is refused', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/quiz')
     const res = await page.request.post('/api/hub/subscription/cancel', {
       data: { expectedSettlement: 0 },
     })

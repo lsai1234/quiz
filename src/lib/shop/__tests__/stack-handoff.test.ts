@@ -180,6 +180,6 @@ describe('leavingStackNotes', () => {
 
 describe('the way back', () => {
   it('points at the hash the reveal reopens on', () => {
-    expect(STACK_RETURN_HREF).toBe('/#stack')
+    expect(STACK_RETURN_HREF).toBe('/quiz#stack')
   })
 })
