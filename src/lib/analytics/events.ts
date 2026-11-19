@@ -57,6 +57,15 @@ export const SHOP_EVENTS = [
   /** Flavour Roulette — opened, and each pull of the lever. */
   'shop_roulette_open',
   'shop_roulette_spin',
+  /* "Not sure where to start?" at the top of the shop. The quiz tile tapped;
+     each finder answer (question, option, products left), so the question
+     people stop at shows; a typed answer (what it read, never the words);
+     Show tapped; and the hand-on to the full quiz from a finished finder. */
+  'shop_quiz_tile_open',
+  'shop_finder_answer',
+  'shop_finder_typed',
+  'shop_finder_show',
+  'shop_finder_to_quiz',
   /* A hero banner was tapped. Which one, so a founder can tell whether the
      artwork they generated is doing anything at all. */
   'shop_banner_click',

@@ -131,10 +131,12 @@ function HeroLink({
  * nothing is uploaded — the only imagery the app is guaranteed to have. Same
  * height either way, so the swap moves nothing when the real one arrives.
  */
-export function ShopMasthead({ products }: { products: CatalogueProduct[] }) {
+export function ShopMasthead({ products, fallback = true }: { products: CatalogueProduct[]; fallback?: boolean }) {
   const banner = useBanner('masthead')
 
-  if (!banner) return <FallbackMasthead products={products} />
+  // The shop page passes `fallback={false}`: its quiz tile now does the
+  // fallback's job, so the masthead shows only when a founder has uploaded one.
+  if (!banner) return fallback ? <FallbackMasthead products={products} /> : null
 
   return (
     <HeroLink

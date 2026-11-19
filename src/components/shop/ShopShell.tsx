@@ -44,6 +44,9 @@ import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
 import { ShopHubCard } from './ShopHubCard'
+import { ShopQuizTile } from './ShopQuizTile'
+import { ShopFinder } from './ShopFinder'
+import { finderCanShow } from '@/lib/shop/finder'
 import { ShopHeroProvider, ShopMasthead, ShopTwinTiles, ShopBreak } from './ShopHeroes'
 import { StackReturnBar } from './StackReturnBar'
 import { BREAK_AFTER_SHELF } from '@/lib/shop/placements'
@@ -239,6 +242,13 @@ export function ShopShell() {
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [duelOpen, setDuelOpen] = useState(false)
   const [rouletteOpen, setRouletteOpen] = useState(false)
+  /**
+   * Whether the finder has been used this visit. Its answers turn the shelves
+   * into results, which would normally fold away everything above the search
+   * box; the finder has to stay put while someone is still answering it. Search
+   * text typed into the box hands the page back to search.
+   */
+  const [finderUsed, setFinderUsed] = useState(false)
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -682,6 +692,16 @@ export function ShopShell() {
     handleQueryChange({ ...query, q })
   }
 
+  // The two ways in stay on screen while browsing, and while the query is one
+  // the finder can show as its own answers (a shared finder link included).
+  // Search text counts as the finder's only if it was typed into the finder.
+  const showWays = !searching || (finderCanShow(query) && (finderUsed || query.q.trim() === ''))
+
+  /** The finder's Show: down to the filter bar, with the products under it. */
+  const showFinderResults = () => {
+    document.getElementById('shop-filters')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
   // are no deals). Kept content-agnostic so the hero never depends on load timing.
   const dealsPct = dealsSection ? maxDealPct(dealsSection.products) : 0
@@ -723,28 +743,11 @@ export function ShopShell() {
           somebody.
         */}
         {!searching && (
-          <div style={{ marginTop: 'var(--space-5)' }}>
-            <ShopMasthead products={products} />
+          <div className="empty:hidden" style={{ marginTop: 'var(--space-5)' }}>
+            <ShopMasthead products={products} fallback={false} />
           </div>
         )}
       </div>
-
-      {!searching && (
-        <ShopGoalRow
-          products={products}
-          selected={query.goals}
-          onSelect={(goal) => applyQueryChange({ ...query, goals: goal ? [goal] : [] })}
-          onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-        />
-      )}
-
-      {/* The twin tiles, under the goals. Absent until a founder fills them. */}
-      {!searching && <ShopTwinTiles />}
-
-      {/* The member hub on its own, while it's on sale. */}
-      {!searching && <ShopHubCard />}
-
-      {!searching && <TrustStrip products={products} />}
 
       {/*
         Three states, not two.
@@ -770,16 +773,46 @@ export function ShopShell() {
             within it. Separating them by placement is what makes them legible
             as different things: this scrolls away, the category row stays.
           */}
-          <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+          <div style={{ padding: '0 var(--space-4) var(--space-3)' }}>
             <ShopSearchBar
               value={searchInput}
-              onChange={setSearchInput}
+              onChange={(v) => { setSearchInput(v); setFinderUsed(false) }}
               resultCount={results ? results.products.length : null}
               suggestions={suggestions}
               onSelect={handleSuggestion}
               onSubmit={rememberCurrentSearch}
               onClearRecent={() => setRecent(clearRecentSearches())}
             />
+          </div>
+
+          {/*
+            "Not sure where to start?" Two ways in, right under the search box:
+            the quiz, shown working, and the finder, whose answers are this
+            page's filters (they land as chips in the bar just below). Shown
+            while browsing, and kept while the finder is in use so answering a
+            question never folds away the question.
+          */}
+          {showWays && (
+            <section className="sf-ways" aria-labelledby="shop-ways-title" style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+              <div className="flex items-baseline justify-between" style={{ gap: 'var(--space-3)' }}>
+                <h2 id="shop-ways-title" className="sf-title" style={{ fontSize: 17, color: 'var(--text)' }}>Not sure where to start?</h2>
+                <span className="sf-meta">Two ways in</span>
+              </div>
+              <div className="sf-ways-tiles">
+                <ShopQuizTile />
+                <ShopFinder
+                  products={products}
+                  index={index}
+                  query={query}
+                  onChange={(next) => { setFinderUsed(true); applyQueryChange(next) }}
+                  onShow={showFinderResults}
+                  onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
+                />
+              </div>
+            </section>
+          )}
+
+          <div id="shop-filters" style={{ padding: '0 var(--space-4) var(--space-4)', scrollMarginTop: 'var(--space-3)' }}>
             <ShopFilterBar
               perServing={perServing}
               onPerServingChange={setPerServing}
@@ -794,6 +827,30 @@ export function ShopShell() {
               onDismissIntent={dismissIntent}
             />
           </div>
+
+          {/*
+            Shop by goal, on a wide screen. On a phone the finder's first
+            question asks the same thing, right above, so the row would be the
+            same question twice; the roulette it ends with is in the finder too.
+          */}
+          {!searching && (
+            <div className="hidden md:block">
+              <ShopGoalRow
+                products={products}
+                selected={query.goals}
+                onSelect={(goal) => applyQueryChange({ ...query, goals: goal ? [goal] : [] })}
+                onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
+              />
+            </div>
+          )}
+
+          {/* The twin tiles. Absent until a founder fills them. */}
+          {!searching && <ShopTwinTiles />}
+
+          {/* The member hub on its own, while it's on sale. */}
+          {!searching && <ShopHubCard />}
+
+          {!searching && <TrustStrip products={products} />}
 
           <ShopCategoryNav categories={searching ? [] : navCategories} />
 

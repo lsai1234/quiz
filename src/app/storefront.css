@@ -442,3 +442,367 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ── Not sure where to start? ─────────────────────────────────────────────────
+   Two tiles at the top of the shop, the two answers to that question: "Build
+   it for me" (the quiz, shown working) and "Choose it myself" (the finder).
+   Same shape, same header, so they read as a pair. On a phone they stack; from
+   `md` they sit side by side.
+
+   The quiz tile is the one place the storefront tints a surface, and it does it
+   with the accent mixed into `--surface`, flat: no gradient, no new colour. */
+.sf-ways {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.sf-ways-tiles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+@media (min-width: 768px) {
+  .sf-ways-tiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.sf-way {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-3);
+  padding: 14px 14px;
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.sf-way-quiz {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.sf-way-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sf-way-words { min-width: 0; display: grid; gap: 3px; }
+.sf-way-eyebrow { display: inline-flex; align-items: center; gap: 6px; }
+
+.sf-way-title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--title-tracking);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/* The tile's one action. In the quiz tile it is also the link for the whole
+   tile: its ::after covers the card, so a thumb landing anywhere goes to the
+   quiz, and the pause button sits above it. */
+.storefront .sf-way-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: var(--meta-size);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sf-way-quiz .sf-way-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.sf-way-go:active { transform: scale(0.97); }
+
+.storefront .sf-way-pause {
+  position: relative;
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+/* ── The example, left to right ─────────────────────────────────────────── */
+.sf-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 60px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.sf-demo-col { display: grid; gap: 5px; min-width: 0; align-content: start; }
+.sf-demo-said { justify-items: end; text-align: right; }
+
+.sf-demo-k {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.sf-demo ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  justify-items: inherit;
+}
+
+.sf-demo li {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+  color: var(--text);
+  transition: opacity 350ms var(--t-ease), transform 350ms var(--t-ease);
+}
+
+.sf-demo li[data-on='false'] { opacity: 0; transform: translateY(5px); }
+
+.sf-demo-said li {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  line-height: 18px;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-hi);
+}
+
+.sf-demo-got li { font-size: 12.5px; line-height: 22px; }
+.sf-demo-got time { color: var(--accent); font-size: 11px; margin-right: 5px; }
+
+.sf-demo-mid { position: relative; display: grid; place-items: center; padding-top: 14px; }
+
+/* The thread from what they said, through Amp, to what they got. It brightens
+   while Amp is thinking. */
+.sf-demo-mid::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  top: calc(50% + 7px);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent) 20%, var(--accent) 80%, transparent);
+  opacity: 0.3;
+  transition: opacity 400ms var(--t-ease);
+}
+
+.sf-demo[data-flow='true'] .sf-demo-mid::before { opacity: 0.9; }
+
+.sf-demo-ring { position: relative; width: 60px; height: 60px; display: block; }
+.sf-ring-track { fill: none; stroke: var(--line); stroke-width: 7; }
+.sf-ring-tick { stroke: var(--text-dim); stroke-width: 5; }
+.sf-ring-sweep { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; }
+
+.sf-ring-dot {
+  fill: var(--text);
+  stroke: var(--accent);
+  stroke-width: 5;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 450ms cubic-bezier(0.34, 1.7, 0.64, 1), opacity 200ms;
+}
+
+.sf-ring-dot[data-on='false'] { transform: scale(0); opacity: 0; }
+
+/* Amp, small: the quiz's orb in the storefront's colours. */
+.sf-amp-halo { fill: var(--accent); opacity: 0.08; transition: opacity 600ms var(--t-ease); }
+.sf-demo-ring[data-amp='charged'] .sf-amp-halo { opacity: 0.22; }
+.sf-amp-body { fill: color-mix(in srgb, var(--accent) 22%, var(--bg)); }
+.sf-amp-sheen { fill: var(--text); opacity: 0.08; }
+.sf-amp-eyes { transition: transform 500ms var(--t-ease); }
+.sf-demo-ring[data-amp='thinking'] .sf-amp-eyes { transform: translate(3px, -6px); }
+.sf-amp-eye { fill: var(--accent); transform-box: fill-box; transform-origin: center; animation: sf-blink 4.2s infinite; }
+.sf-amp-mouth { fill: none; stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; opacity: 0; transition: opacity 400ms; }
+.sf-demo-ring[data-amp='charged'] .sf-amp-mouth { opacity: 1; }
+
+@keyframes sf-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+/* ── The finder ─────────────────────────────────────────────────────────── */
+.sf-way-finder { padding-bottom: 0; gap: 10px; }
+
+.sf-finder-tally { display: grid; justify-items: end; gap: 1px; flex: none; }
+.sf-finder-n { font-size: 28px; line-height: 1; color: var(--accent); }
+.sf-finder-k { font-family: var(--font-sans); font-size: 11px; color: var(--text-dim); }
+
+.sf-finder-line { display: flex; align-items: center; gap: var(--space-2); min-height: 28px; }
+.sf-finder-step { flex: none; }
+
+.sf-finder-q {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: sf-slide-in 350ms var(--t-ease);
+}
+
+.sf-finder-q mark {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+  font-size: var(--meta-size);
+}
+
+.storefront .sf-finder-back,
+.storefront .sf-finder-next {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--meta-size);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.storefront .sf-finder-back { padding: 0; color: var(--text-dim); }
+
+/* The answers. Chips, because an answer narrows the shop (see `Chip`), with
+   the count of what each would leave on the end. Full-bleed so the row can be
+   swiped edge to edge; the padding keeps the first chip in line with the text. */
+.sf-finder-opts {
+  display: flex;
+  gap: 6px;
+  margin: 0 -14px;
+  padding: 0 14px 12px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 14px;
+}
+
+.sf-finder-opts > * { scroll-snap-align: start; animation: sf-slide-in 350ms var(--t-ease) both; }
+
+.storefront .sf-finder-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--surface-hi);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--meta-size);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sf-finder-chip:has(.sf-finder-count) { padding-right: 6px; }
+
+.sf-finder-count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.storefront .sf-finder-chip[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); }
+.sf-finder-chip[aria-pressed='true'] .sf-finder-count { background: color-mix(in srgb, var(--accent-ink) 16%, transparent); color: var(--accent-ink); }
+.storefront .sf-finder-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.storefront .sf-finder-ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--text-dim); }
+.sf-finder-chip:active:not(:disabled) { transform: scale(0.97); }
+
+@media (hover: hover) {
+  .storefront .sf-finder-chip[aria-pressed='false']:hover:not(:disabled),
+  .storefront .sf-finder-ghost:hover { background: color-mix(in srgb, var(--surface-hi) 82%, #fff); color: var(--text); }
+}
+
+.sf-finder-typed { display: flex; gap: 6px; padding-bottom: 12px; }
+
+.storefront .sf-finder-typed input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px; /* 16px, so iOS doesn't zoom the page on focus */
+}
+
+.sf-finder-typed input::placeholder { color: var(--text-dim); }
+
+/* The shelf, as a line: one segment per product (or per few, on a big
+   catalogue), dark where the answers have ruled them out. */
+.sf-finder-shelf { display: flex; gap: 1px; height: 4px; margin: 0 -14px; }
+.sf-finder-shelf i { flex: 1; background: var(--accent); transition: background-color 500ms var(--t-ease), opacity 500ms var(--t-ease); }
+.sf-finder-shelf i[data-on='false'] { background: var(--surface-hi); }
+
+@keyframes sf-slide-in {
+  from { opacity: 0; transform: translateX(14px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-amp-eye,
+  .sf-finder-q,
+  .sf-finder-opts > * { animation: none; }
+  .sf-demo li,
+  .sf-ring-dot,
+  .sf-amp-eyes,
+  .sf-finder-shelf i { transition: none; }
+  .sf-way-go:active,
+  .sf-finder-chip:active:not(:disabled) { transform: none; }
+}
