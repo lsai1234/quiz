@@ -5,48 +5,161 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
 import { productFacts, productDietary } from '@/lib/product-facts'
+import { pricePerServing, formatPerServing } from '@/lib/shop/per-serving'
 import { isAccessory } from '@/lib/catalogue/accessory'
-import { QuizIcon } from '@/components/quiz/QuizIcon'
-import { Badge } from '@/components/storefront'
-
+import { Icon } from '@/components/ui/Icon'
 
 /**
  * Everything a shopper can read about one product, without the chrome around it.
  *
- * Extracted so the quick-view sheet and the `/product/[handle]` page are the
- * same content and cannot drift — the page is not a second, thinner description
- * of the same tub. The two callers differ only in what wraps this: a modal with
- * a sticky footer, or a route with a header and a URL you can send someone.
+ * The product page is the only caller now that the quick-view sheet is gone;
+ * the content stays in its own module so a second surface (a sheet, a compare
+ * view) can never become a second, thinner description of the same tub.
+ *
+ * The facts lead. Format, size, servings and price per serving answer "what is
+ * this and is it worth it" in four cells; the supplier's description follows
+ * for whoever wants to read on.
  */
 
 export function variantLabel(v: Pick<CatalogueVariant, 'title' | 'flavour' | 'size'>): string {
   const parts = [v.flavour, v.size].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : v.title
+  return parts.length > 0 ? parts.join(', ') : v.title
 }
 
-function Fact({ glyph, label, value }: { glyph: string; label: string; value: string }) {
+/* ── Options ──────────────────────────────────────────────────────────────── */
+
+interface OptionProps {
+  product: CatalogueProduct
+  variant: CatalogueVariant | undefined
+  onSelectVariant: (id: string) => void
+}
+
+/**
+ * The variants as pills, in the dimensions they actually vary in.
+ *
+ * Flavours and sizes get a row each when both vary; picking a flavour keeps
+ * the size you had if that combination exists and is in stock, and falls back
+ * to the first one that is. When variants vary in neither (supplier titles
+ * only), they are one row of their own names. Every pill is a real variant, so
+ * nothing here can choose a combination the shop does not sell.
+ */
+export function VariantOptions({ product, variant, onSelectVariant }: OptionProps) {
+  if (product.variants.length < 2) return null
+
+  const flavours = unique(product.variants.map((v) => v.flavour))
+  const sizes = unique(product.variants.map((v) => v.size))
+  const byFlavour = flavours.length > 1
+  const bySize = sizes.length > 1
+
+  if (!byFlavour && !bySize) {
+    return (
+      <OptionRow title="Option" chosen={variant ? variantLabel(variant) : ''}>
+        {product.variants.map((v) => (
+          <Pill key={v.id} on={v.id === variant?.id} disabled={!v.available} onClick={() => onSelectVariant(v.id)} price={v.price}>
+            {variantLabel(v)}
+          </Pill>
+        ))}
+      </OptionRow>
+    )
+  }
+
+  const pickFlavour = (f: string) => {
+    const match = product.variants.find((v) => v.flavour === f && v.size === variant?.size && v.available)
+      ?? product.variants.find((v) => v.flavour === f && v.available)
+      ?? product.variants.find((v) => v.flavour === f)
+    if (match) onSelectVariant(match.id)
+  }
+  const pickSize = (s: string) => {
+    const match = product.variants.find((v) => v.size === s && (!byFlavour || v.flavour === variant?.flavour) && v.available)
+      ?? product.variants.find((v) => v.size === s && v.available)
+      ?? product.variants.find((v) => v.size === s)
+    if (match) onSelectVariant(match.id)
+  }
+
   return (
-    <div className="flex-1 min-w-0" style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)', padding: 'var(--space-4)' }}>
-      <span style={{ color: 'var(--text-dim)' }}><QuizIcon name={glyph} size={18} /></span>
-      <p className="sf-label" style={{ marginTop: 'var(--space-2)' }}>{label}</p>
-      <p className="sf-body" style={{ color: 'var(--text)', marginTop: 'var(--space-1)' }}>{value}</p>
+    <>
+      {byFlavour && (
+        <OptionRow title="Flavour" chosen={variant?.flavour ?? ''}>
+          {flavours.map((f) => {
+            const any = product.variants.some((v) => v.flavour === f && v.available)
+            return (
+              <Pill key={f} on={variant?.flavour === f} disabled={!any} onClick={() => pickFlavour(f)}>
+                {f}
+              </Pill>
+            )
+          })}
+        </OptionRow>
+      )}
+      {bySize && (
+        <OptionRow title="Size" chosen={variant?.size ?? ''}>
+          {sizes.map((s) => {
+            const exact = product.variants.find((v) => v.size === s && (!byFlavour || v.flavour === variant?.flavour))
+            const shown = exact ?? product.variants.find((v) => v.size === s)
+            return (
+              <Pill key={s} on={variant?.size === s} disabled={!shown?.available} onClick={() => pickSize(s)} price={shown?.price}>
+                {s}
+              </Pill>
+            )
+          })}
+        </OptionRow>
+      )}
+    </>
+  )
+}
+
+function OptionRow({ title, chosen, children }: { title: string; chosen: string; children: React.ReactNode }) {
+  return (
+    <div className="sf-pdp-opt">
+      <p className="sf-pdp-opt-h">
+        <span>{title}</span>
+        {chosen && <b>{chosen}</b>}
+      </p>
+      <div className="sf-pdp-pills" role="group" aria-label={title}>{children}</div>
     </div>
   )
 }
 
+function Pill({ on, disabled, onClick, price, children }: { on: boolean; disabled?: boolean; onClick: () => void; price?: number; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="sf-chip sf-pdp-pill"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      data-interactive
+    >
+      {children}
+      {price != null && <i className="sf-num">{formatGBP(price)}</i>}
+      {disabled && <i>Sold out</i>}
+    </button>
+  )
+}
+
+function unique(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((v): v is string => !!v))]
+}
+
+/* ── The body ─────────────────────────────────────────────────────────────── */
+
 interface Props {
   product: CatalogueProduct
-  /** The variant currently chosen — drives the picker's selected state. */
+  /** The variant currently chosen. */
   variant: CatalogueVariant | undefined
-  onSelectVariant: (id: string) => void
+  /**
+   * Given, the body leads with the option pills itself. The product page puts
+   * them higher up, beside the price, and leaves this out; the Founders Hub's
+   * preview passes it so its picture of the page still has them.
+   */
+  onSelectVariant?: (id: string) => void
   className?: string
 }
 
 export function ProductDetailBody({ product, variant, onSelectVariant, className }: Props) {
   const price = variant?.price ?? product.basePrice
 
-  // Honest subscribe-&-save figure for this variant — the same discount the basket
-  // nudge quotes, shown as a concrete monthly price.
+  // Honest subscribe-&-save figure for this variant — the same discount the
+  // basket nudge quotes, shown as a concrete monthly price.
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
   const monthlyPrice = price * (1 - PRICING_CONFIG.subscriptionDiscount)
 
@@ -54,139 +167,75 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
   // 454g bag of the same powder are 33 servings and 454, and one number cannot
   // be right under both.
   const facts = productFacts(product, variant)
+  const perServ = variant ? pricePerServing(product, variant) : null
+  const cells = [
+    ...facts.map((f) => ({ key: f.key, label: f.label === 'Per unit' ? 'Servings' : f.label, value: f.value })),
+    ...(variant?.size ? [{ key: 'size', label: 'Size', value: variant.size }] : []),
+    ...(perServ != null ? [{ key: 'per', label: 'Per serving', value: formatPerServing(perServ) }] : []),
+  ]
   const dietary = productDietary(product)
-  const showVariantPicker = product.variants.length > 1
 
   return (
-    <div className={`space-y-6 ${className ?? ''}`}>
-      <section>
-        <p className="sf-label" style={{ marginBottom: 'var(--space-2)' }}>What it is</p>
-        {product.shortReason && product.shortReason !== product.description && (
-          <p className="sf-body" style={{ color: 'var(--text)', marginBottom: 'var(--space-2)' }}>{product.shortReason}</p>
-        )}
-        {/* `pre-line`, because `cleanDescription` keeps the supplier's
-            paragraph and bullet breaks as newlines — without it they
-            collapse and the whole description runs together as one block. */}
-        <p className="sf-body" style={{ color: 'var(--text-dim)', whiteSpace: 'pre-line' }}>{product.description}</p>
-      </section>
+    <div className={`sf-pdp-body ${className ?? ''}`}>
+      {onSelectVariant && <VariantOptions product={product} variant={variant} onSelectVariant={onSelectVariant} />}
 
       {/* Never on an accessory. A monthly shaker is not a plan, it is a
           cupboard full of shakers — and the offer reads as one we would honour. */}
       {product.subscriptionEligible && !isAccessory(product) && (
-        <Link
-          href="/quiz"
-          data-interactive
-          className="flex items-center"
-          style={{ gap: 'var(--space-3)', background: 'var(--surface)', borderRadius: 'var(--r-card)', padding: 'var(--space-4)' }}
-        >
-          <div className="flex-1 min-w-0">
-            <p className="sf-body" style={{ color: 'var(--text)' }}>Subscribe &amp; save {subscribePct}%</p>
-            <p className="sf-meta">on a personalised monthly plan</p>
-          </div>
-          <span className="sf-num sf-body whitespace-nowrap" style={{ color: 'var(--text)' }}>
-            {formatGBP(monthlyPrice)}<span className="sf-meta">/mo</span>
+        <Link href="/quiz" data-interactive className="sf-pdp-plan">
+          <Icon name="calendar" size={22} />
+          <span className="sf-pdp-plan-words">
+            <b>Subscribe &amp; save {subscribePct}%</b>
+            <span>on a personalised monthly plan</span>
           </span>
+          <span className="sf-pdp-plan-price sf-num">
+            {formatGBP(monthlyPrice)}<small>/mo</small>
+          </span>
+          <Icon name="chevron-right" size={16} />
         </Link>
       )}
 
-      {facts.length > 0 && (
-        <section>
-          <p className="sf-label" style={{ marginBottom: 'var(--space-3)' }}>The facts</p>
-          <div className="flex gap-2.5">
-            {facts.map((f) => <Fact key={f.key} glyph={f.glyph} label={f.label} value={f.value} />)}
-          </div>
+      {cells.length > 0 && (
+        <section aria-labelledby="pdp-facts">
+          <h2 id="pdp-facts" className="sr-only">The facts</h2>
+          <dl className="sf-pdp-facts">
+            {cells.map((c) => (
+              <div key={c.key}>
+                <dt>{c.label}</dt>
+                <dd className="sf-tnum">{c.value}</dd>
+              </div>
+            ))}
+          </dl>
           {dietary.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {dietary.map((label) => <Badge key={label}>{label}</Badge>)}
-            </div>
+            <ul className="sf-pdp-diet" aria-label="Dietary">
+              {dietary.map((label) => (
+                <li key={label}><Icon name="check" size={14} />{label}</li>
+              ))}
+            </ul>
           )}
         </section>
       )}
 
-      {showVariantPicker && (
-        <section>
-          <p className="sf-label" style={{ marginBottom: 'var(--space-3)' }}>Flavour &amp; size</p>
-          {/*
-            A row is a grid, not a flex row with two ends.
-
-            It was `justify-between` with the label on one side and a stock
-            note and a price on the other, which works only while every label
-            is short. Give it a real supplier name and the label wraps to two
-            lines, the stock note concertinas into a three-line column, and no
-            two rows are the same height — which is exactly what a flavour list
-            looked like.
-
-            Three columns instead: the label takes whatever is left and
-            truncates rather than wrapping, and the stock and price columns
-            keep their own width so prices line up down the list whatever the
-            names are doing. `title` carries the full label for the one in ten
-            that is genuinely too long to show.
-          */}
-          <div className="flex flex-col" style={{ gap: 'var(--space-1)' }}>
-            {product.variants.map((v) => {
-              const isSelected = v.id === variant?.id
-              const vStock = variantStock(v)
-              const label = variantLabel(v)
-              const low = v.available && vStock.count != null && vStock.count < 5
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => { if (v.available) onSelectVariant(v.id) }}
-                  disabled={!v.available}
-                  aria-pressed={isSelected}
-                  data-interactive
-                  title={label}
-                  className="w-full grid items-center text-left"
-                  style={{
-                    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
-                    columnGap: 'var(--space-3)',
-                    minHeight: 52,
-                    padding: '0 var(--space-4)',
-                    borderRadius: 'var(--r-control)',
-                    /* The selected row is named by an accent edge rather than
-                       by being a slightly lighter grey. On a dark shelf the
-                       old pair of surfaces were a few per cent apart, which is
-                       not a state anybody can see at a glance. */
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
-                    background: isSelected ? 'var(--surface-hi)' : 'var(--surface)',
-                    color: isSelected ? 'var(--text)' : 'var(--text-dim)',
-                    opacity: v.available ? 1 : 0.45,
-                    cursor: v.available ? 'pointer' : 'not-allowed' }}
-                >
-                  <span
-                    className="sf-body block truncate"
-                    style={{ color: isSelected ? 'var(--text)' : undefined }}
-                  >
-                    {label}
-                  </span>
-
-                  {/* One column, one word. "Only 2 left" wrapped to three lines
-                      in a column sized by the longest price; "2 left" does not
-                      wrap at any width this list is drawn at. */}
-                  <span className="sf-meta whitespace-nowrap" style={{ color: low ? 'var(--text-dim)' : 'var(--text-dim)' }}>
-                    {!v.available
-                      ? (product.restockingSoon ? 'Back soon' : 'Sold out')
-                      : low
-                        ? <><span className="sf-tnum">{vStock.count}</span> left</>
-                        : null}
-                  </span>
-
-                  <span
-                    className="sf-body sf-tnum whitespace-nowrap text-right"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    {formatGBP(v.price)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
+      <section aria-labelledby="pdp-about">
+        <h2 id="pdp-about" className="sf-pdp-h">What it is</h2>
+        {product.shortReason && product.shortReason !== product.description && (
+          <p className="sf-body" style={{ color: 'var(--text)', margin: '0 0 var(--space-2)' }}>{product.shortReason}</p>
+        )}
+        {/* `pre-line`, because `cleanDescription` keeps the supplier's
+            paragraph and bullet breaks as newlines. */}
+        <p className="sf-body" style={{ color: 'var(--text-2)', whiteSpace: 'pre-line', margin: 0, maxWidth: '62ch' }}>{product.description}</p>
+      </section>
 
       {product.warnings.length > 0 && (
-        <p className="sf-meta">{product.warnings.join(' · ')}</p>
+        <p className="sf-meta" style={{ margin: 0 }}>{product.warnings.join(' ')}</p>
       )}
     </div>
   )
+}
+
+/** "2 left in stock", only when it is genuinely nearly gone. A fact, not a countdown. */
+export function stockLine(variant: CatalogueVariant | undefined): string | null {
+  if (!variant || !variant.available) return null
+  const { count } = variantStock(variant)
+  return count != null && count > 0 && count < 5 ? `${count} left in stock` : null
 }

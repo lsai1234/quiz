@@ -11,16 +11,14 @@ import { basketGrams, customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { founderDeliveryOptions } from '@/lib/founder-codes/codes'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { IconButton } from '@/components/ui/IconButton'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
 import { ShopStackRadar } from './ShopStackRadar'
+import { Button } from '@/components/storefront'
 
-/* The one hex in the drawer, replaced by the token. */
-const ACCENT = 'var(--accent)'
 /*
  * A discount is not a semantic tone in this palette — there is no green, and
  * inventing one for a saving would be the tenth colour. It reads as ordinary
@@ -56,7 +54,7 @@ interface Props {
 
 function variantLabel(v: { title: string; flavour: string | null; size: string | null }): string {
   const parts = [v.flavour, v.size].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : v.title
+  return parts.length > 0 ? parts.join(', ') : v.title
 }
 
 /** A right-side slide-in cart drawer: line items up top, the money below. */
@@ -142,71 +140,102 @@ export function BasketDrawer({
 
   if (!mounted) return null
 
+  const items = resolved.reduce((n, l) => n + l.quantity, 0)
+  const busy = checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
+
   return createPortal(
     <div
-      className="storefront fixed inset-0 z-50 flex justify-end"
+      className="storefront sf-drawer-scrim"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ background: 'rgba(0,0,0,0.6)', opacity: shown ? 1 : 0, transition: reduced ? 'none' : 'opacity 0.25s ease' }}
+      style={{ opacity: shown ? 1 : 0, transition: reduced ? 'none' : 'opacity 0.25s ease' }}
     >
       <div
-        className="w-full max-w-[420px] h-full flex flex-col"
+        className="sf-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="basket-title"
         style={{
-          background: 'var(--bg)',
-          borderLeft: '1px solid var(--line)',
           transform: shown ? 'translateX(0)' : 'translateX(100%)',
-          transition: reduced ? 'none' : 'transform 0.3s cubic-bezier(0.22,1,0.36,1)' }}
+          transition: reduced ? 'none' : 'transform 0.45s cubic-bezier(0.22,1,0.36,1)' }}
       >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-4 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
-          <h2 className="text-lg font-medium" style={{ color: 'var(--text)' }}>
-            Your basket
-          </h2>
-          <IconButton icon="x" label="Close basket" size="sm" filled onClick={onClose} />
+        <div className="sf-drawer-head">
+          <h2 id="basket-title">Your basket</h2>
+          {items > 0 && <span className="sf-num">{items} item{items !== 1 ? 's' : ''}</span>}
+          <button type="button" className="sf-icon-button" aria-label="Close basket" onClick={onClose}>
+            <Icon name="x" size={18} />
+          </button>
         </div>
 
         {resolved.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Your basket is empty</p>
-            <p className="text-xs mt-1.5" style={{ color: 'var(--text-dim)' }}>Add something from the shelves to get started.</p>
-            <button onClick={onClose} className="mt-5 px-5 py-2.5 rounded-xl text-xs font-medium active:scale-95 transition-transform" style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-              Keep shopping
-            </button>
+          <div className="sf-drawer-empty">
+            <p className="sf-drawer-empty-h">Your basket is empty</p>
+            <p>Add something from the shelves to get started.</p>
+            <Button variant="primary" size="md" onClick={onClose}>Keep shopping</Button>
           </div>
         ) : (
           <>
-            {/* Line items */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* Free-delivery progress, at the top where it is read first.
+                Hidden under a founder code: under one of those the postage is
+                either nothing or our supplier's actual charge, and neither is
+                "£12 away from free delivery". */}
+            {threshold > 0 && !founderKind && (
+              <div className="sf-drawer-meter">
+                <p>
+                  <span>
+                    {freeDelivery
+                      ? <><Icon name="check" size={13} /> Free UK delivery</>
+                      : `${formatGBP(remaining)} away from free delivery`}
+                  </span>
+                  {/* What postage actually costs on this basket, so the first
+                      time anyone sees a delivery line is not on Stripe's page. */}
+                  <b className="sf-num">{freeDelivery ? `Over ${formatGBP(threshold)}` : `+${formatGBP(deliveryCharge)} delivery`}</b>
+                </p>
+                <span className="sf-drawer-pour" aria-hidden>
+                  <i style={{ transform: `scaleX(${progress})`, transition: reduced ? 'none' : undefined }} />
+                </span>
+              </div>
+            )}
+
+            {/* The lines, and below them what the basket covers and could be;
+                only the money is pinned to the bottom. */}
+            <div className="sf-drawer-scroll">
+            <ul className="sf-drawer-lines">
               {resolved.map((l) => (
-                <div key={`${l.product.id}:${l.variant.id}`} className="flex gap-3">
-                  <ProductTile imageUrl={l.product.imageUrl} formats={l.product.formats} title={l.product.title} size={56} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text)' }}>{l.product.title}</p>
-                      <IconButton icon="x" label={`Remove ${l.product.title}`} size="sm" onClick={() => remove(l.product.id, l.variant.id)} className="-mr-1 -mt-1" />
-                    </div>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{variantLabel(l.variant)}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center rounded-lg" style={{ border: '1px solid var(--line)' }}>
-                        <button onClick={() => setQty(l.product.id, l.variant.id, l.quantity - 1)} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--text-dim)' }} aria-label="Decrease">–</button>
-                        <span className="w-6 text-center text-xs font-medium" >{l.quantity}</span>
-                        <button onClick={() => setQty(l.product.id, l.variant.id, Math.min(MAX_LINE_QTY, l.quantity + 1))} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--text-dim)' }} aria-label="Increase">+</button>
-                      </div>
-                      <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text)' }}>{formatGBP(l.lineTotal)}</span>
+                <li key={`${l.product.id}:${l.variant.id}`} className="sf-drawer-line">
+                  <span className="sf-drawer-thumb">
+                    <ProductTile imageUrl={l.variant.imageUrl ?? l.product.imageUrl} formats={l.product.formats} title={l.product.title} size={160} fill plate />
+                  </span>
+                  <div className="sf-drawer-line-words">
+                    <p className="sf-name sf-clamp-2">{l.product.title}</p>
+                    <p className="sf-drawer-variant">{variantLabel(l.variant)}</p>
+                    <div className="sf-drawer-qty" role="group" aria-label={`${l.product.title}, quantity`}>
+                      <button type="button" onClick={() => setQty(l.product.id, l.variant.id, l.quantity - 1)} aria-label={l.quantity === 1 ? `Remove ${l.product.title}` : `One fewer ${l.product.title}`}>
+                        <Icon name="dash" size={14} />
+                      </button>
+                      <span className="sf-num">{l.quantity}</span>
+                      <button type="button" onClick={() => setQty(l.product.id, l.variant.id, Math.min(MAX_LINE_QTY, l.quantity + 1))} disabled={l.quantity >= MAX_LINE_QTY} aria-label={`One more ${l.product.title}`}>
+                        <Icon name="plus" size={14} />
+                      </button>
                     </div>
                   </div>
-                </div>
+                  <div className="sf-drawer-line-end">
+                    <span className="sf-price">{formatGBP(l.lineTotal)}</span>
+                    <button type="button" className="sf-drawer-remove" onClick={() => remove(l.product.id, l.variant.id)} aria-label={`Remove ${l.product.title}`}>
+                      Remove
+                    </button>
+                  </div>
+                </li>
               ))}
-            </div>
+            </ul>
 
-            {/* Footer */}
-            <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--line)' }}>
+            <div className="sf-drawer-extras">
               {/* What this basket IS, before what it could be. */}
               {products && onBrowseSlot && (
                 <ShopStackRadar resolved={resolved} products={products} onBrowseSlot={onBrowseSlot} />
               )}
 
-              {/* What this basket is close to being. Above the delivery ladder,
-                  because a bundle is the bigger and more specific of the two. */}
+              {/* What this basket is close to being. Bundles only: this drawer
+                  draws its own free-delivery line above. */}
               {nudge && (
                 <ShopBasketNudge
                   nudge={nudge}
@@ -215,50 +244,19 @@ export function BasketDrawer({
                 />
               )}
 
-              {/* Free-delivery progress. Hidden under a founder code: the offer
-                  is a customer-facing ladder, and under one of these codes the
-                  postage is either nothing or our supplier's actual charge —
-                  neither of which "£12 away from free delivery" describes. */}
-              {threshold > 0 && !founderKind && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-medium" style={{ color: freeDelivery ? ACCENT : 'var(--text-dim)' }}>
-                      {freeDelivery ? <><Icon name="check" size={12} className="inline-block -mt-0.5 mr-1" />Free delivery unlocked</> : `${formatGBP(remaining)} away from free delivery`}
-                    </span>
-                    {/* What postage actually costs on this basket. It used to say
-                        only how far off free delivery was, while charging nothing
-                        either way — so the first time anyone saw a delivery line
-                        was on Stripe's page. */}
-                    {!freeDelivery && (
-                      <span className="text-[11px] font-medium" style={{ color: 'var(--text-dim)' }}>
-                        +{formatGBP(deliveryCharge)} delivery
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-hi)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: ACCENT, transition: reduced ? 'none' : 'width 0.4s ease' }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Subscribe-&-save nudge → the personalised quiz */}
-              <Link
-                href="/quiz"
-                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-medium active:scale-[0.99] transition-transform"
-                style={{ color: 'var(--text)', background: 'var(--surface)' }}
-              >
-                <span className="flex-1">Want it monthly? Subscribe &amp; save up to {subscribePct}% with a personalised stack</span>
-                <span aria-hidden>→</span>
+              {/* Subscribe-&-save, to the personalised quiz */}
+              <Link href="/quiz" data-interactive className="sf-drawer-plan">
+                <Icon name="calendar" size={18} />
+                <span>Want it monthly? Subscribe &amp; save up to {subscribePct}% with a personalised stack</span>
+                <Icon name="chevron-right" size={15} />
               </Link>
+            </div>
+            </div>
+
+            <div className="sf-drawer-foot">
 
               {/* The code box, at the top of the money and visible whatever the
-                  basket is worth.
-
-                  It did not exist here at all, and there was no way to reach a
-                  code box in the shop under £15 — the checkout refused the
-                  basket before any screen carrying one was rendered. That is
-                  precisely backwards for the code whose entire job is getting a
-                  small basket through. */}
+                  basket is worth: its whole job is getting a small basket through. */}
               <PartnerCodeBox
                 subtotal={subtotal}
                 channel="shop"
@@ -267,99 +265,76 @@ export function BasketDrawer({
               />
 
               {belowMinimum && (
-                <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
-                  Orders start at {formatGBP(minimum)} — {formatGBP(shortfall)} to go.
+                <p className="sf-drawer-note">
+                  Orders start at {formatGBP(minimum)}. {formatGBP(shortfall)} to go.
                 </p>
               )}
 
               {/* Under a founder code the postage is not the customer ladder, so
-                  it is stated as its own line rather than as progress towards an
-                  offer that no longer applies. */}
+                  it is its own line rather than progress towards an offer. */}
               {founderKind && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-dim)' }}>
-                    {founderKind === 'cost' ? 'Delivery at cost' : 'Delivery'}
-                  </span>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
-                    {deliveryCharge > 0 ? formatGBP(deliveryCharge) : 'Free'}
-                  </span>
-                </div>
+                <p className="sf-drawer-row">
+                  <span>{founderKind === 'cost' ? 'Delivery at cost' : 'Delivery'}</span>
+                  <b className="sf-num">{deliveryCharge > 0 ? formatGBP(deliveryCharge) : 'Free'}</b>
+                </p>
               )}
 
-              {/* Show the discount they've earned, and total at what the card
-                  will actually be charged. Both come from `priceOneOffLines`,
-                  the same function /api/cart bills Stripe from, so the number
-                  here is the number on the card.
-
-                  Named and itemised rather than a lump "you saved £x": a saving
-                  a customer cannot account for reads as marketing. There is
-                  only ever one line — the bundle tier, or a store code if one
-                  is applied and deeper. Never both. */}
+              {/* The discount, itemised, and the total at what the card will be
+                  charged: both from `priceOneOffLines`, the function /api/cart
+                  bills Stripe from. Only ever one discount line. */}
               {priced.discount > 0.01 && (
                 <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--text-dim)' }}>Subtotal</span>
-                    <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text-dim)' }}>{formatGBP(subtotal)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    {/* A founder code has no tier and no rate — it replaces the
-                        prices. Naming it "0% off" would be a lie about a line
-                        that took £48 off, so it is named by what it is. */}
-                    <span className="text-sm" style={{ color: GREEN }}>
+                  <p className="sf-drawer-row">
+                    <span>Subtotal</span>
+                    <b className="sf-num">{formatGBP(subtotal)}</b>
+                  </p>
+                  <p className="sf-drawer-row">
+                    {/* A founder code replaces the prices; it is named by what
+                        it is rather than as "0% off". */}
+                    <span style={{ color: GREEN }}>
                       {founderKind
                         ? appliedCode?.founderLabel ?? 'Founder code'
                         : appliedCode && priced.partnerPct > 0 && priced.partnerPct >= priced.tierPct
-                        ? `${appliedCode.code} · ${Math.round(priced.partnerPct * 100)}% off`
-                        : `${priced.tierLabel ?? 'Bundle discount'} · ${Math.round(priced.tierPct * 100)}% off`}
+                        ? `${appliedCode.code}, ${Math.round(priced.partnerPct * 100)}% off`
+                        : `${priced.tierLabel ?? 'Bundle discount'}, ${Math.round(priced.tierPct * 100)}% off`}
                     </span>
-                    <span className="text-sm font-medium tabular-nums" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
-                  </div>
+                    <b className="sf-num" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</b>
+                  </p>
                 </>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
-                  {priced.discount > 0.01 ? 'Total' : 'Subtotal'}
-                </span>
-                <span className="text-xl font-medium tabular-nums" style={{ color: 'var(--text)' }}>{formatGBP(priced.total)}</span>
-              </div>
+              <p className="sf-drawer-row sf-drawer-total">
+                <span>{priced.discount > 0.01 ? 'Total' : 'Subtotal'}</span>
+                <b className="sf-num">{formatGBP(priced.total)}</b>
+              </p>
 
               {checkoutState.status === 'error' && (
-                <p className="text-[11px] text-center" style={{ color: 'var(--danger)' }}>{checkoutState.message}</p>
+                <p className="sf-drawer-error" role="alert">{checkoutState.message}</p>
               )}
 
-              <button
-                onClick={onCheckout}
-                disabled={checkoutState.status === 'loading' || checkoutState.status === 'redirecting'}
-                className="w-full py-4 rounded-2xl text-sm font-medium tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
-                style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-              >
-                {checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
-                  ? free
-                    ? 'Placing your order…'
-                    : 'Taking you to secure checkout…'
-                  : mockDone
-                    ? 'Demo checkout'
-                    : free
-                      ? 'Place order (nothing to pay) →'
-                      : 'Checkout →'}
-              </button>
-
-              {/* Secure-checkout reassurance — honest cues, no surprise steps.
-                  Which means not promising a card step on an order that has no
-                  payment in it at all. */}
-              <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--text-dim)' }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                <span className="text-[10px] font-medium">
-                  {free
-                    ? 'Nothing to pay — no card step'
-                    : 'Secure checkout · card & wallet payments, encrypted'}
+              <Button variant="primary" size="lg" fullWidth onClick={onCheckout} disabled={busy} loading={busy} className="sf-drawer-checkout">
+                <span>
+                  {busy
+                    ? free
+                      ? 'Placing your order…'
+                      : 'Taking you to secure checkout…'
+                    : mockDone
+                      ? 'Demo checkout'
+                      : free
+                        ? 'Place order (nothing to pay)'
+                        : 'Checkout'}
                 </span>
-              </div>
+                {!busy && <Icon name="lock" size={16} />}
+              </Button>
+
+              {/* Honest cues, no surprise steps — and no card step promised on
+                  an order with no payment in it. */}
+              <p className="sf-drawer-secure">
+                <Icon name="lock" size={13} />
+                {free ? 'Nothing to pay, so no card step' : 'Secure, encrypted checkout with card and wallet payments'}
+              </p>
 
               {mockDone && (
-                <p className="text-[10px] text-center" style={{ color: 'var(--text-dim)' }}>
-                  Payments aren’t live — this is a demo checkout.
-                </p>
+                <p className="sf-drawer-secure">Payments aren’t live. This is a demo checkout.</p>
               )}
             </div>
           </>

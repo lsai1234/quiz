@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { slotCoverage, activeOverlaps, overlapSentence } from '@/lib/shop/stack-radar'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   resolved: ResolvedBasketLine[]
@@ -48,7 +49,7 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
 
   return (
     <section aria-label="What this basket covers">
-      <h3 className="label mb-2" style={{ color: 'var(--text-dim)' }}>
+      <h3 className="sf-label" style={{ margin: '0 0 var(--space-2)' }}>
         This basket covers
       </h3>
 
@@ -56,11 +57,12 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
         {covered.map((row) => (
           <span
             key={row.slot}
-            className="px-2.5 py-1 rounded-full text-[11px] font-medium"
-            style={{ color: 'var(--accent)',
-              background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' }}
+            className="inline-flex items-center gap-1.5 px-3 rounded-full text-[12.5px] font-medium"
+            style={{ minHeight: 28, color: 'var(--accent)',
+              background: 'rgba(0, 212, 255, 0.1)',
+              boxShadow: 'inset 0 0 0 1px rgba(0, 212, 255, 0.28)' }}
           >
+            <Icon name="check" size={12} />
             {row.label}
           </span>
         ))}
@@ -68,7 +70,7 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
 
       {uncovered.length > 0 && (
         <>
-          <p className="text-[11px] mt-3 mb-2" style={{ color: 'var(--text-dim)' }}>
+          <p className="sf-meta" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>
             {/* Stated, not prescribed. */}
             Not in this basket — have a look if any of it is for you:
           </p>
@@ -76,21 +78,21 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
             {shown.map((row) => (
               <button
                 key={row.slot}
+                type="button"
                 onClick={() => onBrowseSlot(row.slot)}
-                className="px-2.5 py-1 rounded-full text-[11px] font-medium active:scale-95 transition-transform"
-                style={{ color: 'var(--text-dim)',
-                  background: 'var(--surface-hi)',
-                  border: '1px solid var(--line)' }}
+                className="sf-chip"
+                style={{ minHeight: 30, padding: '0 12px', fontSize: 12.5 }}
               >
                 {row.label}
-                <span className="ml-1" style={{ opacity: 0.6 }}> {row.available}</span>
+                <span className="sf-num" style={{ color: 'var(--text-dim)' }}>{row.available}</span>
               </button>
             ))}
             {hidden > 0 && (
               <button
+                type="button"
                 onClick={() => setShowAll(true)}
-                className="px-2.5 py-1 rounded-full text-[11px] font-medium active:scale-95 transition-transform"
-                style={{ color: 'var(--text-dim)' }}
+                className="sf-chip"
+                style={{ minHeight: 30, padding: '0 12px', fontSize: 12.5, background: 'transparent', boxShadow: 'none' }}
               >
                 +{hidden} more
               </button>
@@ -105,12 +107,12 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
         claims and this is a shop. See `lib/shop/stack-radar.ts`.
       */}
       {overlaps.length > 0 && (
-        <div className="mt-3 rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-hi)', border: '1px solid var(--line)' }}>
-          <p className="text-[11px] font-medium mb-1" style={{ color: 'var(--text)' }}>
+        <div className="mt-3 px-3.5 py-3" style={{ borderRadius: 14, background: 'var(--surface-mid)', boxShadow: 'inset 0 0 0 1px var(--line)' }}>
+          <p className="text-[12.5px] font-medium mb-1" style={{ color: 'var(--text)' }}>
             Worth knowing
           </p>
           {overlaps.map((overlap) => (
-            <p key={overlap.key} className="text-[11px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+            <p key={overlap.key} className="text-[12.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
               {overlapSentence(overlap)} You may only need one.
             </p>
           ))}

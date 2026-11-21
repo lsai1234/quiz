@@ -37,6 +37,7 @@ import { ShopSearchBar } from './ShopSearchBar'
 import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopBasketNudge } from './ShopBasketNudge'
 import { ShopBasketDock } from './ShopBasketDock'
+import { ShopFooter } from './ShopFooter'
 import { ShopDuelSheet } from './ShopDuelSheet'
 import { ShopCompareBar } from './ShopCompareBar'
 import { ShopRouletteSheet } from './ShopRouletteSheet'
@@ -725,7 +726,7 @@ export function ShopShell() {
       is a gradient and a glow, and the storefront now has neither.
     */
     <ShopHeroProvider>
-    <div className="storefront sf-page min-h-[100dvh]" style={{ paddingBottom: 'var(--space-12)' }}>
+    <div className="storefront sf-page min-h-[100dvh]">
       <ShopHeader count={count} onOpenBasket={openDrawer} onSearch={focusSearch} />
 
       {/* Above everything, for anybody who stepped out of a stack to get here. */}
@@ -936,6 +937,8 @@ export function ShopShell() {
       )}
       </div>
       </main>
+
+      {!searching && <ShopFooter />}
 
       {rouletteOpen && (
         <ShopRouletteSheet products={products} query={query} onClose={() => setRouletteOpen(false)} />

@@ -4,30 +4,29 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { variantStock } from '@/lib/shop/merchandising'
 import { masterVariant } from '@/lib/catalogue/master'
+import { pricePerServing, formatPerServing } from '@/lib/shop/per-serving'
 import { track } from '@/lib/analytics/events'
 import { useBasket } from '@/lib/basket/store'
 import { ShopPageHeader } from './ShopPageHeader'
+import { ShopFooter } from './ShopFooter'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { hasRating } from '@/lib/shop/ratings'
-import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { ProductDetailBody, variantLabel } from './ProductDetail'
+import { ProductDetailBody, VariantOptions, stockLine } from './ProductDetail'
 import { StarRating } from './StarRating'
 import { Button } from '@/components/storefront'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   product: CatalogueProduct
   /**
    * Every `productId:variantId` the catalogue still sells.
    *
-   * The badge has to count the lines the basket will actually CHARGE for, not
-   * the raw persisted ones — see `resolvedItemCount` in `basket/helpers` for
-   * what showing "2 · £0.00" cost. Resolving needs the catalogue, which this
-   * page has server-side and the shop's client store does not reach here, so
-   * the server sends down the keys rather than the products: a few kilobytes of
-   * strings instead of the whole catalogue, for the one question being asked.
+   * The header's count has to count the lines the basket will actually CHARGE
+   * for, not the raw persisted ones — see `resolvedItemCount` in
+   * `basket/helpers`. The server sends down the keys rather than the products:
+   * a few kilobytes of strings instead of the whole catalogue.
    */
   sellableKeys: string[]
 }
@@ -35,14 +34,16 @@ interface Props {
 /**
  * The product page.
  *
- * Same content as the quick-view sheet — `ProductDetailBody` is shared — with
- * the chrome a route needs instead of the chrome a modal needs: a way back to
- * the shop, a real heading, and an add bar that stays put.
+ * A spec sheet, not a brochure: the photograph on its studio plate (sticky
+ * beside the words on a wide screen), then the name, the rating, the price
+ * with what it saves and what a serving costs, the options as pills, one add
+ * bar, and the facts in a ruled table. The supplier's description follows for
+ * whoever wants to read on.
  *
- * The basket drawer is not here. It belongs to `ShopShell` and is wired to that
- * shell's pricing, codes and nudges; a second copy on this page would be a
- * second implementation of the most correctness-sensitive surface in the app.
- * The header's basket links to `/shop#basket`, which opens the real one.
+ * The basket drawer is not here. It belongs to `ShopShell` and is wired to
+ * that shell's pricing, codes and nudges; a second copy on this page would be
+ * a second implementation of the most correctness-sensitive surface in the
+ * app. The header's basket links to `/shop#basket`, which opens the real one.
  */
 export function ProductPageView({ product, sellableKeys }: Props) {
   const add = useBasket((s) => s.add)
@@ -58,9 +59,11 @@ export function ProductPageView({ product, sellableKeys }: Props) {
   const rrp = variant?.compareAtPrice ?? product.compareAtPrice
   const onDeal = rrp != null && rrp > price
   const soldOut = !variant?.available
-  const stock = variant ? variantStock(variant) : { count: null, low: false }
+  const perServ = variant ? pricePerServing(product, variant) : null
+  const stock = stockLine(variant)
   const sellable = useMemo(() => new Set(sellableKeys), [sellableKeys])
   const count = lines.reduce((n, l) => (sellable.has(`${l.productId}:${l.variantId}`) ? n + l.quantity : n), 0)
+  const inBasket = variant ? lines.find((l) => l.productId === product.id && l.variantId === variant.id)?.quantity ?? 0 : 0
 
   const handleAdd = () => {
     if (!variant || soldOut) return
@@ -74,88 +77,100 @@ export function ProductPageView({ product, sellableKeys }: Props) {
     <main className="storefront sf-page min-h-dvh">
       <ShopPageHeader count={count} />
 
-      <div className="max-w-lg mx-auto" style={{ padding: '0 var(--space-4)', paddingBottom: 120 }}>
-        <Link
-          href="/shop"
-          data-interactive
-          className="sf-meta inline-flex items-center"
-          style={{ gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M19 12H5M11 18l-6-6 6-6" />
-          </svg>
-          Back to the shop
-        </Link>
+      <div className="sf-wrap sf-pdp">
+        <nav className="sf-crumbs" aria-label="Breadcrumb">
+          <Link href="/" data-interactive className="sf-crumbs-back">
+            <Icon name="chevron-left" size={15} />
+            Shop
+          </Link>
+          <span aria-hidden>/</span>
+          <span>{product.category}</span>
+        </nav>
 
-        {/* Full width, flush, on the page's own ground. */}
-        <ProductTile
-          // Follows the chosen variant: a flavour picker that changes the price
-          // and not the picture is the shape of a page showing one photograph
-          // for six different tubs.
-          imageUrl={variant?.imageUrl ?? product.imageUrl}
-          formats={product.formats}
-          title={product.title}
-          size={640}
-          fill
-          className="mb-5"
-        />
-
-        {product.brand && <p className="sf-label" style={{ marginBottom: 'var(--space-2)' }}>{product.brand}</p>}
-        <h1 className="sf-display" style={{ color: 'var(--text)' }}>{product.title}</h1>
-
-        <div className="flex items-baseline flex-wrap" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
-          <span className="sf-display sf-tnum" style={{ color: 'var(--text)', fontSize: 26 }}>{formatGBP(price)}</span>
-          {onDeal && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp!)}</span>}
-        </div>
-        {variant && <p className="sf-meta" style={{ marginTop: 'var(--space-1)' }}>{variantLabel(variant)}</p>}
-
-        {hasRating(product.rating) && <StarRating rating={product.rating} size={14} showAverage showCount className="mt-2.5" />}
-        {/*
-          Stock as one line of meta, and only when it is genuinely nearly gone.
-          The amber chip this replaces appeared at every "low" threshold and on
-          the grid as well, which is the shape of a scarcity badge whether or
-          not the number behind it is true.
-        */}
-        {stock.count != null && stock.count > 0 && stock.count < 5 && (
-          <p className="sf-meta" style={{ marginTop: 'var(--space-3)' }}>
-            Only <span className="sf-num">{stock.count}</span> left
-          </p>
-        )}
-        {soldOut && (
-          <p className="sf-meta" style={{ marginTop: 'var(--space-3)' }}>
-            {product.restockingSoon ? 'Back in stock soon' : 'Sold out'}
-          </p>
-        )}
-
-        <ProductDetailBody
-          product={product}
-          variant={variant}
-          onSelectVariant={setVariantId}
-          className="mt-7"
-        />
-      </div>
-
-      {/* The add bar. Fixed rather than in flow: the description runs long, and
-          a shopper who has read to the bottom should not have to scroll back. */}
-      <div
-        className="fixed bottom-0 inset-x-0 z-40"
-        style={{
-          padding: 'var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom))',
-          borderTop: '1px solid var(--line)',
-          background: 'var(--bg)' }}
-      >
-        <div className="max-w-lg mx-auto flex items-center gap-2.5">
-          <div className="flex items-center flex-shrink-0" style={{ background: 'var(--surface-hi)', borderRadius: 'var(--r-control)' }}>
-            <Button variant="ghost" size="lg" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</Button>
-            <span className="sf-num text-center" style={{ width: 24, color: 'var(--text)' }}>{qty}</span>
-            <Button variant="ghost" size="lg" onClick={() => setQty((q) => Math.min(MAX_LINE_QTY, q + 1))} aria-label="Increase quantity">+</Button>
+        <div className="sf-pdp-media">
+          <div className="sf-pdp-plate">
+            <ProductTile
+              // Follows the chosen variant: a flavour picker that changes the
+              // price and not the picture is a page showing one photograph for
+              // six different tubs.
+              imageUrl={variant?.imageUrl ?? product.imageUrl}
+              formats={product.formats}
+              title={product.title}
+              size={640}
+              fill
+              inset
+              plate
+            />
+            {onDeal && rrp != null && (
+              <span className="sf-pcard-off sf-num">−{Math.round((1 - price / rrp) * 100)}%</span>
+            )}
           </div>
-          {/* The one primary on the page. */}
-          <Button variant="primary" size="lg" fullWidth onClick={handleAdd} disabled={soldOut}>
-            {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
-          </Button>
+        </div>
+
+        <div className="sf-pdp-info">
+          <div>
+            {product.brand && <p className="sf-label" style={{ margin: '0 0 var(--space-2)' }}>{product.brand}</p>}
+            <h1 className="sf-pdp-title">{product.title}</h1>
+            {hasRating(product.rating) && (
+              <StarRating rating={product.rating} size={14} showAverage showCount color="var(--text)" className="mt-3.5" />
+            )}
+          </div>
+
+          <div className="sf-pdp-price">
+            <span className="sf-pdp-amount sf-num">{formatGBP(price)}</span>
+            {onDeal && (
+              <>
+                <s className="sf-num">{formatGBP(rrp!)}</s>
+                <span className="sf-pdp-save sf-num">Save {formatGBP(rrp! - price)}</span>
+              </>
+            )}
+            {(perServ != null || stock || soldOut) && (
+              <p className="sf-pdp-under sf-num">
+                {perServ != null && `${formatPerServing(perServ)} a serving`}
+                {perServ != null && (stock || soldOut) && ', '}
+                {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : stock}
+              </p>
+            )}
+          </div>
+
+          <VariantOptions product={product} variant={variant} onSelectVariant={(id) => { setVariantId(id); setQty(1) }} />
+
+          {/* The add bar. Fixed to the bottom on a phone, so a shopper who has
+              read to the end does not have to scroll back; in place on a wide
+              screen, where the whole column is in view. */}
+          <div className="sf-pdp-buy">
+            <div className="sf-pdp-buy-in">
+              <div className="sf-pdp-qty" role="group" aria-label="Quantity">
+                <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity" disabled={qty <= 1}>
+                  <Icon name="dash" size={16} />
+                </button>
+                <span className="sf-num" aria-live="polite">{qty}</span>
+                <button type="button" onClick={() => setQty((q) => Math.min(MAX_LINE_QTY, q + 1))} aria-label="Increase quantity">
+                  <Icon name="plus" size={16} />
+                </button>
+              </div>
+              {/* The one primary on the page. */}
+              <Button variant="primary" size="lg" fullWidth onClick={handleAdd} disabled={soldOut} className="sf-pdp-add">
+                <span className="sf-pdp-add-word">
+                  {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
+                </span>
+                {!soldOut && <span className="sf-num">{formatGBP(price * qty)}</span>}
+              </Button>
+            </div>
+            {inBasket > 0 && !justAdded && (
+              <p className="sf-pdp-inbasket">
+                <Icon name="check" size={14} />
+                {inBasket} in your basket
+                <Link href="/shop#basket" data-interactive>View basket</Link>
+              </p>
+            )}
+          </div>
+
+          <ProductDetailBody product={product} variant={variant} />
         </div>
       </div>
+
+      <ShopFooter />
     </main>
   )
 }
