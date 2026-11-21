@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { useBasket } from '@/lib/basket/store'
+import { ShopTopBar } from './ShopTopBar'
 
 /**
  * The shop's top bar, for the pages that are not the shop.
@@ -27,31 +26,5 @@ export function ShopPageHeader({ count: charged }: { count?: number }) {
   const lines = useBasket((s) => s.lines)
   const count = charged ?? lines.reduce((n, l) => n + l.quantity, 0)
 
-  return (
-    <header
-      className="flex items-center justify-between"
-      style={{ padding: 'var(--space-6) var(--space-4) var(--space-2)' }}
-    >
-      <Link href="/" aria-label="getCHRGD home" data-interactive>
-        <CHRGDLogo markSize={22} wordClassName="text-lg" />
-      </Link>
-
-      <Link
-        href="/shop#basket"
-        data-interactive
-        className="sf-button inline-flex items-center justify-center"
-        style={{
-          minHeight: 36, padding: '0 var(--space-3)', gap: 'var(--space-2)',
-          borderRadius: 'var(--r-control)', background: 'transparent', color: 'var(--text-dim)',
-          fontSize: 'var(--meta-size)', fontWeight: 'var(--weight-medium)',
-          ['--sf-hover' as string]: 'var(--surface-hi)',
-          ['--sf-active' as string]: 'var(--surface-hi)',
-        }}
-        aria-label={`Open basket, ${count} item${count !== 1 ? 's' : ''}`}
-      >
-        Basket
-        {count > 0 && <span className="sf-tnum" style={{ color: 'var(--text)' }}>{count}</span>}
-      </Link>
-    </header>
-  )
+  return <ShopTopBar count={count} />
 }

@@ -32,8 +32,8 @@ interface Props {
 export function CategoryGuideView({ guide, products, shelfHref }: Props) {
   return (
     <div
-      className="storefront min-h-[100dvh]"
-      style={{ background: 'var(--bg)', color: 'var(--text)', paddingBottom: 'var(--space-12)' }}
+      className="storefront sf-page min-h-[100dvh]"
+      style={{ paddingBottom: 'var(--space-12)' }}
     >
       <ShopPageHeader />
 

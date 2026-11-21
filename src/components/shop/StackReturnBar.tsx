@@ -10,6 +10,7 @@ import {
   type StackHandoff,
 } from '@/lib/shop/stack-handoff'
 import { track } from '@/lib/analytics/events'
+import { buttonClasses } from '@/components/storefront'
 
 /**
  * The way back to a stack somebody stepped out of.
@@ -81,16 +82,7 @@ export function StackReturnBar() {
             // to return them to a stack they are already looking at.
             clearStackHandoff()
           }}
-          className="sf-button inline-flex items-center justify-center flex-shrink-0"
-          style={{
-            minHeight: 36,
-            padding: '0 var(--space-4)',
-            borderRadius: 'var(--r-control)',
-            background: 'var(--accent)',
-            color: 'var(--accent-ink)',
-            fontSize: 'var(--meta-size)',
-            fontWeight: 'var(--weight-medium)',
-          }}
+          className={`${buttonClasses('primary', 'sm')} flex-shrink-0`}
         >
           Back to it
         </Link>

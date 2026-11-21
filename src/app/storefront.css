@@ -5,21 +5,30 @@
  * route, the bundles pages and checkout are allowed to use. Components consume
  * it through `var()` and define nothing of their own.
  *
+ * ── The look, in one paragraph ──────────────────────────────────────────────
+ * The quiz's own world, made quiet enough to shop in: the quiz's near-black,
+ * the brand's exact cyan, Space Grotesk for anything that is a headline and
+ * Inter for everything that is read or pressed. Cyan is spent on two things
+ * only — the one action a region is for, and "this is charged" (in your basket,
+ * picked, progressing). Selection is white. Everything else is four greys.
+ * Product photographs sit on a lit studio plate and do the selling; the chrome
+ * around them stays out of the way.
+ *
  * ── Why this is a second file and not a replacement for tokens.css ──────────
  * `tokens.css` is the migrated design system and the three hubs are built on
  * it — glass, specular highlights, three surface elevations, a lit ground. Its
- * values are held by `tokens.test.ts`. This refactor is scoped to the
- * storefront, so deleting that file would take the hubs with it.
+ * values are held by `tokens.test.ts`. This file is scoped to the storefront,
+ * so deleting that one would take the hubs with it.
  *
- * The two therefore run side by side, on deliberately non-colliding names:
- * everything here is a short root name (`--bg`, `--surface`, `--text`), the hub
- * system uses roles (`--ink-1`, `--surface-1`, `--edge`). The one overlap is
- * `--space-*`, which is redefined here to exactly the values tokens.css already
- * has — a no-op, kept so this file reads as the complete scale it is.
- *
- * If the storefront look is adopted for the quiz and the hubs, this file
- * becomes the token set and `tokens.css` goes. Until then, two languages, and
- * this comment is the record of which is which.
+ * The two run side by side on deliberately non-colliding names: everything
+ * here is a short root name (`--bg`, `--surface`, `--text`), the hub system
+ * uses roles (`--ink-1`, `--surface-1`, `--edge`). Before adding a name here,
+ * grep tokens.css for it: both files set `:root`, this one is imported second,
+ * and a collision silently restyles every hub. Two names overlap on purpose. `--space-*`
+ * is redefined to exactly the values tokens.css has, a no-op. `--accent` is the
+ * brand cyan in both files; this one is imported second, so it is the value the
+ * whole app sees, and it is now the exact brand value (#00D4FF) rather than the
+ * slightly darker #00C8F0 the storefront used to override it with.
  *
  * ── Why no utilities are generated ─────────────────────────────────────────
  * Plain `:root`, not `@theme`. Tailwind v4 turns `@theme` entries into
@@ -30,61 +39,75 @@
 
 :root {
   /* ══ Colour ═══════════════════════════════════════════════════════════════
-     Nine values. There is no tenth.
+     The quiz's near-black, four greys, two inks and the brand cyan.
 
-     Category and status are carried by position and copy, not hue: a chip that
-     says "Protein" under a heading that says "Protein" does not also need to be
-     violet, and twelve category colours is twelve colours nobody can name.
-
-     Measured against WCAG AA on every ground they are used on. The tightest
-     pair is `--danger` on `--surface` at 4.63:1; `--text-dim` on `--surface-hi`,
-     the smallest text in the app, is 5.14:1. */
-  --bg: #0A0B0D;
-  --surface: #17191E;
-  --surface-hi: #212530;
-  --line: rgba(255, 255, 255, 0.08);
-  --text: #F2F3F5;
-  --text-dim: #8A9099;
-  --accent: #00C8F0;
-  --accent-ink: #04252E;
+     Measured against WCAG AA on every ground they are used on:
+       --text      on --bg           18.9:1
+       --text-2    on --surface-hi    9.0:1
+       --text-dim  on --bg            6.1:1
+       --text-dim  on --surface-hi    4.9:1   (the tightest pair in use)
+       --accent    on --bg           11.4:1
+       --accent-ink on --accent      10.5:1
+       --danger    on --surface       4.8:1
+     `--text-dim` is never set on `--surface-top`; that pair is 4.2:1. */
+  --bg: #050608;
+  --surface-low: #0B0D10;   /* raised fields: search, the finder */
+  --surface: #0F1115;       /* sheets, drawers, panels */
+  --surface-mid: #13161B;   /* controls at rest: pills, secondary buttons */
+  --surface-hi: #1B1F25;    /* hover, and controls on a panel */
+  --surface-top: #262B33; /* pressed, tracks */
+  --line: rgba(255, 255, 255, 0.075);
+  --line-strong: rgba(255, 255, 255, 0.12);
+  --text: #F5F7F9;
+  --text-2: #BAC0C8;
+  --text-dim: #868D98;
+  --accent: #00D4FF;
+  --accent-hi: #3ADCFF;
+  --accent-lo: #00C3EA;
+  --accent-ink: #00161C;
+  --accent-bloom: rgba(0, 212, 255, 0.55);
+  --accent-tint: rgba(0, 212, 255, 0.12);
   --danger: #E5484D;
 
+  /* The studio plate a product photograph sits on. Supplier photos arrive as
+     JPEGs on white; the image is multiplied onto this, so the white becomes
+     the plate and every photo reads as shot in the same room. */
+  --plate-hi: #FFFFFF;
+  --plate: #EEF0F3;
+  --plate-lo: #E2E6EA;
+
   /* ══ Type ═════════════════════════════════════════════════════════════════
-     Five roles. Two weights.
-
-     The storefront had twenty-four distinct font sizes (fifteen of them
-     arbitrary px values including 9.5, 10.5, 11.5, 12.5 and 13.5) and four
-     hundred weight declarations of which three hundred and eighty were 600 or
-     heavier. Everything was bold, so nothing was.
-
-     400 and 500 only. `font-weight: 600` and above do not exist in the
-     storefront; emphasis is carried by size, colour and position. */
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+     Two faces, already loaded for the quiz: Space Grotesk for headlines and
+     the one big price, Inter for everything read or pressed. No mono: figures
+     line up with `tabular-nums`, which both faces have. */
+  --font-sans: var(--font-body), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: var(--font-display), "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-sans);
 
   --weight-regular: 400;
   --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
 
-  --display-size: 32px;
-  --display-tracking: -0.02em;
-  --display-leading: 1.15;
+  --display-size: 34px;
+  --display-tracking: -0.045em;
+  --display-leading: 1;
 
-  --title-size: 20px;
-  --title-tracking: -0.01em;
-  --title-leading: 1.25;
+  --title-size: 24px;
+  --title-tracking: -0.03em;
+  --title-leading: 1.1;
 
   --body-size: 15px;
-  --body-leading: 1.55;
+  --body-leading: 1.5;
 
   --meta-size: 13px;
 
-  --label-size: 11px;
-  --label-tracking: 0.08em;
+  --label-size: 12px;
+  --label-tracking: 0;
 
   /* ══ Space ════════════════════════════════════════════════════════════════
-     A 4px scale, and only these eight steps. The storefront was using
-     twenty-two, including 2px, 6px, 10px and 14px half-steps that existed
-     because a number looked slightly better once. */
+     A 4px scale. `--section` is the gap between shelves: generous on purpose —
+     the room around a product is part of what makes it look worth the money. */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -93,41 +116,105 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-12: 48px;
+  --section: 56px;
+  --sf-gutter: 16px;
+  --sf-hdr: 60px;
 
   /* ══ Radius ═══════════════════════════════════════════════════════════════
-     Three. Controls are never pills — a pill-shaped button reads as a tag, and
-     the storefront had 129 `rounded-full` elements of which most were buttons. */
-  --r-control: 8px;
-  --r-card: 20px;
+     Buttons are rounded rectangles; chips are pills. That difference is the
+     grammar: a rectangle does something, a pill narrows or chooses. */
+  --r-sm: 10px;
+  --r-control: 12px;
+  --r-lg: 14px;
+  --r-card: 18px;
+  --r-xl: 24px;
   --r-pill: 999px;
 
   /* ══ Motion ═══════════════════════════════════════════════════════════════
-     One duration, one curve. Applied to the four properties that actually
-     change on interaction — see the global rule below. */
-  --t-fast: 150ms;
-  --t-ease: ease-out;
+     Things arrive on a decelerating curve and settle; nothing is linear. */
+  --t-fast: 160ms;
+  --t-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@media (min-width: 960px) {
+  :root {
+    --display-size: 52px;
+    --title-size: 32px;
+    --section: 88px;
+    --sf-gutter: 32px;
+    --sf-hdr: 68px;
+  }
+}
+
+/* ── The page ─────────────────────────────────────────────────────────────────
+   Not a flat rectangle: a faint pool of the brand's light at the top, and a
+   film of grain over the black. The grain is what stops a large dark gradient
+   banding on an 8-bit phone screen, and it gives the black something to be
+   made of. Both sit behind everything and take no pointer events. */
+.sf-page {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(1100px 520px at 72% -160px, rgba(0, 212, 255, 0.07), transparent 70%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.sf-page::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+}
+
+.sf-wrap {
+  width: 100%;
+  max-width: 1312px;
+  margin: 0 auto;
+  padding-left: max(var(--sf-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--sf-gutter), env(safe-area-inset-right, 0px));
+}
+
+/* The shop's column. The page's own sections still carry a 16px inset of
+   their own; on a wide screen the column adds the other 16px, so content lines
+   up with the header's 32px gutter. */
+.sf-main {
+  max-width: 1312px;
+  margin: 0 auto;
+}
+
+@media (min-width: 960px) {
+  .sf-main { padding: 0 16px; }
 }
 
 /* ── Type roles ───────────────────────────────────────────────────────────────
    Classes rather than more tokens, for the reason the eyebrow was a class: a
    token can be picked wrongly and a class cannot. Colour is set by `.sf-meta`
-   and `.sf-label` because it is part of what those roles MEAN; the other three
+   and `.sf-label` because it is part of what those roles MEAN; the others
    inherit, so a title can be dimmed without inventing a variant. */
 
 .sf-display {
-  font-family: var(--font-sans);
+  font-family: var(--font-head);
   font-size: var(--display-size);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-bold);
   letter-spacing: var(--display-tracking);
   line-height: var(--display-leading);
+  text-wrap: balance;
 }
 
 .sf-title {
-  font-family: var(--font-sans);
+  font-family: var(--font-head);
   font-size: var(--title-size);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   letter-spacing: var(--title-tracking);
   line-height: var(--title-leading);
+  text-wrap: balance;
 }
 
 .sf-body {
@@ -145,22 +232,23 @@
   color: var(--text-dim);
 }
 
+/* The quiet label. It used to be tracked-out capitals; sentence case at a
+   small size reads as a label without shouting, and lets the headline under it
+   be the loudest thing in the block. */
 .sf-label {
   font-family: var(--font-sans);
   font-size: var(--label-size);
   font-weight: var(--weight-medium);
   letter-spacing: var(--label-tracking);
-  line-height: 1.2;
-  text-transform: uppercase;
+  line-height: 1.3;
   color: var(--text-dim);
 }
 
 /* ── Numerals ─────────────────────────────────────────────────────────────────
-   Every price, stock count and quantity. Mono for the figure itself and
-   `tabular-nums` so the advance width is fixed: a column of prices lines up on
-   the decimal, and a total that updates does not jitter as its digits change. */
-.sf-num {
-  font-family: var(--font-mono);
+   Every price, stock count and quantity: `tabular-nums`, so a column of prices
+   lines up on the decimal and a total that updates does not jitter. */
+.sf-num,
+.sf-tnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
 }
@@ -177,13 +265,10 @@
 }
 
 /* ── Motion ───────────────────────────────────────────────────────────────────
-   One global rule for everything that responds to a pointer. Scoped to
-   `.storefront` so it cannot reach the hubs, which have their own spring
-   easing and longer durations.
-
-   Only the four properties that actually change on interaction. `transition:
-   all` also animates layout properties, so a control that reflows animates its
-   own reflow — which is the cheapest way to make a fast interface feel slow. */
+   One global rule for everything that responds to a pointer, scoped to
+   `.storefront` so it cannot reach the hubs. Only the properties that actually
+   change on interaction: `transition: all` also animates layout, which is the
+   cheapest way to make a fast interface feel slow. */
 .storefront a,
 .storefront button,
 .storefront input,
@@ -194,6 +279,8 @@
   transition:
     background-color var(--t-fast) var(--t-ease),
     border-color var(--t-fast) var(--t-ease),
+    box-shadow var(--t-fast) var(--t-ease),
+    color var(--t-fast) var(--t-ease),
     opacity var(--t-fast) var(--t-ease),
     transform var(--t-fast) var(--t-ease);
 }
@@ -211,20 +298,18 @@
 }
 
 /* ── Focus ────────────────────────────────────────────────────────────────────
-   A 2px accent ring on every focusable thing in the storefront, offset so it
+   A 2px cyan ring on every focusable thing in the storefront, offset so it
    reads against a fill. `:focus-visible`, so it appears for a keyboard and not
-   for a tap. */
+   for a tap. It does not change the element's own shape. */
 .storefront :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: var(--r-control);
 }
 
 /* ── Scrolling chip rows ──────────────────────────────────────────────────────
-   A horizontal row of chips wider than the viewport cuts off at a hard vertical
-   edge, which reads as a rendering fault rather than as "there is more". The
-   mask fades the last 24px out, and the scroll padding stops the final chip
-   sitting flush against the edge when the row is scrolled to its end. */
+   A horizontal row wider than the viewport cuts off at a hard edge, which reads
+   as a rendering fault rather than as "there is more". The mask fades the last
+   24px out; the scroll padding stops the final chip sitting flush at the end. */
 .sf-scroll-row {
   overflow-x: auto;
   scrollbar-width: none;
@@ -238,33 +323,130 @@
   display: none;
 }
 
-/* ── Button states ────────────────────────────────────────────────────────────
-   The fills come from the component (it knows which variant it is); the states
-   live here because an inline style cannot express `:hover` or `:disabled`.
-   Hover is behind `@media (hover: hover)` — an unguarded `:hover` on a touch
-   device sticks after the tap and leaves the last thing pressed looking
-   permanently active. */
+/* ── Buttons ──────────────────────────────────────────────────────────────────
+   Three kinds by the job they do, three sizes, one shape. Filled, never
+   outlined: an outline around a tinted fill is the look of a default component
+   library, and it was most of what made the old controls read as cheap.
+
+   primary    the one thing a region is for. Cyan, with a highlight along the
+              top edge and a hairline of shade along the bottom, so it reads as
+              a physical key rather than a coloured rectangle.
+   secondary  a real alternative, or a repeated action in a list.
+   ghost      dismissal, navigation, and controls that must be available
+              without being offered.
+
+   Hover is behind `@media (hover: hover)`: an unguarded `:hover` on a touch
+   screen sticks after the tap and leaves the last thing pressed looking lit. */
 .sf-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--r-control);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.006em;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
+.sf-button--sm { min-height: 36px; padding: 0 13px; border-radius: var(--r-sm); font-size: 13.5px; gap: 6px; }
+.sf-button--md { min-height: 44px; padding: 0 18px; font-size: 14px; }
+.sf-button--lg { min-height: 52px; padding: 0 24px; border-radius: var(--r-lg); font-size: 15.5px; }
+
+.sf-button--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 40, 52, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* The large primary also lets a little of its colour onto the ground under
+   it: the one button on a screen that is allowed to glow. */
+.sf-button--primary.sf-button--lg {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 40, 52, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 32px -12px var(--accent-bloom);
+}
+
+.sf-button--secondary {
+  background: var(--surface-mid);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sf-button--ghost {
+  background: transparent;
+  color: var(--text-2);
+}
+
 @media (hover: hover) {
-  .sf-button:hover:not(:disabled) {
-    background: var(--sf-hover);
-  }
+  .sf-button--primary:hover:not(:disabled) { background: var(--accent-hi); }
+  .sf-button--secondary:hover:not(:disabled) { background: var(--surface-hi); }
+  .sf-button--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: var(--text); }
 }
 
-.sf-button:active:not(:disabled) {
-  background: var(--sf-active);
-  transform: scale(0.98);
+.sf-button:active:not(:disabled) { transform: translateY(1px); }
+.sf-button--primary:active:not(:disabled) { background: var(--accent-lo); }
+
+.sf-button:disabled,
+.sf-button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.sf-button:disabled {
-  opacity: 0.5;
-  pointer-events: none;
+.sf-button--full { width: 100%; }
+
+/* A count riding on a button ("Filters 2"): the only badge in the storefront
+   allowed to be cyan, because it is a count of things already chosen. */
+.sf-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
+
+/* A square button holding only an icon: the header's search and basket, close
+   buttons. Ghost by default; the name is always in `aria-label`. */
+.sf-icon-button {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .sf-icon-button:hover { background: rgba(255, 255, 255, 0.06); }
+}
+
+.sf-icon-button:active { transform: translateY(1px); }
 
 .sf-spinner {
   animation: sf-spin 700ms linear infinite;
@@ -278,21 +460,42 @@
   /* The ring still has to say "working", so it steps rather than sweeps —
      motion, but not a spin. */
   .sf-spinner { animation-duration: 2.4s; animation-timing-function: steps(8); }
-  .sf-button:active:not(:disabled) { transform: none; }
+  .sf-button:active:not(:disabled),
+  .sf-icon-button:active { transform: none; }
 }
 
-/* ── Chip states ─────────────────────────────────────────────────────────────*/
+/* ── Chips ────────────────────────────────────────────────────────────────────
+   Pills. Selected is white with dark ink: selection is a state, not an action,
+   so it does not borrow the action colour. */
 .sf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--surface-mid);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 @media (hover: hover) {
-  .sf-chip[aria-pressed='false']:hover {
-    background: color-mix(in srgb, var(--surface-hi) 82%, #fff);
-    color: var(--text);
-  }
+  .sf-chip[aria-pressed='false']:hover { background: var(--surface-hi); color: var(--text); }
+}
+
+.sf-chip[aria-pressed='true'] {
+  background: var(--text);
+  box-shadow: none;
+  color: #0A0C0F;
 }
 
 .sf-chip:active { transform: scale(0.98); }
@@ -301,23 +504,129 @@
   .sf-chip:active { transform: none; }
 }
 
-/* ── Card and shelf type ──────────────────────────────────────────────────────
-   The card's scan order, expressed as three classes. Price leads because it is
-   the first thing anyone looks for on a shelf; the name is second and set at
-   500 so it holds its own against the figure above it; everything else is meta.
+/* ── The header ───────────────────────────────────────────────────────────────
+   Sticky, and the one piece of glass on the shop: content scrolls under it, so
+   the blur has something to blur. Brand on the left, places in the middle on a
+   wide screen, search and basket on the right. */
+.sf-hdr {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 40;
+  background: rgba(5, 6, 8, 0.72);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+  border-bottom: 1px solid var(--line);
+}
 
-   `--price-size` is the seventh step in the scale and the only one added for
-   this: five sizes could not express "bigger than body, smaller than a title",
-   which is exactly what a card price is. */
+.sf-hdr-in {
+  height: var(--sf-hdr);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sf-hdr-brand {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+  border-radius: var(--r-sm);
+}
+
+.sf-hdr-brand svg { filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.35)); }
+
+.sf-hdr-nav {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-right: var(--space-4);
+}
+
+.storefront .sf-hdr-nav a {
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.storefront .sf-hdr-nav a[aria-current='page'] { color: var(--text); }
+
+@media (hover: hover) {
+  .storefront .sf-hdr-nav a:hover { color: var(--text); }
+}
+
+@media (min-width: 960px) {
+  .sf-hdr-nav { display: flex; }
+}
+
+/* The basket's count, on the icon's corner. Cyan: it is a count of things
+   charged and waiting. The ring in the page colour lifts it off the icon. */
+.sf-bag-count {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.sf-bag-count[data-bump='true'] { animation: sf-bump 500ms var(--t-spring); }
+
+@keyframes sf-bump {
+  40% { transform: scale(1.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-bag-count[data-bump='true'] { animation: none; }
+}
+
+/* ── The search field ──────────────────────────────────────────────────────── */
+.sf-search {
+  min-height: 50px;
+  border-radius: var(--r-lg);
+  background: var(--surface-low);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sf-search:focus-within {
+  box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.65), 0 0 0 4px var(--accent-tint);
+}
+
+.sf-search-input {
+  height: 48px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--text);
+}
+
+.sf-search-input::placeholder { color: var(--text-dim); opacity: 1; }
+
+/* ── Card and shelf type ──────────────────────────────────────────────────────
+   The card's scan order: the photograph, the name, then the price. Name and
+   price are both Inter — the display face on a twenty-card grid would be twenty
+   headlines — and the price carries the weight. */
 :root {
-  --price-size: 17px;
-  --name-size: 13px;
+  --price-size: 15.5px;
+  --name-size: 14.5px;
 }
 
 .sf-price {
   font-family: var(--font-sans);
   font-size: var(--price-size);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
   line-height: 1.2;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -328,26 +637,14 @@
   font-family: var(--font-sans);
   font-size: var(--name-size);
   font-weight: var(--weight-medium);
-  line-height: 1.35;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
   color: var(--text);
 }
 
-/* Figures inside meta text — sizes, servings, review counts — kept on the same
-   advance width as the price above them so a column of cards aligns. Sans, not
-   mono: mono earns its place in a column of figures like a basket or a
-   comparison table, and reads as a gap-toothed novelty on a single value. */
-.sf-tnum {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-}
-
-/* ── The card as an object ────────────────────────────────────────────────────
-   A hairline of light on the top edge only. Not a border — a lit edge, the way
-   a physical tile catches the light from above. It is the cheapest way to make
-   a surface read as an object rather than as a slightly lighter region, and at
-   4% separation between --surface and --bg the card needs it. */
+/* ── The card as an object ────────────────────────────────────────────────── */
 .sf-card {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .sf-card:active {
@@ -356,12 +653,11 @@
 
 .sf-add {
   cursor: pointer;
-  box-shadow: 0 0 0 3px var(--surface);
 }
 
 @media (hover: hover) {
   .sf-add:hover {
-    background: color-mix(in srgb, var(--surface-hi) 80%, #fff);
+    background: var(--surface-hi);
   }
 }
 
@@ -389,30 +685,25 @@
 }
 
 /* ── Off-screen shelves ───────────────────────────────────────────────────────
-   Twenty-odd category grids, most of them below the fold. `content-visibility`
-   lets the browser skip laying out and painting a section until it is near the
-   viewport; `contain-intrinsic-size` gives it a height to reserve in the
-   meantime, so the scrollbar does not jump as sections realise how tall they
-   are. The value is a rough two rows of cards — being approximately right is
-   the whole contract. */
+   `content-visibility` lets the browser skip laying out and painting a shelf
+   until it is near the viewport; `contain-intrinsic-size` reserves a rough two
+   rows of cards meanwhile, so the scrollbar does not jump as shelves realise
+   how tall they are. */
 .sf-shelf {
   content-visibility: auto;
   contain-intrinsic-size: auto 720px;
 }
 
 /* ── Added to basket ──────────────────────────────────────────────────────────
-   The card acknowledges the press. A count changing in a bar at the bottom of
-   the screen is not feedback for a tap that happened at the top of it — the
-   product itself has to react, or the shopper taps again.
-
-   A short settle on the photo, not a bounce: this is a confirmation, and a
-   confirmation that draws attention for half a second is one that has to be
-   waited out on every add. */
+   The card acknowledges the press. A count changing in a corner of the screen
+   is not feedback for a tap that happened in the middle of it. A short settle,
+   not a bounce: a confirmation that draws attention has to be waited out on
+   every add. */
 .sf-added { animation: sf-added 420ms var(--t-ease) 1; }
 
 @keyframes sf-added {
   0%   { transform: scale(1); }
-  38%  { transform: scale(0.93); }
+  38%  { transform: scale(0.95); }
   100% { transform: scale(1); }
 }
 
@@ -421,13 +712,8 @@
 }
 
 /*
-  The way through from a shelf to its guide.
-
-  Deliberately not a `.sf-button`. A shelf already has one primary action per
-  card and a category row above it; a filled button here would compete with
-  every Add on the screen and turn a page of products into a page of controls.
-  A text link in the accent, at meta size, reads as "more about this" — which
-  is what it is.
+  The way through from a shelf to its guide: a text link in the accent, at
+  meta size. A filled button here would compete with every Add on the screen.
 */
 .storefront .sf-guide-link {
   font-family: var(--font-sans);
@@ -438,9 +724,11 @@
   text-decoration: none;
 }
 
-.storefront .sf-guide-link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+@media (hover: hover) {
+  .storefront .sf-guide-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 /* ── Not sure where to start? ─────────────────────────────────────────────────

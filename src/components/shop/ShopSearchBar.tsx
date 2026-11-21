@@ -123,14 +123,16 @@ export function ShopSearchBar({
   }
 
   return (
-    <div className="relative px-5 pt-3 pb-1 max-w-lg mx-auto">
-      <div
-        className="flex items-center gap-2 rounded-[var(--r-control)] pl-3 pr-1.5 py-1"
-        style={{ background: 'var(--surface)', border: 'none' }}
-      >
+    <div className="relative" data-shop-search>
+      {/*
+        A field, not a pill: 50px tall, the raised field surface with a hairline,
+        and a cyan ring while focused. 16px type, so iOS does not zoom the page
+        when it takes focus.
+      */}
+      <div className="sf-search flex items-center gap-2.5 pl-4 pr-1.5">
         <svg
-          width="15" height="15" viewBox="0 0 24 24" fill="none"
-          stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round"
+          width="18" height="18" viewBox="0 0 24 24" fill="none"
+          stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round"
           className="flex-shrink-0" aria-hidden
         >
           <circle cx="11" cy="11" r="7" />
@@ -156,8 +158,7 @@ export function ShopSearchBar({
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
-          className="flex-1 min-w-0 bg-transparent py-2 text-sm outline-none placeholder:opacity-70"
-          style={{ color: 'var(--text)' }}
+          className="sf-search-input flex-1 min-w-0 bg-transparent outline-none"
         />
 
         {value !== '' && (
@@ -165,8 +166,8 @@ export function ShopSearchBar({
             type="button"
             onClick={clear}
             aria-label="Clear search"
-            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-            style={{ color: 'var(--text-dim)' }}
+            className="sf-icon-button flex-shrink-0"
+            style={{ width: 36, height: 36, color: 'var(--text-dim)' }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
               <path d="M18 6 6 18M6 6l12 12" />

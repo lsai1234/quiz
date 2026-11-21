@@ -710,6 +710,14 @@ export function ShopShell() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  /** The header's search icon: bring the search box into view and focus it. */
+  const focusSearch = () => {
+    const input = document.querySelector<HTMLInputElement>('[data-shop-search] input')
+    if (!input) return
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => input.focus({ preventScroll: true }), 250)
+  }
+
   return (
     /*
       `.storefront` is the scope for the whole token set: the global transition,
@@ -720,13 +728,13 @@ export function ShopShell() {
       is a gradient and a glow, and the storefront now has neither.
     */
     <ShopHeroProvider>
-    <div className="storefront min-h-[100dvh]" style={{ background: 'var(--bg)', color: 'var(--text)', paddingBottom: 'var(--space-12)' }}>
-      <ShopHeader count={count} onOpenBasket={openDrawer} />
+    <div className="storefront sf-page min-h-[100dvh]" style={{ paddingBottom: 'var(--space-12)' }}>
+      <ShopHeader count={count} onOpenBasket={openDrawer} onSearch={focusSearch} />
 
       {/* Above everything, for anybody who stepped out of a stack to get here. */}
       <StackReturnBar />
 
-      <main>
+      <main className="sf-main">
       <div style={{ padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>
         <p className="sf-label">The Shop</p>
         <h1 className="sf-display" style={{ color: 'var(--text)', marginTop: 'var(--space-2)' }}>

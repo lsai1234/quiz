@@ -32,9 +32,11 @@ export function ShopCategoryNav({ categories }: Props) {
     const compute = () => {
       frame = 0
       let current = categories[0]?.slug ?? ''
+      // Just under the sticky header and this bar, wherever they are tall.
+      const line = (document.querySelector('.sf-hdr')?.getBoundingClientRect().bottom ?? 0) + 72
       for (const c of categories) {
         const el = document.getElementById(`shop-cat-${c.slug}`)
-        if (el && el.getBoundingClientRect().top <= 120) current = c.slug
+        if (el && el.getBoundingClientRect().top <= line) current = c.slug
       }
       setActiveSlug(current)
     }
@@ -73,8 +75,8 @@ export function ShopCategoryNav({ categories }: Props) {
     */
     <nav
       aria-label="Shop categories"
-      className="sticky top-0 z-30"
-      style={{ background: 'var(--bg)', borderBottom: '1px solid var(--line)' }}
+      className="sticky z-30"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + var(--sf-hdr))', background: 'rgba(5, 6, 8, 0.82)', WebkitBackdropFilter: 'blur(20px) saturate(1.7)', backdropFilter: 'blur(20px) saturate(1.7)', borderBottom: '1px solid var(--line)' }}
     >
       {categories.length > 0 && (
         <div

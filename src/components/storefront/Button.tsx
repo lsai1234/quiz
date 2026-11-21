@@ -5,31 +5,23 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 /**
  * The storefront's only button.
  *
- * It replaces 121 raw `<button>` elements across 48 files and 29 distinct
- * inline style signatures in the shop alone — the same "secondary" action was
- * `rounded-xl text-sm font-bold` in one card and `rounded-full text-xs
- * font-bold tracking-wide` in the row above it, and almost none of them had a
- * focus ring.
- *
  * ── Three variants, by the job they do ──────────────────────────────────────
- * `primary`   the one thing this screen wants. Accent fill. **One per screen.**
- *             A second one is not a second priority, it is the loss of the
- *             first.
- * `secondary` a real alternative, or a repeated action in a list — the Add on
- *             a grid card is a secondary because the shelf's primary is the
- *             basket, not any one product.
+ * `primary`   the one thing this region is for. Cyan, with a highlight along
+ *             the top edge so it reads as a key, not a coloured rectangle.
+ *             **One per region.** A second one is not a second priority, it is
+ *             the loss of the first.
+ * `secondary` a real alternative, or a repeated action in a list.
  * `ghost`     dismissal, navigation, and controls that must be available
  *             without being offered.
  *
- * ── No pills ────────────────────────────────────────────────────────────────
- * Every size is `--r-control`. A pill-shaped button reads as a tag, and a
- * screen where the buttons and the filter chips are the same shape has no
- * grammar left.
+ * ── Filled, never outlined ──────────────────────────────────────────────────
+ * The look lives in `storefront.css` (`.sf-button--*`), not inline, because the
+ * states a button needs — hover, pressed, disabled — cannot be written inline,
+ * and an inline fill outranks the stylesheet rule that would dim it.
  *
- * ── Weight 500, sentence case ───────────────────────────────────────────────
- * The layer this replaces ran `font-bold` and `font-black` with uppercase
- * tracking on controls. Everything was shouting, so the actual call to action
- * had nothing left to escalate to.
+ * ── Rounded rectangles, never pills ─────────────────────────────────────────
+ * Pills are chips. A screen where the buttons and the filter chips are the same
+ * shape has no grammar left.
  */
 
 type Variant = 'primary' | 'secondary' | 'ghost'
@@ -52,32 +44,9 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   ref?: Ref<HTMLButtonElement>
 }
 
-/** Heights are minimums, not fixed: the control grows if its label wraps. */
-const SIZE: Record<Size, { minH: string; pad: string; font: string }> = {
-  sm: { minH: '36px', pad: '0 var(--space-3)', font: 'var(--meta-size)' },
-  md: { minH: '44px', pad: '0 var(--space-4)', font: 'var(--body-size)' },
-  lg: { minH: '52px', pad: '0 var(--space-5)', font: 'var(--body-size)' },
-}
-
-const VARIANT: Record<Variant, { bg: string; fg: string; hover: string; active: string }> = {
-  primary: {
-    bg: 'var(--accent)',
-    fg: 'var(--accent-ink)',
-    hover: 'color-mix(in srgb, var(--accent) 88%, #fff)',
-    active: 'color-mix(in srgb, var(--accent) 88%, #fff)',
-  },
-  secondary: {
-    bg: 'var(--surface-hi)',
-    fg: 'var(--text)',
-    hover: 'color-mix(in srgb, var(--surface-hi) 82%, #fff)',
-    active: 'color-mix(in srgb, var(--surface-hi) 82%, #fff)',
-  },
-  ghost: {
-    bg: 'transparent',
-    fg: 'var(--text-dim)',
-    hover: 'var(--surface-hi)',
-    active: 'var(--surface-hi)',
-  },
+/** The classes for a button's look, for the few places that must stay a link. */
+export function buttonClasses(variant: Variant = 'secondary', size: Size = 'md', fullWidth = false): string {
+  return `sf-button sf-button--${variant} sf-button--${size}${fullWidth ? ' sf-button--full' : ''}`
 }
 
 export function Button({
@@ -91,8 +60,6 @@ export function Button({
   ref,
   ...rest
 }: ButtonProps) {
-  const v = VARIANT[variant]
-  const s = SIZE[size]
   const blocked = disabled || loading
 
   return (
@@ -101,21 +68,7 @@ export function Button({
       disabled={blocked}
       aria-busy={loading || undefined}
       data-interactive
-      className={`sf-button inline-flex items-center justify-center gap-2 ${fullWidth ? 'w-full' : ''} ${className ?? ''}`}
-      style={{
-        minHeight: s.minH,
-        padding: s.pad,
-        fontSize: s.font,
-        fontFamily: 'var(--font-sans)',
-        fontWeight: 'var(--weight-medium)',
-        lineHeight: 1.2,
-        borderRadius: 'var(--r-control)',
-        border: 'none',
-        background: v.bg,
-        color: v.fg,
-        ['--sf-hover' as string]: v.hover,
-        ['--sf-active' as string]: v.active,
-      }}
+      className={`${buttonClasses(variant, size, fullWidth)} ${className ?? ''}`}
       {...rest}
     >
       {loading && <Spinner />}

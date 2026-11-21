@@ -71,7 +71,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
   }
 
   return (
-    <main className="storefront min-h-dvh" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <main className="storefront sf-page min-h-dvh">
       <ShopPageHeader count={count} />
 
       <div className="max-w-lg mx-auto" style={{ padding: '0 var(--space-4)', paddingBottom: 120 }}>

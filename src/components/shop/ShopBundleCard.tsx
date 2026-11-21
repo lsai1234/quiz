@@ -6,6 +6,7 @@ import type { ShopBundleView } from '@/hooks/useShopBundles'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { bundleWorkouts } from '@/lib/bundles/resolve'
+import { buttonClasses } from '@/components/storefront'
 
 interface Props {
   view: ShopBundleView
@@ -95,18 +96,7 @@ export function ShopBundleCard({ view, products }: Props) {
       </div>
 
       <div style={{ padding: '0 var(--space-3) var(--space-3)' }}>
-        <span
-          className="sf-button inline-flex items-center justify-center w-full"
-          style={{
-            minHeight: 36,
-            padding: '0 var(--space-3)',
-            fontSize: 'var(--meta-size)',
-            fontFamily: 'var(--font-sans)',
-            fontWeight: 'var(--weight-medium)',
-            borderRadius: 'var(--r-control)',
-            background: 'var(--surface-hi)',
-            color: 'var(--text)' }}
-        >
+        <span className={buttonClasses('secondary', 'sm', true)}>
           View session stack
         </span>
       </div>

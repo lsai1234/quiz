@@ -3,14 +3,11 @@ import type { ReactNode } from 'react'
 /**
  * A non-interactive label on a thing.
  *
- * Deliberately colourless. The layer this replaces carried twelve category
- * hues, a merchandising badge in accent, an amber scarcity chip and a red
- * sold-out chip — four colour systems on one card, none of which a shopper
- * could have learned. Category is said by the section heading it sits under and
- * status is said by the words in the badge, so neither needs a hue.
+ * Deliberately colourless. Category is said by the section heading it sits under
+ * and status by the words in the badge, so neither needs a hue.
  *
- * It is a rounded rectangle, not a pill: pills are chips, and a chip is
- * something you can press.
+ * A small rounded rectangle in sentence case, not a pill: pills are chips, and a
+ * chip is something you can press.
  */
 
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
@@ -20,9 +17,10 @@ export function Badge({ children, className }: { children: ReactNode; className?
       style={{
         padding: '0 var(--space-2)',
         minHeight: 22,
-        borderRadius: 'var(--r-control)',
-        background: 'var(--surface-hi)',
-        color: 'var(--text-dim)',
+        borderRadius: 6,
+        background: 'var(--surface-mid)',
+        boxShadow: 'inset 0 0 0 1px var(--line)',
+        color: 'var(--text-2)',
       }}
     >
       {children}
