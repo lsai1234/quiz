@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * "Not sure where to start?" at the top of the shop: the quiz, shown working,
- * and the finder, whose answers are the shop's own filters.
+ * The top of the shop: the quiz strip, shown working, and the finder, whose
+ * answers are the shop's own filters.
  *
  * What these hold is the finder's promise: an answer is a filter you can see
  * (in the address, as a chip, in the count) and undo, the count is what the
@@ -11,10 +11,10 @@ import { test, expect } from '@playwright/test'
 
 const finder = (page: import('@playwright/test').Page) => page.locator('[data-shop-finder]')
 
-test('the quiz tile goes to the quiz', async ({ page }) => {
+test('the quiz strip at the top of the shop goes to the quiz', async ({ page }) => {
   await page.goto('/')
   const tile = page.locator('[data-shop-quiz-tile]')
-  await expect(tile.getByRole('heading', { name: 'A stack made for you' })).toBeVisible()
+  await expect(tile.getByRole('heading', { name: 'Get a stack built around you' })).toBeVisible()
   await tile.getByRole('link', { name: /take the quiz/i }).click()
   await expect(page).toHaveURL(/\/quiz$/)
 })

@@ -1094,3 +1094,306 @@
   .sf-way-go:active,
   .sf-finder-chip:active:not(:disabled) { transform: none; }
 }
+
+/* ── The quiz strip ───────────────────────────────────────────────────────────
+   The quiz at the very top of the shop, compact on purpose: a full-width band
+   lit from the pad, one line saying what it is, one button, and a live example.
+   About 290px tall on a phone, 250 on a desktop — the shop is on the first
+   screen with it. See `ShopQuizStrip`. */
+.sf-strip {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.sf-strip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(38% 90% at 14% 55%, rgba(0, 212, 255, 0.13), transparent 70%),
+    linear-gradient(180deg, #080A0E 0%, var(--bg) 100%);
+}
+
+/* The horizon: a line of the pad's light along the strip's bottom edge. */
+.sf-strip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 212, 255, 0.35) 25%, rgba(0, 212, 255, 0.08) 70%, transparent 100%);
+}
+
+.sf-strip-in {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-areas: 'stage copy' 'ro ro';
+  gap: 12px 14px;
+  padding-top: 16px;
+  padding-bottom: 18px;
+}
+
+.sf-strip-stage {
+  grid-area: stage;
+  width: 100%;
+  height: 128px;
+  align-self: center;
+  overflow: visible;
+}
+
+.sf-strip-copy {
+  grid-area: copy;
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  min-width: 0;
+}
+
+.sf-strip-title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.sf-strip-title span {
+  color: var(--accent);
+  text-shadow: 0 0 18px rgba(0, 212, 255, 0.35);
+}
+
+.sf-strip-lede {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  max-width: 46ch;
+}
+
+.sf-strip-copy .sf-button svg { fill: currentColor; stroke: none; }
+
+/* The readout: Amp narrating the example. */
+.sf-strip-ro {
+  grid-area: ro;
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px 14px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+}
+
+.sf-strip-amp { position: relative; width: 36px; height: 36px; }
+.sf-strip-amp::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 212, 255, 0.35), transparent);
+  opacity: 0;
+  transition: opacity 600ms var(--t-ease);
+}
+.sf-strip[data-phase='stack'] .sf-strip-amp::after { opacity: 1; }
+.sf-strip-amp svg { display: block; }
+.sf-strip .sf-amp-lit,
+.sf-strip .sf-amp-happy { opacity: 0; transition: opacity 500ms var(--t-ease); }
+.sf-strip .sf-amp-eyes { transition: transform 500ms var(--t-ease), opacity 300ms; }
+.sf-strip[data-phase='said'] .sf-amp-eyes { transform: translate(-1.2px, 1.2px); }
+.sf-strip[data-phase='think'] .sf-amp-eyes { transform: translate(1.6px, -2.8px); }
+.sf-strip[data-phase='stack'] .sf-amp-lit,
+.sf-strip[data-phase='stack'] .sf-amp-happy { opacity: 1; }
+.sf-strip[data-phase='stack'] .sf-amp-eyes { opacity: 0; }
+
+.sf-strip-ro-body { min-width: 0; display: grid; gap: 6px; }
+
+.sf-strip-ro-k {
+  margin: 0;
+  padding-right: 30px;
+  min-height: 18px;
+  font-size: 12.5px;
+  font-weight: var(--weight-medium);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-strip-ro-v {
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+}
+
+.sf-strip-said {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 12.5px;
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  white-space: nowrap;
+  transition: opacity 350ms var(--t-ease), transform 450ms var(--t-ease), filter 350ms;
+}
+
+.sf-strip-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 22px;
+  margin-right: 8px;
+  font-size: 13.5px;
+  font-weight: var(--weight-medium);
+  color: var(--text);
+  white-space: nowrap;
+  transition: opacity 350ms var(--t-ease), transform 450ms var(--t-ease), filter 350ms;
+}
+
+.sf-strip-item b { font-size: 12.5px; font-weight: var(--weight-semibold); color: var(--accent); }
+
+.sf-strip-said[data-on='false'],
+.sf-strip-item[data-on='false'] { opacity: 0; transform: translateY(6px); filter: blur(4px); }
+
+.sf-strip-shimmer {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  line-height: 1.45;
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text-dim) 35%, #fff 50%, var(--text-dim) 65%, var(--text-dim) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sf-shimmer 1.6s linear infinite;
+}
+
+@keyframes sf-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+.sf-strip-steps {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.sf-strip-steps i {
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  transition: background-color 400ms, box-shadow 400ms;
+}
+
+.sf-strip-steps i[data-on='true'] {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.7);
+}
+
+.storefront .sf-strip-pause {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-dim);
+}
+
+/* The stage */
+.sf-strip-ring { fill: none; stroke-width: 1.6; opacity: 0.45; transition: opacity 800ms; }
+.sf-strip-ring-glow { fill: none; stroke: var(--accent); stroke-width: 7; opacity: 0.16; filter: blur(3px); transition: opacity 800ms; }
+.sf-strip[data-phase='stack'] .sf-strip-ring { opacity: 1; }
+.sf-strip[data-phase='stack'] .sf-strip-ring-glow { opacity: 0.4; }
+.sf-strip-glow { opacity: 0.55; transform-box: fill-box; transform-origin: center; transition: opacity 800ms var(--t-ease); }
+.sf-strip[data-phase='think'] .sf-strip-glow { opacity: 0.9; animation: sf-breathe 1.3s ease-in-out infinite; }
+.sf-strip[data-phase='stack'] .sf-strip-glow { opacity: 1; }
+.sf-strip-comet { filter: drop-shadow(0 0 4px #00D4FF) drop-shadow(0 0 8px #00D4FF); }
+.sf-strip-node { transform-box: fill-box; transform-origin: center; transition: transform 550ms var(--t-spring), opacity 200ms; }
+.sf-strip-node[data-on='false'] { transform: scale(0); opacity: 0; }
+.sf-strip-node-halo { fill: var(--accent); opacity: 0.9; filter: blur(2.5px); }
+.sf-strip-node-core { fill: #fff; }
+.sf-strip-back .sf-strip-node { opacity: 0.55; }
+.sf-strip-float { animation: sf-float 7s ease-in-out infinite; }
+.sf-strip-float-b { animation-duration: 8.5s; animation-delay: -3s; }
+
+@keyframes sf-breathe { 50% { transform: scale(1.08); opacity: 0.65; } }
+@keyframes sf-float { 50% { transform: translateY(-5px); } }
+
+@media (min-width: 960px) {
+  .sf-strip-in {
+    grid-template-columns: 220px minmax(0, 1fr) minmax(0, 470px);
+    grid-template-areas: 'stage copy ro';
+    gap: 0 40px;
+    padding-top: 28px;
+    padding-bottom: 30px;
+    align-items: center;
+  }
+  .sf-strip-stage { height: 196px; }
+  .sf-strip-copy { gap: 8px; }
+  .sf-strip-title { font-size: 30px; line-height: 1.08; }
+  .sf-strip-lede { font-size: 15px; margin-bottom: 10px; }
+  .sf-strip-ro-v { min-height: 26px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-strip-float,
+  .sf-strip-glow,
+  .sf-strip-shimmer { animation: none; }
+  .sf-strip-node,
+  .sf-strip-said,
+  .sf-strip-item,
+  .sf-strip-ring,
+  .sf-strip-ring-glow,
+  .sf-strip .sf-amp-lit,
+  .sf-strip .sf-amp-happy,
+  .sf-strip .sf-amp-eyes { transition: none; }
+}
+
+/* ── The shop's head ──────────────────────────────────────────────────────────
+   The title and three facts under it. The facts are the ones the shop can
+   stand behind: the catalogue's own rating, the free-delivery threshold, and a
+   secure checkout. */
+.sf-shophead {
+  display: grid;
+  gap: 12px;
+  padding: 32px var(--space-4) var(--space-4);
+}
+
+.sf-trust {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.sf-trust li { display: inline-flex; align-items: center; gap: 7px; }
+.sf-trust svg { color: var(--text-2); }
+
+@media (min-width: 960px) {
+  .sf-shophead { padding-top: 56px; gap: 16px; }
+}

@@ -44,7 +44,7 @@ import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
 import { ShopHubCard } from './ShopHubCard'
-import { ShopQuizTile } from './ShopQuizTile'
+import { ShopQuizStrip } from './ShopQuizStrip'
 import { ShopFinder } from './ShopFinder'
 import { finderCanShow } from '@/lib/shop/finder'
 import { ShopHeroProvider, ShopMasthead, ShopTwinTiles, ShopBreak } from './ShopHeroes'
@@ -133,19 +133,16 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
   */
   const facts: Array<{ icon: string; text: string }> = [
     ...(summary ? [{ icon: 'star', text: `${summary.average.toFixed(1)} from ${summary.count.toLocaleString()} reviews` }] : []),
-    ...(threshold > 0 ? [{ icon: 'truck', text: `Free delivery over ${formatGBP(threshold)}` }] : []),
+    ...(threshold > 0 ? [{ icon: 'truck', text: `Free UK delivery over ${formatGBP(threshold).replace(/\.00$/, '')}` }] : []),
     { icon: 'lock', text: 'Secure checkout' },
   ]
 
   /* Wrapped, not scrolled: three short facts do not fit one 390px line, and a
      reassurance the shopper has to swipe to reach is not reassuring. */
   return (
-    <ul
-      className="flex flex-wrap"
-      style={{ gap: 'var(--space-2) var(--space-4)', padding: 'var(--space-4) var(--space-4) 0' }}
-    >
+    <ul className="sf-trust" aria-label="Shopping with CHRGD">
       {facts.map((f) => (
-        <li key={f.text} className="sf-meta flex items-center flex-shrink-0" style={{ gap: 'var(--space-2)' }}>
+        <li key={f.text}>
           <Icon name={f.icon as never} size={14} className="shrink-0" />
           {f.text}
         </li>
@@ -734,15 +731,19 @@ export function ShopShell() {
       {/* Above everything, for anybody who stepped out of a stack to get here. */}
       <StackReturnBar />
 
-      <main className="sf-main">
-      <div style={{ padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>
-        <p className="sf-label">The Shop</p>
-        <h1 className="sf-display" style={{ color: 'var(--text)', marginTop: 'var(--space-2)' }}>
+      <main>
+      {/*
+        The quiz first, as a compact strip rather than a takeover: what it is,
+        one button, and a live example. The shop starts on the same screen.
+      */}
+      <ShopQuizStrip />
+
+      <div className="sf-main">
+      <div className="sf-shophead">
+        <h1 className="sf-display" style={{ color: 'var(--text)', margin: 0 }}>
           Everything, à la carte
         </h1>
-        <p className="sf-meta" style={{ marginTop: 'var(--space-2)' }}>
-          Protein, performance, hydration and everyday health — the full CHRGD range, priced à la carte.
-        </p>
+        {products.length > 0 && <TrustStrip products={products} />}
 
         {/*
           The masthead. Uploaded artwork when a founder has added any, and a
@@ -802,12 +803,8 @@ export function ShopShell() {
           */}
           {showWays && (
             <section className="sf-ways" aria-labelledby="shop-ways-title" style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-              <div className="flex items-baseline justify-between" style={{ gap: 'var(--space-3)' }}>
-                <h2 id="shop-ways-title" className="sf-title" style={{ fontSize: 17, color: 'var(--text)' }}>Not sure where to start?</h2>
-                <span className="sf-meta">Two ways in</span>
-              </div>
+              <h2 id="shop-ways-title" className="sr-only">Narrow the shop down</h2>
               <div className="sf-ways-tiles">
-                <ShopQuizTile />
                 <ShopFinder
                   products={products}
                   index={index}
@@ -857,8 +854,6 @@ export function ShopShell() {
 
           {/* The member hub on its own, while it's on sale. */}
           {!searching && <ShopHubCard />}
-
-          {!searching && <TrustStrip products={products} />}
 
           <ShopCategoryNav categories={searching ? [] : navCategories} />
 
@@ -946,6 +941,7 @@ export function ShopShell() {
           )}
         </>
       )}
+      </div>
       </main>
 
       {rouletteOpen && (
