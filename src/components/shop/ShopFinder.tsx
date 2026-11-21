@@ -198,7 +198,7 @@ export function ShopFinder({ products, index, query, onChange, onShow }: Props) 
   if (questions[0].options.length === 0) return null
 
   const answers = answerWords(query, questions)
-  const segments = questions.map((q, i) => (i < step ? 'done' : i === step ? 'now' : 'next'))
+  const segments = questions.map((_, i) => (i < step ? 'done' : i === step ? 'now' : 'next'))
 
   return (
     <section ref={rootRef} className="sf-qf" data-open={open} aria-label="Find your match" data-shop-finder onKeyDown={onKeyDown}>
