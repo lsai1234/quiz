@@ -512,12 +512,32 @@
    wide screen, search and basket on the right. */
 .sf-hdr {
   position: sticky;
-  top: env(safe-area-inset-top, 0px);
+  /* Stuck to the very top of the screen, not below the status bar: on a phone
+     whose browser draws the page behind the status bar (iOS Safari does), a
+     bar stuck under it leaves a band where the page scrolls past above it.
+     The bar pads itself down by the inset instead, and that band is solid. */
+  top: 0;
   z-index: 40;
-  background: rgba(5, 6, 8, 0.72);
+  padding-top: env(safe-area-inset-top, 0px);
+  background:
+    linear-gradient(var(--bg), var(--bg)) top / 100% env(safe-area-inset-top, 0px) no-repeat,
+    rgba(5, 6, 8, 0.72);
   -webkit-backdrop-filter: blur(20px) saturate(1.7);
   backdrop-filter: blur(20px) saturate(1.7);
   border-bottom: 1px solid var(--line);
+}
+
+/* Anything the browser paints above the bar (behind the status bar, or past
+   the top on an overscroll bounce) is covered in the page colour. */
+.sf-hdr::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 160px;
+  background: var(--bg);
+  pointer-events: none;
 }
 
 .sf-hdr-in {
