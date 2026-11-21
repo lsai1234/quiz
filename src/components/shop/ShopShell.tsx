@@ -13,7 +13,7 @@ import { resolveBasket, basketSubtotal, basketSupplierValue, priceBasket, resolv
 import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { buildIndex, queryForAnalytics } from '@/lib/shop/search'
-import { EMPTY_QUERY, applyShopQuery, isEmptyQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
+import { EMPTY_QUERY, activeFilterCount, applyShopQuery, isEmptyQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
 import { decodeShopQuery, shopQuerySearch } from '@/lib/shop/query-url'
 import { stripPhrase } from '@/lib/shop/synonyms'
 import { buildSuggestions, jumpPatch, type Suggestion } from '@/lib/shop/suggestions'
@@ -42,7 +42,6 @@ import { ShopRouletteSheet } from './ShopRouletteSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
-import { ShopGoalRow } from './ShopGoalRow'
 import { ShopHubCard } from './ShopHubCard'
 import { ShopQuizStrip } from './ShopQuizStrip'
 import { ShopFinder } from './ShopFinder'
@@ -744,6 +743,20 @@ export function ShopShell() {
           Everything, à la carte
         </h1>
         {products.length > 0 && <TrustStrip products={products} />}
+        {/* The search box, beside the title on a wide screen and under it on a phone. */}
+        {!isLoading && !(catalogueError && products.length === 0) && (
+          <div className="sf-shophead-search">
+            <ShopSearchBar
+              value={searchInput}
+              onChange={(v) => { setSearchInput(v); setFinderUsed(false) }}
+              resultCount={results ? results.products.length : null}
+              suggestions={suggestions}
+              onSelect={handleSuggestion}
+              onSubmit={rememberCurrentSearch}
+              onClearRecent={() => setRecent(clearRecentSearches())}
+            />
+          </div>
+        )}
 
         {/*
           The masthead. Uploaded artwork when a founder has added any, and a
@@ -752,7 +765,7 @@ export function ShopShell() {
           somebody.
         */}
         {!searching && (
-          <div className="empty:hidden" style={{ marginTop: 'var(--space-5)' }}>
+          <div className="sf-shophead-mast empty:hidden" style={{ marginTop: 'var(--space-3)' }}>
             <ShopMasthead products={products} fallback={false} />
           </div>
         )}
@@ -782,39 +795,24 @@ export function ShopShell() {
             within it. Separating them by placement is what makes them legible
             as different things: this scrolls away, the category row stays.
           */}
-          <div style={{ padding: '0 var(--space-4) var(--space-3)' }}>
-            <ShopSearchBar
-              value={searchInput}
-              onChange={(v) => { setSearchInput(v); setFinderUsed(false) }}
-              resultCount={results ? results.products.length : null}
-              suggestions={suggestions}
-              onSelect={handleSuggestion}
-              onSubmit={rememberCurrentSearch}
-              onClearRecent={() => setRecent(clearRecentSearches())}
-            />
-          </div>
+
 
           {/*
-            "Not sure where to start?" Two ways in, right under the search box:
-            the quiz, shown working, and the finder, whose answers are this
-            page's filters (they land as chips in the bar just below). Shown
-            while browsing, and kept while the finder is in use so answering a
-            question never folds away the question.
+            "Find your match": five quick questions whose answers are this
+            page's filters (they land as chips in the row just below). Folded
+            to one slim bar until somebody opens it. Shown while browsing, and
+            kept while it is in use so answering never folds away the question.
           */}
           {showWays && (
-            <section className="sf-ways" aria-labelledby="shop-ways-title" style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-              <h2 id="shop-ways-title" className="sr-only">Narrow the shop down</h2>
-              <div className="sf-ways-tiles">
-                <ShopFinder
-                  products={products}
-                  index={index}
-                  query={query}
-                  onChange={(next) => { setFinderUsed(true); applyQueryChange(next) }}
-                  onShow={showFinderResults}
-                  onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-                />
-              </div>
-            </section>
+            <div style={{ padding: '0 var(--space-4) var(--space-3)' }}>
+              <ShopFinder
+                products={products}
+                index={index}
+                query={query}
+                onChange={(next) => { setFinderUsed(true); applyQueryChange(next) }}
+                onShow={showFinderResults}
+              />
+            </div>
           )}
 
           <div id="shop-filters" style={{ padding: '0 var(--space-4) var(--space-4)', scrollMarginTop: 'var(--space-3)' }}>
@@ -830,32 +828,26 @@ export function ShopShell() {
               onFacetApplied={handleFacetApplied}
               intentPhrases={results?.matchedPhrases ?? []}
               onDismissIntent={dismissIntent}
+              onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
             />
           </div>
 
           {/*
-            Shop by goal, on a wide screen. On a phone the finder's first
-            question asks the same thing, right above, so the row would be the
-            same question twice; the roulette it ends with is in the finder too.
+            The desktop "shop by goal" row is gone: the finder's first question
+            asks the same thing, a few pixels above, and the roulette it ended
+            with is in the filter row.
           */}
-          {!searching && (
-            <div className="hidden md:block">
-              <ShopGoalRow
-                products={products}
-                selected={query.goals}
-                onSelect={(goal) => applyQueryChange({ ...query, goals: goal ? [goal] : [] })}
-                onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-              />
-            </div>
-          )}
-
           {/* The twin tiles. Absent until a founder fills them. */}
           {!searching && <ShopTwinTiles />}
 
           {/* The member hub on its own, while it's on sale. */}
           {!searching && <ShopHubCard />}
 
-          <ShopCategoryNav categories={searching ? [] : navCategories} />
+          <ShopCategoryNav
+            categories={searching ? [] : navCategories}
+            onOpenFilters={() => setFiltersOpen(true)}
+            filterCount={activeFilterCount(query)}
+          />
 
           {/*
             Two modes. Browsing is the page exactly as it has always been —

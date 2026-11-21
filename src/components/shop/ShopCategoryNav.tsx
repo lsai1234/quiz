@@ -1,31 +1,36 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ShopCategory } from '@/lib/shop/categories'
-import { Chip } from '@/components/storefront'
-
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   categories: ShopCategory[]
-  /**
-   * The search box and the filter row, rendered above the chips inside this same
-   * sticky container. They live here rather than in sticky bars of their own
-   * because each extra one costs a band of a 360px viewport before any product
-   * is visible — and because this is the order the page reads in: what are you
-   * looking for, how do you narrow it, where do you jump to.
-   */
+  /** Opens the filter sheet. With it, the bar carries a Filters button once
+   *  the page's own filter row has scrolled away. */
+  onOpenFilters?: () => void
+  /** Filters on, for the button's count. */
+  filterCount?: number
 }
 
 /**
- * Sticky category jump-nav. Chips scroll to each section and highlight the one
- * you're in. Plain sticky (the shop page has no transformed/clipped ancestor),
- * so no portal is needed here.
+ * The shop's sticky bar: one tab per shelf, a cyan underline that slides to
+ * the shelf you are on, and — once the filter row above has scrolled out of
+ * sight — a Filters button at the end, so narrowing the shop is never more
+ * than one tap away however far down you are.
  *
- * Also the shop's one sticky bar: it hosts the search input and the filter row
- * above the chips. With a search running there are no shelves to jump to, so the
+ * Tabs, not pills. The pills above it narrow what is on the page; these jump
+ * within it. Different jobs, different shapes: a row of text with an underline
+ * reads as navigation, a row of pills reads as choices.
+ *
+ * It is glass, the second blurred surface on the shop after the header: it
+ * sits over shelves that scroll under it, so the blur has something to blur.
  */
-export function ShopCategoryNav({ categories }: Props) {
+export function ShopCategoryNav({ categories, onOpenFilters, filterCount = 0 }: Props) {
   const [activeSlug, setActiveSlug] = useState(categories[0]?.slug ?? '')
+  const [filtersAway, setFiltersAway] = useState(false)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const indRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
     let frame = 0
@@ -39,6 +44,9 @@ export function ShopCategoryNav({ categories }: Props) {
         if (el && el.getBoundingClientRect().top <= line) current = c.slug
       }
       setActiveSlug(current)
+      const row = document.getElementById('shop-filters')
+      const header = document.querySelector('.sf-hdr')?.getBoundingClientRect().bottom ?? 0
+      setFiltersAway(row ? row.getBoundingClientRect().bottom < header : false)
     }
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(compute) }
     compute()
@@ -51,45 +59,48 @@ export function ShopCategoryNav({ categories }: Props) {
     }
   }, [categories])
 
+  // The underline follows the active tab, and the active tab is kept in view.
+  useLayoutEffect(() => {
+    const tabs = tabsRef.current
+    const ind = indRef.current
+    const tab = tabs?.querySelector<HTMLButtonElement>('[aria-current="true"]')
+    if (!tabs || !ind || !tab) return
+    ind.style.width = `${Math.max(0, tab.offsetWidth - 24)}px`
+    ind.style.transform = `translateX(${tab.offsetLeft + 12}px)`
+    const left = tab.offsetLeft - tabs.clientWidth / 2 + tab.offsetWidth / 2
+    tabs.scrollTo({ left, behavior: 'smooth' })
+  }, [activeSlug, categories])
+
   const go = (slug: string) =>
     document.getElementById(`shop-cat-${slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  // No shelves to jump to, no bar.
   if (categories.length === 0) return null
 
   return (
-    /*
-      Only the category row is sticky now, and it is the ONLY pill row on the
-      screen.
-
-      Search and filters used to ride inside this bar, which put two visually
-      identical rows of pills directly on top of each other — one narrowing the
-      catalogue, one jumping within it — with nothing but their contents to say
-      which was which. They are now separated by placement: search and filters
-      sit in the page above, scroll away with it, and are a field and a button;
-      this is a pill row and it is the thing that stays.
-
-      No blur, no translucency: the storefront has no ground behind this to
-      refract, so `backdrop-filter` here was grey haze over a flat colour. An
-      opaque bar and one hairline is what actually divides two sections.
-    */
-    <nav
-      aria-label="Shop categories"
-      className="sticky z-30"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + var(--sf-hdr))', background: 'rgba(5, 6, 8, 0.82)', WebkitBackdropFilter: 'blur(20px) saturate(1.7)', backdropFilter: 'blur(20px) saturate(1.7)', borderBottom: '1px solid var(--line)' }}
-    >
-      {categories.length > 0 && (
-        <div
-          className="sf-scroll-row flex"
-          style={{ gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-4)' }}
-        >
+    <nav aria-label="Shop categories" className="sf-tabbar">
+      <div className="sf-tabbar-in">
+        <div className="sf-tabs" ref={tabsRef}>
           {categories.map((c) => (
-            <Chip key={c.slug} selected={activeSlug === c.slug} onClick={() => go(c.slug)}>
+            <button
+              key={c.slug}
+              type="button"
+              className="sf-tab"
+              aria-current={activeSlug === c.slug ? 'true' : undefined}
+              onClick={() => go(c.slug)}
+            >
               {c.category}
-            </Chip>
+            </button>
           ))}
+          <span className="sf-tab-ind" ref={indRef} aria-hidden />
         </div>
-      )}
+        {onOpenFilters && filtersAway && (
+          <button type="button" className="sf-button sf-button--secondary sf-button--sm sf-tabbar-filters" onClick={onOpenFilters} aria-label={filterCount > 0 ? `Open filters, ${filterCount} on` : 'Open filters'}>
+            <Icon name="sliders" size={15} />
+            <span className="sf-tabbar-filters-word">Filters</span>
+            {filterCount > 0 && <span className="sf-count" aria-hidden>{filterCount}</span>}
+          </button>
+        )}
+      </div>
     </nav>
   )
 }

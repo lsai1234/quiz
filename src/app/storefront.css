@@ -155,6 +155,7 @@
 .sf-page {
   position: relative;
   isolation: isolate;
+  overflow-x: clip;
   background:
     radial-gradient(1100px 520px at 72% -160px, rgba(0, 212, 255, 0.07), transparent 70%),
     var(--bg);
@@ -489,7 +490,8 @@
 }
 
 @media (hover: hover) {
-  .sf-chip[aria-pressed='false']:hover { background: var(--surface-hi); color: var(--text); }
+  .sf-chip[aria-pressed='false']:hover,
+  .sf-chip:not([aria-pressed]):hover { background: var(--surface-hi); color: var(--text); }
 }
 
 .sf-chip[aria-pressed='true'] {
@@ -1394,6 +1396,387 @@
 .sf-trust li { display: inline-flex; align-items: center; gap: 7px; }
 .sf-trust svg { color: var(--text-2); }
 
+.sf-shophead-search { margin-top: 4px; }
+
 @media (min-width: 960px) {
-  .sf-shophead { padding-top: 56px; gap: 16px; }
+  .sf-shophead {
+    grid-template-columns: minmax(0, 1fr) 440px;
+    column-gap: 48px;
+    align-items: end;
+    padding-top: 56px;
+    padding-bottom: 24px;
+    gap: 16px 48px;
+  }
+  .sf-shophead > h1,
+  .sf-shophead > .sf-trust { grid-column: 1; }
+  .sf-shophead-search { grid-column: 2; grid-row: 1 / span 2; align-self: end; margin: 0; }
+  .sf-shophead-mast { grid-column: 1 / -1; }
+}
+
+/* ── The finder ───────────────────────────────────────────────────────────────
+   A slim bar that opens into quick-fire questions. See `ShopFinder`. */
+.sf-qf {
+  position: relative;
+  border-radius: var(--r-card);
+  background: var(--surface-low);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow 300ms var(--t-ease);
+}
+
+.sf-qf[data-open='true'] {
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 30px 60px -40px rgba(0, 0, 0, 0.9);
+}
+
+.storefront .sf-qf-bar {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 14px 10px 16px;
+  border: 0;
+  border-radius: var(--r-card);
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-qf-words { display: grid; gap: 2px; min-width: 0; }
+.sf-qf-title { font-size: 15.5px; font-weight: var(--weight-semibold); letter-spacing: -0.012em; line-height: 1.25; }
+.sf-qf-sub { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-qf-sub[data-answered='true'] { color: var(--text-2); }
+
+.sf-qf-count { display: grid; justify-items: end; gap: 4px; line-height: 1; }
+.sf-qf-count b { font-family: var(--font-head); font-size: 22px; font-weight: var(--weight-semibold); letter-spacing: -0.03em; }
+.sf-qf-count small { font-size: 11.5px; color: var(--text-dim); }
+
+.sf-qf-chev {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-hi);
+  color: var(--text-2);
+  transition: transform 400ms var(--t-ease), background-color 200ms;
+}
+
+.sf-qf[data-open='true'] .sf-qf-chev { transform: rotate(180deg); }
+
+@media (hover: hover) {
+  .sf-qf-bar:hover .sf-qf-chev { background: var(--surface-top); }
+}
+
+/* The chart: on a phone a band under the bar, on a desktop beside the title. */
+.sf-qf-chart { display: flex; flex-direction: column; gap: 6px; }
+.sf-qf-chart--wide { display: none; }
+.sf-qf-chart--narrow { padding: 0 16px 12px; }
+
+.sf-qf-sky { display: flex; align-items: flex-end; gap: 2px; height: 24px; }
+
+.sf-qf-sky i {
+  flex: 1;
+  max-width: 12px;
+  border-radius: 2px 2px 0 0;
+  background: #22272E;
+  transform: scaleY(0.5);
+  transform-origin: bottom;
+  transition: background-color 450ms var(--t-ease), opacity 300ms, transform 500ms var(--t-ease);
+}
+
+.sf-qf-sky i[data-on='true'] { background: var(--accent); opacity: 0.9; transform: none; }
+.sf-qf-sky i[data-dim='true'] { opacity: 0.22; }
+
+.sf-qf-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  color: var(--text-dim);
+}
+
+/* The panel opens by animating its row from 0fr to 1fr, so it can open to
+   whatever height its content is without a measured max-height. */
+.sf-qf-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 380ms var(--t-ease); }
+.sf-qf[data-open='true'] .sf-qf-body { grid-template-rows: 1fr; }
+.sf-qf-clip { overflow: hidden; min-height: 0; }
+
+.sf-qf-panel {
+  display: grid;
+  gap: 14px;
+  padding: 2px 16px 6px;
+  opacity: 0;
+  transition: opacity 250ms;
+}
+
+.sf-qf[data-open='true'] .sf-qf-panel { opacity: 1; transition-delay: 60ms; }
+
+.sf-qf-top { display: flex; align-items: center; gap: 12px; }
+.sf-qf-segs { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.sf-qf-segs i { height: 3px; border-radius: 2px; background: var(--surface-top); transition: background-color 300ms; }
+.sf-qf-segs i[data-state='done'] { background: rgba(0, 212, 255, 0.45); }
+.sf-qf-segs i[data-state='now'] { background: var(--accent); }
+.sf-qf-n { font-size: 12px; font-weight: var(--weight-medium); color: var(--text-dim); }
+
+.sf-qf-card { display: grid; gap: 12px; }
+.sf-qf-card[data-enter='true'] { animation: sf-qf-in 300ms var(--t-ease); }
+
+@keyframes sf-qf-in {
+  from { opacity: 0; transform: translateX(16px); }
+}
+
+.sf-qf-q {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 19px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.sf-qf-q b { color: var(--accent); }
+
+.sf-qf-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+.storefront .sf-qf-tile {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 11px;
+  row-gap: 2px;
+  align-items: center;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--surface-mid);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storefront .sf-qf-tile[hidden] { display: none; }
+.sf-qf-ico { grid-row: 1 / span 2; display: grid; place-items: center; color: var(--text-2); }
+.sf-qf-l { font-size: 14px; font-weight: var(--weight-medium); line-height: 1.2; min-width: 0; }
+.sf-qf-c { font-size: 12px; line-height: 1.2; color: var(--text-dim); }
+.sf-qf-tick { position: absolute; top: 9px; right: 9px; opacity: 0; visibility: hidden; }
+
+.sf-qf-tile kbd {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: none;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  place-items: center;
+  border-radius: 5px;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+@media (hover: hover) {
+  .storefront .sf-qf-tile:hover:not(:disabled):not([aria-pressed='true']) { background: var(--surface-hi); }
+}
+
+.sf-qf-tile:active:not(:disabled) { transform: scale(0.98); }
+
+.storefront .sf-qf-tile[aria-pressed='true'] {
+  background: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  color: var(--accent-ink);
+}
+
+.sf-qf-tile[aria-pressed='true'] .sf-qf-ico,
+.sf-qf-tile[aria-pressed='true'] .sf-qf-c { color: rgba(0, 22, 28, 0.72); }
+.sf-qf-tile[aria-pressed='true'] .sf-qf-tick { opacity: 1; visibility: visible; animation: sf-tick-in 300ms var(--t-spring); }
+
+@keyframes sf-tick-in {
+  from { opacity: 0; transform: scale(0.5); }
+}
+.sf-qf-tile[aria-pressed='true'] kbd { display: none !important; }
+.sf-qf-tile:disabled { opacity: 0.35; cursor: not-allowed; }
+.sf-qf-tile--more .sf-qf-ico { color: var(--accent); }
+
+/* "More goals": every answer, as a compact set you swipe through in two rows. */
+.sf-qf-tiles[data-more='true'] {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+
+.sf-qf-tiles[data-more='true']::-webkit-scrollbar { display: none; }
+.sf-qf-tiles[data-more='true'] .sf-qf-tile { min-height: 48px; padding: 8px 14px 8px 12px; border-radius: var(--r-pill); }
+.sf-qf-tiles[data-more='true'] .sf-qf-c { display: none; }
+.sf-qf-tiles[data-more='true'] .sf-qf-ico { grid-row: auto; }
+.sf-qf-tiles[data-more='true'] .sf-qf-tile { grid-template-rows: auto; }
+.sf-qf-tiles[data-more='true'] .sf-qf-tick,
+.sf-qf-tiles[data-more='true'] kbd { display: none !important; }
+
+.sf-qf-foot { display: flex; align-items: center; gap: 4px; min-height: 36px; margin: 0 -10px; padding-bottom: 6px; }
+.sf-qf-grow { flex: 1; }
+.sf-qf-foot .sf-button--primary { margin-right: 10px; }
+
+.sf-qf-typed { display: flex; gap: 8px; }
+.storefront .sf-qf-typed input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  outline: 0;
+}
+
+.storefront .sf-qf-typed input:focus { box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.65), 0 0 0 4px var(--accent-tint); }
+.sf-qf-typed input::placeholder { color: var(--text-dim); }
+
+.sf-qf-read { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; color: var(--text-2); }
+.sf-qf-read mark { padding: 2px 9px; border-radius: var(--r-pill); background: var(--text); color: #0A0C0F; font-weight: var(--weight-medium); }
+
+.sf-qf-done { display: grid; gap: 14px; }
+.sf-qf-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (min-width: 960px) {
+  .storefront .sf-qf-bar { grid-template-columns: minmax(0, 1fr) 320px auto 28px; gap: 24px; padding: 18px 20px 16px 22px; }
+  .sf-qf-chart--wide { display: flex; }
+  .sf-qf-chart--narrow { display: none; }
+  .sf-qf-chart--wide .sf-qf-sky { height: 28px; }
+  .sf-qf-panel { padding: 0 22px 10px; }
+  .sf-qf-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sf-qf-tiles[data-more='true'] { margin: 0 -22px; padding: 0 22px; }
+  .sf-qf-tile kbd { display: inline-grid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-qf-card[data-enter='true'] { animation: none; }
+  .sf-qf-body,
+  .sf-qf-panel,
+  .sf-qf-chev,
+  .sf-qf-sky i { transition: none; }
+  .sf-qf-tile[aria-pressed='true'] .sf-qf-tick { animation: none; }
+  .sf-qf-tile:active:not(:disabled) { transform: none; }
+}
+
+/* ── The sticky tab bar ───────────────────────────────────────────────────────
+   One tab per shelf with a sliding underline, and a Filters button once the
+   page's own filter row has scrolled away. See `ShopCategoryNav`. */
+.sf-tabbar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--sf-hdr));
+  z-index: 30;
+  margin-top: var(--space-2);
+  /* Full-bleed from inside the shop's column; .sf-page clips the overhang. */
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  background: rgba(5, 6, 8, 0.82);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+  border-bottom: 1px solid var(--line);
+}
+
+.sf-tabbar-in {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 1312px;
+  margin: 0 auto;
+  /* The first tab's words line up with the page's gutter. */
+  padding: 0 calc(var(--sf-gutter) - 4px) 0 calc(var(--sf-gutter) - 12px);
+}
+
+.sf-tabs {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+
+.sf-tabs::-webkit-scrollbar { display: none; }
+
+.storefront .sf-tab {
+  flex: none;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--text-dim);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storefront .sf-tab[aria-current='true'] { color: var(--text); }
+
+@media (hover: hover) {
+  .storefront .sf-tab:hover { color: var(--text); }
+}
+
+.sf-tab-ind {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+  transition: transform 350ms var(--t-ease), width 350ms var(--t-ease);
+  pointer-events: none;
+}
+
+.sf-tabbar-filters { flex: none; }
+.sf-tabbar-filters-word { display: none; }
+
+@media (min-width: 960px) {
+  .sf-tabbar-filters-word { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-tab-ind { transition: none; }
+}
+
+/* A hairline between the filters and the view controls in the filter row. */
+.sf-row-sep { flex: none; width: 1px; height: 20px; margin: 0 4px; background: var(--line-strong); }
+
+/* Inside a finder tile the count is plain text ("8 products"), not the old
+   counter badge the chip version wore. */
+.sf-qf .sf-finder-count {
+  display: inline;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
 }

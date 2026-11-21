@@ -11,6 +11,14 @@ import { test, expect } from '@playwright/test'
 
 const finder = (page: import('@playwright/test').Page) => page.locator('[data-shop-finder]')
 
+/** The finder is folded to one bar until it is opened. */
+async function openFinder(page: import('@playwright/test').Page) {
+  const f = finder(page)
+  await f.getByRole('button', { name: /find your match/i }).click()
+  await expect(f.getByRole('button', { name: /find your match/i })).toHaveAttribute('aria-expanded', 'true')
+  return f
+}
+
 test('the quiz strip at the top of the shop goes to the quiz', async ({ page }) => {
   await page.goto('/')
   const tile = page.locator('[data-shop-quiz-tile]')
@@ -21,11 +29,14 @@ test('the quiz strip at the top of the shop goes to the quiz', async ({ page }) 
 
 test('answers become filters, the count is the shelves, Show goes to them', async ({ page }) => {
   await page.goto('/')
-  const f = finder(page)
+  const f = await openFinder(page)
   await expect(f.locator('[data-finder-question="goal"]')).toHaveText("What's it for?")
 
   const muscle = f.locator('[data-finder-option="muscle"]')
   const left = Number(await muscle.locator('.sf-finder-count').textContent())
+  // The quick view shows the three goals that cover the most of the shop; the
+  // rest are a tap away under "More goals".
+  if (!(await muscle.isVisible())) await f.getByRole('button', { name: /more goals/i }).click()
   await muscle.click()
   await expect(page).toHaveURL(/[?&]g=muscle/)
   // A single answer moves on by itself.
@@ -47,7 +58,7 @@ test('answers become filters, the count is the shelves, Show goes to them', asyn
 
 test('removing a chip opens its question again; a shared link opens answered', async ({ page }) => {
   await page.goto('/?g=muscle&d=vegan')
-  const f = finder(page)
+  const f = await openFinder(page)
   // The first two are answered, so it opens on the third.
   await expect(f.locator('[data-finder-question="format"]')).toBeVisible()
 
@@ -63,7 +74,7 @@ test('removing a chip opens its question again; a shared link opens answered', a
 
 test('a typed answer fills in what it can and searches the rest', async ({ page }) => {
   await page.goto('/')
-  const f = finder(page)
+  const f = await openFinder(page)
   await f.locator('[data-finder-type]').click()
   await f.getByRole('textbox', { name: /say what you're after/i }).fill('vegan protein under £40')
   await f.getByRole('button', { name: 'Go' }).click()

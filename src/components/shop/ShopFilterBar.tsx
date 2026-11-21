@@ -12,6 +12,7 @@ import {
   type ShopQuery,
 } from '@/lib/shop/shop-query'
 import { Button, Chip } from '@/components/storefront'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   /** Prices shown per serving rather than per unit. */
@@ -30,6 +31,8 @@ interface Props {
   /** Intent phrases the search text implied, in the shopper's own words. */
   intentPhrases: string[]
   onDismissIntent: (phrase: string) => void
+  /** The flavour roulette, offered at the end of the row. */
+  onSurprise?: () => void
 }
 
 /**
@@ -45,7 +48,7 @@ interface Props {
  * shop already had, and demoting the common case to two taps to make room for
  * the rare ones would be a poor trade.
  */
-export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApplied, intentPhrases, onDismissIntent, perServing, onPerServingChange, compareMode, onCompareModeChange,
+export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApplied, intentPhrases, onDismissIntent, perServing, onPerServingChange, compareMode, onCompareModeChange, onSurprise,
 }: Props) {
   const count = activeFilterCount(query)
   const sorted = query.sort !== EMPTY_QUERY.sort
@@ -120,16 +123,12 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
       implied. That is the distinction the two stacked rows never made.
     */
     <div className="sf-scroll-row flex items-center" style={{ gap: 'var(--space-2)', paddingTop: 'var(--space-3)' }}>
-      <Button
-        variant={count > 0 ? 'secondary' : 'ghost'}
-        size="sm"
-        onClick={onOpenFilters}
-        className="flex-shrink-0"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-          <path d="M3 6h18M7 12h10M11 18h2" />
-        </svg>
-        {count > 0 ? `Filters (${count})` : 'Filters'}
+      <Button variant="secondary" size="sm" onClick={onOpenFilters} className="flex-shrink-0">
+        <Icon name="sliders" size={15} />
+        Filters
+        {/* The count reads as a badge; the button's name stays "Filters (2)". */}
+        {count > 0 && <span className="sr-only"> ({count})</span>}
+        {count > 0 && <span className="sf-count" aria-hidden>{count}</span>}
       </Button>
 
       {sorted && (
@@ -152,6 +151,8 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
         made the grid read as a form. Here it costs one control and the cards
         stay clean.
       */}
+      <span className="sf-row-sep" aria-hidden />
+
       <Chip selected={perServing} onClick={() => onPerServingChange(!perServing)}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M3 6h18M3 12h18M3 18h10" />
@@ -190,6 +191,14 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
           {DIETARY_LABEL[tag]}
         </Chip>
       ))}
+
+      {/* The flavour roulette: one more way in, for somebody who would rather be surprised. */}
+      {onSurprise && (
+        <button type="button" className="sf-chip flex-shrink-0" onClick={onSurprise} data-interactive>
+          <Icon name="sparkle" size={14} />
+          Surprise me
+        </button>
+      )}
     </div>
   )
 }
