@@ -280,3 +280,132 @@ the search bar, the product sheet, the basket drawer, the duel and the bundle
 cards. They still use `--color-*` and hairline borders, so the shelf now reads
 considerably better than the chrome around it. That unevenness is the honest
 state — worth finishing, and the same shape of change each time.
+
+
+---
+
+# Third pass: the shop on brand
+
+The brief: the shop had drifted off brand. The brand lives in the quiz —
+near-black, the glowing brand cyan, the battery-and-bolt mark, the black
+bottle render, heavy Space Grotesk headlines and Amp — and the shop was set in
+Geist on a slightly darker cyan, flat, with tracked capital labels. The quiz
+also needed to sit at the very top of the shop and say plainly what it is.
+
+It was built in phases, each committed with screenshots. What follows is what
+the shop is now made of and the rules that hold it together.
+
+## The look, in one paragraph
+
+The quiz's own world, made quiet enough to shop in. One near-black (`--bg`),
+four greys, two inks and the brand cyan exactly (`#00D4FF`). Cyan is spent on
+two things only: the one action a region is for, and "charged" — in your
+basket, picked, progressing. Selection is white. Space Grotesk sets the
+headlines and the one big price; Inter sets everything read or pressed; labels
+are sentence case. The page has a faint pool of the brand's light at the top
+and a film of grain over the black (`.sf-page`). Product photographs sit on a
+lit studio plate and do the selling; the chrome around them stays out of the
+way.
+
+## The parts
+
+| Part | Component | What it is |
+|---|---|---|
+| Header | `ShopTopBar` (via `ShopHeader`, `ShopPageHeader`) | Sticky glass: the mark, Shop and The quiz on a wide screen, search and basket as icons. The basket count sits on the icon and pops when it rises. |
+| The quiz | `ShopQuizStrip` | A compact strip above the title: "Get a stack built around you", one line on what it asks, one button. The bottle stands on a charging pad whose ring is the day; Amp narrates an example in three beats (answers, thinking, the stack landing on the ring). About 290px on a phone. |
+| The finder | `ShopFinder` | Folded to one bar: what it is, how many products fit, and a price chart of the whole shop lit where the answers fit. Opened, it is quick-fire: one question, at most four answers, auto-advance, keys 1–4 on a keyboard. Same filters as before (`lib/shop/finder.ts`). |
+| Filter row | `ShopFilterBar` | Filters (with a count), the view toggles, the dietary pills and Surprise me. |
+| Tabs | `ShopCategoryNav` | Sticky glass tabs with a sliding cyan underline; a Filters button appears once the filter row has scrolled away. |
+| Cards | `ShopProductCard` | Frameless: the plate, then brand, name, size, price and rating as type. Add is a round button on the photo; in the basket it becomes a cyan − n + stepper and the plate takes a cyan ring. |
+| Shelves | `ShopSection`, `ShopBundlesRow`, `ShopResultsGrid` | 2/3/4/5 columns by width, two whole rows before "Show all". |
+| Basket dock | `ShopBasketDock` | A floating glass bar while the basket has something in it: the last three products, the total, the distance to free delivery and View basket. |
+| Drawer | `BasketDrawer` | Restyled only. Every figure comes from the same functions as before. The lines scroll; only the money is pinned. |
+| Product page | `ProductPageView`, `ProductDetail` | A spec sheet: sticky plate, name, price with saving and price per serving, options as pills (flavour and size when both vary), one add bar, a ruled facts table, then the description. |
+| Footer | `ShopFooter` | Brand, the shop's places and the legal pages. Only links to pages that exist. |
+
+## The studio plate
+
+`ProductTile` takes `plate`. The plate is a lit light-grey panel and the photo
+is multiplied onto it, so a supplier's white background becomes the plate and
+every product reads as shot in the same room. It is off everywhere else, so the
+quiz's own tiles are unchanged.
+
+## Buttons and pills
+
+`Button` and `buttonClasses()` in `@/components/storefront`: `primary`,
+`secondary`, `ghost` at `sm`/`md`/`lg` (36/44/52px). Filled, never outlined —
+an outline round a tinted fill was most of what made the old controls look
+cheap. The look lives in `storefront.css` so hover, press and disabled can be
+expressed. Buttons are rounded rectangles; chips are pills; that difference is
+the grammar.
+
+## Rules that are tests
+
+`src/app/__tests__/storefront-tokens.test.ts`:
+
+- `storefront.css` and `tokens.css` both declare on `:root`, and the storefront
+  file is imported second, so any name they share takes the storefront's value
+  **everywhere**. Four new names did exactly that during this work and moved
+  the Founders Hub. The test holds the overlap to `--accent` and the space
+  scale.
+- `--accent` is the brand cyan exactly.
+- Every text pair the storefront uses clears AA.
+
+## Motion, and what it does under reduced motion
+
+| Moment | Normal | Reduced motion |
+|---|---|---|
+| Quiz strip example | Answers rise in, a light runs round the ring, products land as points | The finished example, still; no pause button needed |
+| Capsules beside the bottle | A slow float | Still |
+| Finder | Card slides in, count rolls, chart bars dim | Instant |
+| Add on a card | A band of light runs up the photo; the stepper springs in | None |
+| Tabs | Underline slides | Jumps |
+| Basket count | Pops | Changes |
+| Dock and drawer meter | Fill eases | Fill is set |
+| Product hover | The photo lifts slightly | None |
+
+The quiz strip plays only while on screen and the tab is visible, and has a
+pause button.
+
+## Bundle pages and the sheets
+
+The bundle page is built from the quiz's own stack and receipt components,
+which are left as the quiz draws them. Its own chrome moved onto the
+storefront: the glass header (back to the shop, the mark, the quiz — no basket,
+because a session stack is bought on its own page), sentence-case section
+labels, and the checkout bar as the same glass dock the shop uses.
+
+Those quiz components set quiet text in `--color-muted`, which measures 4.0–4.3:1
+on the receipt's grey surfaces. Inside `.storefront` it is lifted to `#8E95A0`
+(4.9:1 at the lowest), so the bundle page clears AA without the quiz changing.
+
+The filter, compare and roulette sheets keep their layout and take the new
+tokens; their capital labels are now the sentence-case `.sf-label`.
+
+## Accessibility notes
+
+- An axe audit (WCAG 2.1 A/AA) of the shop, the open finder, the basket, a
+  product page and a bundle page at 390px and 1440px finds nothing in the
+  storefront's own markup.
+- Every control has a visible 2px cyan ring; inside horizontally scrolling rows
+  the ring is drawn inside the control so the scroller cannot clip it.
+- Product links are named "name, price, was price, sold out" rather than all of
+  their text run together.
+- Scrolling the shop does for you (a tab, the search icon, Show) jumps instead
+  of gliding under reduced motion (`lib/shop/scroll-behavior.ts`).
+- **Not changed, and worth a decision:** the root layout's viewport sets
+  `maximumScale: 1, userScalable: false`, which stops pinch-zoom site-wide. axe
+  flags it on every page. It predates this work and the quiz's gesture screens
+  may rely on it, so it was left alone.
+
+## What did not change
+
+Payment logic, Stripe objects, the database schema, quiz scoring and the
+recommendation maths are untouched; the drawer and the bundle page's purchase
+bar are presentation only. The Meta pixel is untouched.
+
+Catalogue descriptions are product data and were not edited. Some carry
+claims (the mock catalogue's "Supports immunity, bone health and energy", for
+example). The product page now leads with the facts and puts the description
+below them; whether to rewrite the descriptions themselves is a decision for
+whoever owns the catalogue copy.

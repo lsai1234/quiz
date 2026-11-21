@@ -2532,3 +2532,21 @@
 @media (prefers-reduced-motion: reduce) {
   .sf-drawer-pour i { transition: none; }
 }
+
+/* ── The quiz's grey, inside the storefront ───────────────────────────────────
+   The bundle page reuses the quiz's receipt and stack components, which set
+   their quiet text in `--color-muted` (#7d7d87). On the receipt's own grey
+   surfaces that measures 4.0–4.3:1, under AA at 10–11px. Lifted here, inside
+   the storefront only, to a value that clears AA on every surface those
+   components use (4.9:1 at the lowest), so the quiz itself is untouched. */
+.storefront {
+  --color-muted: #8E95A0;
+}
+
+/* Inside a horizontally scrolling row the scroller clips anything drawn
+   outside its children, so the focus ring is drawn just inside instead. */
+.storefront .sf-scroll-row :focus-visible,
+.storefront .sf-tabs :focus-visible,
+.storefront .sf-qf-tiles[data-more='true'] :focus-visible {
+  outline-offset: -2px;
+}

@@ -26,6 +26,9 @@ import { BundleHero } from './BundleHero'
 import { BundleAddOnCard } from './BundleAddOnCard'
 import { WorkoutSection } from './WorkoutSection'
 import { BundleHowTo } from './BundleHowTo'
+import { Button } from '@/components/storefront'
+import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
+import { scrollBehavior } from '@/lib/shop/scroll-behavior'
 
 interface Props {
   bundle: ResolvedBundle
@@ -200,36 +203,24 @@ export function BundleLandingPage({ bundle }: Props) {
   }
 
   return (
-    <div className="min-h-screen pb-28" style={{ background: 'var(--color-bg)' }}>
-      {/* Minimal brand header — first-time visitors can land here cold */}
-      <header
-        className="sticky top-0 z-30 border-b border-[var(--color-border)]"
-        style={{
-          background: 'color-mix(in srgb, var(--color-bg) 88%, transparent)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <div className="max-w-lg mx-auto px-5 py-3.5 flex items-center justify-between">
-          <Link
-            href="/shop"
-            className="text-xs font-semibold active:opacity-70 transition-opacity"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            ← Shop
+    <div className="storefront sf-page min-h-screen pb-28">
+      {/*
+        The storefront's glass bar, with the two ways out a cold visitor needs:
+        back to the shop, or the quiz. No basket: a session stack is bought on
+        this page, separately from the shop's basket.
+      */}
+      <header className="sf-hdr">
+        <div className="sf-wrap sf-hdr-in" style={{ maxWidth: 'calc(32rem + 2 * var(--sf-gutter))' }}>
+          <Link href="/shop" data-interactive className="sf-crumbs-back" style={{ fontSize: 14 }}>
+            <Icon name="chevron-left" size={15} />
+            Shop
           </Link>
-          <span
-            className="text-base font-black tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
-          >
-            getCHRGD
-          </span>
-          <Link
-            href="/quiz"
-            className="text-xs font-semibold active:opacity-70 transition-opacity"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            Build your own →
+          <Link href="/" aria-label="getCHRGD home" data-interactive className="sf-hdr-brand" style={{ margin: '0 auto' }}>
+            <CHRGDLogo markSize={20} wordClassName="text-[17px]" />
+          </Link>
+          <Link href="/quiz" data-interactive className="sf-crumbs-back" style={{ fontSize: 14, marginLeft: 0, marginRight: -6 }}>
+            Build your own
+            <Icon name="chevron-right" size={15} />
           </Link>
         </div>
       </header>
@@ -240,14 +231,11 @@ export function BundleLandingPage({ bundle }: Props) {
 
       {/* What's inside — the top-trumps deck (Act 4 surface) */}
       <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
-        <p
-          className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          What&apos;s inside — {sortedSlots.length} products · swipe to see all {sortedSlots.length}
-        </p>
-        <p className="px-5 max-w-lg mx-auto text-xs leading-relaxed mb-4" style={{ color: 'var(--color-text-2)' }}>
-          Tap a card for the detail and to pick your flavours — everything arrives together in one order.
+        <h2 className="sf-label px-5 max-w-lg mx-auto" style={{ margin: '0 auto 4px' }}>
+          What&apos;s inside: <span className="sf-num">{sortedSlots.length}</span> products
+        </h2>
+        <p className="px-5 max-w-lg mx-auto text-[13px] leading-relaxed mb-4" style={{ color: 'var(--color-text-2)' }}>
+          Swipe through them, and tap a card for the detail and to pick your flavours. Everything arrives together in one order.
         </p>
         <StackDeck
           slots={sortedSlots}
@@ -261,12 +249,9 @@ export function BundleLandingPage({ bundle }: Props) {
       {/* Optional add-ons */}
       {addOns.length > 0 && (
         <div className="px-5 pt-8 max-w-lg mx-auto space-y-3">
-          <p
-            className="text-[10px] font-bold tracking-widest uppercase"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
-          >
-            Make it yours — optional add-ons
-          </p>
+          <h2 className="sf-label" style={{ margin: 0 }}>
+            Optional add-ons
+          </h2>
           {addOns.map(({ addOn, product }) => (
             <BundleAddOnCard
               key={addOn.slotId}
@@ -304,12 +289,9 @@ export function BundleLandingPage({ bundle }: Props) {
 
       {/* Price summary + checkout — the Act 4 receipt */}
       <div ref={summaryRef} id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-20">
-        <p
-          className="text-[10px] font-bold tracking-widest uppercase mb-4"
-          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
-        >
-          Checkout — one-off or monthly
-        </p>
+        <h2 className="sf-label" style={{ margin: '0 0 var(--space-4)' }}>
+          Checkout, one-off or monthly
+        </h2>
 
         {checkoutState.status === 'error' && (
           <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
@@ -352,7 +334,7 @@ export function BundleLandingPage({ bundle }: Props) {
           onCheckout={handleCheckout}
           partnerCode={partnerCode?.code ?? null}
           codeKind={partnerCode?.kind ?? null}
-          onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onCustomise={() => stackRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })}
           isLoading={checkoutState.status === 'loading'}
         />
 
@@ -392,38 +374,32 @@ export function BundleLandingPage({ bundle }: Props) {
 
       {mounted && showStickyBar && createPortal(
         <div
-          className="fixed inset-x-0 bottom-0 z-30 px-4 pt-6 pb-[max(0.9rem,env(safe-area-inset-bottom))] pointer-events-none"
-          style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}
+          className="storefront fixed inset-x-0 bottom-0 z-30 pointer-events-none"
+          style={{ padding: '0 12px max(12px, env(safe-area-inset-bottom))' }}
         >
-          <div
-            className="max-w-lg mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-2 py-2 pointer-events-auto"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border-2)',
-              boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)',
-            }}
-          >
-            <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-                {stickyIsSub ? 'Monthly' : 'One-off total'}
-              </p>
-              <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          {/* The storefront's basket dock, for a stack: the total and the one action. */}
+          <div className="sf-dock pointer-events-auto" style={{ maxWidth: '32rem' }}>
+            <div className="sf-dock-words" style={{ paddingLeft: 6 }}>
+              <small>{stickyIsSub ? 'Monthly' : 'One-off total'}</small>
+              <b className="sf-num" style={{ fontFamily: 'var(--font-head)', fontSize: 20, letterSpacing: '-0.02em' }}>
                 {formatGBP(stickyTotal)}
-                {stickyIsSub && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
-              </p>
+                {stickyIsSub && <small style={{ display: 'inline' }}>/mo</small>}
+              </b>
             </div>
-            <button
+            <Button
+              variant="primary"
+              size="md"
               onClick={handleCheckout}
               disabled={checkoutState.status === 'loading'}
-              className="flex-1 py-3.5 rounded-xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+              loading={checkoutState.status === 'loading'}
+              className="flex-1"
             >
               {checkoutState.status === 'loading'
                 ? 'Building…'
                 : stickyIsSub
-                  ? 'Start subscription →'
-                  : 'Checkout →'}
-            </button>
+                  ? 'Start subscription'
+                  : 'Checkout'}
+            </Button>
           </div>
         </div>,
         document.body,

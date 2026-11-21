@@ -410,7 +410,16 @@ subscription controls — are entirely on this system. `founder-hub.test.ts` and
 **The quiz, the shop, checkout, bundles, the share card, the receipt and the
 legal screens are not migrated and were never in scope for this work** — the
 brief was everything *outside* the quiz flow, and the storefront grew from the
-same root. They still use `@/components/ui`, `src/lib/ui/tokens.ts` and the
+same root.
+
+The storefront (the shop, product pages and the bundle page's chrome) has its
+own token set in `src/app/storefront.css`, rebuilt to sit on the quiz's brand:
+the quiz's near-black, the exact brand cyan, Space Grotesk and Inter, filled
+buttons, pills for choices. `docs/SHOP_TYPE_AND_IMAGES.md` §"Third pass" is the
+reference. One rule from it matters here: both files declare on `:root` and the
+storefront file is imported second, so **a token name the two share takes the
+storefront's value in every hub**. `storefront-tokens.test.ts` holds the overlap
+to `--accent` and the space scale. They still use `@/components/ui`, `src/lib/ui/tokens.ts` and the
 `--color-*` palette, and those therefore still exist. Five components nothing
 imported any more (`ChargeScale`, `Disclosure`, `EmptyState`, `OptionRow`,
 `Skeleton`) and ten unreferenced `--color-*` variables have been deleted; the

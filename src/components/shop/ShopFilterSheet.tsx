@@ -322,7 +322,7 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
 function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="mb-6 last:mb-1">
-      <h3 className="label mb-2.5" style={{ color: 'var(--text-dim)' }}>
+      <h3 className="sf-label mb-2.5">
         {label}
       </h3>
       {hint && <p className="text-[11px] -mt-1.5 mb-2.5" style={{ color: 'var(--text-dim)' }}>{hint}</p>}

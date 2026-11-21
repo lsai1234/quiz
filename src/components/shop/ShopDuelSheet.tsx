@@ -180,7 +180,7 @@ function Row({ row }: { row: DuelRow }) {
     <tr style={{ borderTop: '1px solid var(--line)' }}>
       <th
         scope="row"
-        className="text-left align-top py-2.5 pr-2 label w-[5.5rem]"
+        className="text-left align-top py-2.5 pr-2 sf-label w-[5.5rem]"
         style={{ color: 'var(--text-dim)' }}
       >
         {row.label}

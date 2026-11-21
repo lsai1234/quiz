@@ -19,7 +19,7 @@ export function ShopHubCard() {
   return (
     <div style={{ padding: '0 var(--space-4)', marginTop: 'var(--space-5)' }} data-shop-hub>
       <Card padding="roomy" elevation={2} tone="accent">
-        <p style={{ color: 'var(--accent)', fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase' }}>
+        <p style={{ color: 'var(--accent)', fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)' }}>
           {C.shopEyebrow}
         </p>
         <p

@@ -116,6 +116,12 @@ export function ShopProductCard({
           onOpen?.(product)
         }}
         aria-pressed={selectable ? selected : undefined}
+        aria-label={[
+          product.title,
+          `${range.varies ? 'from ' : ''}${formatGBP(headline)}`,
+          off > 0 && rrp != null ? `was ${formatGBP(rrp)}` : null,
+          soldOut ? (product.restockingSoon ? 'back in stock soon' : 'sold out') : null,
+        ].filter(Boolean).join(', ')}
         data-interactive
         className="sf-pcard-link"
       >

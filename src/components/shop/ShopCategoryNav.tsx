@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ShopCategory } from '@/lib/shop/categories'
 import { Icon } from '@/components/ui/Icon'
+import { scrollBehavior } from '@/lib/shop/scroll-behavior'
 
 interface Props {
   categories: ShopCategory[]
@@ -68,11 +69,11 @@ export function ShopCategoryNav({ categories, onOpenFilters, filterCount = 0 }: 
     ind.style.width = `${Math.max(0, tab.offsetWidth - 24)}px`
     ind.style.transform = `translateX(${tab.offsetLeft + 12}px)`
     const left = tab.offsetLeft - tabs.clientWidth / 2 + tab.offsetWidth / 2
-    tabs.scrollTo({ left, behavior: 'smooth' })
+    tabs.scrollTo({ left, behavior: scrollBehavior() })
   }, [activeSlug, categories])
 
   const go = (slug: string) =>
-    document.getElementById(`shop-cat-${slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    document.getElementById(`shop-cat-${slug}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
 
   if (categories.length === 0) return null
 

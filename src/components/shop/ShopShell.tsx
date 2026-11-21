@@ -53,6 +53,7 @@ import { StackReturnBar } from './StackReturnBar'
 import { BREAK_AFTER_SHELF } from '@/lib/shop/placements'
 import { rememberScroll, readScroll, forgetScroll } from '@/lib/shop/scroll-memory'
 import { Button } from '@/components/storefront'
+import { scrollBehavior } from '@/lib/shop/scroll-behavior'
 
 // Canonical dietary-chip order (matches the sheet's labels).
 const DIETARY_ORDER = Object.keys(DIETARY_LABEL) as DietaryTag[]
@@ -697,7 +698,7 @@ export function ShopShell() {
 
   /** The finder's Show: down to the filter bar, with the products under it. */
   const showFinderResults = () => {
-    document.getElementById('shop-filters')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    document.getElementById('shop-filters')?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
   }
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
@@ -705,14 +706,14 @@ export function ShopShell() {
   const dealsPct = dealsSection ? maxDealPct(dealsSection.products) : 0
   const goToDeals = () => {
     const el = document.getElementById('shop-cat-deals') ?? document.querySelector('section[id^="shop-cat-"]')
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    el?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
   }
 
   /** The header's search icon: bring the search box into view and focus it. */
   const focusSearch = () => {
     const input = document.querySelector<HTMLInputElement>('[data-shop-search] input')
     if (!input) return
-    input.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    input.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })
     window.setTimeout(() => input.focus({ preventScroll: true }), 250)
   }
 
