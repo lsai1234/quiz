@@ -1780,3 +1780,343 @@
   color: inherit;
   font-size: inherit;
 }
+
+/* ── The product card ─────────────────────────────────────────────────────────
+   Frameless: the photograph on its studio plate, then type. See
+   `ShopProductCard`. */
+.sf-pcard {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+}
+
+.storefront .sf-pcard-link {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r-card);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sf-pcard-plate {
+  position: relative;
+  display: block;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  transition: box-shadow 400ms var(--t-ease);
+}
+
+.sf-pcard-plate > div { border-radius: var(--r-card); }
+.sf-pcard-plate img { transition: transform 700ms var(--t-ease), opacity 200ms ease-out; }
+
+@media (hover: hover) {
+  .sf-pcard-link:hover .sf-pcard-plate img { transform: translateY(-4px) scale(1.03); }
+}
+
+/* In the basket: the plate takes a cyan ring, so a shelf shows what you have. */
+.sf-pcard[data-in='true'] .sf-pcard-plate {
+  box-shadow: 0 0 0 2px var(--accent), 0 16px 40px -16px rgba(0, 212, 255, 0.7);
+}
+
+/* Picked for comparing. */
+.sf-pcard[data-picked='true'] .sf-pcard-plate { box-shadow: 0 0 0 2px var(--text); }
+
+/* The add, acknowledged: a band of cyan light runs up the photograph once. */
+.sf-pcard-plate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(0deg, transparent 0%, rgba(0, 212, 255, 0) 30%, rgba(0, 212, 255, 0.4) 50%, rgba(255, 255, 255, 0) 70%, transparent 100%);
+  transform: translateY(110%);
+}
+
+.sf-pcard-charged::after { animation: sf-charge 800ms var(--t-ease) 1; }
+
+@keyframes sf-charge {
+  from { transform: translateY(110%); }
+  to { transform: translateY(-110%); }
+}
+
+.sf-pcard-off {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  top: 10px;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: #0A0C0F;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: var(--weight-semibold);
+}
+
+.sf-pcard-pick {
+  position: absolute;
+  z-index: 2;
+  left: 10px;
+  bottom: 10px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1.5px rgba(10, 12, 15, 0.25);
+  color: transparent;
+}
+
+.sf-pcard[data-picked='true'] .sf-pcard-pick { background: var(--text); box-shadow: none; color: #0A0C0F; }
+
+.sf-pcard-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 2px 0;
+  min-width: 0;
+}
+
+.sf-pcard-brand { font-size: 12px; color: var(--text-dim); }
+.sf-pcard-meta { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sf-pcard-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-top: 6px;
+}
+
+.sf-pcard-small { font-size: 13px; color: var(--text-dim); }
+
+.sf-pcard-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.sf-pcard-rate svg { fill: currentColor; color: var(--text-2); }
+.sf-pcard-rate span { color: var(--text-dim); }
+
+/* The add, on the photograph's corner. */
+.sf-pcard-buy {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  left: 0;
+  aspect-ratio: 1 / 1;
+  pointer-events: none;
+}
+
+.sf-pcard-buy > * { position: absolute; right: 8px; bottom: 8px; pointer-events: auto; }
+
+.storefront .sf-addbtn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #0A0C0F;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.55);
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .storefront .sf-addbtn:hover { background: var(--accent); color: var(--accent-ink); }
+}
+
+.sf-addbtn:active { transform: scale(0.92); }
+
+.sf-stepper {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 22px -8px rgba(0, 212, 255, 0.9);
+  animation: sf-grow 350ms var(--t-spring);
+}
+
+.storefront .sf-stepper button {
+  width: 36px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sf-stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+.sf-stepper span { min-width: 12px; text-align: center; font-size: 14px; font-weight: var(--weight-bold); }
+
+@keyframes sf-grow {
+  from { transform: scale(0.8); opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-pcard-charged::after,
+  .sf-stepper { animation: none; }
+  .sf-pcard-plate img { transition: opacity 200ms ease-out; }
+  .sf-pcard-link:hover .sf-pcard-plate img { transform: none; }
+  .sf-addbtn:active { transform: none; }
+}
+
+/* ── Shelves ──────────────────────────────────────────────────────────────── */
+.sf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30px 12px;
+}
+
+@media (min-width: 700px) { .sf-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1040px) { .sf-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 44px 20px; } }
+@media (min-width: 1240px) { .sf-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.sf-shelf-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.sf-shelf-head h2 { margin: 0; min-width: 0; }
+.sf-shelf-count { font-size: 14px; color: var(--text-dim); }
+.sf-shelf-head .sf-guide-link { margin-left: auto; white-space: nowrap; }
+
+@media (min-width: 960px) {
+  .sf-shelf-head { margin-bottom: 26px; }
+}
+
+/* ── Bundle cards ─────────────────────────────────────────────────────────── */
+.sf-bgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 30px 16px;
+}
+
+@media (min-width: 700px) { .sf-bgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1040px) { .sf-bgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 44px 20px; } }
+
+.storefront .sf-bcard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r-card);
+}
+
+.sf-bcard-plate {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(130% 90% at 50% 0%, var(--plate-hi) 0%, var(--plate) 52%, var(--plate-lo) 100%);
+}
+
+.sf-bcard-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* Three products standing together: the middle one a little taller and in front. */
+.sf-bcard-item { position: absolute; bottom: 4%; width: 36%; aspect-ratio: 1 / 1; }
+.sf-bcard-item[data-pos='0'] { left: 6%; width: 32%; }
+.sf-bcard-item[data-pos='1'] { left: 32%; width: 38%; z-index: 2; }
+.sf-bcard-item[data-pos='2'] { right: 6%; width: 32%; }
+.sf-bcard-item > div { width: 100%; height: 100%; }
+
+@media (hover: hover) {
+  .sf-bcard:hover .sf-bcard-item img { transform: translateY(-3px); }
+}
+
+.sf-bcard-item img { transition: transform 600ms var(--t-ease), opacity 200ms ease-out; }
+
+.sf-bcard-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-bcard-item img { transition: opacity 200ms ease-out; }
+  .sf-bcard:hover .sf-bcard-item img { transform: none; }
+}
+
+/* ── The basket dock ──────────────────────────────────────────────────────────
+   A floating glass bar at the bottom of the shop while the basket has
+   something in it. See `ShopBasketDock`. */
+.sf-dock {
+  position: relative;
+  overflow: hidden;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 20px;
+  background: rgba(19, 22, 27, 0.88);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 24px 60px -16px rgba(0, 0, 0, 0.85);
+  animation: sf-dock-in 450ms var(--t-ease);
+}
+
+@keyframes sf-dock-in {
+  from { opacity: 0; transform: translateY(24px); }
+}
+
+.sf-dock-thumbs { display: flex; flex: none; }
+
+.sf-dock-thumb {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px #15181D;
+  margin-left: -12px;
+}
+
+.sf-dock-thumb:first-child { margin-left: 0; }
+.sf-dock-thumb > div { width: 100%; height: 100%; border-radius: 11px; }
+
+.sf-dock-words { min-width: 0; display: grid; line-height: 1.25; }
+.sf-dock-words b { font-size: 15.5px; font-weight: var(--weight-semibold); letter-spacing: -0.01em; color: var(--text); }
+.sf-dock-words small { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-dock .sf-button { margin-left: auto; flex: none; }
+
+.sf-dock-line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, 0.06); }
+
+.sf-dock-line i {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  transform-origin: left;
+  transition: transform 600ms var(--t-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-dock { animation: none; }
+  .sf-dock-line i { transition: none; }
+}

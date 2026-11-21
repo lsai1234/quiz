@@ -32,6 +32,13 @@ interface Props {
    * what makes it look photographed rather than jammed in.
    */
   inset?: boolean
+  /**
+   * The storefront's studio plate: a lit light-grey panel, with the photo
+   * multiplied onto it so a supplier's white background becomes the plate and
+   * every product reads as shot in the same room. Off everywhere else, which
+   * keeps the quiz's own tiles exactly as they were.
+   */
+  plate?: boolean
   /** Layout only — corner radii, mostly. */
   style?: CSSProperties
   className?: string
@@ -53,7 +60,7 @@ interface Props {
  * omega-3 says what the product is for, which is a health claim.
  */
 export function ProductTile({
-  imageUrl, formats, title, size = 96, fill = false, inset = false, style, className,
+  imageUrl, formats, title, size = 96, fill = false, inset = false, plate = false, style, className,
 }: Props) {
   const glyph = formatFact([...(formats ?? [])]).glyph
   const hue = TILE_HUE
@@ -119,9 +126,12 @@ export function ProductTile({
           letterboxing into the dark card. There is no code path that produces a
           dark gap around a product.
         */
-        background: src
-          ? IMAGE_PLATE
-          : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--surface-hi, var(--color-surface-2))`,
+        background: plate
+          ? 'radial-gradient(130% 90% at 50% 0%, var(--plate-hi, #fff) 0%, var(--plate, #EEF0F3) 52%, var(--plate-lo, #E2E6EA) 100%)'
+          : src
+            ? IMAGE_PLATE
+            : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--surface-hi, var(--color-surface-2))`,
+        isolation: plate ? 'isolate' : undefined,
         ...style,
       }}
     >
@@ -139,14 +149,14 @@ export function ProductTile({
           ref={(el) => { if (el?.complete) setLoaded(true) }}
           onLoad={() => setLoaded(true)}
           onError={() => setAttempt((a) => a + 1)}
-          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 200ms ease-out' }}
+          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 200ms ease-out', mixBlendMode: plate ? 'multiply' : undefined }}
         />
       ) : (
         /* The glyph is sized against the tile it is drawn in, which in `fill`
            mode is the container and not `size` — `size` there is what the image
            pipeline is asked for (320px for a shelf card), and scaling a fallback
            glyph to 42% of THAT filled a 173px card with a 134px moon. */
-        <span className={fill ? 'block w-[42%] [&_svg]:w-full [&_svg]:h-auto' : ''} style={{ color: hue, opacity: 0.92 }}>
+        <span className={fill ? 'block w-[42%] [&_svg]:w-full [&_svg]:h-auto' : ''} style={{ color: plate ? 'var(--text-dim)' : hue, opacity: plate ? 0.85 : 0.92 }}>
           <QuizIcon name={glyph} size={Math.round(size * 0.42)} />
         </span>
       )}

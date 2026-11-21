@@ -27,8 +27,8 @@ interface Props {
  */
 export function ShopResultsGrid({ products, query, fuzzy, onOpen }: Props) {
   return (
-    <section aria-label="Search results" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
-      <div className="flex items-baseline justify-between gap-3 mb-3">
+    <section aria-label="Search results" style={{ padding: 'var(--space-8) var(--space-4) 0' }}>
+      <div className="sf-shelf-head">
         <h2 className="sf-title" style={{ color: 'var(--text)' }}>
           {products.length} {products.length === 1 ? 'result' : 'results'}
           {query && (
@@ -46,7 +46,7 @@ export function ShopResultsGrid({ products, query, fuzzy, onOpen }: Props) {
         </p>
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-4)' }}>
+      <div className="sf-grid">
         {/*
           `data-card` marks a product card for the rest of the app — the deck
           animations query it, and every e2e card selector is built on it. It

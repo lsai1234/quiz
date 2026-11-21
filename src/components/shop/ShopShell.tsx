@@ -36,6 +36,7 @@ import { ShopBundlesRow } from './ShopBundlesRow'
 import { ShopSearchBar } from './ShopSearchBar'
 import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopBasketNudge } from './ShopBasketNudge'
+import { ShopBasketDock } from './ShopBasketDock'
 import { ShopDuelSheet } from './ShopDuelSheet'
 import { ShopCompareBar } from './ShopCompareBar'
 import { ShopRouletteSheet } from './ShopRouletteSheet'
@@ -994,12 +995,9 @@ export function ShopShell() {
             </div>
           ) : null}
           {comparing.length === 0 && count > 0 && (
-            /* The shelf's one primary action. */
-            <div className="pointer-events-auto" style={{ background: 'var(--bg)', borderRadius: 'var(--r-control)' }}>
-              <Button variant="primary" size="lg" fullWidth onClick={openDrawer} aria-label={`View basket, ${count} item${count !== 1 ? 's' : ''}, ${formatGBP(subtotal)}`}>
-                <span className="flex-1 text-left">View basket</span>
-                <span className="sf-num">{formatGBP(subtotal)}</span>
-              </Button>
+            /* The shelf's one primary action, docked. */
+            <div className="pointer-events-auto">
+              <ShopBasketDock lines={resolved} count={count} subtotal={subtotal} onOpen={openDrawer} showDelivery={shelfNudge?.kind !== 'delivery'} />
             </div>
           )}
         </div>

@@ -31,21 +31,15 @@ export function ShopBundlesRow({ bundles, products }: Props) {
       floating over the first and last card's content at exactly the viewport
       edges where a thumb already is.
     */
-    <section className="sf-shelf" id="shop-cat-bundles" style={{ scrollMarginTop: 'calc(var(--sf-hdr) + 64px)', paddingTop: 'var(--space-8)' }}>
-      <div className="flex items-baseline justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
-        <h2 className="sf-title min-w-0" style={{ color: 'var(--text)' }}>Session stacks</h2>
-        <span className="sf-meta flex-shrink-0">
+    <section className="sf-shelf" id="shop-cat-bundles" style={{ scrollMarginTop: 'calc(var(--sf-hdr) + 64px)', paddingTop: 'var(--section)' }}>
+      <div className="sf-shelf-head" style={{ padding: '0 var(--space-4)' }}>
+        <h2 className="sf-title" style={{ color: 'var(--text)' }}>Session stacks</h2>
+        <span className="sf-shelf-count">
           <span className="sf-num">{bundles.length}</span> stack{bundles.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      <div
-        className="grid"
-        style={{
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 'var(--space-4)',
-          padding: '0 var(--space-4)' }}
-      >
+      <div className="sf-bgrid" style={{ padding: '0 var(--space-4)' }}>
         {shown.map((view) => (
           <div key={view.bundle.slug} data-card>
             <ShopBundleCard view={view} products={products} />
@@ -54,11 +48,10 @@ export function ShopBundlesRow({ bundles, products }: Props) {
       </div>
 
       {hidden > 0 && (
-        <div style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
+        <div style={{ padding: 'var(--space-6) var(--space-4) 0' }}>
           <Button
             variant="secondary"
-            size="sm"
-            fullWidth
+            size="md"
             aria-expanded={expanded}
             aria-controls="shop-cat-bundles"
             onClick={() => setExpanded((open) => !open)}

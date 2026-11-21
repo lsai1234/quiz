@@ -9,9 +9,10 @@ import { pricePerServing, formatPerServing, servingsForVariant } from '@/lib/sho
 import { servingsLabel } from '@/lib/catalogue/accessory'
 import { hasRating } from '@/lib/shop/ratings'
 import { useBasket } from '@/lib/basket/store'
+import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { track } from '@/lib/analytics/events'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { StarRating } from './StarRating'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   product: CatalogueProduct
@@ -26,37 +27,34 @@ interface Props {
 }
 
 /**
- * A product on the shelf.
+ * A product on the shelf. No frame: the photograph and the type are the card.
+ *
+ * ── Why frameless ───────────────────────────────────────────────────────────
+ * Twenty boxed cards a screen is twenty borders, twenty fills and twenty
+ * shadows competing with the twenty products they hold. Taking the box away
+ * leaves the photograph on its studio plate — the one surface on the shelf —
+ * and lets the space between products do the separating. That room is most of
+ * what makes a shelf look like it is worth the money.
  *
  * ── The scan order ──────────────────────────────────────────────────────────
- * A shop card is not a list row. A list row is read; a card is scanned, and
- * scanning needs a focal point and a fixed order underneath it. Here that is:
- * the photograph, then the price, then the name, then the detail that separates
- * this product from the one beside it.
+ * Photograph, then the name, then the price; the size, servings and rating
+ * underneath are what separate one tub from the one beside it. Brand first in
+ * small type, because that is how a supplement shelf is actually scanned.
  *
- * The version this replaces had the title and the price at the same size, the
- * same weight and the same colour, so nothing led and the card had to be read.
- * That is the difference between browsing and working.
- *
- * ── The information is the point ────────────────────────────────────────────
- * A card carrying only a name and a price cannot be chosen from: two creatines
- * at £18.99 and £29.99 and nothing on either explains the £11. So the card
- * carries the size, the servings, the rating and — the useful one — the price
- * per serving, which the shop already computes and never showed.
- *
- * This is not clutter. Clutter is unordered information; four facts on one grid
- * under one heading is a specification.
- *
- * ── One action, and it is not a button ──────────────────────────────────────
- * Two full-width grey buttons per card put eight identical grey rectangles on a
- * screen, which is what made the grid read as a form. The whole card is a link
- * to the product page; Add is a 36px circle that sits on the photograph's
- * bottom edge, where it is unmistakable and takes no vertical space.
+ * ── One action, on the photograph ──────────────────────────────────────────
+ * Add is a round button on the photo's corner. Once the product is in the
+ * basket it becomes a cyan − n + stepper in the same place and the plate gets
+ * a cyan ring, so the shelf shows at a glance what you have already picked.
+ * The stepper is a sibling of the link, not inside it: an interactive element
+ * may not sit inside an anchor.
  */
 export function ShopProductCard({
   product, onOpen, perServing = false, selectable = false, selected = false, onToggleSelect,
 }: Props) {
   const add = useBasket((s) => s.add)
+  const setQty = useBasket((s) => s.setQty)
+  const remove = useBasket((s) => s.remove)
+  const lines = useBasket((s) => s.lines)
   const [justAdded, setJustAdded] = useState(false)
   const [reduced, setReduced] = useState(false)
   const addTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -68,17 +66,9 @@ export function ShopProductCard({
 
   const { price, rrp, onDeal } = dealInfo(product)
   /*
-    "From £11.99" when the variants are genuinely different prices.
-
-    The card prices the default variant, which is right while the variants are
-    flavours of one tub. It is not right when a master SKU holds two different
-    things — the glycine sold both as 100 capsules and as 454g of powder — and
-    a single number then quotes whichever happens to be in stock first.
-
-    When they do differ the card follows its own number: the cheapest sellable
-    variant is the one it prices, describes and adds. A card that says "From
-    £11.99" and drops a £20.04 bag in the basket is worse than one that never
-    said "from" at all.
+    "From £11.99" when the variants are genuinely different prices: the card
+    prices, describes and adds the cheapest sellable variant, so a card that
+    says "From £11.99" never drops a £20.04 bag in the basket.
   */
   const range = priceRange(product)
   const cheapest = [...product.variants]
@@ -89,132 +79,113 @@ export function ShopProductCard({
     ?? product.variants[0]
   const soldOut = !variant?.available
   const headline = range.varies ? range.min : price
+  const off = !range.varies && onDeal && rrp != null && rrp > 0 ? Math.round((1 - price / rrp) * 100) : 0
 
   const perServ = variant ? pricePerServing(product, variant) : null
-  /*
-    The servings of the VARIANT on the card, never the product's own number.
-
-    An accessory has none at all (`servingsForVariant` says so), which is what
-    put "30 servings" under two shakers and "1 servings" under a third; and a
-    product whose variants are different sizes has a different count per size,
-    so the product-level figure is wrong about every variant but the first.
-  */
+  /* The servings of the VARIANT on the card, never the product's own number. */
   const servings = variant ? servingsForVariant(product, variant) : null
   const spec = [variant?.size, servings != null ? servingsLabel(servings) : null]
     .filter(Boolean)
-    .join(' · ')
+    .join(', ')
 
-  const handleAdd = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const inBasket = variant ? lines.find((l) => l.productId === product.id && l.variantId === variant.id)?.quantity ?? 0 : 0
+
+  const handleAdd = () => {
     if (!variant || soldOut) return
     add(product.id, variant.id, 1)
     track('add_to_basket', { id: product.id, source: 'card', price })
     if (reduced) return
     setJustAdded(true)
     if (addTimer.current) clearTimeout(addTimer.current)
-    addTimer.current = setTimeout(() => setJustAdded(false), 1200)
+    addTimer.current = setTimeout(() => setJustAdded(false), 900)
+  }
+
+  const handleLess = () => {
+    if (!variant) return
+    if (inBasket <= 1) remove(product.id, variant.id)
+    else setQty(product.id, variant.id, inBasket - 1)
   }
 
   return (
-    <Link
-      href={`/product/${product.handle}`}
-      onClick={(e) => {
-        if (selectable) { e.preventDefault(); onToggleSelect?.(product); return }
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
-        onOpen?.(product)
-      }}
-      aria-pressed={selectable ? selected : undefined}
-      data-interactive
-      className="sf-card relative flex flex-col h-full overflow-hidden"
-      style={{
-        background: 'var(--surface)',
-        borderRadius: 'var(--r-card)',
-        outline: selectable && selected ? '2px solid var(--accent)' : 'none',
-        outlineOffset: -2 }}
-    >
-      <div className={`relative ${justAdded ? 'sf-added' : ''}`}>
-        <ProductTile
-          // The variant's own photograph when PowerBody sent one for its SKU —
-          // every flavour is a separate product at their end, so the pictures
-          // are per-flavour and the card used to show one of them for all.
-          imageUrl={variant?.imageUrl ?? product.imageUrl}
-          formats={product.formats}
-          title={product.title}
-          size={320}
-          fill
-          inset
-          style={{ borderTopLeftRadius: 'var(--r-card)', borderTopRightRadius: 'var(--r-card)' }}
-        />
+    <article className="sf-pcard" data-in={inBasket > 0} data-picked={selectable && selected}>
+      <Link
+        href={`/product/${product.handle}`}
+        onClick={(e) => {
+          if (selectable) { e.preventDefault(); onToggleSelect?.(product); return }
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+          onOpen?.(product)
+        }}
+        aria-pressed={selectable ? selected : undefined}
+        data-interactive
+        className="sf-pcard-link"
+      >
+        <span className={`sf-pcard-plate${justAdded ? ' sf-pcard-charged' : ''}`}>
+          <ProductTile
+            // The variant's own photograph when PowerBody sent one for its SKU.
+            imageUrl={variant?.imageUrl ?? product.imageUrl}
+            formats={product.formats}
+            title={product.title}
+            size={320}
+            fill
+            inset
+            plate
+          />
+          {off > 0 && <span className="sf-pcard-off sf-num">−{off}%</span>}
+          {selectable && (
+            <span className="sf-pcard-pick" aria-hidden>
+              <Icon name="check" size={14} />
+            </span>
+          )}
+        </span>
 
-        {/*
-          Add, on the photograph's bottom edge. Half over the image and half
-          over the text block, so it reads as attached to the product rather
-          than as a row of controls at the bottom of a form — and it costs the
-          card no height at all.
-        */}
-        {!selectable && (
-          <button
-            onClick={handleAdd}
-            disabled={soldOut}
-            data-interactive
-            aria-label={soldOut ? `${product.title} is sold out` : `Add ${product.title} to basket`}
-            className="sf-add absolute flex items-center justify-center"
-            style={{
-              right: 'var(--space-3)',
-              bottom: -18,
-              width: 36,
-              height: 36,
-              borderRadius: 'var(--r-pill)',
-              border: 'none',
-              background: justAdded ? 'var(--accent)' : 'var(--surface-hi)',
-              color: justAdded ? 'var(--accent-ink)' : 'var(--text)',
-              opacity: soldOut ? 0.4 : 1,
-              pointerEvents: soldOut ? 'none' : undefined }}
-          >
-            {justAdded ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>
+        <span className="sf-pcard-text">
+          {product.brand && <span className="sf-pcard-brand">{product.brand}</span>}
+          <span className="sf-name sf-clamp-2">{product.title}</span>
+          {spec && <span className="sf-pcard-meta sf-tnum">{spec}</span>}
+          <span className="sf-pcard-price">
+            {perServing && perServ != null ? (
+              <>
+                <span className="sf-price">{formatPerServing(perServ)}</span>
+                <span className="sf-pcard-small">a serving</span>
+              </>
             ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+              <>
+                {range.varies && <span className="sf-pcard-small">From</span>}
+                <span className="sf-price">{formatGBP(headline)}</span>
+                {off > 0 && rrp != null && <s className="sf-pcard-small sf-tnum">{formatGBP(rrp)}</s>}
+              </>
             )}
-          </button>
-        )}
-      </div>
-
-      <div className="flex flex-col flex-1" style={{ padding: 'var(--space-3)', gap: 2 }}>
-        {/*
-          Brand first. It is how a supplement shelf is actually scanned — the
-          manufacturer, then the product — and without it every card in a
-          category opens with the same three words. PowerBody has always sent
-          it; the catalogue used to throw it away.
-        */}
-        {product.brand && <p className="sf-label" style={{ paddingRight: 40 }}>{product.brand}</p>}
-
-        {/* Then the price. It is the first NUMBER anyone looks for. */}
-        <p className="flex items-baseline" style={{ gap: 'var(--space-2)', paddingRight: 40 }}>
-          <span className="sf-price">
-            {range.varies && <span className="sf-meta">From </span>}
-            {formatGBP(headline)}
           </span>
-          {!range.varies && onDeal && rrp != null && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp)}</span>}
-        </p>
+          {hasRating(product.rating) && (
+            <span className="sf-pcard-rate sf-tnum">
+              <Icon name="star" size={12} />
+              {product.rating.average.toFixed(1)}
+              <span>({product.rating.count.toLocaleString()})</span>
+            </span>
+          )}
+          {soldOut && <span className="sf-pcard-meta">{product.restockingSoon ? 'Back in stock soon' : 'Sold out'}</span>}
+        </span>
+      </Link>
 
-        <p className="sf-name sf-clamp-2" style={{ marginTop: 2 }}>{product.title}</p>
-
-        {spec && <p className="sf-meta sf-tnum">{spec}</p>}
-
-        {perServing && perServ != null ? (
-          <p className="sf-meta sf-tnum">{formatPerServing(perServ)} per serving</p>
-        ) : hasRating(product.rating) ? (
-          <StarRating rating={product.rating} size={11} showCount className="mt-0.5" />
-        ) : null}
-
-        {soldOut && (
-          <p className="sf-meta" style={{ marginTop: 'auto', paddingTop: 'var(--space-2)' }}>
-            {product.restockingSoon ? 'Back in stock soon' : 'Sold out'}
-          </p>
-        )}
-      </div>
-    </Link>
+      {!selectable && !soldOut && (
+        <div className="sf-pcard-buy">
+          {inBasket > 0 ? (
+            <div className="sf-stepper" role="group" aria-label={`${product.title}, ${inBasket} in basket`}>
+              <button type="button" onClick={handleLess} aria-label={inBasket === 1 ? `Remove ${product.title} from basket` : `One fewer ${product.title}`}>
+                <Icon name="dash" size={15} />
+              </button>
+              <span className="sf-num" aria-live="polite">{inBasket}</span>
+              <button type="button" onClick={handleAdd} disabled={inBasket >= MAX_LINE_QTY} aria-label={`One more ${product.title}`}>
+                <Icon name="plus" size={15} />
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="sf-addbtn" onClick={handleAdd} aria-label={`Add ${product.title} to basket`} data-interactive>
+              <Icon name="plus" size={18} />
+            </button>
+          )}
+        </div>
+      )}
+    </article>
   )
 }

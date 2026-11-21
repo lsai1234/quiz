@@ -41,12 +41,18 @@ export function ShopBasketNudge({ nudge, onAct, onDismiss }: Props) {
 
   return (
     <div
-      className="flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-2 max-w-lg mx-auto w-full"
+      className="flex items-center gap-2 pl-3.5 pr-1.5 py-2.5 mx-auto w-full"
       style={{
+        maxWidth: 560,
+        borderRadius: 16,
         background: offerish
-          ? 'color-mix(in srgb, var(--accent) 9%, var(--surface))'
-          : 'var(--surface)',
-        border: `1px solid ${offerish ? 'color-mix(in srgb, var(--accent) 26%, transparent)' : 'var(--line)'}` }}
+          ? 'linear-gradient(90deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0) 70%), rgba(19, 22, 27, 0.9)'
+          : 'rgba(19, 22, 27, 0.9)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.7)',
+        backdropFilter: 'blur(20px) saturate(1.7)',
+        boxShadow: offerish
+          ? 'inset 0 0 0 1px rgba(0, 212, 255, 0.25), 0 16px 40px -16px rgba(0, 0, 0, 0.8)'
+          : 'inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 16px 40px -16px rgba(0, 0, 0, 0.8)' }}
     >
       {nudge.kind === 'bundle' ? (
         <Link href={`/bundles/${nudge.slug}`} onClick={onAct} className="flex-1 min-w-0 active:opacity-80">

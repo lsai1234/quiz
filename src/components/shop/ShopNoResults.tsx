@@ -126,7 +126,7 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
           <h3 className="sf-title" style={{ color: 'var(--text)', marginBottom: 'var(--space-4)' }}>
             {query.q.trim() ? 'Closest we stock' : 'Popular right now'}
           </h3>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+          <div className="sf-grid">
             {nearest.map((product) => (
               <div key={product.id} data-card>
                 <ShopProductCard

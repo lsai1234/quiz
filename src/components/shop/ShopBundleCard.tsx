@@ -6,7 +6,7 @@ import type { ShopBundleView } from '@/hooks/useShopBundles'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { bundleWorkouts } from '@/lib/bundles/resolve'
-import { buttonClasses } from '@/components/storefront'
+import { Icon } from '@/components/ui/Icon'
 
 interface Props {
   view: ShopBundleView
@@ -28,78 +28,50 @@ export function ShopBundleCard({ view, products }: Props) {
 
   return (
     /*
-      A bundle card is a product card with more than one product in it, so it is
-      built the same way: surface fill, no border, no gradient, image area, name,
-      price, one action. It carried an accent gradient, an accent border, an
-      accent badge, an accent tagline, an accent price, an accent saving line
-      and a filled accent button — seven accent objects on one card.
+      Built the way a product card is: frameless, one studio plate, then type.
+      The plate holds the package's own photograph when it has one, and the
+      products it contains as a group shot when it does not — three tubs
+      standing together on the same plate a single product gets.
     */
-    <Link
-      href={`/bundles/${bundle.slug}`}
-      data-interactive
-      className="flex flex-col overflow-hidden h-full"
-      style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)' }}
-    >
-      {/*
-        The package's own photograph when it has one.
-
-        A bundle is sold on what it is FOR — the session, the morning, the week
-        — and that is a picture of the thing, not of the packaging. Without one
-        the card falls back to what it always did: the products it contains, on
-        the same lit ground a single product gets, which is the best a card can
-        do with no image and reads as three tubs in a row.
-      */}
-      <div className="relative flex items-end justify-center" style={{ height: 128, gap: 'var(--space-1)', padding: bundle.imageUrl ? 0 : '0 var(--space-4)' }}>
+    <Link href={`/bundles/${bundle.slug}`} data-interactive className="sf-bcard">
+      <span className="sf-bcard-plate">
         {bundle.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={bundle.imageUrl}
-            alt=""
-            loading="lazy"
-            className="absolute inset-0 w-full h-full"
-            style={{ objectFit: 'cover' }}
-          />
+          <img src={bundle.imageUrl} alt="" loading="lazy" className="sf-bcard-photo" />
         ) : (
-          <>
-            <span
-              aria-hidden
-              className="absolute inset-0 pointer-events-none"
-              style={{ background: 'radial-gradient(ellipse 60% 52% at 50% 62%, rgba(255,255,255,0.06), transparent 70%)' }}
-            />
-            {coreSlots.slice(0, 3).map((slot, i) => {
-              const product = byId.get(slot.selectedProductId)
-              return (
+          coreSlots.slice(0, 3).map((slot, i) => {
+            const product = byId.get(slot.selectedProductId)
+            return (
+              <span key={slot.slotId} className="sf-bcard-item" data-pos={i}>
                 <ProductTile
-                  key={slot.slotId}
                   imageUrl={product?.imageUrl ?? null}
                   formats={product?.formats}
                   title=""
-                  size={96}
-                  style={{ width: 42, height: 92 - Math.abs(1 - i) * 12, position: 'relative' }}
+                  size={160}
+                  fill
+                  plate
+                  style={{ background: 'transparent' }}
                 />
-              )
-            })}
-          </>
+              </span>
+            )
+          })
         )}
-      </div>
+      </span>
 
-      <div className="flex flex-col flex-1" style={{ padding: 'var(--space-3)', gap: 2 }}>
-        <p className="sf-label truncate">{bundle.seriesName}</p>
-        <p className="sf-price">{formatGBP(price.price)}</p>
-        <p className="sf-name sf-clamp-2" style={{ marginTop: 2 }}>{bundle.name}</p>
-        {/* What the package IS: the stack and the sessions that come with it.
-            A product count alone described half of it. */}
-        <p className="sf-meta sf-tnum">
+      <span className="sf-pcard-text">
+        <span className="sf-pcard-brand">{bundle.seriesName}</span>
+        <span className="sf-name sf-clamp-2">{bundle.name}</span>
+        {/* What the package IS: the stack and the sessions that come with it. */}
+        <span className="sf-pcard-meta sf-tnum">
           {coreSlots.length} products
-          {workoutCount > 0 && ` · ${workoutCount} workout${workoutCount === 1 ? '' : 's'}`}
-        </p>
-      </div>
-
-      <div style={{ padding: '0 var(--space-3) var(--space-3)' }}>
-        <span className={buttonClasses('secondary', 'sm', true)}>
-          View session stack
+          {workoutCount > 0 && `, ${workoutCount} workout${workoutCount === 1 ? '' : 's'}`}
         </span>
-      </div>
+        <span className="sf-pcard-price"><span className="sf-price">{formatGBP(price.price)}</span></span>
+        <span className="sf-bcard-go">
+          View session stack
+          <Icon name="chevron-right" size={14} />
+        </span>
+      </span>
     </Link>
   )
 }
