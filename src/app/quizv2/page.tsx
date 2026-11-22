@@ -15,7 +15,7 @@ import { isPortalAuthed } from '@/lib/portal/guard'
  * get it, on `/` (pin it with `/?quizArm=v2`).
  *
  * Whether customers see the consult on `/` is a separate switch, in the hub
- * (Settings → Quiz), and it is off by default.
+ * (Settings → Quiz). By default it is a third option on the quiz homepage.
  *
  * The preview runs with every AI feature on whenever the server has an OpenAI
  * key, whatever the hub's switch for customers says: founders reviewing the

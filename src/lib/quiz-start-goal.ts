@@ -42,3 +42,15 @@ export function setPendingStartGoal(goal: Goal | null): void {
 export function pendingStartGoal(): Goal | null {
   return pending
 }
+
+/**
+ * `/quiz?start=consult`: open the Amp Consult straight away, for the shop
+ * banner's "Or ask Amp". Honoured only where the quiz page offers the consult
+ * at all (the hub's rollout); with the consult off it shows the homepage.
+ */
+export const START_PARAM = 'start'
+export const CONSULT_START_HREF = `/quiz?${START_PARAM}=consult`
+
+export function wantsConsult(search: string): boolean {
+  return new URLSearchParams(search).get(START_PARAM) === 'consult'
+}

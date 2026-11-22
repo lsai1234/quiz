@@ -102,7 +102,7 @@ export function FounderPreview({ aiConfigured }: Props) {
       note: CONSULT_FEATURES.uploads ? '“Fill from my tracker” on the training and sleep screens, except on the 1-minute version.' : 'Switched off for now: no screenshots from wearables.',
     },
     { label: 'What’s this?', tone: 'info', note: 'The ⓘ on options. With the AI on it also takes a follow-up question.' },
-    { label: 'Customers', tone: 'info', note: 'The public home page follows Founder hub → Settings → Quiz, which is off by default.' },
+    { label: 'Customers', tone: 'info', note: 'The public home page follows Founder hub → Settings → Quiz: the consult is a third option there unless that is changed.' },
   ]
 
   return (

@@ -6,11 +6,12 @@ import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { track } from '@/lib/analytics/events'
 import { Icon } from '@/components/ui/Icon'
 import { buttonClasses } from '@/components/storefront'
-import { startGoalHref } from '@/lib/quiz-start-goal'
+import { useQuizArmState } from '@/lib/experiments/client'
 import {
   BANNER_EXAMPLES,
   BANNER_FINAL_PHRASE,
   BANNER_GOALS,
+  bannerDoors,
   dayX,
   dotWaves,
   hhmm,
@@ -62,6 +63,12 @@ const STOP = Symbol('stop')
 
 export function ShopQuizStrip() {
   const reduced = useReducedMotion()
+  // Where its ways in go: the quiz (whichever version this visitor is
+  // assigned), with the consult beside it when the hub offers it, or the
+  // consult alone for a visitor whose front door it is (`bannerDoors`).
+  const { heroOffer } = useQuizArmState()
+  const doors = bannerDoors(heroOffer)
+  const trackOpen = (consult: boolean) => track(consult ? 'shop_quiz_consult' : 'shop_quiz_tile_open')
   const rootRef = useRef<HTMLElement>(null)
   const ctlRef = useRef<{ play: (who?: number) => void; stop: () => void; still: (who: number) => void } | null>(null)
   const [active, setActive] = useState(3)
@@ -366,7 +373,7 @@ export function ShopQuizStrip() {
   return (
     <section ref={rootRef} className="sf-qb" data-beat="you" aria-labelledby="shop-quiz-title" data-shop-quiz-tile>
       <div className="sf-wrap sf-qb-in">
-        <p className="sf-qb-eyebrow"><i aria-hidden />The quiz · about a minute</p>
+        <p className="sf-qb-eyebrow"><i aria-hidden />{doors.eyebrow}</p>
         <h2 id="shop-quiz-title" className="sf-qb-title">
           A stack built around{' '}
           <span className="sf-qb-swap" aria-hidden>
@@ -390,12 +397,14 @@ export function ShopQuizStrip() {
             <div className="sf-qb-q">
               <div className="sf-qb-q-h">
                 <p className="sf-qb-q-t" id="shop-quiz-q">What’s the main goal?</p>
-                <Link href="/quiz" className="sf-qb-q-more" onClick={() => track('shop_quiz_tile_open')}>More goals</Link>
+                <Link href={doors.side.href} className="sf-qb-q-more" data-consult={doors.side.consult || undefined} onClick={() => trackOpen(doors.side.consult)}>
+                  {doors.side.label}
+                </Link>
               </div>
               <ul className="sf-qb-q-opts" aria-labelledby="shop-quiz-q">
                 {BANNER_GOALS.map((g) => (
                   <li key={g.id}>
-                    <Link href={startGoalHref(g.id)} className="sf-qb-opt" onClick={() => track('shop_quiz_goal', { goal: g.id })}>
+                    <Link href={doors.goalHref(g.id)} className="sf-qb-opt" onClick={() => track('shop_quiz_goal', { goal: g.id })}>
                       <Icon name={g.icon} size={16} />
                       {g.label}
                     </Link>
@@ -422,8 +431,8 @@ export function ShopQuizStrip() {
         </div>
 
         <div className="sf-qb-act">
-          <Link href="/quiz" className={`${buttonClasses('primary', 'md')} sf-qb-cta`} onClick={() => track('shop_quiz_tile_open')}>
-            Take the quiz
+          <Link href={doors.cta.href} className={`${buttonClasses('primary', 'md')} sf-qb-cta`} onClick={() => trackOpen(heroOffer === 'consult-only')}>
+            {doors.cta.label}
             <Icon name="bolt" size={15} />
           </Link>
           <div className="sf-qb-people" role="group" aria-label="Examples">

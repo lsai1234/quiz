@@ -7,9 +7,9 @@ import {
 } from '../consult'
 
 describe('H11 consult rollout', () => {
-  it('defaults to off: customers see the quiz only, founders use /quizv2', () => {
-    expect(DEFAULT_CONSULT_ROLLOUT.mode).toBe('off')
-    expect(heroOfferFor(10, DEFAULT_CONSULT_ROLLOUT)).toBe('quiz-only')
+  it('defaults to the consult as a third option on the quiz homepage', () => {
+    expect(DEFAULT_CONSULT_ROLLOUT.mode).toBe('option')
+    expect(heroOfferFor(10, DEFAULT_CONSULT_ROLLOUT)).toBe('both')
   })
 
   it('switches without a deploy: off, option and all apply to everyone', () => {
@@ -58,7 +58,7 @@ describe('H11 consult rollout', () => {
 
   it('normalises a bad stored setting rather than breaking the hero', () => {
     expect(normaliseConsultRollout(null)).toEqual(DEFAULT_CONSULT_ROLLOUT)
-    expect(normaliseConsultRollout({ mode: 'everything', split: 400, ai: false })).toEqual({ mode: 'off', split: 100, ai: false })
+    expect(normaliseConsultRollout({ mode: 'everything', split: 400, ai: false })).toEqual({ mode: DEFAULT_CONSULT_ROLLOUT.mode, split: 100, ai: false })
     expect(parseConsultArm('nope')).toBeNull()
     expect(consultArmFor('consult-only')).toBe('consult')
   })

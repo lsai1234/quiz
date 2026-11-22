@@ -10,8 +10,8 @@ const WINDOW_DAYS = 28
 /**
  * GET /api/portal/vitals — speed on real devices, by device type, for each
  * part of the site (plan Phase 7.1). Founder-only. Founder sessions are left
- * out unless `?founders=1` (the consult is founders-only until rollout, so
- * until then its figures are all theirs).
+ * out unless `?founders=1`, so founders previewing at /quizv2 don't skew
+ * what customers get.
  */
 export const dynamic = 'force-dynamic'
 

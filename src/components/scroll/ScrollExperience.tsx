@@ -13,7 +13,7 @@ import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
 import { CHANGE_ANSWERS_HASH, clearResultsOpen, resultsOpenFor } from '@/lib/consult/results-tab'
 import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
-import { START_GOAL_PARAM, setPendingStartGoal, startGoalFrom } from '@/lib/quiz-start-goal'
+import { START_GOAL_PARAM, START_PARAM, setPendingStartGoal, startGoalFrom, wantsConsult } from '@/lib/quiz-start-goal'
 
 /** The quiz in hub mode, after joining the hub on its own: no results page, straight to the hub. */
 const HubSetupFinish = dynamic(() => import('./HubSetupFinish').then((m) => m.HubSetupFinish), { ssr: false })
@@ -250,6 +250,29 @@ export function ScrollExperience() {
       setAnimKey((k) => k + 1)
     }
   }, [resolved, heroOffer, act, hubSetup])
+
+  /*
+    `/quiz?start=consult`: the shop banner's "Or ask Amp". Opens the consult
+    once the server has said it is offered here; with the consult off, the
+    parameter is dropped and the homepage shows, as for anyone else. Read once.
+  */
+  const startedConsult = useRef(false)
+  useEffect(() => {
+    if (startedConsult.current || !resolved || hubSetup) return
+    if (!wantsConsult(window.location.search)) return
+    startedConsult.current = true
+    const params = new URLSearchParams(window.location.search)
+    params.delete(START_PARAM)
+    const rest = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash)
+    if (heroOffer === 'quiz-only') return
+    useQuizStore.getState().setConsultExclusions(null)
+    clearResultsOpen()
+    setResumeDismissed(true)
+    setConsult(true)
+    setAct(2)
+    setAnimKey((k) => k + 1)
+  }, [resolved, heroOffer, hubSetup])
 
   /*
     "Change my answers" on a consult's results page (`ConsultNote`): reopen the

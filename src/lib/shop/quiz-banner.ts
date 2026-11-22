@@ -1,6 +1,8 @@
 import { GOALS_DATA } from '@/lib/quiz-goals'
 import type { Goal } from '@/lib/types'
 import type { IconName } from '@/components/ui/Icon'
+import type { HeroOffer } from '@/lib/experiments/consult'
+import { CONSULT_START_HREF, startGoalHref } from '@/lib/quiz-start-goal'
 
 /**
  * The shop's quiz banner: what it shows and the arithmetic of laying it out.
@@ -135,4 +137,46 @@ export function dotWaves(example: number, count: number, picks: number[]): [numb
   const a = Math.floor(rest.length * 0.55)
   const b = Math.floor(rest.length * 0.86)
   return [rest.slice(0, a), rest.slice(a, b), rest.slice(b)]
+}
+
+/**
+ * Where the banner's ways in go, for what the quiz page offers this visitor
+ * (the hub's consult rollout, `heroOfferFor`).
+ *
+ *   quiz-only     a goal opens the quiz with it ticked; "More goals" opens it
+ *                 from the start.
+ *   both          the same, and the small link beside the question becomes
+ *                 "Or ask Amp": the consult, offered, never in the way of a
+ *                 one-tap start.
+ *   consult-only  this visitor's front door is the consult (a split test, or
+ *                 the consult for everyone), so every way in opens it. A goal
+ *                 isn't carried in: the consult asks its own way.
+ *
+ * Which quiz opens (v1 or v2) is never decided here: `/quiz` serves whichever
+ * the visitor is assigned, so the hub's v1/v2 split stays a fair comparison.
+ */
+export interface BannerDoors {
+  eyebrow: string
+  cta: { label: string; href: string }
+  goalHref: (goal: Goal) => string
+  side: { label: string; href: string; consult: boolean }
+}
+
+export function bannerDoors(offer: HeroOffer): BannerDoors {
+  if (offer === 'consult-only') {
+    return {
+      eyebrow: 'The Amp Consult · 1 to 6 minutes',
+      cta: { label: 'Start with Amp', href: CONSULT_START_HREF },
+      goalHref: () => CONSULT_START_HREF,
+      side: { label: 'More goals', href: CONSULT_START_HREF, consult: true },
+    }
+  }
+  return {
+    eyebrow: 'The quiz · about a minute',
+    cta: { label: 'Take the quiz', href: '/quiz' },
+    goalHref: (goal) => startGoalHref(goal),
+    side: offer === 'both'
+      ? { label: 'Or ask Amp', href: CONSULT_START_HREF, consult: true }
+      : { label: 'More goals', href: '/quiz', consult: false },
+  }
 }

@@ -56,7 +56,7 @@ export function SpeedPanel() {
       </p>
       <div style={{ display: 'grid', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
         <Segmented label="Part of the site" options={AREAS.map((a) => ({ value: a, label: AREA_LABEL[a] }))} value={area} onChange={setArea} />
-        <Checkbox label="Include founder sessions" hint="The consult is founders-only until it rolls out, so its figures are all yours until then." checked={founders} onChange={(e) => setFounders(e.target.checked)} />
+        <Checkbox label="Include founder sessions" hint="Founders' own sessions, including the consult preview at /quizv2." checked={founders} onChange={(e) => setFounders(e.target.checked)} />
       </div>
       {error ? (
         <Note tone="critical" icon="alert-triangle">{error}</Note>

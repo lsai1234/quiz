@@ -9,9 +9,10 @@
  *
  * And how the founder chooses it, from the hub, without a deploy:
  *
- *   off     everyone: quiz-only (the default: the consult is founders-only,
- *           at /quizv2, until a founder changes this in the hub)
- *   option  everyone: both — the consult as a third option
+ *   off     everyone: quiz-only. The kill switch: the consult goes back to
+ *           being founders-only, at /quizv2
+ *   option  everyone: both — the consult as a third option. The default
+ *           since the consult went on the quiz homepage
  *   split   `split`% of visitors: consult-only; the rest: quiz-only. A clean
  *           A/B: each visitor sees one front door, and both doors lead to the
  *           same results page, so conversion compares like with like.
@@ -45,7 +46,12 @@ export interface ConsultRollout {
   ai: boolean
 }
 
-export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'off', split: 50, ai: false }
+/**
+ * On the quiz homepage as a third option for everyone, on its scripted copy
+ * (no AI, so no cost per consult). A founder's saved setting in the hub
+ * (Settings → Quiz) always wins over this default, `off` included.
+ */
+export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'option', split: 50, ai: false }
 
 /** Cookie pinning the consult arm outright, set from `?consultArm=`. */
 export const CONSULT_ARM_COOKIE = 'chrgd_consult_arm'

@@ -748,7 +748,8 @@ the last 28 days; and, from browsers that report them, long animation frames
   never slows the first scene. Two anonymous events, `web_vital` and
   `long_frames`; the server adds the device bucket from the user agent.
 - Founder sessions are left out unless **Include founder sessions** is ticked.
-  The consult is founders-only until it rolls out, so its figures are all
-  founders' until then.
+  The consult is a third option on the quiz homepage by default (Settings →
+  Quiz can switch it off, split it or make it the only door), so its figures
+  include customers unless it has been switched off.
 - Good is under 2.5s, 200ms and 0.1 (web.dev's thresholds); the badge is
   the p75's rating.

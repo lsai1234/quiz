@@ -38,6 +38,26 @@ test('a goal on the quiz strip opens the quiz with it ticked', async ({ page }) 
   await expect(page.getByRole('button', { name: /build muscle/i })).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('the consult is offered beside the goals, and opens from there', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  const tile = page.locator('[data-shop-quiz-tile]')
+  // The quiz page offers the consult as a third option by default.
+  const amp = tile.getByRole('link', { name: 'Or ask Amp' })
+  await expect(amp).toBeVisible({ timeout: 20_000 })
+  await amp.click()
+  await expect(page.locator('.amp-consult')).toBeVisible({ timeout: 30_000 })
+  // Read once: the address no longer asks for it.
+  await expect(page).toHaveURL(/\/quiz$/)
+})
+
+test('the quiz homepage offers the consult as a third way in', async ({ page }) => {
+  await page.goto('/quiz')
+  await expect(page.getByTestId('enter-consult')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('button', { name: /Everyday wellness/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Performance \+ wellness/ })).toBeVisible()
+})
+
 test('the quiz strip plays once, then rests on the first question', async ({ page }) => {
   await page.goto('/')
   const tile = page.locator('[data-shop-quiz-tile]')

@@ -66,6 +66,9 @@ export const SHOP_EVENTS = [
      question (which goal), and an example face tapped to watch it again. */
   'shop_quiz_goal',
   'shop_quiz_example',
+  /* …and its door to the Amp Consult ("Or ask Amp", or every door for a
+     visitor whose front door is the consult). */
+  'shop_quiz_consult',
   'shop_finder_answer',
   'shop_finder_typed',
   'shop_finder_show',

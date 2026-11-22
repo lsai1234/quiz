@@ -1,5 +1,5 @@
-import { BANNER_EXAMPLES, BANNER_GOALS, dayX, dotWaves, hhmm, pickDots, placeLabels } from '../quiz-banner'
-import { startGoalFrom, startGoalHref } from '@/lib/quiz-start-goal'
+import { BANNER_EXAMPLES, BANNER_GOALS, bannerDoors, dayX, dotWaves, hhmm, pickDots, placeLabels } from '../quiz-banner'
+import { CONSULT_START_HREF, startGoalFrom, startGoalHref, wantsConsult } from '@/lib/quiz-start-goal'
 
 /* A label's width as the banner draws it: "07:30 Creatine" in 12–13px Inter,
    padded, with a 36px capsule beside it on a wide screen. Generous on purpose:
@@ -84,5 +84,36 @@ describe('a goal in the quiz link', () => {
     expect(startGoalFrom('')).toBeNull()
     expect(startGoalFrom('?goal=sleep-better')).toBeNull()
     expect(startGoalFrom('?goal=<script>')).toBeNull()
+  })
+})
+
+describe('the banner’s ways in', () => {
+  it('opens the quiz with the goal ticked, whichever version the visitor is assigned', () => {
+    for (const offer of ['quiz-only', 'both'] as const) {
+      const doors = bannerDoors(offer)
+      expect(doors.goalHref('muscle')).toBe('/quiz?goal=muscle')
+      // Never a version-specific link: `/quiz` serves the visitor's own arm.
+      expect(doors.cta.href).toBe('/quiz')
+      expect(doors.goalHref('muscle')).not.toMatch(/quizArm/)
+    }
+  })
+
+  it('offers the consult beside the goals when the quiz page offers it, never in their way', () => {
+    expect(bannerDoors('quiz-only').side).toEqual({ label: 'More goals', href: '/quiz', consult: false })
+    expect(bannerDoors('both').side).toEqual({ label: 'Or ask Amp', href: CONSULT_START_HREF, consult: true })
+  })
+
+  it('sends every way in to the consult for a visitor whose front door it is', () => {
+    const doors = bannerDoors('consult-only')
+    expect(doors.cta).toEqual({ label: 'Start with Amp', href: CONSULT_START_HREF })
+    expect(doors.goalHref('hydration')).toBe(CONSULT_START_HREF)
+    expect(doors.side.href).toBe(CONSULT_START_HREF)
+    expect(doors.eyebrow).toMatch(/Amp Consult/)
+  })
+
+  it('reads the consult start link, and nothing else, as asking for the consult', () => {
+    expect(wantsConsult(new URL(CONSULT_START_HREF, 'https://x.test').search)).toBe(true)
+    expect(wantsConsult('?start=quiz')).toBe(false)
+    expect(wantsConsult('')).toBe(false)
   })
 })
