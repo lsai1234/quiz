@@ -67,8 +67,8 @@ test.describe('the storefront', () => {
   })
 
   test('the shop', async ({ page }) => {
-    // The quiz tile plays its example on timers, which `animations: disabled`
-    // can't park. Under reduced motion it holds a finished example, still.
+    // The quiz banner plays its examples on timers, which `animations: disabled`
+    // can't park. Under reduced motion it rests on the quiz's first question.
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await openShop(page)
     await settle(page)

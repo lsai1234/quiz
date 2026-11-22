@@ -22,9 +22,30 @@ async function openFinder(page: import('@playwright/test').Page) {
 test('the quiz strip at the top of the shop goes to the quiz', async ({ page }) => {
   await page.goto('/')
   const tile = page.locator('[data-shop-quiz-tile]')
-  await expect(tile.getByRole('heading', { name: 'Get a stack built around you' })).toBeVisible()
+  await expect(tile.getByRole('heading', { name: 'A stack built around you' })).toBeVisible()
   await tile.getByRole('link', { name: /take the quiz/i }).click()
   await expect(page).toHaveURL(/\/quiz$/)
+})
+
+test('a goal on the quiz strip opens the quiz with it ticked', async ({ page }) => {
+  // Still, it rests on the quiz's first question; moving, it plays first.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  const tile = page.locator('[data-shop-quiz-tile]')
+  await tile.getByRole('link', { name: 'Build muscle' }).click()
+  // The goal comes off the address once read, so a refresh doesn't restart the quiz.
+  await expect(page).toHaveURL(/\/quiz$/)
+  await expect(page.getByRole('button', { name: /build muscle/i })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('the quiz strip plays once, then rests on the first question', async ({ page }) => {
+  await page.goto('/')
+  const tile = page.locator('[data-shop-quiz-tile]')
+  // Playing: an example is on, and the button stops it.
+  await expect(tile.getByRole('button', { name: 'Stop the examples' })).toBeVisible()
+  await tile.getByRole('button', { name: 'Stop the examples' }).click()
+  await expect(tile.getByRole('link', { name: 'Build muscle' })).toBeVisible()
+  await expect(tile.getByRole('button', { name: 'Your first question' })).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('answers become filters, the count is the shelves, Show goes to them', async ({ page }) => {

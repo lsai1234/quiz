@@ -24,6 +24,7 @@ import { questionById } from '@/lib/quiz-v2/bank'
 import { DRIVERS, rankedDrivers } from '@/lib/quiz-v2/drivers'
 import { useSteer } from '@/lib/quiz-v2/steer'
 import { useQuizArmState } from '@/lib/experiments/client'
+import { pendingStartGoal, setPendingStartGoal } from '@/lib/quiz-start-goal'
 import type { Goal, AgeBracket, Gender, WeightBand } from '@/lib/types'
 
 /**
@@ -193,10 +194,18 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
   // The interview lives in the store so a refresh resumes it. Seeded on first
   // mount from whichever budget the founder has set for this track.
-  const state: InterviewState = useMemo(
-    () => interview ?? emptyInterview(budgetConfig.performance),
-    [interview, budgetConfig.performance],
-  )
+  // A goal tapped on the shop's quiz banner (`/quiz?goal=…`) is the first
+  // answer: the new interview starts on the training track with it ticked.
+  const state: InterviewState = useMemo(() => {
+    if (interview) return interview
+    const fresh = emptyInterview(budgetConfig.performance)
+    const goal = pendingStartGoal()
+    return goal ? setGoals(setTrack(fresh, 'performance'), [goal]) : fresh
+  }, [interview, budgetConfig.performance])
+  // Once the interview exists it carries the goal itself.
+  useEffect(() => {
+    if (interview) setPendingStartGoal(null)
+  }, [interview])
 
   const update = useCallback((next: InterviewState) => setInterview(next), [setInterview])
 

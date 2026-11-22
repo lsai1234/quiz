@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
 import { CHANGE_ANSWERS_HASH, clearResultsOpen, resultsOpenFor } from '@/lib/consult/results-tab'
 import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
+import { START_GOAL_PARAM, setPendingStartGoal, startGoalFrom } from '@/lib/quiz-start-goal'
 
 /** The quiz in hub mode, after joining the hub on its own: no results page, straight to the hub. */
 const HubSetupFinish = dynamic(() => import('./HubSetupFinish').then((m) => m.HubSetupFinish), { ssr: false })
@@ -125,6 +126,30 @@ export function ScrollExperience() {
       clearResultsOpen()
       const track = test.get('track')
       if (track === 'performance' || track === 'wellbeing') q.setAnswer('track', track)
+      setResumeDismissed(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+      return
+    }
+
+    /*
+      `/quiz?goal=muscle`: a goal tapped on the shop's quiz banner. That tap
+      was the quiz's first answer, so the quiz starts on the training track
+      with the goal ticked. The parameter comes off the address straight away,
+      so a refresh doesn't start the quiz over.
+    */
+    const startGoal = startGoalFrom(window.location.search)
+    if (startGoal) {
+      const q = useQuizStore.getState()
+      q.reset()
+      clearResultsOpen()
+      q.setAnswer('track', 'performance')
+      q.setGoals([startGoal])
+      setPendingStartGoal(startGoal)
+      const params = new URLSearchParams(window.location.search)
+      params.delete(START_GOAL_PARAM)
+      const rest = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash)
       setResumeDismissed(true)
       setAct(2)
       setAnimKey((k) => k + 1)

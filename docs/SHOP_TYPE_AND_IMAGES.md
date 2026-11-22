@@ -312,7 +312,7 @@ way.
 | Part | Component | What it is |
 |---|---|---|
 | Header | `ShopTopBar` (via `ShopHeader`, `ShopPageHeader`) | Sticky glass: the mark, Shop and The quiz on a wide screen, search and basket as icons. The basket count sits on the icon and pops when it rises. |
-| The quiz | `ShopQuizStrip` | A compact strip above the title: "Get a stack built around you", one line on what it asks, one button. The bottle stands on a charging pad whose ring is the day; Amp narrates an example in three beats (answers, thinking, the stack landing on the ring). About 290px on a phone. |
+| The quiz | `ShopQuizStrip` | One banner above the title. "A stack built around …" stays put while its last words follow the example on screen and land on "you." Underneath, one scene changes shape: the shop as dots, an example's answers switching most of them off, the three left landing on a line through the day, and a light running along it into the bottle's pad. Sam, Priya, then Jo; then it rests on the quiz's own first question, where a goal opens the quiz with it ticked (`/quiz?goal=…`). About 290px on a phone. Logic and layout rules in `lib/shop/quiz-banner.ts` (tested). |
 | The finder | `ShopFinder` | Folded to one bar: what it is, how many products fit, and a price chart of the whole shop lit where the answers fit. Opened, it is quick-fire: one question, at most four answers, auto-advance, keys 1–4 on a keyboard. Same filters as before (`lib/shop/finder.ts`). |
 | Filter row | `ShopFilterBar` | Filters (with a count), the view toggles, the dietary pills and Surprise me. |
 | Tabs | `ShopCategoryNav` | Sticky glass tabs with a sliding cyan underline; a Filters button appears once the filter row has scrolled away. |
@@ -355,8 +355,7 @@ the grammar.
 
 | Moment | Normal | Reduced motion |
 |---|---|---|
-| Quiz strip example | Answers rise in, a light runs round the ring, products land as points | The finished example, still; no pause button needed |
-| Capsules beside the bottle | A slow float | Still |
+| Quiz banner | Plays once (about 30 seconds) the first time it is on screen: answers arrive, dots dim, three glide onto the day, a light runs into the pad. Then it rests on the first question | Opens on the first question; the faces show each example as a finished picture |
 | Finder | Card slides in, count rolls, chart bars dim | Instant |
 | Add on a card | A band of light runs up the photo; the stepper springs in | None |
 | Tabs | Underline slides | Jumps |
@@ -364,8 +363,8 @@ the grammar.
 | Dock and drawer meter | Fill eases | Fill is set |
 | Product hover | The photo lifts slightly | None |
 
-The quiz strip plays only while on screen and the tab is visible, and has a
-pause button.
+The quiz banner plays only while on screen and the tab is visible, stops when
+scrolled away, and has a stop / play-again button beside the faces.
 
 ## Bundle pages and the sheets
 

@@ -62,6 +62,10 @@ export const SHOP_EVENTS = [
      people stop at shows; a typed answer (what it read, never the words);
      Show tapped; and the hand-on to the full quiz from a finished finder. */
   'shop_quiz_tile_open',
+  /* The quiz banner at the top of the shop: a goal tapped on its first
+     question (which goal), and an example face tapped to watch it again. */
+  'shop_quiz_goal',
+  'shop_quiz_example',
   'shop_finder_answer',
   'shop_finder_typed',
   'shop_finder_show',

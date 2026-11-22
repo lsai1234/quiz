@@ -1117,279 +1117,507 @@
   .sf-finder-chip:active:not(:disabled) { transform: none; }
 }
 
-/* ── The quiz strip ───────────────────────────────────────────────────────────
-   The quiz at the very top of the shop, compact on purpose: a full-width band
-   lit from the pad, one line saying what it is, one button, and a live example.
-   About 290px tall on a phone, 250 on a desktop — the shop is on the first
-   screen with it. See `ShopQuizStrip`. */
-.sf-strip {
+/* ── The quiz banner ──────────────────────────────────────────────────────────
+   The quiz at the very top of the shop. A title that stays put while its last
+   words change, one scene that changes shape (the shop as dots, an example's
+   answers, the day, the bottle charging), and the quiz's first question to
+   finish on. About 285px tall on a phone. See `ShopQuizStrip`.
+
+   Layers in the scene, back to front: the day's ticks, the day line (with the
+   light that runs along it), the answers, the dots, the labels. The dots sit
+   above the line, so the day passes behind them, and each label has a dark
+   backing so a stem from a higher row passes behind a lower label's words. */
+.sf-qb {
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: radial-gradient(55% 110% at 100% 45%, rgba(0, 212, 255, 0.1), transparent 62%);
 }
 
-.sf-strip::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(38% 90% at 14% 55%, rgba(0, 212, 255, 0.13), transparent 70%),
-    linear-gradient(180deg, #080A0E 0%, var(--bg) 100%);
-}
-
-/* The horizon: a line of the pad's light along the strip's bottom edge. */
-.sf-strip::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(0, 212, 255, 0.35) 25%, rgba(0, 212, 255, 0.08) 70%, transparent 100%);
-}
-
-.sf-strip-in {
+.sf-qb-in {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  grid-template-areas: 'stage copy' 'ro ro';
-  gap: 12px 14px;
-  padding-top: 16px;
-  padding-bottom: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'eyebrow' 'title' 'stage' 'act';
+  padding-block: 16px 14px;
 }
 
-.sf-strip-stage {
-  grid-area: stage;
-  width: 100%;
-  height: 128px;
-  align-self: center;
-  overflow: visible;
-}
-
-.sf-strip-copy {
-  grid-area: copy;
-  align-self: center;
-  display: grid;
-  gap: 6px;
-  justify-items: start;
-  min-width: 0;
-}
-
-.sf-strip-title {
-  margin: 0;
-  font-family: var(--font-head);
-  font-size: 20px;
-  font-weight: var(--weight-semibold);
-  line-height: 1.12;
-  letter-spacing: -0.03em;
-  color: var(--text);
-  text-wrap: balance;
-}
-
-.sf-strip-title span {
-  color: var(--accent);
-  text-shadow: 0 0 18px rgba(0, 212, 255, 0.35);
-}
-
-.sf-strip-lede {
-  margin: 0 0 6px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--text-dim);
-  max-width: 46ch;
-}
-
-.sf-strip-copy .sf-button svg { fill: currentColor; stroke: none; }
-
-/* The readout: Amp narrating the example. */
-.sf-strip-ro {
-  grid-area: ro;
-  position: relative;
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 12px 14px 14px 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.035);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
-}
-
-.sf-strip-amp { position: relative; width: 36px; height: 36px; }
-.sf-strip-amp::after {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(0, 212, 255, 0.35), transparent);
-  opacity: 0;
-  transition: opacity 600ms var(--t-ease);
-}
-.sf-strip[data-phase='stack'] .sf-strip-amp::after { opacity: 1; }
-.sf-strip-amp svg { display: block; }
-.sf-strip .sf-amp-lit,
-.sf-strip .sf-amp-happy { opacity: 0; transition: opacity 500ms var(--t-ease); }
-.sf-strip .sf-amp-eyes { transition: transform 500ms var(--t-ease), opacity 300ms; }
-.sf-strip[data-phase='said'] .sf-amp-eyes { transform: translate(-1.2px, 1.2px); }
-.sf-strip[data-phase='think'] .sf-amp-eyes { transform: translate(1.6px, -2.8px); }
-.sf-strip[data-phase='stack'] .sf-amp-lit,
-.sf-strip[data-phase='stack'] .sf-amp-happy { opacity: 1; }
-.sf-strip[data-phase='stack'] .sf-amp-eyes { opacity: 0; }
-
-.sf-strip-ro-body { min-width: 0; display: grid; gap: 6px; }
-
-.sf-strip-ro-k {
-  margin: 0;
-  padding-right: 30px;
-  min-height: 18px;
+.sf-qb-eyebrow {
+  grid-area: eyebrow;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 7px;
   font-size: 12.5px;
   font-weight: var(--weight-medium);
+  color: var(--text-dim);
+}
+
+.sf-qb-eyebrow i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.14), 0 0 10px var(--accent);
+}
+
+/* The title: "A stack built around" never moves; only its last words change. */
+.sf-qb-title {
+  grid-area: title;
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: var(--weight-bold);
+  font-size: 29px;
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  color: var(--text);
+}
+
+.sf-qb-swap { display: grid; color: var(--accent); }
+
+.sf-qb-w {
+  grid-area: 1 / 1;
+  justify-self: start;
+  position: relative;
+  opacity: 0;
+  transform: translateY(0.3em);
+  transition: opacity 0.32s var(--t-ease), transform 0.55s var(--t-ease);
+}
+
+.sf-qb-w.is-on { opacity: 1; transform: none; }
+.sf-qb-w.is-off { opacity: 0; transform: translateY(-0.3em); }
+
+/* The line under the changing words fills while each example plays. */
+.sf-qb-w::after {
+  content: '';
+  position: absolute;
+  left: 0.02em;
+  right: 0.24em;
+  bottom: -0.05em;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-bloom);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.sf-qb-w.is-on.run::after { animation: sf-qb-charge var(--qb-hold, 9500ms) linear forwards; }
+.sf-qb-w.is-on.is-static::after { transform: scaleX(1); }
+
+@keyframes sf-qb-charge { to { transform: scaleX(1); } }
+
+.sf-qb-lede {
+  grid-area: lede;
+  display: none;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+/* The stage: the scene on the left, the bottle on its pad on the right. */
+.sf-qb-stage {
+  grid-area: stage;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  column-gap: 10px;
+  height: 108px;
+  margin-top: 12px;
+}
+
+.sf-qb-left { position: relative; min-width: 0; display: flex; flex-direction: column; }
+
+.sf-qb-k {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 20px;
+  margin: 0;
+  font-size: 12px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  transition: opacity 0.35s;
 }
 
-.sf-strip-ro-v {
-  min-height: 44px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
+.sf-qb-tag {
+  padding: 0 6px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.sf-strip-said {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.07);
-  font-size: 12.5px;
-  font-weight: var(--weight-medium);
-  color: var(--text);
-  white-space: nowrap;
-  transition: opacity 350ms var(--t-ease), transform 450ms var(--t-ease), filter 350ms;
+.sf-qb-k b { font-weight: var(--weight-semibold); color: var(--text-2); }
+
+.sf-qb-scene { position: relative; flex: 1; transition: opacity 0.4s var(--t-ease); }
+
+.sf-qb[data-beat='you'] .sf-qb-scene,
+.sf-qb[data-beat='you'] .sf-qb-k {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s, visibility 0s 0.35s;
 }
 
-.sf-strip-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  height: 22px;
-  margin-right: 8px;
-  font-size: 13.5px;
-  font-weight: var(--weight-medium);
-  color: var(--text);
-  white-space: nowrap;
-  transition: opacity 350ms var(--t-ease), transform 450ms var(--t-ease), filter 350ms;
-}
+.sf-qb.is-clearing .sf-qb-scene,
+.sf-qb.is-clearing .sf-qb-k { opacity: 0; }
 
-.sf-strip-item b { font-size: 12.5px; font-weight: var(--weight-semibold); color: var(--accent); }
-
-.sf-strip-said[data-on='false'],
-.sf-strip-item[data-on='false'] { opacity: 0; transform: translateY(6px); filter: blur(4px); }
-
-.sf-strip-shimmer {
-  flex: 1 1 100%;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: var(--weight-medium);
-  line-height: 1.45;
-  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text-dim) 35%, #fff 50%, var(--text-dim) 65%, var(--text-dim) 100%);
-  background-size: 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: sf-shimmer 1.6s linear infinite;
-}
-
-@keyframes sf-shimmer {
-  from { background-position: 100% 0; }
-  to { background-position: -150% 0; }
-}
-
-.sf-strip-steps {
+/* The answers. */
+.sf-qb-chips {
   position: absolute;
-  left: 14px;
-  right: 14px;
+  z-index: 2;
+  left: 0;
+  top: 0;
   bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  width: 124px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: 8px;
+  transition: opacity 0.35s var(--t-ease), transform 0.5s var(--t-ease);
 }
 
-.sf-strip-steps i {
-  height: 2px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.07);
-  transition: background-color 400ms, box-shadow 400ms;
+.sf-qb-chip {
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  line-height: 17px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.35s var(--t-ease), transform 0.5s var(--t-ease);
 }
 
-.sf-strip-steps i[data-on='true'] {
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.7);
-}
+.sf-qb-chip.on { opacity: 1; transform: none; }
+.sf-qb.is-line .sf-qb-chips { opacity: 0; transform: translateX(-10px); }
 
-.storefront .sf-strip-pause {
+/* The shop as dots, which become the stack's points on the day. */
+.sf-qb-field { position: absolute; z-index: 2; inset: 0; pointer-events: none; }
+
+.sf-qb-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 30px;
-  height: 30px;
+  left: 0;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
   border-radius: 50%;
-  color: var(--text-dim);
+  background: var(--text-2);
+  opacity: 0.45;
+  transition:
+    opacity 0.5s var(--t-ease),
+    transform 0.75s var(--t-ease),
+    width 0.4s var(--t-ease),
+    height 0.4s var(--t-ease),
+    margin 0.4s var(--t-ease),
+    background-color 0.4s,
+    box-shadow 0.4s;
 }
 
-/* The stage */
-.sf-strip-ring { fill: none; stroke-width: 1.6; opacity: 0.45; transition: opacity 800ms; }
-.sf-strip-ring-glow { fill: none; stroke: var(--accent); stroke-width: 7; opacity: 0.16; filter: blur(3px); transition: opacity 800ms; }
-.sf-strip[data-phase='stack'] .sf-strip-ring { opacity: 1; }
-.sf-strip[data-phase='stack'] .sf-strip-ring-glow { opacity: 0.4; }
-.sf-strip-glow { opacity: 0.55; transform-box: fill-box; transform-origin: center; transition: opacity 800ms var(--t-ease); }
-.sf-strip[data-phase='think'] .sf-strip-glow { opacity: 0.9; animation: sf-breathe 1.3s ease-in-out infinite; }
-.sf-strip[data-phase='stack'] .sf-strip-glow { opacity: 1; }
-.sf-strip-comet { filter: drop-shadow(0 0 4px #00D4FF) drop-shadow(0 0 8px #00D4FF); }
-.sf-strip-node { transform-box: fill-box; transform-origin: center; transition: transform 550ms var(--t-spring), opacity 200ms; }
-.sf-strip-node[data-on='false'] { transform: scale(0); opacity: 0; }
-.sf-strip-node-halo { fill: var(--accent); opacity: 0.9; filter: blur(2.5px); }
-.sf-strip-node-core { fill: #fff; }
-.sf-strip-back .sf-strip-node { opacity: 0.55; }
-.sf-strip-float { animation: sf-float 7s ease-in-out infinite; }
-.sf-strip-float-b { animation-duration: 8.5s; animation-delay: -3s; }
+.sf-qb-dot.dim { opacity: 0.08; }
+.sf-qb-dot.pick { opacity: 1; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.sf-qb.is-line .sf-qb-dot:not(.pick) { opacity: 0; }
 
-@keyframes sf-breathe { 50% { transform: scale(1.08); opacity: 0.65; } }
-@keyframes sf-float { 50% { transform: translateY(-5px); } }
+/* On the day: a white point in a cyan ring, with a gap of page colour round it
+   so the line reads as passing behind. */
+.sf-qb-dot.node {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 5px var(--bg), 0 0 14px 3px rgba(0, 212, 255, 0.45);
+}
+
+.sf-qb-dot.flash { animation: sf-qb-flash 0.6s var(--t-ease); }
+
+@keyframes sf-qb-flash {
+  40% { box-shadow: 0 0 0 2px var(--accent), 0 0 0 5px var(--bg), 0 0 24px 8px rgba(0, 212, 255, 0.7); }
+}
+
+/* The day: a line from 5am to 11pm that runs on into the bottle's pad. */
+.sf-qb-line {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: var(--qb-line-y, 78px);
+  width: calc(100% + var(--qb-ext, 12px));
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--surface-top);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.6s var(--t-ease), opacity 0.35s;
+}
+
+.sf-qb-line.drawn { transform: none; }
+
+.sf-qb-line-lit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.2), var(--accent));
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.sf-qb-line.lit .sf-qb-line-lit { transform: none; transition: transform 1.2s linear; }
+
+.sf-qb-comet {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.25), 0 0 16px var(--accent);
+  opacity: 0;
+}
+
+.sf-qb-line.lit .sf-qb-comet { left: 100%; opacity: 1; transition: left 1.2s linear, opacity 0.2s; }
+.sf-qb-line.done .sf-qb-comet { opacity: 0; }
+
+.sf-qb-ticks {
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  top: var(--qb-line-y, 78px);
+  height: 0;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.sf-qb.is-line .sf-qb-ticks { opacity: 1; }
+.sf-qb-ticks i { position: absolute; top: 5px; width: 1px; height: 4px; background: var(--line-strong); }
+
+.sf-qb-ticks span {
+  position: absolute;
+  top: 11px;
+  display: none;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Labels: one line each, on the first of three rows where they touch nothing
+   (`placeLabels`). */
+.sf-qb-nodes { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
+.sf-qb-node { position: absolute; top: var(--qb-line-y, 78px); --qb-stem: 8px; }
+.sf-qb-node[data-row='1'] { --qb-stem: 30px; }
+.sf-qb-node[data-row='2'] { --qb-stem: 52px; }
+
+.sf-qb-stem {
+  position: absolute;
+  left: -0.5px;
+  bottom: 7px;
+  width: 1px;
+  height: calc(var(--qb-stem) - 3px);
+  background: linear-gradient(to top, var(--accent), rgba(0, 212, 255, 0.15));
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.35s var(--t-ease);
+}
+
+.sf-qb-node.on .sf-qb-stem { transform: scaleY(1); }
+
+.sf-qb-lab {
+  position: absolute;
+  bottom: calc(var(--qb-stem) + 4px);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: rgba(5, 6, 8, 0.9);
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  line-height: 17px;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.35s var(--t-ease) 0.1s, transform 0.45s var(--t-ease) 0.1s;
+}
+
+.sf-qb-lab-t { color: var(--accent); font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; }
+.sf-qb-thumb { flex: none; width: 34px; height: 13px; background: center / contain no-repeat; }
+.sf-qb-node[data-align='c'] .sf-qb-lab { left: 0; transform: translate(-50%, 3px); }
+.sf-qb-node[data-align='l'] .sf-qb-lab { left: -8px; transform: translateY(3px); }
+.sf-qb-node[data-align='r'] .sf-qb-lab { right: -8px; transform: translateY(3px); }
+.sf-qb-node.on .sf-qb-lab { opacity: 1; }
+.sf-qb-node.on[data-align='c'] .sf-qb-lab { transform: translate(-50%, 0); }
+.sf-qb-node.on[data-align='l'] .sf-qb-lab,
+.sf-qb-node.on[data-align='r'] .sf-qb-lab { transform: none; }
+
+/* The bottle on its pad. The ring lights when the day's light reaches it. */
+.sf-qb-bottle { position: relative; }
+.sf-qb-bottle svg { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; overflow: visible; }
+.sf-qb-glow { opacity: 0.3; transition: opacity 0.7s var(--t-ease); }
+.sf-qb-ring-base { fill: none; stroke: rgba(255, 255, 255, 0.1); stroke-width: 1.4; }
+
+.sf-qb-ring {
+  fill: none;
+  stroke: #9BF0FF;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 50;
+  stroke-dashoffset: 50;
+  filter: drop-shadow(0 0 3px rgba(0, 212, 255, 0.9));
+}
+
+.sf-qb-ring-back { transition: stroke-dashoffset 0.4s linear; }
+.sf-qb-ring-front { transition: stroke-dashoffset 0.4s linear 0.4s; }
+.sf-qb-bottle.charged .sf-qb-glow { opacity: 1; }
+.sf-qb-bottle.charged .sf-qb-ring { stroke-dashoffset: 0; }
+
+/* Your turn: the quiz's first question. */
+.sf-qb-q {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s, visibility 0s 0.35s;
+}
+
+.sf-qb[data-beat='you'] .sf-qb-q { opacity: 1; visibility: visible; transition: opacity 0.45s var(--t-ease) 0.15s; }
+.sf-qb-q-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.sf-qb-q-t { margin: 0; font-size: 14px; font-weight: var(--weight-semibold); line-height: 18px; color: var(--text); }
+
+.storefront .sf-qb-q-more {
+  font-size: 12.5px;
+  font-weight: var(--weight-semibold);
+  color: var(--text-2);
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.sf-qb-q-opts { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; }
+
+.storefront .sf-qb-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 37px;
+  padding: 0 10px;
+  border-radius: var(--r-control);
+  background: var(--surface-mid);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--t-fast);
+}
+
+.sf-qb-opt svg { flex: none; color: var(--text-dim); }
+.storefront .sf-qb-opt:active { transform: translateY(1px); }
+
+@media (hover: hover) {
+  .storefront .sf-qb-opt:hover { background: var(--surface-hi); }
+  .storefront .sf-qb-q-more:hover { color: var(--text); }
+}
+
+/* The way in, and whose example it is. */
+.sf-qb-act { grid-area: act; display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+.storefront .sf-qb-cta { min-height: 40px; margin-right: auto; }
+.sf-qb-people { display: flex; align-items: center; gap: 6px; }
+.sf-qb-people-k { display: none; margin-right: 4px; font-size: 12.5px; color: var(--text-dim); }
+
+.sf-qb-face,
+.sf-qb-ctl {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-mid);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text-2);
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.sf-qb-face[aria-pressed='true'] { background: var(--text); color: var(--bg); box-shadow: none; }
+.sf-qb-ctl { margin-left: 2px; background: transparent; box-shadow: none; color: var(--text-dim); }
+
+@media (hover: hover) {
+  .sf-qb-face[aria-pressed='false']:hover { background: var(--surface-hi); color: var(--text); }
+  .sf-qb-ctl:hover { background: var(--surface-mid); color: var(--text); }
+}
+
+/* Moves between examples happen with transitions off. */
+.sf-qb-snap,
+.sf-qb-snap * { transition: none !important; }
+
+@media (min-width: 600px) {
+  .sf-qb-stage { grid-template-columns: minmax(0, 1fr) 84px; column-gap: 14px; }
+}
 
 @media (min-width: 960px) {
-  .sf-strip-in {
-    grid-template-columns: 220px minmax(0, 1fr) minmax(0, 470px);
-    grid-template-areas: 'stage copy ro';
-    gap: 0 40px;
-    padding-top: 28px;
-    padding-bottom: 30px;
-    align-items: center;
+  .sf-qb-in {
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    grid-template-areas: 'eyebrow stage' 'title stage' 'lede stage' 'act stage';
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 64px;
+    padding-block: 30px 28px;
   }
-  .sf-strip-stage { height: 196px; }
-  .sf-strip-copy { gap: 8px; }
-  .sf-strip-title { font-size: 30px; line-height: 1.08; }
-  .sf-strip-lede { font-size: 15px; margin-bottom: 10px; }
-  .sf-strip-ro-v { min-height: 26px; }
+
+  .sf-qb-eyebrow { margin-bottom: 12px; }
+  .sf-qb-title { font-size: 44px; }
+  .sf-qb-lede { display: block; margin-top: 14px; max-width: 40ch; }
+  .sf-qb-act { align-self: end; margin-top: 20px; gap: 8px; }
+  .storefront .sf-qb-cta { min-height: 44px; margin-right: 16px; }
+  .sf-qb-people-k { display: inline; }
+
+  .sf-qb-stage {
+    align-self: center;
+    height: 196px;
+    margin-top: 0;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    column-gap: 18px;
+  }
+
+  .sf-qb-k { height: 24px; font-size: 12.5px; }
+  .sf-qb-chips { width: 186px; gap: 9px; }
+  .sf-qb-chip { padding: 5px 13px; font-size: 13px; line-height: 18px; }
+  .sf-qb-ticks span { display: block; }
+  .sf-qb-node { --qb-stem: 10px; }
+  .sf-qb-node[data-row='1'] { --qb-stem: 38px; }
+  .sf-qb-node[data-row='2'] { --qb-stem: 66px; }
+  .sf-qb-lab { height: 22px; gap: 7px; padding: 0 6px; font-size: 13px; line-height: 22px; }
+  .sf-qb-q { gap: 14px; }
+  .sf-qb-q-t { font-family: var(--font-head); font-size: 22px; font-weight: var(--weight-bold); line-height: 1.1; letter-spacing: -0.03em; }
+  .sf-qb-q-opts { gap: 10px; }
+  .storefront .sf-qb-opt { min-height: 54px; padding: 0 16px; gap: 10px; border-radius: var(--r-lg); font-size: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sf-strip-float,
-  .sf-strip-glow,
-  .sf-strip-shimmer { animation: none; }
-  .sf-strip-node,
-  .sf-strip-said,
-  .sf-strip-item,
-  .sf-strip-ring,
-  .sf-strip-ring-glow,
-  .sf-strip .sf-amp-lit,
-  .sf-strip .sf-amp-happy,
-  .sf-strip .sf-amp-eyes { transition: none; }
+  .sf-qb *,
+  .sf-qb *::before,
+  .sf-qb *::after { transition: none !important; animation: none !important; }
 }
 
 /* ── The shop's head ──────────────────────────────────────────────────────────
