@@ -9,6 +9,9 @@ import { useCatalogueProducts, invalidateCatalogue } from '@/hooks/useCatalogueP
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
+import { useShopPlanCheckout } from '@/hooks/useShopPlanCheckout'
+import { AccountGate } from '@/components/auth/AccountGate'
+import { ConsentGate } from '@/components/legal/ConsentGate'
 import { resolveBasket, basketSubtotal, basketSupplierValue, priceBasket, resolvedItemCount } from '@/lib/basket/helpers'
 import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
@@ -203,8 +206,10 @@ export function ShopShell() {
   // everything swaps in together — the bundles rail can't pop in late and shove the
   // shelves down (the main source of shop CLS). See LoadingSkeleton.
   const isLoading = productsLoading || bundlesLoading
-  const { lines } = useBasket()
+  const { lines, plan } = useBasket()
   const { state, checkout, reset } = useShopCheckout()
+  // The same basket bought every month: the quiz plan's checkout, fed a basket.
+  const { state: planState, checkout: checkoutPlan, resume: resumePlan, reset: resetPlan } = useShopPlanCheckout()
   const [drawerOpen, setDrawerOpen] = useState(false)
   /**
    * Everything narrowing the shop, in one object. Replaces the old
@@ -1025,8 +1030,26 @@ export function ShopShell() {
           onNudgeAct={() => drawerNudge && track('shop_nudge_click', { key: drawerNudge.key, kind: drawerNudge.kind })}
           onNudgeDismiss={() => drawerNudge && dismissNudge(drawerNudge.key)}
           checkoutState={state}
-          onCheckout={() => checkout(resolved, 'basket', appliedCode?.code ?? null)}
+          planState={planState}
+          onCheckout={() => (plan === 'monthly'
+            ? checkoutPlan(resolved, products, appliedCode?.code ?? null)
+            : checkout(resolved, 'basket', appliedCode?.code ?? null))}
           onClose={closeDrawer}
+        />
+      )}
+
+      {/* A monthly basket needs an account and the terms, as a quiz plan does:
+          the account gate takes both; signed in already, the consent gate. */}
+      {planState.status === 'needs-account' && (
+        <AccountGate payload={planState.payload} onAuthenticated={resumePlan} onCancel={resetPlan} />
+      )}
+      {planState.status === 'needs-consent' && (
+        <ConsentGate
+          versions={planState.versions}
+          notice={planState.notice}
+          subscription={planState.payload.subscription}
+          onAccept={resumePlan}
+          onCancel={resetPlan}
         />
       )}
     </div>

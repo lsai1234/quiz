@@ -6,8 +6,13 @@ import type { BasketLine } from './types'
 import { addLine, setLineQty, removeLine, pruneBasket } from './helpers'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
+/** How the basket is bought: once, or every month (`lib/checkout/shop-plan`). */
+export type BasketPlan = 'once' | 'monthly'
+
 interface BasketStore {
   lines: BasketLine[]
+  plan: BasketPlan
+  setPlan: (plan: BasketPlan) => void
   add: (productId: string, variantId: string, qty?: number) => void
   setQty: (productId: string, variantId: string, qty: number) => void
   remove: (productId: string, variantId: string) => void
@@ -32,13 +37,16 @@ export const useBasket = create<BasketStore>()(
   persist(
     (set) => ({
       lines: [],
+      plan: 'once',
+      setPlan: (plan) => set({ plan }),
       add: (productId, variantId, qty = 1) =>
         set((s) => ({ lines: addLine(s.lines, productId, variantId, qty) })),
       setQty: (productId, variantId, qty) =>
         set((s) => ({ lines: setLineQty(s.lines, productId, variantId, qty) })),
       remove: (productId, variantId) =>
         set((s) => ({ lines: removeLine(s.lines, productId, variantId) })),
-      clear: () => set({ lines: [] }),
+      // An emptied basket starts again as a one-off.
+      clear: () => set({ lines: [], plan: 'once' }),
       prune: (products) =>
         set((s) => {
           const lines = pruneBasket(s.lines, products)
@@ -55,7 +63,7 @@ export const useBasket = create<BasketStore>()(
       storage: createJSONStorage(() =>
         (typeof window !== 'undefined' ? window.localStorage : undefined) as Storage,
       ),
-      partialize: (s) => ({ lines: s.lines }),
+      partialize: (s) => ({ lines: s.lines, plan: s.plan }),
     },
   ),
 )

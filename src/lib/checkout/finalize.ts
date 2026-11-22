@@ -20,7 +20,7 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 import { getSubscription, saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
-import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
+import { clampRate, discountWithFloor, firstMonthRate, formatGBP, getPricingConfig, resolveIntroDiscount, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
@@ -184,6 +184,105 @@ export class BonusUnavailable extends Error {
 }
 
 /**
+ * A shop basket that can't be a monthly plan: under the monthly minimum, or
+ * holding something no longer sold. Thrown before anything is stored or
+ * charged, with the sentence to show.
+ */
+export class ShopPlanRefused extends Error {
+  constructor(
+    message: string,
+    readonly reason: 'empty' | 'unavailable' | 'minimum',
+  ) {
+    super(message)
+    this.name = 'ShopPlanRefused'
+  }
+}
+
+/** The payload with its plan rebuilt from the basket's products (see step 2b). */
+async function withShopPlan(payload: CheckoutPayload): Promise<CheckoutPayload> {
+  const [{ getResolvedCatalogue }, { buildShopPlan }] = await Promise.all([
+    import('@/lib/catalogue/resolve'),
+    import('./shop-plan'),
+  ])
+  const { products } = await getResolvedCatalogue()
+  const plan = buildShopPlan(payload.shop?.lines ?? [], products, getPricingConfig())
+  if (!plan.ok) throw new ShopPlanRefused(plan.message, plan.reason)
+  return {
+    ...payload,
+    subscription: { ...plan.subscription, customerEmail: payload.subscription?.customerEmail ?? '' },
+    quiz: null,
+    bonus: null,
+    guide: null,
+  }
+}
+
+/**
+ * A quiz or bundle plan priced below what we sell it for. Thrown before
+ * anything is stored or charged.
+ */
+export class PlanPriceRefused extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PlanPriceRefused'
+  }
+}
+
+/**
+ * Check a browser-priced plan against our own prices (see step 2c).
+ *
+ * The browser works the monthly out (`calculatePricing`) with the plan's own
+ * subscribe-&-save rate, tier and margin floor, and nothing here second-guesses
+ * which of those it was entitled to. What it can't do is go below the floor:
+ * every line at our catalogue price, taken down by the DEEPEST rate we offer
+ * on any plan (`levelSubscriptionDiscount`, `subscriptionDiscount`,
+ * `subscriptionTiers`) and no further than the margin floor allows. A real
+ * plan is always at or above that; a tampered one is refused. Pennies of
+ * rounding per line are allowed for.
+ *
+ * And the monthly minimum, as the shop plan has it: a plan under it is not
+ * offered, so nobody gets a plan (or the hub that comes with one) for less.
+ *
+ * Lines whose product isn't in the catalogue are left to the checks that
+ * already handle them (`assertPlanInStock` does the same); they can't ship,
+ * and the minimum still applies to the plan as a whole.
+ */
+export async function assertPlanPrice(sub: MemberSubscription): Promise<void> {
+  const config = getPricingConfig()
+  const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
+  const { products } = await getResolvedCatalogue()
+  const deepest = Math.max(
+    0,
+    config.subscriptionDiscount,
+    ...Object.values(config.levelSubscriptionDiscount),
+    ...config.subscriptionTiers.map((t) => t.discountPct),
+  )
+  let floor = 0
+  let priced = 0
+  for (const line of sub.lines ?? []) {
+    const product = products.find((p) => p.id === line.productId)
+    if (!product) continue
+    const variant =
+      product.variants.find((v) => v.id === line.variantId) ??
+      (line.sku ? product.variants.find((v) => v.sku === line.sku) : undefined) ??
+      product.variants.find((v) => v.available) ??
+      product.variants[0]
+    const unitPrice = variant?.price ?? product.basePrice
+    const units = Math.max(1, Math.floor(Number(line.quantity) || 1))
+    const every = Math.min(config.maxDeliveryMonths, Math.max(1, Math.floor(Number(line.deliveryIntervalMonths) || 1)))
+    const unit = discountWithFloor(unitPrice, deepest, unitCostOf(product, unitPrice, config), config)
+    floor += Math.round((units / every) * unit * 100) / 100
+    priced++
+  }
+  const monthly = Number(sub.flatMonthly)
+  if (!Number.isFinite(monthly) || monthly + 0.01 * (priced + 1) < floor) {
+    throw new PlanPriceRefused('Our prices have changed since your plan was put together. Go back to your stack to see the price now, then try again. You have not been charged.')
+  }
+  if (monthly + 0.005 < config.minSubscriptionMonthly) {
+    throw new PlanPriceRefused(`Monthly plans start at ${formatGBP(config.minSubscriptionMonthly).replace(/\.00$/, '')} a month. You have not been charged.`)
+  }
+}
+
+/**
  * Something in the plan has sold out. Thrown before anything is stored or
  * charged; the routes answer it with the sentence and the list.
  */
@@ -249,7 +348,7 @@ export async function assertPlanInStock(sub: MemberSubscription): Promise<void> 
 export async function finalizeCheckout(
   userId: string,
   email: string | null,
-  payload: CheckoutPayload,
+  incoming: CheckoutPayload,
   options: FinalizeOptions | string = {},
 ): Promise<FinalizeResult> {
   const opts: FinalizeOptions = typeof options === 'string' ? { origin: options } : options
@@ -262,10 +361,23 @@ export async function finalizeCheckout(
 
   // 2. Consent, before anything is stored or charged. The documents recorded
   //    are the ones WE are currently serving, never what the payload claims.
-  const consent = validateConsent(payload.consent)
+  const consent = validateConsent(incoming.consent)
   if (!consent.ok) {
     throw new CheckoutRejected(consentErrorMessage(consent.error), consent.error, consent.versions)
   }
+
+  // 2b. A shop basket bought monthly: the plan is built HERE, from our
+  //     catalogue and our prices (`buildShopPlan`). The browser sent products
+  //     and quantities; whatever plan it also sent was for showing in the
+  //     account gate and is thrown away. No quiz, no gift, no guide: a shop
+  //     plan carries none of them.
+  const payload: CheckoutPayload = incoming.shop ? await withShopPlan(incoming) : incoming
+  const fromShop = Boolean(incoming.shop)
+
+  // 2c. A quiz or bundle plan arrives priced by the browser. It is checked
+  //     against what we sell those products for at the deepest saving we
+  //     offer, and against the monthly minimum, before anything is stored.
+  if (!fromShop) await assertPlanPrice(payload.subscription)
 
   // 3. The partner code, re-validated here against OUR monthly total. What the
   //    browser sent is a string; the discount is decided on this side. A code
@@ -397,7 +509,8 @@ export async function finalizeCheckout(
       customerEmail: subscription.customerEmail || email,
       successUrl: `${base}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/myhub`,
-      metadata: { userId },
+      // A shop plan says so, for whoever reads the dashboard; routing reads `plan` only.
+      metadata: fromShop ? { userId, source: 'shop' } : { userId },
       // Delivery on the monthly total, recurring with the box. The margin model
       // already assumes a plan under the free line collects postage like any
       // other order. ONE rate, as its own monthly line: Stripe has no shipping

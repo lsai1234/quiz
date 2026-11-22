@@ -1,8 +1,10 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
-import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { useBasket } from '@/lib/basket/store'
+import { track } from '@/lib/analytics/events'
 import { variantStock } from '@/lib/shop/merchandising'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { pricePerServing, formatPerServing } from '@/lib/shop/per-serving'
@@ -157,11 +159,22 @@ interface Props {
 
 export function ProductDetailBody({ product, variant, onSelectVariant, className }: Props) {
   const price = variant?.price ?? product.basePrice
+  const router = useRouter()
 
-  // Honest subscribe-&-save figure for this variant — the same discount the
-  // basket nudge quotes, shown as a concrete monthly price.
-  const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
-  const monthlyPrice = price * (1 - PRICING_CONFIG.subscriptionDiscount)
+  /*
+    Every month: this product in the basket, the basket set to monthly, and
+    the basket opened, where the plan's terms are spelled out against the
+    whole basket. Same price as buying it once; the plan brings the member
+    hub (`lib/checkout/shop-plan`). It used to send people to the quiz.
+  */
+  const getMonthly = () => {
+    if (!variant?.available) return
+    const basket = useBasket.getState()
+    if (!basket.lines.some((l) => l.productId === product.id && l.variantId === variant.id)) basket.add(product.id, variant.id, 1)
+    basket.setPlan('monthly')
+    track('add_to_basket', { id: product.id, source: 'monthly', price })
+    router.push('/shop#basket')
+  }
 
   // The facts of the variant on screen, not of the product: 100 vcaps and a
   // 454g bag of the same powder are 33 servings and 454, and one number cannot
@@ -182,17 +195,17 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
       {/* Never on an accessory. A monthly shaker is not a plan, it is a
           cupboard full of shakers — and the offer reads as one we would honour. */}
       {product.subscriptionEligible && !isAccessory(product) && (
-        <Link href="/quiz" data-interactive className="sf-pdp-plan">
+        <button type="button" data-interactive className="sf-pdp-plan" onClick={getMonthly} disabled={!variant?.available}>
           <Icon name="calendar" size={22} />
           <span className="sf-pdp-plan-words">
-            <b>Subscribe &amp; save {subscribePct}%</b>
-            <span>on a personalised monthly plan</span>
+            <b>Get it every month</b>
+            <span>Same price, delivered monthly, with the member hub</span>
           </span>
           <span className="sf-pdp-plan-price sf-num">
-            {formatGBP(monthlyPrice)}<small>/mo</small>
+            {formatGBP(price)}<small>/mo</small>
           </span>
           <Icon name="chevron-right" size={16} />
-        </Link>
+        </button>
       )}
 
       {cells.length > 0 && (

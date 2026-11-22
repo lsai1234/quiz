@@ -319,8 +319,8 @@ way.
 | Cards | `ShopProductCard` | Frameless: the plate, then brand, name, size, price and rating as type. Add is a round button on the photo; in the basket it becomes a cyan − n + stepper and the plate takes a cyan ring. |
 | Shelves | `ShopSection`, `ShopBundlesRow`, `ShopResultsGrid` | 2/3/4/5 columns by width, two whole rows before "Show all". |
 | Basket dock | `ShopBasketDock` | A floating glass bar while the basket has something in it: the last three products, the total, the distance to free delivery and View basket. |
-| Drawer | `BasketDrawer` | Restyled only. Every figure comes from the same functions as before. The lines scroll; only the money is pinned. |
-| Product page | `ProductPageView`, `ProductDetail` | A spec sheet: sticky plate, name, price with saving and price per serving, options as pills (flavour and size when both vary), one add bar, a ruled facts table, then the description. |
+| Drawer | `BasketDrawer` | The lines scroll; only the money is pinned. "How often?" offers Once or Every month: every month is the same basket at the same price as a plan, with the member hub (`lib/checkout/shop-plan`, see `docs/SUBSCRIPTIONS.md`). One-off figures come from the same functions as before; monthly ones from the function the server charges from. |
+| Product page | `ProductPageView`, `ProductDetail` | A spec sheet: sticky plate, name, price with saving and price per serving, options as pills (flavour and size when both vary), one add bar, "Get it every month" (adds the product and opens the basket set to monthly), a ruled facts table, then the description. |
 | Footer | `ShopFooter` | Brand, the shop's places and the legal pages. Only links to pages that exist. |
 
 ## The studio plate

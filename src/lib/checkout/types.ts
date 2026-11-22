@@ -1,6 +1,7 @@
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { QuizAnswers, StackLevel } from '@/lib/types'
+import type { ShopPlanLineInput } from './shop-plan'
 
 /** What a member subscribes with — persisted to their account at checkout so
  *  the hub shows their real bundle and their quiz answers when they return. */
@@ -34,4 +35,10 @@ export interface CheckoutPayload {
    * server-side (`normaliseGuideSeed`); nothing else is taken from it.
    */
   guide?: unknown
+  /**
+   * A shop basket bought every month (`lib/checkout/shop-plan`). When present,
+   * the server builds `subscription` from these lines and our catalogue, and
+   * ignores the one sent alongside (that one only fills the account gate).
+   */
+  shop?: { lines: ShopPlanLineInput[] } | null
 }

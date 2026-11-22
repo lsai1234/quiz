@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
-import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
+import { buildShopPlan, shopPlanTermLine } from '@/lib/checkout/shop-plan'
 import { basketGrams, customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { founderDeliveryOptions } from '@/lib/founder-codes/codes'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
+import type { ShopPlanCheckoutState } from '@/hooks/useShopPlanCheckout'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
@@ -48,6 +50,8 @@ interface Props {
   /** Browse the shop filtered to a slot — the drawer closes on the way. */
   onBrowseSlot?: (slot: StackSlot) => void
   checkoutState: ShopCheckoutState
+  /** The monthly checkout's progress, when the basket is bought every month. */
+  planState?: ShopPlanCheckoutState
   onCheckout: () => void
   onClose: () => void
 }
@@ -71,10 +75,11 @@ export function BasketDrawer({
   onBrowseSlot,
   onCodeChange,
   checkoutState,
+  planState = { status: 'idle' },
   onCheckout,
   onClose,
 }: Props) {
-  const { setQty, remove } = useBasket()
+  const { setQty, remove, plan, setPlan } = useBasket()
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
   const [reduced, setReduced] = useState(false)
@@ -113,7 +118,26 @@ export function BasketDrawer({
     ? founderDeliveryOptions(founderKind, { supplierValue, grams: basketGrams(resolved, config), orderValue: priced.total }, config)[0]?.price ?? 0
     : customerDeliveryCharge(subtotal, 'uk-1', config)
   const progress = threshold > 0 ? Math.min(1, subtotal / threshold) : 1
-  const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
+
+  /*
+    Every month: the same basket at the same price, as a plan (`buildShopPlan`,
+    the function the server charges from). A founder code is for one-off orders
+    only, so it rules the monthly plan out while it is applied.
+  */
+  const shopPlan = useMemo(
+    () => buildShopPlan(resolved.map((l) => ({ productId: l.product.id, variantId: l.variant.id, quantity: l.quantity })), products ?? [], config),
+    [resolved, products, config],
+  )
+  const monthly = plan === 'monthly'
+  const monthlyBlock = founderKind ? 'Founder codes are for one-off orders, so this basket can’t be monthly while one is applied.' : !shopPlan.ok ? shopPlan.message : null
+  const planReady = monthly && !monthlyBlock && shopPlan.ok
+  // A code is checked for one way of buying; switching asks for it again,
+  // rather than showing a code as applied to a plan it may not work on.
+  const choosePlan = (next: 'once' | 'monthly') => {
+    if (next === plan) return
+    setPlan(next)
+    if (appliedCode) onCodeChange(null)
+  }
 
   /**
    * Below the minimum order, and said HERE rather than after a failed checkout.
@@ -131,17 +155,20 @@ export function BasketDrawer({
   // Judged on the UNDISCOUNTED subtotal, which is the expression `/api/cart`
   // refuses on. Measuring the discounted total here would put a basket through
   // this notice that the checkout then let past, or the reverse.
-  const belowMinimum = !founderKind && minimum > 0 && priced.subtotal < minimum && resolved.length > 0
+  const belowMinimum = !monthly && !founderKind && minimum > 0 && priced.subtotal < minimum && resolved.length > 0
   const shortfall = Math.max(0, Math.round((minimum - priced.subtotal) * 100) / 100)
 
   const mockDone = checkoutState.status === 'mock-complete'
+  const planDone = planState.status === 'mock-complete'
   /** Nothing to pay at all — only a `free` code reaches this. */
   const free = founderKind === 'free' && priced.total + deliveryCharge <= 0
 
   if (!mounted) return null
 
   const items = resolved.reduce((n, l) => n + l.quantity, 0)
-  const busy = checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
+  const busy = monthly
+    ? planState.status === 'loading' || planState.status === 'redirecting'
+    : checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
 
   return createPortal(
     <div
@@ -244,12 +271,33 @@ export function BasketDrawer({
                 />
               )}
 
-              {/* Subscribe-&-save, to the personalised quiz */}
-              <Link href="/quiz" data-interactive className="sf-drawer-plan">
-                <Icon name="calendar" size={18} />
-                <span>Want it monthly? Subscribe &amp; save up to {subscribePct}% with a personalised stack</span>
-                <Icon name="chevron-right" size={15} />
-              </Link>
+              {/* Once or every month. Every month is the same basket at the
+                  same price, delivered monthly, with the member hub. */}
+              <section className="sf-drawer-planbox" aria-labelledby="basket-plan-h" data-basket-plan>
+                <div className="sf-drawer-planhead">
+                  <h3 id="basket-plan-h">How often?</h3>
+                  <div className="sf-drawer-seg" role="group" aria-labelledby="basket-plan-h">
+                    <button type="button" aria-pressed={!monthly} onClick={() => choosePlan('once')}>Once</button>
+                    <button type="button" aria-pressed={monthly} onClick={() => choosePlan('monthly')}>Every month</button>
+                  </div>
+                </div>
+                {monthly && monthlyBlock ? (
+                  <p className="sf-drawer-planwhy">{monthlyBlock}</p>
+                ) : monthly && shopPlan.ok ? (
+                  <ul className="sf-drawer-planlist">
+                    <li><Icon name="calendar" size={15} />{formatGBP(shopPlan.monthly)} a month, the same as buying it once</li>
+                    <li><Icon name="truck" size={15} />{shopPlan.delivery ? `${formatGBP(shopPlan.delivery.price)} delivery a month` : 'Free UK delivery every month'}</li>
+                    <li><Icon name="home" size={15} />The member hub comes with it, with member prices when you top up</li>
+                    {/* The terms' "Take it off my plan": a shop plan has no
+                        answers to choose a safe swap from, so it is said here,
+                        before anyone subscribes, and changeable in the hub. */}
+                    <li><Icon name="swap" size={15} />If a product becomes unavailable, we take it off your plan and tell you</li>
+                    <li><Icon name="check" size={15} /><span>{shopPlanTermLine(shopPlan.minMonths)}. <Link href="/legal/terms">Plan terms</Link></span></li>
+                  </ul>
+                ) : (
+                  <p className="sf-drawer-planwhy">Every month is the same basket at the same price, delivered monthly, with the member hub.</p>
+                )}
+              </section>
             </div>
             </div>
 
@@ -257,9 +305,12 @@ export function BasketDrawer({
 
               {/* The code box, at the top of the money and visible whatever the
                   basket is worth: its whole job is getting a small basket through. */}
+              {/* Every month, the code is checked as a plan's is (a partner's
+                  code works there, off the first month); once, as a basket's. */}
               <PartnerCodeBox
-                subtotal={subtotal}
-                channel="shop"
+                key={monthly ? 'monthly' : 'once'}
+                subtotal={monthly && shopPlan.ok ? shopPlan.monthly : subtotal}
+                channel={monthly ? 'subscription' : 'shop'}
                 applied={appliedCode}
                 onChange={onCodeChange}
               />
@@ -279,10 +330,43 @@ export function BasketDrawer({
                 </p>
               )}
 
+              {/* Every month: the plan's own figures (`buildShopPlan`, what the
+                  server charges). A code comes off the first month, as on a
+                  quiz plan; the server works out by how much. */}
+              {planReady && shopPlan.ok && (
+                <>
+                  {shopPlan.saving > 0.01 && (
+                    <>
+                      <p className="sf-drawer-row">
+                        <span>Subtotal</span>
+                        <b className="sf-num">{formatGBP(subtotal)}</b>
+                      </p>
+                      <p className="sf-drawer-row">
+                        <span>{priced.tierLabel ?? 'Bundle discount'}</span>
+                        <b className="sf-num">−{formatGBP(shopPlan.saving)}</b>
+                      </p>
+                    </>
+                  )}
+                  {shopPlan.delivery && (
+                    <p className="sf-drawer-row">
+                      <span>Delivery, every month</span>
+                      <b className="sf-num">{formatGBP(shopPlan.delivery.price)}</b>
+                    </p>
+                  )}
+                  {appliedCode && !founderKind && (
+                    <p className="sf-drawer-note">{appliedCode.code} comes off your first month at checkout.</p>
+                  )}
+                  <p className="sf-drawer-row sf-drawer-total">
+                    <span>Every month</span>
+                    <b className="sf-num">{formatGBP(shopPlan.monthly)}</b>
+                  </p>
+                </>
+              )}
+
               {/* The discount, itemised, and the total at what the card will be
                   charged: both from `priceOneOffLines`, the function /api/cart
                   bills Stripe from. Only ever one discount line. */}
-              {priced.discount > 0.01 && (
+              {!monthly && priced.discount > 0.01 && (
                 <>
                   <p className="sf-drawer-row">
                     <span>Subtotal</span>
@@ -302,39 +386,60 @@ export function BasketDrawer({
                   </p>
                 </>
               )}
-              <p className="sf-drawer-row sf-drawer-total">
-                <span>{priced.discount > 0.01 ? 'Total' : 'Subtotal'}</span>
-                <b className="sf-num">{formatGBP(priced.total)}</b>
-              </p>
-
-              {checkoutState.status === 'error' && (
-                <p className="sf-drawer-error" role="alert">{checkoutState.message}</p>
+              {!monthly && (
+                <p className="sf-drawer-row sf-drawer-total">
+                  <span>{priced.discount > 0.01 ? 'Total' : 'Subtotal'}</span>
+                  <b className="sf-num">{formatGBP(priced.total)}</b>
+                </p>
               )}
 
-              <Button variant="primary" size="lg" fullWidth onClick={onCheckout} disabled={busy} loading={busy} className="sf-drawer-checkout">
-                <span>
-                  {busy
-                    ? free
-                      ? 'Placing your order…'
-                      : 'Taking you to secure checkout…'
-                    : mockDone
-                      ? 'Demo checkout'
-                      : free
-                        ? 'Place order (nothing to pay)'
-                        : 'Checkout'}
-                </span>
-                {!busy && <Icon name="lock" size={16} />}
-              </Button>
+              {!monthly && checkoutState.status === 'error' && (
+                <p className="sf-drawer-error" role="alert">{checkoutState.message}</p>
+              )}
+              {monthly && planState.status === 'error' && (
+                <p className="sf-drawer-error" role="alert">{planState.message}</p>
+              )}
 
-              {/* Honest cues, no surprise steps — and no card step promised on
-                  an order with no payment in it. */}
-              <p className="sf-drawer-secure">
-                <Icon name="lock" size={13} />
-                {free ? 'Nothing to pay, so no card step' : 'Secure, encrypted checkout with card and wallet payments'}
-              </p>
+              {planDone ? (
+                <div className="sf-drawer-done" role="status">
+                  <p><Icon name="check" size={15} /> Your monthly plan is set up.</p>
+                  <Link href="/myhub" className="sf-button sf-button--primary sf-button--md sf-button--full">Go to your hub</Link>
+                  <p className="sf-drawer-secure">Payments aren’t live. This is a demo, and nothing was charged.</p>
+                </div>
+              ) : (
+                <>
+                  <Button variant="primary" size="lg" fullWidth onClick={onCheckout} disabled={busy || (monthly && !planReady)} loading={busy} className="sf-drawer-checkout">
+                    <span>
+                      {busy
+                        ? monthly
+                          ? 'Setting up your plan…'
+                          : free
+                            ? 'Placing your order…'
+                            : 'Taking you to secure checkout…'
+                        : monthly
+                          ? 'Start monthly plan'
+                          : mockDone
+                            ? 'Demo checkout'
+                            : free
+                              ? 'Place order (nothing to pay)'
+                              : 'Checkout'}
+                    </span>
+                    {!busy && <Icon name="lock" size={16} />}
+                  </Button>
 
-              {mockDone && (
-                <p className="sf-drawer-secure">Payments aren’t live. This is a demo checkout.</p>
+                  {/* Honest cues, no surprise steps — and no card step promised on
+                      an order with no payment in it. */}
+                  <p className="sf-drawer-secure">
+                    <Icon name="lock" size={13} />
+                    {monthly
+                      ? 'You’ll make an account, then pay securely by card'
+                      : free ? 'Nothing to pay, so no card step' : 'Secure, encrypted checkout with card and wallet payments'}
+                  </p>
+
+                  {!monthly && mockDone && (
+                    <p className="sf-drawer-secure">Payments aren’t live. This is a demo checkout.</p>
+                  )}
+                </>
               )}
             </div>
           </>

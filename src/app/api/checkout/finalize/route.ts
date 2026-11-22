@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { BonusUnavailable, CheckoutRejected, PaymentStartFailed, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, PaymentStartFailed, PlanPriceRefused, ShopPlanRefused, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
 import { reportError } from '@/lib/monitoring/report'
@@ -29,7 +29,10 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
-  if (!body?.subscription || !Array.isArray(body.subscription.lines)) {
+  // A quiz plan arrives as a subscription; a monthly shop basket arrives as its
+  // lines, and the server builds the subscription from them (`finalizeCheckout`).
+  const shopLines = body?.shop && Array.isArray(body.shop.lines) ? body.shop.lines : null
+  if (!shopLines && (!body?.subscription || !Array.isArray(body.subscription.lines))) {
     return NextResponse.json({ error: 'subscription is required' }, { status: 400 })
   }
 
@@ -62,6 +65,12 @@ export async function POST(req: Request) {
     }
     // The free bonus can't come with this plan any more. Nothing was stored or
     // charged; the page drops the gift and says why.
+    if (err instanceof PlanPriceRefused) {
+      return NextResponse.json({ error: err.message, code: 'price-changed' }, { status: 409 })
+    }
+    if (err instanceof ShopPlanRefused) {
+      return NextResponse.json({ error: err.message, reason: err.reason }, { status: 409 })
+    }
     if (err instanceof BonusUnavailable) {
       return NextResponse.json({ error: err.message, bonusChanged: true, bonus: null, reason: err.reason }, { status: 409 })
     }

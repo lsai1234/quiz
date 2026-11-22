@@ -1,5 +1,55 @@
 # Subscriptions — how it works & how it will plug into Shopify
 
+> **Current state, read first.** Plans are Stripe subscriptions now
+> (`lib/payments/stripe.ts`, `createSubscriptionSession`), priced in the
+> checkout session, with the member's plan stored by `lib/checkout/finalize.ts`.
+> Much of what follows (Shopify, Recharge, a four-month minimum, scratch
+> defaults) describes the earlier plan and is kept for its reasoning. The two
+> sections immediately below are current.
+
+## Shop plans: a basket, every month
+
+The shop sells plans too (`lib/checkout/shop-plan.ts`). In the basket,
+"How often?" offers **Once** or **Every month**; the product page's "Get it
+every month" adds the product and opens the basket set to monthly.
+
+| | A shop plan |
+|---|---|
+| Price | What the same basket costs bought once (`priceOneOffLines`), so the basket's own saving (the £50+ tier) carries over. No subscribe-&-save rate. |
+| Minimum | `minSubscriptionMonthly` a month, as a quiz plan. |
+| Term | `minSubscriptionMonths`, raised by any product that needs longer, as a quiz plan. |
+| Delivery | A monthly line under the free-delivery line (`recurringDeliveryOption`), as a quiz plan. |
+| Codes | A partner's code comes off the first month, as on a quiz plan; founder codes are for one-off orders. |
+| The hub | Opens with the plan and stays open while it runs (`lib/hub/access`), as for any plan, with member prices on top-ups (`lib/deals`). |
+| Unavailable products | Taken out and the member told (`defaultChangePolicy: 'remove'`): a shop plan has no quiz answers to swap against safely. Changeable in the hub. |
+| No | Quiz answers, the free gift (its terms exclude shop baskets), or a personal guide. |
+
+Checkout is the quiz plan's: `POST /api/checkout/finalize` with the basket's
+products and quantities (`shop.lines`), the same account gate, the same
+consent gate, then Stripe. The **server builds and prices the plan** from its
+own catalogue; the plan the browser sends alongside only fills the account
+gate and is discarded. The Stripe session carries `source: 'shop'` in its
+metadata. Refusals (`ShopPlanRefused`: empty, unavailable, under the minimum)
+answer 409 with the sentence to show; nothing is stored or charged.
+
+## Quiz and bundle plans are checked on the server
+
+A quiz or bundle plan is priced in the browser (`calculatePricing`), with its
+own rate, tier, intro offer and code. `assertPlanPrice` holds it to two
+floors before anything is stored or charged:
+
+- every line at our catalogue price, taken down by the **deepest** saving any
+  plan is offered (`levelSubscriptionDiscount`, `subscriptionDiscount`,
+  `subscriptionTiers`) and no further than the margin floor. A real plan is
+  always at or above it; a tampered one (a penny a month, a delivery gap
+  stretched to a year) is refused as `PlanPriceRefused`, 409 `price-changed`.
+- `minSubscriptionMonthly`, so no plan, and so no hub that comes with one, is
+  had for less.
+
+The intro rate and partner codes were already re-validated server-side
+(`claimIntroDiscount`, `redeemPartnerCode`), and the hub on its own is priced
+from settings on the server (`lib/hub-plan/server.ts`).
+
 This documents the subscription model the quiz builds today (running on mock
 data) and exactly how it will map onto Shopify when you connect it later.
 

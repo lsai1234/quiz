@@ -2510,13 +2510,20 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
   padding: 16px 16px 16px 18px;
+  border: 0;
   border-radius: var(--r-card);
   background: linear-gradient(100deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0) 62%), var(--surface-low);
   box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
+
+.sf-pdp-plan:disabled { opacity: 0.55; cursor: default; }
 
 @media (hover: hover) {
   .sf-pdp-plan:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
@@ -2741,27 +2748,87 @@
   border-top: 1px solid var(--line);
 }
 
-.sf-drawer-plan {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+/* Once or every month. A small panel in the drawer's scroll, under the lines:
+   the choice, then what "every month" means for this basket. The choice is a
+   pair of pressed/unpressed buttons; selected is white, like every choice in
+   the shop. */
+.sf-drawer-planbox {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
   border-radius: var(--r-lg);
-  background: linear-gradient(100deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0) 62%), var(--surface-low);
+  background: linear-gradient(100deg, rgba(0, 212, 255, 0.08), rgba(0, 212, 255, 0) 62%), var(--surface-low);
   box-shadow: inset 0 0 0 1px var(--line);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: var(--weight-medium);
-  line-height: 1.35;
-  text-decoration: none;
 }
 
-.sf-drawer-plan > svg:first-child { color: var(--accent); flex: none; }
-.sf-drawer-plan > svg:last-child { color: var(--text-dim); flex: none; margin-left: auto; }
+.sf-drawer-planhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.sf-drawer-planhead h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+}
+
+.sf-drawer-seg {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border-radius: var(--r-control);
+  background: var(--surface-mid);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sf-drawer-seg button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.sf-drawer-seg button[aria-pressed='true'] { background: var(--text); color: var(--bg); }
 
 @media (hover: hover) {
-  .sf-drawer-plan:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .sf-drawer-seg button[aria-pressed='false']:hover { color: var(--text); }
 }
+
+.sf-drawer-planlist { list-style: none; display: grid; gap: 8px; margin: 0; padding: 0; }
+
+.sf-drawer-planlist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.sf-drawer-planlist svg { flex: none; margin-top: 1px; color: var(--accent); }
+.storefront .sf-drawer-planlist a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.sf-drawer-planwhy { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+
+.sf-drawer-done { display: grid; gap: 10px; }
+
+.sf-drawer-done > p:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.sf-drawer-done svg { color: var(--accent); }
 
 .sf-drawer-note { margin: 0; font-size: 12.5px; color: var(--text-dim); }
 .sf-drawer-row { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; color: var(--text-dim); }

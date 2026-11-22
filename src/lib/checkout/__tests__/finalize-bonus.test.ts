@@ -25,12 +25,16 @@ import { DEFAULT_OFFER } from '@/lib/offer/settings'
 const STACK = ['chrgd-whey-protein', 'chrgd-creatine', 'chrgd-pre-workout', 'chrgd-bcaa', 'chrgd-clear-whey']
 const consent = { accepted: true, termsVersion: TERMS_VERSION, disclaimerVersion: DISCLAIMER_VERSION }
 
+/* A monthly the server will accept: the five at a 15% subscribe-and-save rate.
+   (A made-up figure under what we sell them for is refused as tampered.) */
+const MONTHLY = Math.round(STACK.reduce((s, id) => s + MOCK_CATALOGUE.find((x) => x.id === id)!.variants.find((x) => x.available)!.price, 0) * 0.85 * 100) / 100
+
 function plan(): MemberSubscription {
   return {
     id: `sub-${Math.random().toString(36).slice(2, 8)}`,
     status: 'active',
     customerEmail: '',
-    flatMonthly: 90,
+    flatMonthly: MONTHLY,
     dispatchDayOfMonth: 15,
     minMonths: 1,
     monthsActive: 0,

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getHubUser } from '@/lib/auth/session'
 import { kvGet, kvDelete } from '@/lib/db/kv'
-import { BonusUnavailable, CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, StockUnavailable } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, PlanPriceRefused, ShopPlanRefused, StockUnavailable } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
 import { getProvider } from '@/lib/auth/providers'
@@ -74,6 +74,19 @@ export async function GET(req: Request) {
       // Nothing saved or charged: back to the start, as for a sold-out plan.
       console.warn('[checkout/continue] free bonus refused:', err.message)
       return NextResponse.redirect(`${origin}/?checkout=gift-changed`)
+    }
+    if (err instanceof PlanPriceRefused) {
+      // Priced below what we sell it for, or under the minimum. Nothing saved
+      // or charged; back to the start rather than a hub with no plan in it.
+      console.warn('[checkout/continue] plan price refused:', err.message)
+      return NextResponse.redirect(`${origin}/?checkout=price-changed`)
+    }
+    if (err instanceof ShopPlanRefused) {
+      // A monthly shop basket that changed while they signed in (something
+      // sold out, or it fell under the minimum). Nothing saved or charged:
+      // back to the basket, which says what's wrong.
+      console.warn('[checkout/continue] shop plan refused:', err.message)
+      return NextResponse.redirect(`${origin}/?checkout=${err.reason === 'unavailable' ? 'sold-out' : 'plan-minimum'}#basket`)
     }
     console.error('[checkout/continue] finalize failed:', err)
   }
