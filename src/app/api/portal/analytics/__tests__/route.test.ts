@@ -12,15 +12,16 @@ import { recordEvent } from '@/lib/analytics/repo'
 
 /** The hub's Analytics page data: founders only, and every figure drawn from the same visits. */
 
+/** Visits to the quiz, which lives at /quiz since the shop took the main address. */
 async function seed(session: string, at: number, device: 'mobile' | 'desktop', events: { event: string; props?: Record<string, string | number> }[]) {
   for (const [i, e] of events.entries()) {
     const iso = new Date(at + i * 1000).toISOString()
-    await recordEvent({ event: e.event as never, props: e.props ?? {}, sessionId: session, path: '/', at: iso })
+    await recordEvent({ event: e.event as never, props: e.props ?? {}, sessionId: session, path: '/quiz', at: iso })
     await recordSessionEvent(
       session,
       patchFromEvent({
-        event: e.event, props: e.props ?? {}, path: '/', at: iso,
-        ctx: { land: '/' }, device: { device, os: device === 'mobile' ? 'iOS' : 'Windows', browser: 'Safari', bot: false },
+        event: e.event, props: e.props ?? {}, path: '/quiz', at: iso,
+        ctx: { land: '/quiz' }, device: { device, os: device === 'mobile' ? 'iOS' : 'Windows', browser: 'Safari', bot: false },
       }),
     )
   }

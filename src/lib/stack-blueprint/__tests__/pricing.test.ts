@@ -348,16 +348,17 @@ describe('consumption protocol & monthly quantities', () => {
     expect(line.shipEveryMonths).toBe(PRICING_CONFIG.maxDeliveryMonths)  // 300/30 = 10 → capped to 6
   })
 
-  it('reports the minimum subscription term from config and product overrides', () => {
+  // The Terms promise members they can cancel any time, so neither the
+  // shop-wide setting nor a product's own raises a minimum term.
+  it('has no minimum term, whatever the settings or the products say', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'] })
     const b = makeProduct({ id: 'b', stackSlots: ['health'], minSubscriptionMonths: 6 })
     const bp = makeBlueprint([
       { selectedProductId: 'a' },
       { selectedProductId: 'b', slotType: 'health' } as never,
     ])
-    // Config floor is 4; a product can only raise it.
-    expect(calculatePricing(bp, [a, b]).subscriptionMinMonths).toBe(6)
-    expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a' }]), [a]).subscriptionMinMonths).toBe(PRICING_CONFIG.minSubscriptionMonths)
+    expect(calculatePricing(bp, [a, b]).subscriptionMinMonths).toBe(1)
+    expect(calculatePricing(bp, [a, b], null, { ...PRICING_CONFIG, minSubscriptionMonths: 4 }).subscriptionMinMonths).toBe(1)
   })
 
   it('applies no intro discount by default (scratch-to-reveal not yet scratched)', () => {

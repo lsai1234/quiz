@@ -1,3 +1,4 @@
+import { billingDayOf } from '@/lib/recharge/billing-day'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
@@ -66,14 +67,17 @@ function variantLabel(v: { flavour: string | null; size: string | null; title: s
   return parts.length > 0 ? parts.join(' · ') : v.title
 }
 
-/** The minimum term for these products: the setting, raised by any that need longer. */
-export function shopPlanMinMonths(products: Pick<CatalogueProduct, 'minSubscriptionMonths'>[], config: PricingConfig = getPricingConfig()): number {
-  return Math.max(1, config.minSubscriptionMonths, ...products.map((p) => p.minSubscriptionMonths ?? 0))
+/**
+ * The minimum term for a shop plan: none. Members are promised they can cancel
+ * any time (`calculatePricing` says why the settings no longer raise it).
+ */
+export function shopPlanMinMonths(): number {
+  return 1
 }
 
 /** How the term reads, wherever a shop plan is offered. */
-export function shopPlanTermLine(minMonths: number): string {
-  return minMonths > 1 ? `Minimum ${minMonths} months, then cancel any time` : 'Cancel any time'
+export function shopPlanTermLine(): string {
+  return 'Cancel any time'
 }
 
 export function buildShopPlan(
@@ -149,14 +153,15 @@ export function buildShopPlan(
     allowSubstitution: false,
   }))
 
-  const minMonths = shopPlanMinMonths(resolved.map((r) => r.product), config)
+  const minMonths = shopPlanMinMonths()
   const subscription: MemberSubscription = {
     id: `shop-${now.getTime()}`,
     status: 'active',
     customerEmail: '',
     flatMonthly: monthly,
     subscriptionDiscountRate: 0,
-    dispatchDayOfMonth: 15,
+    // The day it starts is the day Stripe bills it, and so the day each box goes (`billing-day`).
+    dispatchDayOfMonth: billingDayOf(now),
     minMonths,
     introDiscountRate: 0,
     firstMonth: monthly,

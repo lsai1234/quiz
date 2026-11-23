@@ -75,12 +75,12 @@ describe('a shop basket bought every month', () => {
     expect(plan.ok && plan.subscription.lines.every((l) => l.allowSubstitution === false)).toBe(true)
   })
 
-  it('uses the configured minimum term, raised by any product that needs longer', () => {
-    expect(shopPlanMinMonths([{}, {}], { ...config, minSubscriptionMonths: 1 })).toBe(1)
-    expect(shopPlanMinMonths([{ minSubscriptionMonths: 3 }, {}], { ...config, minSubscriptionMonths: 1 })).toBe(3)
-    expect(shopPlanMinMonths([{}], { ...config, minSubscriptionMonths: 2 })).toBe(2)
-    expect(shopPlanTermLine(1)).toBe('Cancel any time')
-    expect(shopPlanTermLine(3)).toBe('Minimum 3 months, then cancel any time')
+  // Members are promised they can cancel any time; no setting adds a term.
+  it('has no minimum term, whatever the products', () => {
+    expect(shopPlanMinMonths()).toBe(1)
+    expect(shopPlanTermLine()).toBe('Cancel any time')
+    const plan = buildShopPlan([lineFor(sellable[0])], MOCK_CATALOGUE.map((p) => ({ ...p, minSubscriptionMonths: 6 })), { ...config, minSubscriptionMonths: 3 })
+    expect(plan.ok && plan.subscription.minMonths).toBe(1)
   })
 
   it('adds a monthly delivery line under the free-delivery line, and none over it', () => {

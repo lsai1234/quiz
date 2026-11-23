@@ -2056,12 +2056,12 @@ export function calculatePricing(
   subscriptionItemsOneOffTotal = round(subscriptionItemsOneOffTotal)
   const subscriptionSaving = round(subscriptionItemsOneOffTotal - subscriptionTotal)
 
-  // Minimum commitment: the config floor, raised by any product that requires a
-  // longer term (set in the portal).
-  const subscriptionMinMonths = subPlan.reduce(
-    (min, line) => Math.max(min, line.product.minSubscriptionMonths ?? 0),
-    config.minSubscriptionMonths,
-  )
+  // No minimum term, for any plan. The Terms, the hub, the confirmation and
+  // the emails all promise members they can cancel any time, and this used to
+  // raise a term from the shop-wide setting or any product's own (both set in
+  // the Founders Hub) without any of them knowing. Neither setting raises it any
+  // more; the field stays on the type so older plans and orders still read.
+  const subscriptionMinMonths = 1
 
   // Intro offer: a discount on the first month; the rest bill at the flat total.
   // With scratch-to-reveal enabled nothing is applied until the member reveals a

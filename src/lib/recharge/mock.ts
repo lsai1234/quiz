@@ -7,6 +7,7 @@
  * store calls Recharge's API here instead; the shapes are deliberately aligned.
  */
 
+import { billingDayOf, nextPlanDate } from './billing-day'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -70,6 +71,13 @@ export function buildMemberSubscription(
     changePolicyByProductId?: Record<string, ChangePolicy>
     /** Hard dietary/stimulant exclusions, snapshotted at the point of sale. */
     safetyConstraints?: SafetyConstraints
+    /**
+     * The clock the plan is made by. A plan's start, its day and every date the
+     * calendar derives come from it, so a test with a fixed date passes the same
+     * date here, or the plan starts on the real day and the test's calendar
+     * looks at months before it existed.
+     */
+    now?: Date
   } = {},
 ): MemberSubscription {
   const defaultPolicy: ChangePolicy = opts.defaultChangePolicy ?? 'auto-swap'
@@ -94,7 +102,7 @@ export function buildMemberSubscription(
   const pricing = calculatePricing(blueprint, catalogue, answers, getPricingConfig(), opts)
 
   const monthsActive = opts.monthsActive ?? 0
-  const startedAt = new Date()
+  const startedAt = new Date(opts.now ?? new Date())
   startedAt.setMonth(startedAt.getMonth() - monthsActive)
 
   const lines: MemberSubscriptionLine[] = plan.map((l, i) => {
@@ -130,7 +138,8 @@ export function buildMemberSubscription(
     customerEmail: email,
     flatMonthly: pricing.subscriptionTotal,
     subscriptionDiscountRate: pricing.subscriptionDiscountPct / 100,
-    dispatchDayOfMonth: opts.dispatchDayOfMonth ?? 15,
+    // The day it started, which is the day Stripe bills it (`billing-day`).
+    dispatchDayOfMonth: opts.dispatchDayOfMonth ?? billingDayOf(startedAt),
     minMonths: pricing.subscriptionMinMonths,
     introDiscountRate: pricing.subscriptionIntroDiscountPct / 100,
     firstMonth: pricing.subscriptionFirstMonth,
@@ -148,8 +157,10 @@ export function createMockSubscription(
   catalogue: CatalogueProduct[],
   email: string,
   answers?: QuizAnswers | null,
+  /** The clock it's made by: tests pass theirs so the plan and the schedule agree. */
+  now: Date = new Date(),
 ): MemberSubscription {
-  return buildMemberSubscription(MOCK_BLUEPRINT, catalogue, email, answers, { monthsActive: 2 })
+  return buildMemberSubscription(MOCK_BLUEPRINT, catalogue, email, answers, { monthsActive: 2, now })
 }
 
 /** Deliveries shipped after `months` for a line shipping every `everyMonths` (first at signup). */
@@ -159,12 +170,14 @@ export function deliveriesInMonths(months: number, everyMonths: number): number 
 
 // ─── Dates ────────────────────────────────────────────────────────────────────
 
-/** The next calendar date that lands on `dayOfMonth` (capped at 28). */
+/**
+ * The next date the plan's day falls on: the day itself, or a shorter month's
+ * last day for a plan started on the 29th–31st, as Stripe bills it
+ * (`billing-day`). It used to stop at the 28th, which was right for the days the
+ * hub offered and wrong for a plan whose day is the day it was bought.
+ */
 export function nextDispatchDate(dayOfMonth: number, from: Date = new Date()): Date {
-  const day = Math.min(Math.max(dayOfMonth, 1), 28)
-  const target = new Date(from.getFullYear(), from.getMonth(), day)
-  if (target <= from) target.setMonth(target.getMonth() + 1)
-  return target
+  return nextPlanDate(dayOfMonth, from)
 }
 
 export function formatDispatchDate(date: Date): string {

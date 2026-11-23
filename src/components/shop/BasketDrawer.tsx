@@ -297,7 +297,7 @@ export function BasketDrawer({
                         answers to choose a safe swap from, so it is said here,
                         before anyone subscribes, and changeable in the hub. */}
                     <li><Icon name="swap" size={15} />If a product becomes unavailable, we take it off your plan and tell you</li>
-                    <li><Icon name="check" size={15} /><span>{shopPlanTermLine(shopPlan.minMonths)}. <Link href="/legal/terms">Plan terms</Link></span></li>
+                    <li><Icon name="check" size={15} /><span>{shopPlanTermLine()}. <Link href="/legal/terms">Plan terms</Link></span></li>
                   </ul>
                 ) : (
                   <p className="sf-drawer-planwhy">Every month is the same basket at the same price, delivered monthly, with the member hub.</p>

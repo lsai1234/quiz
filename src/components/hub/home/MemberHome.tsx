@@ -6,6 +6,8 @@ import { HUB_COPY as C } from '@/lib/hub/copy'
 import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
 import type { HubHome } from '@/lib/hub/home-types'
 import { DealsCard } from '../DealsCard'
+import { FeedbackLink } from '../feedback/FeedbackPage'
+import { HubLoadProblem } from '../HubLoadProblem'
 import { LinkOrder, OrdersSection } from './AccountBits'
 import { HubHero } from './HubHero'
 import { JoinOfferCard, MembershipCard } from './MembershipCard'
@@ -35,13 +37,18 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   const [failed, setFailed] = useState(false)
 
   const load = useCallback(() => {
-    if (typeof fetch !== 'function') return
-    fetch('/api/hub/home')
+    if (typeof fetch !== 'function') return Promise.resolve()
+    return fetch('/api/hub/home')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
-      .then((h: HubHome) => setHome(h))
+      .then((h: HubHome) => {
+        setHome(h)
+        setFailed(false)
+      })
       .catch(() => setFailed(true))
   }, [])
-  useEffect(() => load(), [load])
+  useEffect(() => {
+    void load()
+  }, [load])
 
   // Just joined the hub on its own (`?joined=1`, or `?welcome=1` after the quiz): say so once.
   const [welcome, setWelcome] = useState(false)
@@ -56,7 +63,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
   if (failed && !home) {
     return (
       <div className="mx-auto max-w-2xl" style={col('var(--stack)')}>
-        <Note tone="critical">We couldn’t load your hub. Pull to refresh, or try again in a moment.</Note>
+        <HubLoadProblem what="hub" onRetry={load} />
         {plan}
         {data}
       </div>
@@ -93,6 +100,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
         {none}
         {home.joinOffer && <JoinOfferCard monthly={home.joinOffer.monthly} />}
         <LinkOrder onLinked={load} />
+        <FeedbackLink />
         {data}
       </div>
     )
@@ -208,6 +216,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
                 <div style={{ paddingTop: 'var(--space-3)' }}>{data}</div>
               </Disclosure>
             )}
+            <FeedbackLink />
           </section>
         </Rise>
       </div>

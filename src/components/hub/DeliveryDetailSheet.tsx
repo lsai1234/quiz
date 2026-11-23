@@ -18,7 +18,11 @@ interface Props {
   catalogue: CatalogueProduct[]
   onSkip: () => void
   onUnskip: () => void
-  onReschedule: (date: Date) => void
+  /**
+   * Move this box. Left out for a plan Stripe bills: its boxes are raised by
+   * Stripe's invoice on the plan's day, so a box moved here would not move.
+   */
+  onReschedule?: (date: Date) => void
   /** Add a one-off of a product to this box only. */
   onAddItem: (product: CatalogueProduct) => void
   /** Add a product to the recurring plan (every delivery). */
@@ -141,6 +145,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
         </div>
 
         {/* Move this delivery */}
+        {onReschedule && (
         <div>
           <Eyebrow className="mb-2">Move this delivery</Eyebrow>
           <div className="flex gap-2 mb-2">
@@ -171,17 +176,24 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
             />
           </label>
         </div>
+        )}
 
         {/* Skip / unskip */}
         {skipped ? (
           <Button variant="primary" icon="refresh" onClick={onUnskip}>Restore this delivery</Button>
         ) : (
           <div>
-            <Button variant="destructive" icon="skip-forward" onClick={onSkip}>
+            {/* Secondary, not destructive: skipping is a member's choice about
+                their own plan, not an error (DESIGN.md). */}
+            <Button variant="secondary" icon="skip-forward" onClick={onSkip}>
               Skip this box{credit > 0 ? ` · credit ${formatGBP(credit)}` : ''}
             </Button>
+            {/* What actually happens, as the Terms say it: the payment is still
+                taken, and the box's value comes off the next one. */}
             <p className="text-[11px] text-[var(--ink-3)] mt-2 text-center leading-relaxed">
-              You won’t be charged for it, and it won’t use up a month — your plan simply moves back a month.
+              {credit > 0
+                ? `Nothing ships that month, and the box’s value, ${formatGBP(credit)}, is credited against your next payment.`
+                : 'Nothing ships that month. Nothing was due in this box, so there’s nothing to credit.'}
             </p>
           </div>
         )}

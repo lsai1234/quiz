@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect } from 'react'
 import { buttonSurface } from '@/components/system'
-import { HubLogin } from '@/components/hub/HubLogin'
+import { HubSignedOut } from '@/components/hub/HubSignedOut'
 import { HubShell } from '@/components/hub/HubShell'
 import { HubSkeleton } from '@/components/hub/HubSkeleton'
 import { useHubStore } from '@/lib/hub-store'
@@ -14,10 +14,7 @@ import { TrainerChat } from './TrainerChat'
 export function TrainerPage() {
   const session = useHubStore((s) => s.session)
   const hydrated = useHubStore((s) => s.hydrated)
-  const providers = useHubStore((s) => s.providers)
-  const canResetPassword = useHubStore((s) => s.canResetPassword)
   const hydrate = useHubStore((s) => s.hydrate)
-  const authenticate = useHubStore((s) => s.authenticate)
   const logout = useHubStore((s) => s.logout)
 
   useEffect(() => {
@@ -31,7 +28,7 @@ export function TrainerPage() {
       </HubShell>
     )
   }
-  if (!session) return <HubLogin onAuthenticate={authenticate} providers={providers} canResetPassword={canResetPassword} />
+  if (!session) return <HubSignedOut />
 
   const back = buttonSurface('ghost', 'sm')
   return (

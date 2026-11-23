@@ -17,6 +17,7 @@
 import { normaliseGuideSeed } from '@/lib/guide/build'
 import type { CheckoutPayload } from './types'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import { billingDayOf } from '@/lib/recharge/billing-day'
 import { getSubscription, saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
@@ -423,10 +424,16 @@ export async function finalizeCheckout(
 
   // 4. Store the member's bundle + quiz answers on their account, banking the
   //    first-month discount they revealed as we go.
+  const startedAt = new Date()
   const subscription = claimIntroDiscount(
     {
       ...payload.subscription,
       customerEmail: email || payload.subscription.customerEmail,
+      // It starts now, by our clock, and Stripe bills it on this day of the
+      // month from here on (`billing-day`). The browser's copy said the 15th
+      // whatever the date; the webhook confirms the day from Stripe's anchor.
+      startedAt: startedAt.toISOString(),
+      dispatchDayOfMonth: billingDayOf(startedAt),
       partnerCode: redemption?.ok ? redemption.code.code : null,
       // Snapshot the hard dietary/stimulant exclusions now, so a substitution
       // months from now is judged against what they told us at the point of sale

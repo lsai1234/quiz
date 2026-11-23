@@ -66,8 +66,12 @@ describe('nextDispatchDate', () => {
     expect(nextDispatchDate(5, from).getMonth()).toBe(from.getMonth() + 1) // already passed → next month
   })
 
-  it('caps the day at 28', () => {
-    expect(nextDispatchDate(31, new Date('2026-06-01')).getDate()).toBe(28)
+  // A plan's day is the day it was bought, so it can be the 29th–31st; in a
+  // shorter month it falls on the last day, as Stripe bills it (`billing-day`).
+  it('falls on a shorter month’s last day', () => {
+    expect(nextDispatchDate(31, new Date('2026-06-01')).getDate()).toBe(30)
+    expect(nextDispatchDate(31, new Date('2026-02-01')).getDate()).toBe(28)
+    expect(nextDispatchDate(28, new Date('2026-06-01')).getDate()).toBe(28)
   })
 })
 

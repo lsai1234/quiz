@@ -15,17 +15,55 @@ import type { FeedbackCheckIn } from '@/lib/feedback'
 import { getEngine, now } from './engine'
 
 export async function getSubscription(userId: string): Promise<MemberSubscription | null> {
+  return (await getStoredPlan(userId))?.subscription ?? null
+}
+
+/**
+ * A stored plan and its version: a short fingerprint of the document as stored,
+ * which changes whenever anything in the plan does.
+ *
+ * The version is how the hub's save (`PUT /api/hub/subscription`) tells a change
+ * made to the plan the member is looking at from one made to a plan that has
+ * since moved on, in another tab, on another device, or by a renewal. Without
+ * it the later save wins and quietly undoes the earlier one.
+ *
+ * A fingerprint of the content rather than the `updated_at` time, so two saves
+ * in the same millisecond still differ, and no column is added for it.
+ *
+ * Only a document that is a plan counts. `saveQuiz` leaves `{}` in the row
+ * before anybody has paid, and that used to read back as a plan with no status,
+ * which the hub's access rule (`hubAccessFrom`: any plan not cancelled) took
+ * for an active subscriber.
+ */
+export async function getStoredPlan(userId: string): Promise<{ subscription: MemberSubscription; version: string } | null> {
   // A sample member's plan is sample data, never a row here (`lib/samples`).
   const samples = await import('@/lib/samples/registry')
-  if (await samples.isSampleUserId(userId)) return samples.getSampleSubscription(userId)
+  if (await samples.isSampleUserId(userId)) {
+    const sub = await samples.getSampleSubscription(userId)
+    return sub ? { subscription: sub, version: planVersion(JSON.stringify(sub)) } : null
+  }
   const db = await getEngine()
   const row = await db.get<{ data: string }>('SELECT data FROM subscriptions WHERE user_id = ?', [userId])
   if (!row) return null
+  let doc: unknown
   try {
-    return JSON.parse(row.data) as MemberSubscription
+    doc = JSON.parse(row.data)
   } catch {
     return null
   }
+  return isPlanDocument(doc) ? { subscription: doc, version: planVersion(row.data) } : null
+}
+
+/** A plan has an id and lines; the placeholder `saveQuiz` writes has neither. */
+export function isPlanDocument(doc: unknown): doc is MemberSubscription {
+  if (!doc || typeof doc !== 'object') return false
+  const d = doc as { id?: unknown; lines?: unknown }
+  return typeof d.id === 'string' && d.id.length > 0 && Array.isArray(d.lines)
+}
+
+/** The version of a stored plan document: see `getStoredPlan`. */
+export function planVersion(stored: string): string {
+  return crypto.createHash('sha256').update(stored).digest('base64url').slice(0, 16)
 }
 
 /**
@@ -35,9 +73,13 @@ export async function getSubscription(userId: string): Promise<MemberSubscriptio
  * created by `setQuiz` *before* anybody pays — at which point the world is
  * whatever the quiz was taken under — and only becomes real money later.
  */
-export async function saveSubscription(userId: string, subscription: MemberSubscription): Promise<void> {
+export async function saveSubscription(userId: string, subscription: MemberSubscription): Promise<string> {
+  const stored = JSON.stringify(subscription)
   const samples = await import('@/lib/samples/registry')
-  if (await samples.isSampleUserId(userId)) return samples.setSampleSubscription(userId, subscription)
+  if (await samples.isSampleUserId(userId)) {
+    await samples.setSampleSubscription(userId, subscription)
+    return planVersion(stored)
+  }
   const db = await getEngine()
   await db.run(
     `INSERT INTO subscriptions (user_id, data, mode, updated_at) VALUES (?, ?, ?, ?)
@@ -46,8 +88,10 @@ export async function saveSubscription(userId: string, subscription: MemberSubsc
        mode = CASE WHEN subscriptions.mode = 'live' OR excluded.mode = 'live' THEN 'live'
                    ELSE COALESCE(subscriptions.mode, excluded.mode) END,
        updated_at = excluded.updated_at`,
-    [userId, JSON.stringify(subscription), currentStripeWorld(), now()],
+    [userId, stored, currentStripeWorld(), now()],
   )
+  // The new version, for a caller that hands it back to the hub.
+  return planVersion(stored)
 }
 
 /** The quiz answers + stack context the member subscribed with (for the hub). */

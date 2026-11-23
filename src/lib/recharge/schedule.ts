@@ -14,6 +14,7 @@ import { effectiveNextDispatch } from './mock'
 import { getPricingConfig, discountWithFloor, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { shipsAtCycle } from './clock'
+import { dayInMonth } from './billing-day'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -111,9 +112,8 @@ export function removedLinesAtCycle(sub: MemberSubscription, cycle: number): str
   return (id != null ? sub.deliveryOverrides?.[id]?.removedLineIds : undefined) ?? []
 }
 
-function dispatchDateInMonth(day: number, year: number, monthIndex0: number): Date {
-  return new Date(year, monthIndex0, Math.min(Math.max(Math.round(day), 1), 28))
-}
+/** The plan's day in a month, or that month's last day (`billing-day`). */
+const dispatchDateInMonth = dayInMonth
 
 /** Full-price one-off unit price for a product added to a box. */
 export function oneOffUnitPrice(product: CatalogueProduct, config = getPricingConfig()): number {

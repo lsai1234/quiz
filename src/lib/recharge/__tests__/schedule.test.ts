@@ -15,7 +15,8 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 
 const NOW = new Date('2026-06-27T12:00:00Z')
-const sub = () => createMockSubscription(MOCK_CATALOGUE, 'test@example.com')
+// Made by the same clock as the schedule, so its months are the plan's months.
+const sub = () => createMockSubscription(MOCK_CATALOGUE, 'test@example.com', null, NOW)
 const schedule = (s = sub()) => buildDeliverySchedule(s, MOCK_CATALOGUE, 6, NOW)
 
 const addable = (s = sub()) =>

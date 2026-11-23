@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { getSubscription, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
+import { getStoredPlan, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
 import { normaliseIncomingSubscription } from '@/lib/recharge/reprice'
@@ -13,7 +13,7 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/hub/subscription → { subscription, feedback, quiz, seeded }
+ * GET /api/hub/subscription → { subscription, version, feedback, quiz, seeded }
  *
  * The member's stored subscription + check-in history. `subscription` is **null**
  * for an account that has never subscribed, and the hub renders `NoSubscription`
@@ -25,12 +25,18 @@ export const dynamic = 'force-dynamic'
  * were invented, stored, and manageable. The seed is now confined to deployments
  * that cannot take money — see `seedsDemoSubscription`, which is also what keeps
  * `npm run dev` demoable with no credentials.
+ *
+ * `version` is the stored plan's fingerprint (`getStoredPlan`). The hub sends it
+ * back with every change, so a change made to a plan that has since moved on is
+ * caught rather than saved over the newer one.
  */
 export async function GET() {
   const user = await getHubUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
 
-  let subscription = await getSubscription(user.id)
+  const stored = await getStoredPlan(user.id)
+  let subscription = stored?.subscription ?? null
+  let version = stored?.version ?? null
   let seeded = false
   // Never over someone who joined the hub on its own: a demo box plan would contradict what they bought.
   const { getHubPlan } = await import('@/lib/hub-plan/store')
@@ -39,17 +45,18 @@ export async function GET() {
   if (!subscription && seedsDemoSubscription() && !isSampleEmail(user.email) && !(await getHubPlan(user.id))) {
     const { products } = await getResolvedCatalogue()
     subscription = createMockSubscription(products, user.email ?? '')
-    await saveSubscription(user.id, subscription)
+    version = await saveSubscription(user.id, subscription)
     seeded = true
   }
 
   const [feedback, quiz] = await Promise.all([listFeedback(user.id), getQuiz(user.id)])
-  return NextResponse.json({ subscription: subscription ?? null, feedback, quiz, seeded })
+  return NextResponse.json({ subscription, version, feedback, quiz, seeded })
 }
 
 /**
  * PUT /api/hub/subscription
- * Body: { subscription: MemberSubscription } → { ok } | { error }
+ * Body: { subscription: MemberSubscription, version?: string }
+ *   → { ok, version, subscription } | { error, code? }
  *
  * Persists the latest subscription state after a hub mutation, AND tells Stripe.
  *
@@ -66,12 +73,28 @@ export async function GET() {
  *
  * The Stripe ids are never taken from the request. A client that could rewrite
  * `stripeSubscriptionId` could point our billing calls at somebody else's plan.
+ *
+ * It changes a plan; it never creates one. Plans are made by checkout (and, where
+ * no money can be taken, the demo seed). This route used to save whatever it was
+ * sent into an account that had no plan, and since any plan that isn't cancelled
+ * opens the whole hub (`hubAccessFrom`), anyone signed in could give themselves a
+ * subscription at £0 with one request. An account with no plan is now a 409.
+ *
+ * `version` is the fingerprint the hub was given with the plan it is showing.
+ * When it no longer matches what is stored, the plan has moved on since (another
+ * tab, another device, a renewal), and saving this document would quietly undo
+ * that. The answer is a 409 with the current plan and its version, so the hub can
+ * make the member's change again on top of it (`hub-store`). Optional, so an
+ * older client still saves as it did.
+ *
+ * A save answers with the plan as stored (re-priced here, see below) and its new
+ * version, which the hub carries into its next change.
  */
 export async function PUT(req: Request) {
   const user = await getHubUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
 
-  let body: { subscription?: unknown }
+  let body: { subscription?: unknown; version?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -83,11 +106,21 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'subscription must be a MemberSubscription' }, { status: 400 })
   }
 
-  const previous = await getSubscription(user.id)
-  if (!previous) {
-    // Nothing to diff against and no Stripe link to keep in step.
-    await saveSubscription(user.id, incoming)
-    return NextResponse.json({ ok: true })
+  const stored = await getStoredPlan(user.id)
+  if (!stored) {
+    return NextResponse.json({ error: 'There’s no plan on this account to change.', code: 'no-plan' }, { status: 409 })
+  }
+  const previous = stored.subscription
+  if (typeof body.version === 'string' && body.version !== stored.version) {
+    return NextResponse.json(
+      {
+        error: 'Your plan changed somewhere else, so we’ve loaded the latest.',
+        code: 'stale',
+        subscription: previous,
+        version: stored.version,
+      },
+      { status: 409 },
+    )
   }
 
   // Server-held fields the browser has no business changing.
@@ -98,6 +131,9 @@ export async function PUT(req: Request) {
     shippingAddress: previous.shippingAddress,
     monthsActive: previous.monthsActive,
     billingStatus: previous.billingStatus,
+    // Stripe bills a linked plan on its own day and each box is raised by that
+    // charge, so the day is Stripe's (`billing-day`), not the browser's.
+    dispatchDayOfMonth: previous.stripeSubscriptionId ? previous.dispatchDayOfMonth : incoming.dispatchDayOfMonth,
   }
 
   await syncPortalRuntime()
@@ -126,10 +162,10 @@ export async function PUT(req: Request) {
     console.error(`[hub] subscription cancelled locally but NOT in Stripe for ${user.id}:`, sync.cancelError)
   }
 
-  await saveSubscription(user.id, subscription)
+  const version = await saveSubscription(user.id, subscription)
   await creditNewlySkippedBoxes(user.id, previous, subscription)
   await creditNewlySkippedLines(user.id, previous, subscription)
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, version, subscription })
 }
 
 /**

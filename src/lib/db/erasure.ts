@@ -60,6 +60,8 @@ export interface AccountExport {
   hubMembership: unknown
   /** Videos they sent (form checks): what each is, and where to download it while it's kept. */
   videos: unknown[]
+  /** What they wrote on the hub's feedback page. */
+  memberFeedback: unknown[]
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -168,6 +170,10 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
         quizAnswers: start?.seed ?? null,
       }
     })(),
+    memberFeedback: (await (await import('@/lib/member-feedback/store')).memberFeedbackFor(userId)).map((f) => ({
+      sentAt: f.createdAt,
+      text: f.text,
+    })),
     videos: (await (await import('@/lib/media/store')).mediaOwnedBy(userId)).map((m) => ({
       kind: m.kind,
       sentAt: m.createdAt,
@@ -262,6 +268,10 @@ export async function deleteAccount(userId: string): Promise<DeletionResult> {
   }
   const { kvDelete } = await import('@/lib/db/kv')
   await kvDelete(`hub-start:${userId}`)
+
+  // What they wrote on the hub's feedback page.
+  const { deleteMemberFeedbackFor } = await import('@/lib/member-feedback/store')
+  if ((await deleteMemberFeedbackFor(userId)) > 0) deleted.push('feedback they sent us')
 
   // Emails keep their audit trail (that a receipt was sent, and when) but lose
   // the recipient and the rendered body.

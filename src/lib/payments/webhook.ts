@@ -22,7 +22,7 @@ import { getOrder, getOrderByPaymentIntent } from '@/lib/orders/repo'
 import { queuePaymentFailedEmail } from '@/lib/notify/billing'
 import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
 import { advanceCycle } from '@/lib/recharge/clock'
-import { defaultCardFor } from './stripe'
+import { subscriptionFactsFor } from './stripe'
 import { linkStripeSubscription, userIdForStripeSubscription } from './subscription-link'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import { reportError } from '@/lib/monitoring/report'
@@ -151,9 +151,11 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
           const address = addressFromSession(session)
           if (address) sub.shippingAddress = address
           // The card they actually paid with, so the hub can stop claiming
-          // everyone is on a Visa ending 4242.
-          const card = await defaultCardFor(stripeSubscriptionId)
-          if (card) sub.paymentMethod = card
+          // everyone is on a Visa ending 4242, and the day Stripe bills on,
+          // which is the day every renewal box is raised (`billing-day`).
+          const facts = await subscriptionFactsFor(stripeSubscriptionId)
+          if (facts.card) sub.paymentMethod = facts.card
+          if (facts.billingDay) sub.dispatchDayOfMonth = facts.billingDay
           await saveSubscription(userId, sub)
 
           // Confirm the plan now that it is linked, active and has an address —

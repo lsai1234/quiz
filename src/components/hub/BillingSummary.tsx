@@ -3,7 +3,7 @@
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { Card } from '@/components/system'
 import { Eyebrow } from './Eyebrow'
-import { ordinalSuffix } from '@/lib/ui/tokens'
+import { billingDayPhrase } from '@/lib/recharge/billing-day'
 import { MoneyRow } from './MoneyRow'
 import { nextChargeBreakdown } from '@/lib/recharge/schedule'
 import { cancelSettlement } from '@/lib/recharge/mock'
@@ -45,7 +45,7 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
         </span>
       </div>
       <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' }}>
-        One flat amount on the {sub.dispatchDayOfMonth}{ordinalSuffix(sub.dispatchDayOfMonth)} each month — it covers your whole stack,
+        One flat amount on {billingDayPhrase(sub.dispatchDayOfMonth)} of each month, the day your plan started. It covers your whole stack,
         spread evenly so you never get a lumpy bill, however often each item ships.
         {charge.delivery > 0.01 && ' Postage is billed alongside it, as its own line.'}
       </p>
@@ -73,7 +73,8 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
 
         {charge.skippedUpcoming > 0 && (
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-positive)', marginTop: 'var(--space-2)' }}>
-            {charge.skippedUpcoming} upcoming {charge.skippedUpcoming === 1 ? 'box is' : 'boxes are'} skipped — no charge those cycles.
+            {/* The Terms: a skipped box is credited against the next payment, not left uncharged. */}
+            {charge.skippedUpcoming} upcoming {charge.skippedUpcoming === 1 ? 'box is' : 'boxes are'} skipped. The value of each is credited against your next payment.
           </p>
         )}
       </Card>

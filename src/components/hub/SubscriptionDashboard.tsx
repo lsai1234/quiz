@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { ordinalSuffix, tint } from '@/lib/ui/tokens'
+import { billingDayPhrase } from '@/lib/recharge/billing-day'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice, skipCredit } from '@/lib/recharge/schedule'
@@ -67,6 +68,8 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
   const [portalError, setPortalError] = useState<string | null>(null)
   const [openingPortal, setOpeningPortal] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const billingRef = useRef<HTMLDivElement>(null)
+  const billingButtonRef = useRef<HTMLButtonElement>(null)
   const reduced = useReducedMotion()
 
   /** The catalogue entry behind each line, for photos. */
@@ -143,8 +146,20 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     const params = new URLSearchParams(window.location.search)
     const changeLineId = params.get('change')
     const addGroup = params.get('add')
-    if (!changeLineId && !addGroup) return
+    const billing = params.get('billing') === '1'
+    if (!changeLineId && !addGroup && !billing) return
     deepLinkHandled.current = true
+
+    // The payment-failed email's link: open the settings at the billing card,
+    // with the button that opens Stripe's portal focused. It used to land on
+    // the top of the hub and leave the member to find it.
+    if (billing) {
+      setShowSettings(true)
+      requestAnimationFrame(() => {
+        billingRef.current?.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' })
+        billingButtonRef.current?.focus({ preventScroll: true })
+      })
+    }
 
     if (changeLineId) {
       // The line may have gone since the email — a later removal, or a second
@@ -160,8 +175,9 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     const url = new URL(window.location.href)
     url.searchParams.delete('change')
     url.searchParams.delete('add')
+    url.searchParams.delete('billing')
     window.history.replaceState({}, '', `${url.pathname}${url.search}`)
-  }, [sub])
+  }, [sub, reduced])
 
   // Subtle premium entrance — the one piece of hub motion that was already
   // right. It just never asked whether the visitor wanted any.
@@ -236,6 +252,20 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
         </Card>
       ) : (
         <>
+          {/* A payment that didn't go through. The email about it links here,
+              and the hub used to say nothing about it at all. */}
+          {sub.billingStatus === 'past_due' && (
+            <div className="mb-5" data-billing-past-due>
+              <Note tone="attention" icon="alert-triangle">
+                Your last payment didn’t go through. Stripe will try again over the next few days, or you can update your card now.
+              </Note>
+              <Button variant="primary" size="sm" icon="credit-card" className="mt-3" loading={openingPortal} onClick={openBillingPortal}>
+                Update your card
+              </Button>
+              {portalError && !showSettings && <Note icon="alert-triangle" tone="attention" live="assertive" className="mt-3">{portalError}</Note>}
+            </div>
+          )}
+
           {/* Hero — next box */}
           <div
             className="rounded-3xl p-5 mb-5 relative overflow-hidden"
@@ -406,32 +436,43 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               <div className="space-y-4 pt-1">
                 {/* Regular ship day */}
                 <Card>
-                  <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Regular ship day</p>
-                  <p className="text-xs text-[var(--ink-3)] mb-3">Boxes default to the {sub.dispatchDayOfMonth}th. Move any single box from the calendar.</p>
-                  {/* `ariaLabel` per option: the visible label is a bare number,
-                      and "17" on its own is not something anyone can act on. */}
-                  <Segmented
-                    label="Regular ship day"
-                    value={sub.dispatchDayOfMonth}
-                    onChange={(day) => {
-                      if (day === sub.dispatchDayOfMonth) return
-                      setPending({
-                        title: 'Change your regular ship day',
-                        subtitle: `The ${sub.dispatchDayOfMonth}${ordinalSuffix(sub.dispatchDayOfMonth)} → the ${day}${ordinalSuffix(day)} of the month`,
-                        monthlyBefore: sub.flatMonthly,
-                        monthlyAfter: sub.flatMonthly,
-                        effectiveFrom: nextDispatchDate(day).toISOString(),
-                        note: 'This moves every future box, not just the next one. Your payment date follows your ship day, and the amount is unchanged.',
-                        confirmLabel: 'Change ship day',
-                        onConfirm: () => setDispatchDay(day),
-                      })
-                    }}
-                    options={DAY_OPTIONS.map((day) => ({
-                      value: day,
-                      label: day,
-                      ariaLabel: `${day}${ordinalSuffix(day)} of the month`,
-                    }))}
-                  />
+                  <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your plan’s day</p>
+                  {sub.stripeSubscriptionId ? (
+                    /* Stripe bills on the day the plan started and each box is
+                       raised by that payment, so the day isn't ours to move
+                       here: a picker would change the screen and nothing else. */
+                    <p className="text-xs text-[var(--ink-3)]" data-plan-day>
+                      You’re charged, and your box is sent, on {billingDayPhrase(sub.dispatchDayOfMonth)} of each month, the day your plan started. To miss a month, skip that box in the calendar.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-[var(--ink-3)] mb-3">Boxes go on {billingDayPhrase(sub.dispatchDayOfMonth)} of each month. Move any single box from the calendar.</p>
+                      {/* `ariaLabel` per option: the visible label is a bare number,
+                          and "17" on its own is not something anyone can act on. */}
+                      <Segmented
+                        label="Regular ship day"
+                        value={sub.dispatchDayOfMonth}
+                        onChange={(day) => {
+                          if (day === sub.dispatchDayOfMonth) return
+                          setPending({
+                            title: 'Change your regular ship day',
+                            subtitle: `The ${sub.dispatchDayOfMonth}${ordinalSuffix(sub.dispatchDayOfMonth)} → the ${day}${ordinalSuffix(day)} of the month`,
+                            monthlyBefore: sub.flatMonthly,
+                            monthlyAfter: sub.flatMonthly,
+                            effectiveFrom: nextDispatchDate(day).toISOString(),
+                            note: 'This moves every future box, not just the next one. Your payment date follows your ship day, and the amount is unchanged.',
+                            confirmLabel: 'Change ship day',
+                            onConfirm: () => setDispatchDay(day),
+                          })
+                        }}
+                        options={DAY_OPTIONS.map((day) => ({
+                          value: day,
+                          label: day,
+                          ariaLabel: `${day}${ordinalSuffix(day)} of the month`,
+                        }))}
+                      />
+                    </>
+                  )}
                 </Card>
 
                 {/* If a product becomes unavailable — the plan-wide default.
@@ -452,6 +493,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                 </Card>
 
                 {/* Billing */}
+                <div ref={billingRef} data-billing-settings>
                 <Card>
                   <p className="text-sm font-bold text-[var(--ink-1)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing &amp; payment</p>
                   <div className="flex items-center justify-between gap-3">
@@ -459,12 +501,13 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                       <Icon name="credit-card" size={14} className="text-[var(--ink-3)]" />
                       {sub.paymentMethod ? `${sub.paymentMethod.brand} ending ${sub.paymentMethod.last4}` : 'No card on file'}
                     </span>
-                    <span className="text-[11px] text-[var(--ink-3)]">Direct debit · monthly</span>
+                    <span className="text-[11px] text-[var(--ink-3)]">Charged monthly</span>
                   </div>
                   {/* This was `alert()` — a browser dialog, in production, on a
                       paying member's billing panel — while the route it needed
                       sat unused. */}
                   <Button
+                    ref={billingButtonRef}
                     variant="secondary"
                     size="sm"
                     onClick={openBillingPortal}
@@ -475,6 +518,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                   </Button>
                   {portalError && <Note icon="alert-triangle" tone="attention" live="assertive" className="mt-3">{portalError}</Note>}
                 </Card>
+                </div>
 
                 {/* Pause / cancel — routed through the save flow */}
                 <Button variant="ghost" icon="pause" onClick={() => setShowSave(true)}>
@@ -587,7 +631,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               onConfirm: () => unskipDelivery(selectedDelivery.id),
             })
           }}
-          onReschedule={(date) => {
+          onReschedule={sub.stripeSubscriptionId ? undefined : (date) => {
             setPending({
               title: 'Move this delivery',
               subtitle: `${fmtDay(selectedDelivery.date)} → ${fmtDay(date.toISOString())}`,

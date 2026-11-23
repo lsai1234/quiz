@@ -674,17 +674,37 @@ export async function resumeStripeSubscription(stripeSubscriptionId: string): Pr
 export async function defaultCardFor(
   stripeSubscriptionId: string,
 ): Promise<{ brand: string; last4: string } | null> {
+  return (await subscriptionFactsFor(stripeSubscriptionId)).card
+}
+
+/**
+ * What the webhook reads off a subscription when it links it to a plan: the
+ * card, and the day of the month Stripe bills it on (from its billing cycle
+ * anchor, as a UK day; see `recharge/billing-day`). One request for both.
+ *
+ * The day is the plan's day from then on: Stripe charges on it and each renewal
+ * box is raised by that charge, so the hub's dates are read from here rather
+ * than assumed.
+ *
+ * Best-effort, like `defaultCardFor`: nulls rather than throwing, so it can
+ * never fail the webhook that is activating someone's plan.
+ */
+export async function subscriptionFactsFor(
+  stripeSubscriptionId: string,
+): Promise<{ card: { brand: string; last4: string } | null; billingDay: number | null }> {
   try {
     const stripe = getStripeClient()
     const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
       expand: ['default_payment_method'],
     })
     const pm = subscription.default_payment_method
-    if (!pm || typeof pm === 'string' || !pm.card) return null
-    return { brand: pm.card.brand, last4: pm.card.last4 }
+    const card = pm && typeof pm !== 'string' && pm.card ? { brand: pm.card.brand, last4: pm.card.last4 } : null
+    const anchor = subscription.billing_cycle_anchor
+    const { billingDayOfAnchor } = await import('@/lib/recharge/billing-day')
+    return { card, billingDay: typeof anchor === 'number' && anchor > 0 ? billingDayOfAnchor(anchor) : null }
   } catch (err) {
-    console.error('[stripe] could not read the default payment method:', err)
-    return null
+    console.error('[stripe] could not read the subscription:', err)
+    return { card: null, billingDay: null }
   }
 }
 

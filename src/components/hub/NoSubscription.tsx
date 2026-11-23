@@ -5,7 +5,7 @@ import { Eyebrow } from './Eyebrow'
 import { Button, Card } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { LEGAL_ENTITY } from '@/lib/legal/content'
-import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { bestPlanSavingPct, usePricingConfig } from '@/hooks/usePricingConfig'
 import { tint } from '@/lib/ui/tokens'
 
 /**
@@ -59,7 +59,9 @@ export function NoSubscription({
   const firstName = (name ?? '').trim().split(/\s+/)[0]
   const greeting = firstName && !firstName.includes('@') ? `Hi ${firstName}` : 'Welcome'
 
-  const savePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
+  // The deepest plan saving as the Founders Hub has it set. This used to read the
+  // flat default (15%) while the biggest bundle saved 20%.
+  const savePct = bestPlanSavingPct(usePricingConfig())
   // The legal-entity settings use `[bracketed]` placeholders for "not filled in
   // yet". One of those is not an address to send anybody to.
   const support = LEGAL_ENTITY.contactEmail.startsWith('[') ? null : LEGAL_ENTITY.contactEmail
@@ -138,8 +140,10 @@ export function NoSubscription({
         <span className="shrink-0 text-[var(--ink-3)]">
           <Icon name="box" size={17} />
         </span>
+        {/* Both ways the shop sells: once, or the same basket every month at
+            the shop's own price (`shop-plan`). */}
         <span className="flex-1 text-left text-xs font-semibold text-[var(--ink-1)]">
-          Just after one thing? Buy it once from the shop
+          Rather pick your own? Buy from the shop once, or get your basket every month
         </span>
         <span aria-hidden className="text-[var(--ink-3)]">→</span>
       </Link>
@@ -155,9 +159,11 @@ export function NoSubscription({
           <Benefit icon="pause">
             Skip a box or pause the whole thing whenever — no phone call, no notice period.
           </Benefit>
-          <Benefit icon="bolt">
-            Subscribe &amp; save up to {savePct}% against buying the same products one at a time.
-          </Benefit>
+          {savePct > 0 && (
+            <Benefit icon="bolt">
+              A plan built from the quiz saves up to {savePct}% against buying the same products one at a time.
+            </Benefit>
+          )}
         </ul>
       </Card>
 

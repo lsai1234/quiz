@@ -81,11 +81,13 @@ describe('POST /api/analytics', () => {
   })
 
   it('folds the event into its visit, with the device, the country and the source', async () => {
+    // The quiz lives at /quiz since the shop took the main address, and its
+    // landing is a page view there (`/` is the shop's).
     await beacon(
-      { event: 'page_view', ctx: { land: '/', utm_source: 'instagram', utm_medium: 'paid', utm_campaign: 'launch' } },
+      { event: 'page_view', path: '/quiz', ctx: { land: '/quiz', utm_source: 'instagram', utm_medium: 'paid', utm_campaign: 'launch' } },
       { 'x-vercel-ip-country': 'gb' },
     )
-    await beacon({ event: 'quiz_start', path: '/', props: { arm: 'v1' } })
+    await beacon({ event: 'quiz_start', path: '/quiz', props: { arm: 'v1' } })
     const [visit] = await listSessions(null, new Date(Date.now() + 60_000).toISOString())
     expect(visit).toMatchObject({
       session_id: 'sid-1',

@@ -25,6 +25,7 @@ import { getOrder } from './repo'
 import { orderReference } from './service'
 import { getSubscription } from '@/lib/db/hub-data'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import { nextPlanDate } from '@/lib/recharge/billing-day'
 import type { Order, OrderLine } from './types'
 
 // ─── The response contract (§4.2) ────────────────────────────────────────────
@@ -300,13 +301,17 @@ export function toConfirmationSubscription(
   }
 }
 
-function nextBillingDate(sub: MemberSubscription): string | null {
+/**
+ * The plan's next charge, as a date. The plan's day is Stripe's billing day
+ * (`billing-day`), so this is the date Stripe charges, not an assumed 15th.
+ *
+ * Written from the date's own parts: `toISOString()` of a local midnight is the
+ * day before on a server running on British Summer Time.
+ */
+function nextBillingDate(sub: MemberSubscription, now = new Date()): string | null {
   if (sub.nextDispatchOverride) return sub.nextDispatchOverride.slice(0, 10)
-  const day = Math.min(Math.max(sub.dispatchDayOfMonth, 1), 28)
-  const now = new Date()
-  const next = new Date(now.getFullYear(), now.getMonth(), day)
-  if (next <= now) next.setMonth(next.getMonth() + 1)
-  return next.toISOString().slice(0, 10)
+  const next = nextPlanDate(sub.dispatchDayOfMonth, now)
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`
 }
 
 // ─── Variant resolution (§2.1) ───────────────────────────────────────────────

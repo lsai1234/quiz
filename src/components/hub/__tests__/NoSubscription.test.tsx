@@ -59,12 +59,18 @@ describe('the no-plan hub', () => {
     expect(build).toHaveAttribute('href', '/quiz')
   })
 
-  it('offers the shop too, because a plan is not the only way to buy', () => {
+  it('offers the shop too, once or every month, because a plan from the quiz is not the only way to buy', () => {
     render(<NoSubscription name="Sam" />)
-    expect(screen.getByRole('link', { name: /buy it once from the shop/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /buy from the shop once, or get your basket every month/i })).toHaveAttribute(
       'href',
       '/shop',
     )
+  })
+
+  it('promises the deepest plan saving the settings give, not the flat default', () => {
+    render(<NoSubscription name="Sam" />)
+    // The Complete bundle's 20%, where the screen used to say the 15% default.
+    expect(screen.getByText(/saves up to 20%/)).toBeInTheDocument()
   })
 })
 

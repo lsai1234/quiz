@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react'
 import { useHubStore } from '@/lib/hub-store'
-import { HubLogin } from './HubLogin'
+import { HubLoadProblem } from './HubLoadProblem'
 import { HubShell } from './HubShell'
+import { HubSignedOut } from './HubSignedOut'
 import { HubSkeleton } from './HubSkeleton'
 import { NoSubscription } from './NoSubscription'
 import { SubscriptionDashboard } from './SubscriptionDashboard'
@@ -14,10 +15,9 @@ export function HubPage() {
   const session = useHubStore((s) => s.session)
   const subscription = useHubStore((s) => s.subscription)
   const hydrated = useHubStore((s) => s.hydrated)
-  const providers = useHubStore((s) => s.providers)
-  const canResetPassword = useHubStore((s) => s.canResetPassword)
   const hydrate = useHubStore((s) => s.hydrate)
-  const authenticate = useHubStore((s) => s.authenticate)
+  const refresh = useHubStore((s) => s.refresh)
+  const loadProblem = useHubStore((s) => s.loadProblem)
   const logout = useHubStore((s) => s.logout)
 
   // Restore the cookie session on load (also lands the OAuth redirect back).
@@ -40,15 +40,8 @@ export function HubPage() {
     )
   }
 
-  if (!session) {
-    return (
-      <HubLogin
-        onAuthenticate={authenticate}
-        providers={providers}
-        canResetPassword={canResetPassword}
-      />
-    )
-  }
+  // Signed out, or, when the check itself failed, a retry (`HubSignedOut`).
+  if (!session) return <HubSignedOut />
 
   /**
    * Signed in, no plan.
@@ -68,7 +61,13 @@ export function HubPage() {
     <HubShell onSignOut={logout} nav="home" wide>
       <MemberHome
         name={session.name ?? null}
-        plan={subscription ? <SubscriptionDashboard embedded /> : null}
+        plan={
+          subscription ? (
+            <SubscriptionDashboard embedded />
+          ) : loadProblem === 'plan' ? (
+            <HubLoadProblem what="plan" onRetry={refresh} />
+          ) : null
+        }
         none={<NoSubscription name={session.name} email={session.email} onSignOut={logout} />}
         data={<YourData />}
       />

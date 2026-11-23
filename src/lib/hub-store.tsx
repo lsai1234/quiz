@@ -53,50 +53,124 @@ export interface HubSession {
 }
 
 /**
- * Write the mutated subscription through to the account.
+ * Saving the plan.
  *
- * Optimistic — the local state has already moved and this returns it unchanged,
- * because every one of these mutations is instant and reversible in the UI.
+ * Every change shows at once (they are all instant and reversible on screen),
+ * then is saved through `/api/hub/subscription`, which also tells Stripe.
  *
- * What it can no longer do is fail in silence. The save now also pushes the
- * change to Stripe and answers 502 with NOTHING saved if Stripe refuses, so a
- * swallowed rejection would leave someone looking at a plan and a price that
- * their card knows nothing about. On failure we reload the stored truth and
- * surface a message.
+ * Saves go one at a time, in the order they were made, and each is made afresh
+ * on top of the plan as last stored, sent with that plan's version. Two things
+ * used to go wrong without that:
+ *
+ *  - Two quick changes raced. Each sent the whole plan, and whichever arrived
+ *    last was saved, even if it was the older of the two.
+ *  - A plan changed somewhere else (another tab, another device, a renewal) was
+ *    quietly undone by the next change made here, because this sent a whole plan
+ *    built from what the screen had loaded earlier.
+ *
+ * Now the server answers a stale version with the current plan (409, `stale`),
+ * and the change is made again on top of that and sent once more, so the member's
+ * change and the other one both stand. A save that fails for any other reason
+ * (Stripe refused, a price the server won't accept) is dropped, the screen goes
+ * back to what is stored, and the member is told. What is shown is never a
+ * change that didn't happen.
  */
-function persist(subscription: MemberSubscription): MemberSubscription {
-  void (async () => {
-    try {
-      const res = await fetch('/api/hub/subscription', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription }),
-      })
-      if (res.ok) return
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      useHubStore.setState({
-        saveError: data.error ?? 'We couldn’t save that change. Please try again.',
-      })
-      // Pull back what's actually stored so the screen stops showing a change
-      // that didn't happen.
-      await useHubStore.getState().refresh()
-    } catch {
-      useHubStore.setState({
-        saveError: 'We couldn’t reach your account. Check your connection and try again.',
-      })
-    }
-  })()
-  return subscription
+type Change = (sub: MemberSubscription) => MemberSubscription
+
+/** The plan as last stored, and its version. What every save is made on top of. */
+let stored: { subscription: MemberSubscription; version: string | null } | null = null
+let queue: Promise<void> = Promise.resolve()
+let waiting = 0
+
+function setStored(subscription: MemberSubscription | null, version: string | null) {
+  stored = subscription ? { subscription, version } : null
 }
 
+/** Make a change on screen now, and queue its save. */
+function change(fn: Change): void {
+  const current = useHubStore.getState().subscription
+  if (!current) return
+  useHubStore.setState({ subscription: fn(current) })
+  waiting += 1
+  queue = queue
+    .then(() => save(fn))
+    .catch(() => {})
+    .finally(() => {
+      waiting -= 1
+      // Once nothing else is on its way, show the plan exactly as stored (the
+      // server re-prices what it's sent), or what's left after a refusal.
+      if (waiting === 0 && stored) useHubStore.setState({ subscription: stored.subscription })
+    })
+}
+
+async function save(fn: Change, retried = false): Promise<void> {
+  if (!stored) return
+  const subscription = fn(stored.subscription)
+  let res: Response
+  try {
+    res = await fetch('/api/hub/subscription', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription, version: stored.version }),
+    })
+  } catch {
+    useHubStore.setState({ saveError: 'We couldn’t reach your account, so that change may not have saved. Check your connection and try again.' })
+    // Find out what did happen, if the account can be reached at all now.
+    await useHubStore.getState().refresh()
+    return
+  }
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string
+    code?: string
+    subscription?: MemberSubscription
+    version?: string
+  }
+  if (res.ok) {
+    setStored(data.subscription ?? subscription, data.version ?? null)
+    return
+  }
+  if (res.status === 409 && data.code === 'stale' && data.subscription && !retried) {
+    setStored(data.subscription, data.version ?? null)
+    return save(fn, true)
+  }
+  useHubStore.setState({ saveError: data.error ?? 'We couldn’t save that change. Please try again.' })
+  // Go back to what's actually stored, so the screen stops showing a change that didn't happen.
+  await useHubStore.getState().refresh()
+}
+
+/**
+ * Save a check-in. It shows at once; if it doesn't save, it comes off again and
+ * the member is told, rather than being lost while it looks kept.
+ */
 function persistCheckIn(checkIn: FeedbackCheckIn): FeedbackCheckIn {
+  const failed = () =>
+    useHubStore.setState((s) => ({
+      feedback: s.feedback.filter((f) => f.id !== checkIn.id),
+      saveError: 'We couldn’t save your check-in. Please try again.',
+    }))
   void fetch('/api/hub/feedback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ checkIn }),
-  }).catch(() => {})
+  })
+    .then((res) => {
+      if (!res.ok) failed()
+    })
+    .catch(failed)
   return checkIn
 }
+
+/**
+ * What couldn't be loaded, if anything.
+ *
+ *   session  we couldn't tell whether they're signed in
+ *   plan     signed in, but their plan didn't load
+ *
+ * Neither is "signed out" or "no plan". Treating them as those used to send a
+ * subscriber to the sign-in screen, or tell them they had no plan, whenever a
+ * request failed.
+ */
+export type HubLoadProblem = 'session' | 'plan' | null
 
 interface HubStore {
   session: HubSession | null
@@ -114,10 +188,12 @@ interface HubStore {
    * silently didn't happen is worse than one that visibly didn't.
    */
   saveError: string | null
+  /** What couldn't be loaded, if anything: see `HubLoadProblem`. */
+  loadProblem: HubLoadProblem
 
   /** Restore the signed-in state on load (cookie session → account data). */
   hydrate: () => Promise<void>
-  /** Re-read the stored subscription — used to roll back after a failed save. */
+  /** Re-read the stored plan: after a failed save, and to retry a failed load. */
   refresh: () => Promise<void>
   clearSaveError: () => void
   /** Sign in or create an account. Resolves to an error message, or null on success. */
@@ -172,19 +248,30 @@ interface HubStore {
   submitDimension: (dimension: FeedbackDimension, rating: number) => void
 }
 
-/** Fetch the account's subscription + feedback (server seeds on first sign-in). */
+/** Fetch the account's plan, its version and check-ins. `null` when it couldn't be loaded. */
 async function loadAccountData(): Promise<{
   subscription: MemberSubscription | null
+  version: string | null
   feedback: FeedbackCheckIn[]
-}> {
+} | null> {
   try {
     const res = await fetch('/api/hub/subscription')
-    if (!res.ok) return { subscription: null, feedback: [] }
-    const data = (await res.json()) as { subscription?: MemberSubscription; feedback?: FeedbackCheckIn[] }
-    return { subscription: data.subscription ?? null, feedback: data.feedback ?? [] }
+    if (!res.ok) return null
+    const data = (await res.json()) as { subscription?: MemberSubscription | null; version?: string | null; feedback?: FeedbackCheckIn[] }
+    const subscription = data.subscription ?? null
+    const version = data.version ?? null
+    setStored(subscription, version)
+    return { subscription, version, feedback: data.feedback ?? [] }
   } catch {
-    return { subscription: null, feedback: [] }
+    return null
   }
+}
+
+/** The store's fields for a load that worked, or didn't. */
+function accountState(data: Awaited<ReturnType<typeof loadAccountData>>) {
+  return data
+    ? { subscription: data.subscription, feedback: data.feedback, loadProblem: null }
+    : { subscription: null, feedback: [], loadProblem: 'plan' as const }
 }
 
 export const useHubStore = create<HubStore>((set) => ({
@@ -195,39 +282,46 @@ export const useHubStore = create<HubStore>((set) => ({
   providers: [],
   canResetPassword: false,
   saveError: null,
+  loadProblem: null,
 
   refresh: async () => {
-    const { subscription, feedback } = await loadAccountData()
-    if (subscription) set({ subscription, feedback })
+    const data = await loadAccountData()
+    // A refresh that fails leaves what's on screen; one that was retrying a failed load says so again.
+    if (data) set(accountState(data))
   },
 
   clearSaveError: () => set({ saveError: null }),
 
   hydrate: async () => {
-    try {
-      const me = (await (await fetch('/api/auth/me')).json()) as {
-        user?: { email: string | null; name: string } | null
-        providers?: { id: string; label: string }[]
-        canResetPassword?: boolean
-      }
-      const providers = me.providers ?? []
-      const canResetPassword = me.canResetPassword ?? false
-      if (!me.user) {
-        set({ hydrated: true, providers, canResetPassword })
-        return
-      }
-      const { subscription, feedback } = await loadAccountData()
-      set({
-        session: { email: me.user.email ?? '', name: me.user.name },
-        subscription,
-        feedback,
-        hydrated: true,
-        providers,
-        canResetPassword,
-      })
-    } catch {
-      set({ hydrated: true })
+    let me: {
+      user?: { email: string | null; name: string } | null
+      providers?: { id: string; label: string }[]
+      canResetPassword?: boolean
     }
+    try {
+      const res = await fetch('/api/auth/me')
+      if (!res.ok) throw new Error(`auth/me ${res.status}`)
+      me = await res.json()
+    } catch {
+      // Not "signed out": we don't know. The hub says so and offers to try again.
+      set({ hydrated: true, loadProblem: 'session' })
+      return
+    }
+    const providers = me.providers ?? []
+    const canResetPassword = me.canResetPassword ?? false
+    if (!me.user) {
+      setStored(null, null)
+      set({ hydrated: true, providers, canResetPassword, session: null, loadProblem: null })
+      return
+    }
+    const data = await loadAccountData()
+    set({
+      session: { email: me.user.email ?? '', name: me.user.name },
+      ...accountState(data),
+      hydrated: true,
+      providers,
+      canResetPassword,
+    })
   },
 
   authenticate: async (mode, email, password) => {
@@ -239,8 +333,8 @@ export const useHubStore = create<HubStore>((set) => ({
       })
       const data = (await res.json()) as { user?: { email: string | null; name: string }; error?: string }
       if (!res.ok || !data.user) return data.error ?? 'Something went wrong — try again'
-      const { subscription, feedback } = await loadAccountData()
-      set({ session: { email: data.user.email ?? '', name: data.user.name }, subscription, feedback })
+      const account = await loadAccountData()
+      set({ session: { email: data.user.email ?? '', name: data.user.name }, ...accountState(account) })
       return null
     } catch {
       return 'Network error — try again'
@@ -249,7 +343,8 @@ export const useHubStore = create<HubStore>((set) => ({
 
   logout: () => {
     void fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
-    set({ session: null, subscription: null, feedback: [] })
+    setStored(null, null)
+    set({ session: null, subscription: null, feedback: [], loadProblem: null })
   },
 
   submitFeedback: (ratings, noticedImprovements, notes) =>
@@ -267,61 +362,56 @@ export const useHubStore = create<HubStore>((set) => ({
     })),
 
   setDispatchDay: (day) =>
-    set((s) => (s.subscription ? { subscription: persist(setDispatchDay(s.subscription, day)) } : s)),
-  pause: () => set((s) => (s.subscription ? { subscription: persist(pauseSubscription(s.subscription)) } : s)),
-  resume: () => set((s) => (s.subscription ? { subscription: persist(resumeSubscription(s.subscription)) } : s)),
-  cancel: () => set((s) => (s.subscription ? { subscription: persist(cancelSubscription(s.subscription)) } : s)),
+    change((sub) => setDispatchDay(sub, day)),
+  pause: () => change((sub) => pauseSubscription(sub)),
+  resume: () => change((sub) => resumeSubscription(sub)),
+  cancel: () => change((sub) => cancelSubscription(sub)),
   swapLine: (lineId, newProduct) =>
-    set((s) => (s.subscription ? { subscription: persist(swapSubscriptionLine(s.subscription, lineId, newProduct)) } : s)),
+    change((sub) => swapSubscriptionLine(sub, lineId, newProduct)),
 
   snooze: (months) =>
-    set((s) => (s.subscription ? { subscription: persist(snoozeSubscription(s.subscription, months)) } : s)),
+    change((sub) => snoozeSubscription(sub, months)),
   applyDownsize: (dropLineIds) =>
-    set((s) => {
-      if (!s.subscription) return s
-      let sub = s.subscription
-      for (const id of dropLineIds) sub = removeLineMutation(sub, id).sub
-      return { subscription: persist(sub) }
-    }),
+    change((sub) => dropLineIds.reduce((next, id) => removeLineMutation(next, id).sub, sub)),
   cancelWithReason: (reason) =>
-    set((s) => (s.subscription ? { subscription: persist(cancelSubscription(s.subscription, reason)) } : s)),
+    change((sub) => cancelSubscription(sub, reason)),
 
   addLine: (product, catalogue) =>
-    set((s) => (s.subscription ? { subscription: persist(addLineMutation(s.subscription, product, catalogue)) } : s)),
+    change((sub) => addLineMutation(sub, product, catalogue)),
   removeLine: (lineId) =>
-    set((s) => (s.subscription ? { subscription: persist(removeLineMutation(s.subscription, lineId).sub) } : s)),
+    change((sub) => removeLineMutation(sub, lineId).sub),
   setLineCadence: (lineId, months) =>
-    set((s) => (s.subscription ? { subscription: persist(setLineCadenceMutation(s.subscription, lineId, months)) } : s)),
+    change((sub) => setLineCadenceMutation(sub, lineId, months)),
   setLineQuantity: (lineId, quantity) =>
-    set((s) => (s.subscription ? { subscription: persist(setLineQuantityMutation(s.subscription, lineId, quantity)) } : s)),
+    change((sub) => setLineQuantityMutation(sub, lineId, quantity)),
   setLineUsage: (lineId, product, usageLevel) =>
-    set((s) => (s.subscription ? { subscription: persist(setLineUsageMutation(s.subscription, lineId, product, usageLevel)) } : s)),
+    change((sub) => setLineUsageMutation(sub, lineId, product, usageLevel)),
   setLineSubstitution: (lineId, allow) =>
-    set((s) => (s.subscription ? { subscription: persist(setLineSubstitutionMutation(s.subscription, lineId, allow)) } : s)),
+    change((sub) => setLineSubstitutionMutation(sub, lineId, allow)),
   setLineChangePolicy: (lineId, policy) =>
-    set((s) => (s.subscription ? { subscription: persist(setLineChangePolicyMutation(s.subscription, lineId, policy)) } : s)),
+    change((sub) => setLineChangePolicyMutation(sub, lineId, policy)),
   setDefaultChangePolicy: (policy) =>
-    set((s) => (s.subscription ? { subscription: persist(setDefaultChangePolicyMutation(s.subscription, policy)) } : s)),
+    change((sub) => setDefaultChangePolicyMutation(sub, policy)),
   skipNext: (lineId) =>
-    set((s) => (s.subscription ? { subscription: persist(skipNextMutation(s.subscription, lineId)) } : s)),
+    change((sub) => skipNextMutation(sub, lineId)),
   setNextDispatchDate: (date) =>
-    set((s) => (s.subscription ? { subscription: persist(setNextDispatchDateMutation(s.subscription, date)) } : s)),
-  sendNow: () => set((s) => (s.subscription ? { subscription: persist(sendNowMutation(s.subscription)) } : s)),
+    change((sub) => setNextDispatchDateMutation(sub, date)),
+  sendNow: () => change((sub) => sendNowMutation(sub)),
   bringForward: (days) =>
-    set((s) => (s.subscription ? { subscription: persist(bringForwardMutation(s.subscription, days)) } : s)),
+    change((sub) => bringForwardMutation(sub, days)),
   delayDispatch: (days) =>
-    set((s) => (s.subscription ? { subscription: persist(delayDispatchMutation(s.subscription, days)) } : s)),
+    change((sub) => delayDispatchMutation(sub, days)),
 
   skipDelivery: (deliveryId) =>
-    set((s) => (s.subscription ? { subscription: persist(skipDeliveryMutation(s.subscription, deliveryId)) } : s)),
+    change((sub) => skipDeliveryMutation(sub, deliveryId)),
   unskipDelivery: (deliveryId) =>
-    set((s) => (s.subscription ? { subscription: persist(unskipDeliveryMutation(s.subscription, deliveryId)) } : s)),
+    change((sub) => unskipDeliveryMutation(sub, deliveryId)),
   rescheduleDelivery: (deliveryId, date) =>
-    set((s) => (s.subscription ? { subscription: persist(rescheduleDeliveryMutation(s.subscription, deliveryId, date)) } : s)),
+    change((sub) => rescheduleDeliveryMutation(sub, deliveryId, date)),
   addItemToDelivery: (deliveryId, product) =>
-    set((s) => (s.subscription ? { subscription: persist(addItemToDeliveryMutation(s.subscription, deliveryId, product)) } : s)),
+    change((sub) => addItemToDeliveryMutation(sub, deliveryId, product)),
   removeItemFromDelivery: (deliveryId, item) =>
-    set((s) => (s.subscription ? { subscription: persist(removeItemFromDeliveryMutation(s.subscription, deliveryId, item)) } : s)),
+    change((sub) => removeItemFromDeliveryMutation(sub, deliveryId, item)),
 
   submitDimension: (dimension, rating) =>
     set((s) => ({

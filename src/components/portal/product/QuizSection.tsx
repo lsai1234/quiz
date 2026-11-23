@@ -371,13 +371,8 @@ export function QuizSection({
               <option value={draft.subscriptionProductId}>{draft.subscriptionProductId}</option>
             )}
           </Select>
-          <Input
-            label="Minimum term (months)"
-            inputMode="numeric"
-            value={draft.minSubscriptionMonths}
-            onChange={(e) => set('minSubscriptionMonths', e.target.value)}
-            hint="Blank uses the shop-wide default."
-          />
+          {/* No "Minimum term" here any more: members are promised they can
+              cancel any time, and no setting raises a term (`calculatePricing`). */}
           <Select label="Keep-or-change advice" value={draft.recommendationBasis} onChange={(e) => set('recommendationBasis', e.target.value)} hint="Whether how it feels should decide a change.">
             <option value="">Auto</option>
             <option value="objective">By need — not felt (protein, vitamins)</option>

@@ -122,6 +122,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         icon: 'sparkle',
       },
       {
+        slug: 'member-feedback',
+        title: 'Member feedback',
+        blurb: 'What members wrote on the hub’s feedback page, newest first, with who sent it and a way to reply.',
+        icon: 'chat',
+      },
+      {
         slug: 'test-views',
         title: 'Test views',
         blurb: 'Every screen with sample data: each quiz, the results page, every state of the hub, and every email. Nothing real is touched.',
