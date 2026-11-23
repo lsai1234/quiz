@@ -20,7 +20,7 @@ every month" adds the product and opens the basket set to monthly.
 | Term | `minSubscriptionMonths`, raised by any product that needs longer, as a quiz plan. |
 | Delivery | A monthly line under the free-delivery line (`recurringDeliveryOption`), as a quiz plan. |
 | Codes | A partner's code comes off the first month, as on a quiz plan; founder codes are for one-off orders. |
-| The hub | Opens with the plan and stays open while it runs (`lib/hub/access`), as for any plan, with member prices on top-ups (`lib/deals`). |
+| The hub | Opens with the plan and stays open while it runs (`lib/hub/access`), as for any plan. Member prices on top-ups (`lib/deals`) come with it only while that service is switched on; the basket says so only then. |
 | Unavailable products | Taken out and the member told (`defaultChangePolicy: 'remove'`): a shop plan has no quiz answers to swap against safely. Changeable in the hub. |
 | No | Quiz answers, the free gift (its terms exclude shop baskets), or a personal guide. |
 

@@ -15,6 +15,7 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 import type { ShopPlanCheckoutState } from '@/hooks/useShopPlanCheckout'
+import { useOfferSettings } from '@/hooks/useOfferSettings'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
@@ -80,6 +81,10 @@ export function BasketDrawer({
   onClose,
 }: Props) {
   const { setQty, remove, plan, setPlan } = useBasket()
+  // Member prices on top-ups are a hub service the founders switch on; the
+  // monthly plan only promises them while they are on (`GET /api/offer`).
+  const { settings: offer } = useOfferSettings()
+  const memberPrices = offer.services.deals
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
   const [reduced, setReduced] = useState(false)
@@ -287,7 +292,7 @@ export function BasketDrawer({
                   <ul className="sf-drawer-planlist">
                     <li><Icon name="calendar" size={15} />{formatGBP(shopPlan.monthly)} a month, the same as buying it once</li>
                     <li><Icon name="truck" size={15} />{shopPlan.delivery ? `${formatGBP(shopPlan.delivery.price)} delivery a month` : 'Free UK delivery every month'}</li>
-                    <li><Icon name="home" size={15} />The member hub comes with it, with member prices when you top up</li>
+                    <li><Icon name="home" size={15} />{memberPrices ? 'The member hub comes with it, with member prices when you top up' : 'The member hub comes with it'}</li>
                     {/* The terms' "Take it off my plan": a shop plan has no
                         answers to choose a safe swap from, so it is said here,
                         before anyone subscribes, and changeable in the hub. */}
