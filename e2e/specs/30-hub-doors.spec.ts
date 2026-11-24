@@ -99,7 +99,7 @@ test('a monthly shop basket: what’s on it, how to manage it, and adding to the
   // In the shop: what's on the plan says so, and anything else can go in the next box.
   await openShop(page)
   await openProductSheet(page, 'Whey Protein')
-  await expect(page.getByText('On your plan')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('On your plan', { exact: true })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: /Get it every month/ })).toHaveCount(0)
   await openShop(page)
   await openProductSheet(page, 'Creatine Monohydrate')
@@ -110,8 +110,10 @@ test('a monthly shop basket: what’s on it, how to manage it, and adding to the
 
   // The basket offers the next box too, never a second plan.
   await page.getByRole('button', { name: 'Add to basket' }).click()
-  await openBasket(page)
+  // On a product page the basket opens from its own "View basket".
+  await page.getByText('View basket', { exact: true }).click()
   const drawer = basketDrawer(page)
+  await expect(drawer).toBeVisible({ timeout: 15_000 })
   await expect(drawer.getByRole('heading', { name: 'How do you want these?' })).toBeVisible()
   await expect(drawer.getByRole('button', { name: 'Every month' })).toHaveCount(0)
   await drawer.getByRole('button', { name: 'In my next box' }).click()
