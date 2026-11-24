@@ -270,7 +270,8 @@ export function BasketDrawer({
                 Hidden under a founder code: under one of those the postage is
                 either nothing or our supplier's actual charge, and neither is
                 "£12 away from free delivery". */}
-            {threshold > 0 && !founderKind && (
+            {/* Not for extras in the next box: they ship with it, with no delivery charge. */}
+            {threshold > 0 && !founderKind && !toBox && (
               <div className="sf-drawer-meter">
                 <p>
                   <span>
@@ -542,7 +543,9 @@ export function BasketDrawer({
                   <p className="sf-drawer-secure">
                     <Icon name="lock" size={13} />
                     {monthly
-                      ? 'You’ll make an account, then pay securely by card'
+                      ? mine.signedIn
+                        ? 'You’ll confirm the plan’s terms, then pay securely by card'
+                        : 'You’ll make an account, then pay securely by card'
                       : free ? 'Nothing to pay, so no card step' : 'Secure, encrypted checkout with card and wallet payments'}
                   </p>
 

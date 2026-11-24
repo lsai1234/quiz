@@ -106,7 +106,7 @@ export const OFFER_RULES: readonly OfferRule[] = [
     id: 'first-month',
     name: 'First-month discount (scratch card)',
     channels: only('stack-monthly'),
-    switch: 'Pricing → intro offer',
+    switch: 'Pricing (top bar) → intro offer',
     note: 'The first payment of a stack or bundle plan. Never on a monthly shop basket.',
   },
   {
@@ -120,7 +120,7 @@ export const OFFER_RULES: readonly OfferRule[] = [
     id: 'member-prices',
     name: 'Member prices',
     channels: only('hub-top-up'),
-    switch: 'Settings → Member hub → member deals',
+    switch: 'Settings → Offer → Box services (sizes in Settings → Member hub)',
     note: 'In the hub, on products a member has bought, while their hub is open.',
   },
   {

@@ -21,12 +21,14 @@ export interface MyPlan {
 export interface MyPlanState {
   /** Still asking. */
   loading: boolean
+  /** Signed in (the question was answered for an account). */
+  signedIn: boolean
   plan: MyPlan | null
   quote: { box: { id: string; date: string }; price: number } | null
   refusal: { reason: string; error: string } | null
 }
 
-const NONE: MyPlanState = { loading: false, plan: null, quote: null, refusal: null }
+const NONE: MyPlanState = { loading: false, signedIn: false, plan: null, quote: null, refusal: null }
 
 export function useMyPlan(productId?: string | null, variantId?: string | null): MyPlanState & { reload: () => void } {
   const [state, setState] = useState<MyPlanState>({ ...NONE, loading: true })
@@ -38,8 +40,8 @@ export function useMyPlan(productId?: string | null, variantId?: string | null):
       .then(async (res) => {
         if (!live) return
         if (!res.ok) return setState(NONE)
-        const data = (await res.json()) as Omit<MyPlanState, 'loading'>
-        setState({ loading: false, plan: data.plan ?? null, quote: data.quote ?? null, refusal: data.refusal ?? null })
+        const data = (await res.json()) as Omit<MyPlanState, 'loading' | 'signedIn'>
+        setState({ loading: false, signedIn: true, plan: data.plan ?? null, quote: data.quote ?? null, refusal: data.refusal ?? null })
       })
       .catch(() => live && setState(NONE))
     return () => {
