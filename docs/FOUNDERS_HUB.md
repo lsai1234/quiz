@@ -753,3 +753,31 @@ the last 28 days; and, from browsers that report them, long animation frames
   include customers unless it has been switched off.
 - Good is under 2.5s, 200ms and 0.1 (web.dev's thresholds); the badge is
   the p75's rating.
+
+## 10. Member feedback
+
+**Settings → Member feedback** (`components/portal/MemberFeedbackInbox.tsx`)
+lists what members wrote on the hub's feedback page (`/myhub/feedback`, linked
+from the bottom of the hub's home as "Tell us what you think"), newest first.
+Each message shows who sent it, where they were with us at the time (on a plan,
+bought recently, hub closed, no order yet), the time, a **Reply** link that
+opens an email to them, and **Delete**. Messages since the inbox was last
+opened say **New**.
+
+- One open text box, up to 2,000 characters; five messages a day per member.
+- Kept in the key-value table, one row each (`member-feedback:<id>`, no schema
+  change); in the member's data export; deleted with their account.
+- Members are told before they send that the team sees their name and email.
+
+## 11. Where each offer applies, and the nightly Stripe check
+
+- **Settings → Offer** opens with a table of every offer against every way to
+  buy (`lib/offer/rulebook.ts`): partner, store and founder codes, the basket
+  saving, plan savings, the first-month discount, the free gift, member prices
+  and the guarantee, across the shop (once and monthly), quiz and consult
+  stacks (once and monthly) and the hub's top-up box. A test checks every cell
+  against the code that enforces it.
+- **Monitoring → health** has "Stripe agrees with our plans": the daily job
+  compares every plan Stripe bills with its subscription (status, monthly,
+  day) and lists any that disagree. It needs the daily job running
+  (`CRON_SECRET`, `vercel.json`).

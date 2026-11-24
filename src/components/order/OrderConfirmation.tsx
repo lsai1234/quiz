@@ -4,9 +4,15 @@ import { GUIDE_COPY } from '@/lib/guide/copy'
 import { HUB_COPY } from '@/lib/hub/copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useBasket } from '@/lib/basket/store'
+import { reorderLines } from '@/lib/basket/reorder'
+import { releasePaidBasket } from '@/lib/basket/paid'
+import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
+import { useMyPlan } from '@/hooks/useMyPlan'
 import { track } from '@/lib/analytics/events'
 import { LAST_CHANCE_USED_KEY } from '@/lib/last-chance/source'
-import type { ConfirmationResponse } from '@/lib/orders/confirmation'
+import type { ConfirmationLine, ConfirmationResponse } from '@/lib/orders/confirmation'
 import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
 import { receiptFromConfirmation } from '@/lib/receipt/build'
 import { Card as UICard } from '@/components/ui/Card'
@@ -176,6 +182,57 @@ function CtaLink({
   )
 }
 
+/**
+ * A one-off order, every month: the same products back in the basket, set to
+ * monthly, the basket open. Not offered to someone already on a plan (an
+ * account holds one), nor when nothing in the order can be on a plan.
+ */
+function MonthlyAgain({ lines }: { lines: ConfirmationLine[] }) {
+  const router = useRouter()
+  const { products } = useCatalogueProducts()
+  const mine = useMyPlan()
+  const [missing, setMissing] = useState(false)
+  const wanted = lines
+    .filter((l): l is ConfirmationLine & { productId: string } => Boolean(l.productId && !l.bonus && products.find((p) => p.id === l.productId)?.subscriptionEligible))
+    .map((l) => {
+      const product = products.find((p) => p.id === l.productId)
+      return { productId: l.productId, variantId: product?.variants.find((v) => v.sku && v.sku === l.sku)?.id ?? null, title: l.name, quantity: l.qty }
+    })
+  if (mine.loading || (mine.plan && mine.plan.status !== 'cancelled') || wanted.length === 0) return null
+
+  const go = () => {
+    const { add } = reorderLines(wanted, products)
+    if (!add.length) return setMissing(true)
+    const basket = useBasket.getState()
+    for (const l of add) basket.add(l.productId, l.variantId, l.quantity)
+    basket.setPlan('monthly')
+    track('confirmation_cta', { cta: 'get_monthly' })
+    router.push('/shop#basket')
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={go}
+        className={[
+          'flex items-center justify-center gap-2 w-full min-h-13 px-5 py-3.5 rounded-2xl',
+          'text-sm font-bold transition-all duration-200 active:scale-[0.97]',
+          'focus-visible:outline-none focus-visible:ring-2',
+        ].join(' ')}
+        style={{ fontFamily: 'var(--font-display)', ['--tw-ring-color' as string]: tint(ACCENT, 45), background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, color: 'var(--color-text)' }}
+      >
+        <Icon name="calendar" size={16} />
+        Get these every month
+      </button>
+      <p className="text-[11px] text-[var(--color-muted)] mt-2 text-center leading-relaxed">
+        Same price as today, delivered monthly, with the member hub. Cancel any time.
+      </p>
+      {missing && <p className="text-xs mt-2 text-center" style={{ color: AMBER }} role="status">None of these are on sale right now.</p>}
+    </div>
+  )
+}
+
 /** Never a dead end: every state gets a way back into the shop (OC-F-072). */
 function BackToShop({ label = 'Back to shop' }: { label?: string }) {
   return <div className="mt-3"><CtaLink href="/shop" label={label} cta="back_to_shop" /></div>
@@ -303,7 +360,7 @@ function Processing({ data, timedOut }: { data: ConfirmationResponse; timedOut: 
 function HubReadyLink({ email }: { email: string | null }) {
   return (
     <a
-      href="/myhub"
+      href="/myhub?welcome=1"
       data-hub-ready
       className="mt-6 flex items-center justify-between gap-3 rounded-2xl px-5 py-5"
       style={{ background: 'var(--color-accent)', color: 'var(--color-bg)' }}
@@ -351,6 +408,10 @@ function GuideLink({ href }: { href: string }) {
  */
 function Confirmed({ data }: { data: ConfirmationResponse }) {
   const { order, subscription, personalisation, variant } = data
+  // Paid for: the basket that went to checkout empties (`basket/paid`), and only that basket.
+  useEffect(() => {
+    releasePaidBasket()
+  }, [])
   const isSub = variant === 'personalised_subscription' || variant === 'standard_subscription'
   const name = personalisation?.firstName
   const receipt = receiptFromConfirmation(data)
@@ -413,10 +474,11 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
       )}
 
       {isSub ? (
-        <PrimaryCta href="/myhub" label="Manage your subscription" cta="manage_subscription" icon="sliders" />
+        <PrimaryCta href="/myhub?welcome=1" label="Manage your subscription" cta="manage_subscription" icon="sliders" />
       ) : (
         <PrimaryCta href="/shop" label="Continue shopping" cta="continue_shopping" />
       )}
+      {!isSub && order && <MonthlyAgain lines={order.lineItems} />}
       {isSub && <BackToShop label="Keep exploring" />}
       {!isSub && !personalisation && <QuizInvitation />}
     </Shell>

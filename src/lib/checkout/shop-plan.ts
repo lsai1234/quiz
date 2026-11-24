@@ -162,6 +162,7 @@ export function buildShopPlan(
     subscriptionDiscountRate: 0,
     // The day it starts is the day Stripe bills it, and so the day each box goes (`billing-day`).
     dispatchDayOfMonth: billingDayOf(now),
+    source: 'shop',
     minMonths,
     introDiscountRate: 0,
     firstMonth: monthly,

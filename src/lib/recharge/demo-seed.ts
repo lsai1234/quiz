@@ -24,7 +24,20 @@
  */
 import { getPaymentSource } from '@/lib/payments'
 
-export function seedsDemoSubscription(): boolean {
+export function seedsDemoSubscription(email?: string | null): boolean {
   if (getPaymentSource() === 'stripe') return false
-  return (process.env.HUB_DEMO_SUBSCRIPTION ?? '').trim().toLowerCase() !== 'off'
+  if ((process.env.HUB_DEMO_SUBSCRIPTION ?? '').trim().toLowerCase() === 'off') return false
+  return !skipsDemoByDomain(email)
+}
+
+/**
+ * `HUB_DEMO_SKIP_DOMAIN=real.e2e.test`: accounts at that domain get no demo
+ * plan, so the end-to-end suite can make real accounts through every way in
+ * (an order once, a monthly basket, nothing at all) and see what that customer
+ * sees, in the same run as the specs that rely on the demo. Only ever narrows
+ * the seeding; unset, nothing changes.
+ */
+function skipsDemoByDomain(email?: string | null): boolean {
+  const domain = (process.env.HUB_DEMO_SKIP_DOMAIN ?? '').trim().toLowerCase()
+  return Boolean(domain && email && email.toLowerCase().endsWith(`@${domain}`))
 }

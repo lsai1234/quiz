@@ -208,6 +208,9 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
   const { memberHubPlanView } = await import('@/lib/hub-plan/server')
   const membership = await memberHubPlanView(user.id, now)
   const boxRunning = Boolean(sub && sub.status !== 'cancelled')
+  // What they have, plainly: the plan and the orders (`summary`).
+  const { planSummary, orderSummary } = await import('./summary')
+  const catalogue = (await (await import('@/lib/catalogue/resolve')).getResolvedCatalogue()).products
   const { hubOnSale } = await import('@/lib/offer/settings')
   const joinOffer = hubOnSale(settings) && !open && !boxRunning && !membership ? { monthly: settings.hubPrice.monthly } : null
 
@@ -220,6 +223,13 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
       ? {
           token: guide.token,
           stackName: guide.stackName,
+          day: {
+            wake: guide.routine.day.wake,
+            bed: guide.routine.day.bed,
+            trainAt: guide.routine.day.trainAt,
+            trainWeekdays: guide.routine.day.trainWeekdays,
+            assumed: guide.routine.day.assumed,
+          },
           products: guide.products.map((p) => ({
             id: p.id,
             kind: kindOf.get(p.id) ?? null,
@@ -242,13 +252,8 @@ export async function hubHome(user: Who, now = new Date()): Promise<HubHome> {
     training,
     trainer,
     deals,
-    orders: orders.slice(0, 10).map((o) => ({
-      reference: o.reference ?? o.id.slice(0, 8).toUpperCase(),
-      createdAt: o.createdAt,
-      total: o.total,
-      items: o.lines.filter((l) => !l.bonus).map((l) => l.title),
-      status: o.status,
-    })),
+    orders: orders.slice(0, 10).map((o) => orderSummary(o, catalogue)),
+    plan: planSummary(sub, catalogue, now),
     membership,
     joinOffer,
     todaySession,

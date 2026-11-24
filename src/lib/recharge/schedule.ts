@@ -28,6 +28,8 @@ export interface DeliveryItem {
   price: number
   /** True for a one-off addition (charged in full, not part of the recurring plan). */
   oneOff?: boolean
+  /** The extra this is (`BoxExtra.id`), for one added through `/api/hub/next-box`. */
+  extraId?: string
 }
 
 export interface Delivery {
@@ -182,8 +184,25 @@ export function buildDeliverySchedule(
       })
     }
 
-    // One-off products added to this box only.
+    // Extras added to this box (`hub/next-box`), as charged: their own price
+    // and variant, whatever the catalogue says now.
     let oneOffTotal = 0
+    for (const extra of ov.addedItems ?? []) {
+      oneOffTotal = round(oneOffTotal + extra.price)
+      const product = catalogue.find((p) => p.id === extra.productId)
+      items.push({
+        lineId: null,
+        productId: extra.productId,
+        productTitle: extra.variantTitle ? `${extra.title} · ${extra.variantTitle}` : extra.title,
+        slotTitle: product ? SLOT_LABELS[product.stackSlots[0]] ?? product.category : 'Extra',
+        units: 1,
+        price: extra.price,
+        oneOff: true,
+        extraId: extra.id,
+      })
+    }
+
+    // One-off products added the old way (`addedProductIds`): shown as they always were.
     for (const pid of ov.addedProductIds ?? []) {
       const product = catalogue.find((p) => p.id === pid)
       if (!product) continue

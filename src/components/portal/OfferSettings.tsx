@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Note, Segmented } from '@/components/system'
 import { ProductPicker } from './ProductPicker'
+import { OfferRulebook } from './OfferRulebook'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus, type ServiceSettings } from '@/lib/offer/settings'
 import { LEVEL_NAME, type GiftVerdict } from '@/lib/offer/bonus-economics'
@@ -86,6 +87,8 @@ export function OfferSettings() {
       <HeroCard view={view} saving={saving} onSwitch={(on) => save({ heroEnabled: on })} />
       <BonusCard view={view} saving={saving} onSave={(bonus) => save({ bonus })} />
       <ServicesCard view={view} saving={saving} onSwitch={(services) => save({ services })} />
+      {/* Every offer side by side, after the switches it depends on. */}
+      <OfferRulebook />
     </div>
   )
 }

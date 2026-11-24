@@ -220,6 +220,12 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
 
       const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
       const { products } = await getResolvedCatalogue()
+      // Extras added to this box (`hub/next-box`): whatever this payment paid for, read off its lines.
+      const { extrasFromInvoice } = await import('@/lib/hub/next-box')
+      const extras = extrasFromInvoice(
+        ((invoice as unknown as { lines?: { data?: Array<{ amount?: number | null; quantity?: number | null; description?: string | null; metadata?: Record<string, string> | null }> } }).lines?.data) ?? [],
+        products,
+      )
       const order = await createSubscriptionOrder({
         id: orderId,
         userId,
@@ -253,6 +259,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         // The charge behind this invoice, so a refund from the Founders Hub
         // actually moves money instead of just relabelling the row.
         stripePaymentIntentId: idOf(invoice.payment_intent),
+        extras,
       })
 
       // A paid invoice clears any dunning flag: whatever went wrong before, the

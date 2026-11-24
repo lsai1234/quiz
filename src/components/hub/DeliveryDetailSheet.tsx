@@ -128,10 +128,14 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                           <span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% on plan
                         </p>
                       )}
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <Button variant="secondary" size="sm" onClick={() => { onAddItem(p); setAdding(false) }}>
-                          Just this box · +{formatGBP(oneOffUnitPrice(p))}
-                        </Button>
+                      {/* "Just this box" only on the next box: an extra is paid for
+                          with the next payment, whichever box that is (`hub/next-box`). */}
+                      <div className={`grid ${delivery.isNext ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
+                        {delivery.isNext && (
+                          <Button variant="secondary" size="sm" onClick={() => { onAddItem(p); setAdding(false) }}>
+                            Just this box · +{formatGBP(oneOffUnitPrice(p))}
+                          </Button>
+                        )}
                         <Button variant="primary" size="sm" onClick={() => { onAddRecurring(p); setAdding(false) }}>
                           Every delivery · +{formatGBP(econ.perMonth)}/mo
                         </Button>
@@ -194,6 +198,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
               {credit > 0
                 ? `Nothing ships that month, and the box’s value, ${formatGBP(credit)}, is credited against your next payment.`
                 : 'Nothing ships that month. Nothing was due in this box, so there’s nothing to credit.'}
+              {delivery.items.some((i) => i.extraId) && ' The extras you added come out too, and off the payment.'}
             </p>
           </div>
         )}

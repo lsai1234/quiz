@@ -9,6 +9,8 @@ import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPaymentSource } from '@/lib/payments'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import { extrasDroppedBySkip, keepStoredExtras } from '@/lib/hub/next-box'
+import { reportErrorAsync } from '@/lib/monitoring/report'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +44,7 @@ export async function GET() {
   const { getHubPlan } = await import('@/lib/hub-plan/store')
   // Nor over a sample member (Settings → Test views): their state is the scenario's.
   const { isSampleEmail } = await import('@/lib/samples/domain')
-  if (!subscription && seedsDemoSubscription() && !isSampleEmail(user.email) && !(await getHubPlan(user.id))) {
+  if (!subscription && seedsDemoSubscription(user.email) && !isSampleEmail(user.email) && !(await getHubPlan(user.id))) {
     const { products } = await getResolvedCatalogue()
     subscription = createMockSubscription(products, user.email ?? '')
     version = await saveSubscription(user.id, subscription)
@@ -124,7 +126,7 @@ export async function PUT(req: Request) {
   }
 
   // Server-held fields the browser has no business changing.
-  const claimed: MemberSubscription = {
+  const claimed: MemberSubscription = keepStoredExtras(previous, {
     ...incoming,
     stripeSubscriptionId: previous.stripeSubscriptionId,
     stripeCustomerId: previous.stripeCustomerId,
@@ -134,7 +136,11 @@ export async function PUT(req: Request) {
     // Stripe bills a linked plan on its own day and each box is raised by that
     // charge, so the day is Stripe's (`billing-day`), not the browser's.
     dispatchDayOfMonth: previous.stripeSubscriptionId ? previous.dispatchDayOfMonth : incoming.dispatchDayOfMonth,
-  }
+    // The old one-offs were never charged or packed: a plan Stripe bills takes no new ones.
+    deliveryOverrides: previous.stripeSubscriptionId
+      ? pinLegacyOneOffs(previous, incoming.deliveryOverrides)
+      : incoming.deliveryOverrides,
+  })
 
   await syncPortalRuntime()
 
@@ -160,9 +166,11 @@ export async function PUT(req: Request) {
   if (sync.cancelError) {
     // The member is out either way; this needs reconciling in Stripe by hand.
     console.error(`[hub] subscription cancelled locally but NOT in Stripe for ${user.id}:`, sync.cancelError)
+    reportErrorAsync(sync.cancelError, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId: user.id, context: { step: 'cancel-in-stripe' } })
   }
 
   const version = await saveSubscription(user.id, subscription)
+  await unchargeSkippedExtras(user.id, previous, subscription)
   await creditNewlySkippedBoxes(user.id, previous, subscription)
   await creditNewlySkippedLines(user.id, previous, subscription)
   return NextResponse.json({ ok: true, version, subscription })
@@ -213,6 +221,7 @@ async function creditNewlySkippedBoxes(
       })
     } catch (err) {
       console.error(`[hub] skip credit of £${amount} failed to reach Stripe for ${userId}:`, err)
+      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'skip-credit', amount } })
     }
   }
 }
@@ -260,6 +269,51 @@ async function creditNewlySkippedLines(
       })
     } catch (err) {
       console.error(`[hub] line credit of £${delta} failed to reach Stripe for ${userId}:`, err)
+      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'line-credit', amount: delta } })
+    }
+  }
+}
+
+/**
+ * The old one-off list (`addedProductIds`) as stored, whatever the browser sent:
+ * on a plan Stripe bills it was never charged or packed, so it may not grow.
+ * Extras go through `/api/hub/next-box` now.
+ */
+function pinLegacyOneOffs(
+  previous: MemberSubscription,
+  incoming: MemberSubscription['deliveryOverrides'],
+): MemberSubscription['deliveryOverrides'] {
+  const out = { ...(incoming ?? {}) }
+  for (const id of new Set([...Object.keys(previous.deliveryOverrides ?? {}), ...Object.keys(out)])) {
+    const stored = previous.deliveryOverrides?.[id]?.addedProductIds
+    if (!out[id]) {
+      if (stored?.length) out[id] = { addedProductIds: stored }
+      continue
+    }
+    const { addedProductIds: _sent, ...rest } = out[id]
+    void _sent
+    out[id] = stored?.length ? { ...rest, addedProductIds: stored } : rest
+  }
+  return out
+}
+
+/**
+ * A box the member has just skipped sends nothing, so the extras they had added
+ * to it come off its payment (`extrasDroppedBySkip`). Never throws: the skip
+ * stands either way, and an extra still on the payment is reported to be taken
+ * off by hand.
+ */
+async function unchargeSkippedExtras(userId: string, previous: MemberSubscription, next: MemberSubscription): Promise<void> {
+  const dropped = extrasDroppedBySkip(previous, next).filter((x) => x.invoiceItemId)
+  if (!dropped.length || getPaymentSource() !== 'stripe') return
+  const { removeInvoiceItem } = await import('@/lib/payments/stripe')
+  for (const extra of dropped) {
+    try {
+      if (!(await removeInvoiceItem(extra.invoiceItemId!))) {
+        console.warn(`[hub] skipped box's extra ${extra.id} was already invoiced for ${userId}`)
+      }
+    } catch (err) {
+      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'uncharge-skipped-extra', invoiceItemId: extra.invoiceItemId } })
     }
   }
 }

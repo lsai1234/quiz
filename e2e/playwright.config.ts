@@ -132,6 +132,9 @@ export default defineConfig({
          is passed through rather than fixed: `HUB_DEMO_SUBSCRIPTION=off npm run
          e2e` runs it, and the specs that need it skip otherwise. */
       HUB_DEMO_SUBSCRIPTION: process.env.HUB_DEMO_SUBSCRIPTION ?? '',
+      /* Accounts at this domain get no demo plan, in every run: the specs that
+         walk each real way into the hub (30-hub-doors) use it. */
+      HUB_DEMO_SKIP_DOMAIN: 'real.e2e.test',
     },
   },
 })

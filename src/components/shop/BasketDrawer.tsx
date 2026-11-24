@@ -16,6 +16,9 @@ import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 import type { ShopPlanCheckoutState } from '@/hooks/useShopPlanCheckout'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
+import { addToNextBox, useMyPlan } from '@/hooks/useMyPlan'
+import { extraPrice } from '@/lib/hub/extra-price'
+import { billingDayOf, billingDayPhrase } from '@/lib/recharge/billing-day'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
@@ -81,6 +84,21 @@ export function BasketDrawer({
   onClose,
 }: Props) {
   const { setQty, remove, plan, setPlan } = useBasket()
+  /*
+    Someone already on a plan: these can go in their next box (paid with that
+    box, no delivery charge) or be bought once, never start a second plan. An
+    account holds one plan, and checkout refuses a second (`PlanAlreadyExists`).
+  */
+  const mine = useMyPlan()
+  const hasPlan = Boolean(mine.plan && mine.plan.status !== 'cancelled')
+  const boxPlan = mine.plan?.status === 'active' && mine.plan.nextBox ? mine.plan : null
+  const [intoBox, setIntoBox] = useState(false)
+  const [boxBusy, setBoxBusy] = useState(false)
+  const [boxDone, setBoxDone] = useState<string | null>(null)
+  const [boxError, setBoxError] = useState<string | null>(null)
+  useEffect(() => {
+    if (hasPlan && plan === 'monthly') setPlan('once')
+  }, [hasPlan, plan, setPlan])
   // Member prices on top-ups are a hub service the founders switch on; the
   // monthly plan only promises them while they are on (`GET /api/offer`).
   const { settings: offer } = useOfferSettings()
@@ -133,7 +151,36 @@ export function BasketDrawer({
     () => buildShopPlan(resolved.map((l) => ({ productId: l.product.id, variantId: l.variant.id, quantity: l.quantity })), products ?? [], config),
     [resolved, products, config],
   )
-  const monthly = plan === 'monthly'
+  const monthly = plan === 'monthly' && !hasPlan
+  const toBox = intoBox && Boolean(boxPlan)
+  const boxTotal = Math.round(resolved.reduce((sum, l) => sum + extraPrice(l.product, l.variant, config) * l.quantity, 0) * 100) / 100
+
+  /** Every unit into the next box, one request each; what went in leaves the basket. */
+  const addAllToBox = async () => {
+    if (!boxPlan || boxBusy) return
+    setBoxBusy(true)
+    setBoxError(null)
+    let said = ''
+    for (const l of resolved) {
+      let added = 0
+      for (let i = 0; i < l.quantity; i++) {
+        const r = await addToNextBox(l.product.id, l.variant.id)
+        if (!r.ok) {
+          setQty(l.product.id, l.variant.id, l.quantity - added)
+          setBoxError(r.message)
+          setBoxBusy(false)
+          mine.reload()
+          return
+        }
+        said = r.message
+        added++
+      }
+      remove(l.product.id, l.variant.id)
+    }
+    setBoxDone(`${said.replace(/\s*£[\d.,]+ goes on that payment\.$/, '')} ${formatGBP(boxTotal)} goes on that payment.`.trim())
+    setBoxBusy(false)
+    mine.reload()
+  }
   const monthlyBlock = founderKind ? 'Founder codes are for one-off orders, so this basket can’t be monthly while one is applied.' : !shopPlan.ok ? shopPlan.message : null
   const planReady = monthly && !monthlyBlock && shopPlan.ok
   // A code is checked for one way of buying; switching asks for it again,
@@ -160,7 +207,7 @@ export function BasketDrawer({
   // Judged on the UNDISCOUNTED subtotal, which is the expression `/api/cart`
   // refuses on. Measuring the discounted total here would put a basket through
   // this notice that the checkout then let past, or the reverse.
-  const belowMinimum = !monthly && !founderKind && minimum > 0 && priced.subtotal < minimum && resolved.length > 0
+  const belowMinimum = !monthly && !toBox && !founderKind && minimum > 0 && priced.subtotal < minimum && resolved.length > 0
   const shortfall = Math.max(0, Math.round((minimum - priced.subtotal) * 100) / 100)
 
   const mockDone = checkoutState.status === 'mock-complete'
@@ -198,7 +245,20 @@ export function BasketDrawer({
           </button>
         </div>
 
-        {resolved.length === 0 ? (
+        {resolved.length === 0 && planDone ? (
+          <div className="sf-drawer-empty" role="status" data-plan-done>
+            <p className="sf-drawer-empty-h"><Icon name="check" size={16} /> Your monthly plan is set up.</p>
+            <p>It’s in your hub, where you can change anything about it.</p>
+            <Link href="/myhub?welcome=1" className="sf-button sf-button--primary sf-button--md">Go to your hub</Link>
+            <p className="sf-drawer-secure">Payments aren’t live. This is a demo, and nothing was charged.</p>
+          </div>
+        ) : resolved.length === 0 && boxDone ? (
+          <div className="sf-drawer-empty" role="status" data-box-added>
+            <p className="sf-drawer-empty-h"><Icon name="check" size={16} /> In your next box</p>
+            <p>{boxDone}</p>
+            <Link href="/myhub" className="sf-button sf-button--primary sf-button--md">See your box</Link>
+          </div>
+        ) : resolved.length === 0 ? (
           <div className="sf-drawer-empty">
             <p className="sf-drawer-empty-h">Your basket is empty</p>
             <p>Add something from the shelves to get started.</p>
@@ -276,8 +336,33 @@ export function BasketDrawer({
                 />
               )}
 
-              {/* Once or every month. Every month is the same basket at the
-                  same price, delivered monthly, with the member hub. */}
+              {hasPlan ? (
+                /* On a plan already: once, or into the next box. */
+                <section className="sf-drawer-planbox" aria-labelledby="basket-plan-h" data-basket-plan data-member-plan>
+                  <div className="sf-drawer-planhead">
+                    <h3 id="basket-plan-h">How do you want these?</h3>
+                    <div className="sf-drawer-seg" role="group" aria-labelledby="basket-plan-h">
+                      <button type="button" aria-pressed={!toBox} onClick={() => setIntoBox(false)}>Once</button>
+                      <button type="button" aria-pressed={toBox} onClick={() => setIntoBox(true)} disabled={!boxPlan}>In my next box</button>
+                    </div>
+                  </div>
+                  {toBox && boxPlan?.nextBox ? (
+                    <ul className="sf-drawer-planlist">
+                      <li><Icon name="box" size={15} />Into your box on {new Date(boxPlan.nextBox.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}, added to that box’s payment</li>
+                      <li><Icon name="truck" size={15} />No delivery charge: it ships with your box</li>
+                      <li><Icon name="calendar" size={15} /><span>Want something every month instead? <Link href="/myhub">Add it to your plan in your hub</Link></span></li>
+                    </ul>
+                  ) : (
+                    <p className="sf-drawer-planwhy">
+                      {boxPlan
+                        ? 'You’re on a monthly plan, so these can go in your next box instead, with no delivery charge.'
+                        : 'Your plan is paused, so these can only be bought once right now. Resume it in your hub to add to a box.'}
+                    </p>
+                  )}
+                </section>
+              ) : (
+              /* Once or every month. Every month is the same basket at the
+                 same price, delivered monthly, with the member hub. */
               <section className="sf-drawer-planbox" aria-labelledby="basket-plan-h" data-basket-plan>
                 <div className="sf-drawer-planhead">
                   <h3 id="basket-plan-h">How often?</h3>
@@ -289,9 +374,11 @@ export function BasketDrawer({
                 {monthly && monthlyBlock ? (
                   <p className="sf-drawer-planwhy">{monthlyBlock}</p>
                 ) : monthly && shopPlan.ok ? (
-                  <ul className="sf-drawer-planlist">
-                    <li><Icon name="calendar" size={15} />{formatGBP(shopPlan.monthly)} a month, the same as buying it once</li>
+                  /* What happens, in order: today, then each month, then where it's run from. */
+                  <ul className="sf-drawer-planlist" data-monthly-how>
+                    <li><Icon name="calendar" size={15} />Your first box today, then {formatGBP(shopPlan.monthly)} on {billingDayPhrase(billingDayOf(new Date()))} of each month: the same as buying it once</li>
                     <li><Icon name="truck" size={15} />{shopPlan.delivery ? `${formatGBP(shopPlan.delivery.price)} delivery a month` : 'Free UK delivery every month'}</li>
+                    <li><Icon name="sliders" size={15} />It’s run from your hub: add, swap or remove products, skip a month, pause or cancel any time</li>
                     <li><Icon name="home" size={15} />{memberPrices ? 'The member hub comes with it, with member prices when you top up' : 'The member hub comes with it'}</li>
                     {/* The terms' "Take it off my plan": a shop plan has no
                         answers to choose a safe swap from, so it is said here,
@@ -303,6 +390,7 @@ export function BasketDrawer({
                   <p className="sf-drawer-planwhy">Every month is the same basket at the same price, delivered monthly, with the member hub.</p>
                 )}
               </section>
+              )}
             </div>
             </div>
 
@@ -312,6 +400,7 @@ export function BasketDrawer({
                   basket is worth: its whole job is getting a small basket through. */}
               {/* Every month, the code is checked as a plan's is (a partner's
                   code works there, off the first month); once, as a basket's. */}
+              {!toBox && (
               <PartnerCodeBox
                 key={monthly ? 'monthly' : 'once'}
                 subtotal={monthly && shopPlan.ok ? shopPlan.monthly : subtotal}
@@ -319,6 +408,7 @@ export function BasketDrawer({
                 applied={appliedCode}
                 onChange={onCodeChange}
               />
+              )}
 
               {belowMinimum && (
                 <p className="sf-drawer-note">
@@ -368,10 +458,25 @@ export function BasketDrawer({
                 </>
               )}
 
+              {/* Into the next box: what goes on that payment, and the one button. */}
+              {toBox && boxPlan?.nextBox && (
+                <>
+                  <p className="sf-drawer-row sf-drawer-total">
+                    <span>Added to your next payment</span>
+                    <b className="sf-num">{formatGBP(boxTotal)}</b>
+                  </p>
+                  {boxError && <p className="sf-drawer-error" role="alert">{boxError}</p>}
+                  <Button variant="primary" size="lg" fullWidth onClick={addAllToBox} disabled={boxBusy} loading={boxBusy} className="sf-drawer-checkout">
+                    <span>{boxBusy ? 'Adding to your box…' : 'Add to my next box'}</span>
+                  </Button>
+                  <p className="sf-drawer-secure">Nothing to pay now. It’s added to your box’s payment, and you can take it out again in your hub.</p>
+                </>
+              )}
+
               {/* The discount, itemised, and the total at what the card will be
                   charged: both from `priceOneOffLines`, the function /api/cart
                   bills Stripe from. Only ever one discount line. */}
-              {!monthly && priced.discount > 0.01 && (
+              {!monthly && !toBox && priced.discount > 0.01 && (
                 <>
                   <p className="sf-drawer-row">
                     <span>Subtotal</span>
@@ -391,7 +496,7 @@ export function BasketDrawer({
                   </p>
                 </>
               )}
-              {!monthly && (
+              {!monthly && !toBox && (
                 <p className="sf-drawer-row sf-drawer-total">
                   <span>{priced.discount > 0.01 ? 'Total' : 'Subtotal'}</span>
                   <b className="sf-num">{formatGBP(priced.total)}</b>
@@ -405,10 +510,10 @@ export function BasketDrawer({
                 <p className="sf-drawer-error" role="alert">{planState.message}</p>
               )}
 
-              {planDone ? (
+              {toBox ? null : planDone ? (
                 <div className="sf-drawer-done" role="status">
                   <p><Icon name="check" size={15} /> Your monthly plan is set up.</p>
-                  <Link href="/myhub" className="sf-button sf-button--primary sf-button--md sf-button--full">Go to your hub</Link>
+                  <Link href="/myhub?welcome=1" className="sf-button sf-button--primary sf-button--md sf-button--full">Go to your hub</Link>
                   <p className="sf-drawer-secure">Payments aren’t live. This is a demo, and nothing was charged.</p>
                 </div>
               ) : (

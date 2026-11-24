@@ -277,6 +277,47 @@ function checkPayments(): HealthCheck {
   }
 }
 
+/**
+ * The nightly comparison of our plans with Stripe (`payments/reconcile`): a
+ * cancel that reached us and not Stripe, a monthly that drifted, a plan Stripe
+ * has never heard of. Read from the last run; nothing is asked of Stripe here.
+ */
+async function checkStripeAgrees(): Promise<HealthCheck> {
+  const { getPaymentSource } = await import('@/lib/payments')
+  if (getPaymentSource() !== 'stripe') {
+    return { id: 'stripe-agrees', title: 'No Stripe plans to compare', status: 'ok', detail: 'Payments are mocked, so there are no Stripe subscriptions to check our plans against.' }
+  }
+  const { kvGet } = await import('@/lib/db/kv')
+  const { RECONCILE_KEY } = await import('@/lib/payments/reconcile')
+  const last = await kvGet<import('@/lib/payments/reconcile').ReconcileResult>(RECONCILE_KEY)
+  if (!last) {
+    return {
+      id: 'stripe-agrees',
+      title: 'Plans not yet compared with Stripe',
+      status: 'warn',
+      detail: 'The daily job compares every plan with its Stripe subscription, and it hasn’t run yet. Check the daily job is scheduled and CRON_SECRET is set.',
+      href: '/founderhub/monitoring',
+    }
+  }
+  const when = new Date(last.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const extra = [
+    last.daysFixed ? `${last.daysFixed} plan day${last.daysFixed === 1 ? '' : 's'} corrected to Stripe’s.` : '',
+    last.unreachable ? `${last.unreachable} couldn’t be checked (Stripe didn’t answer) and will be tried again.` : '',
+  ].filter(Boolean).join(' ')
+  if (!last.findings.length) {
+    return { id: 'stripe-agrees', title: 'Stripe agrees with our plans', status: 'ok', detail: `${last.checked} plan${last.checked === 1 ? '' : 's'} checked ${when}.${extra ? ` ${extra}` : ''}` }
+  }
+  const n = last.findings.length
+  const named = last.findings.slice(0, 3).map((f) => `${f.email ?? f.userId}: ${f.detail}`).join(' ')
+  return {
+    id: 'stripe-agrees',
+    title: `Stripe disagrees with ${n} plan${n === 1 ? '' : 's'}`,
+    status: 'fail',
+    detail: `${named}${n > 3 ? ` And ${n - 3} more.` : ''} Checked ${when}.${extra ? ` ${extra}` : ''}`,
+    href: '/founderhub/monitoring',
+  }
+}
+
 /** Recent unresolved criticals, as a health line rather than a list. */
 async function checkCriticals(): Promise<HealthCheck> {
   const n = await criticalCountSince(24)
@@ -312,6 +353,7 @@ export async function runHealthChecks(): Promise<HealthCheck[]> {
     checkOutbox,
     checkCron,
     async () => checkPayments(),
+    checkStripeAgrees,
   ]
 
   return Promise.all(

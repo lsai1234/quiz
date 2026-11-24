@@ -136,6 +136,7 @@ export function BundleLandingPage({ bundle }: Props) {
       introDiscountOverride: revealedIntroDiscount,
       partnerDiscountPct: partnerCode?.discountPct ?? null,
       partnerCode: partnerCode?.code ?? null,
+      source: 'bundle' as const,
     }),
     [revealedIntroDiscount, partnerCode],
   )

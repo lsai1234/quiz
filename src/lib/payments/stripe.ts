@@ -708,6 +708,50 @@ export async function subscriptionFactsFor(
   }
 }
 
+/**
+ * Put an extra on a subscription's next payment (`hub/next-box`).
+ *
+ * A pending invoice item on the subscription: Stripe adds it to the next invoice
+ * it makes for that subscription, and the renewal box packs it
+ * (`extrasFromInvoice`, by the metadata). Keyed so a retried request cannot
+ * charge twice.
+ */
+export async function addInvoiceItem(input: {
+  customerId: string
+  subscriptionId: string
+  amount: number
+  description: string
+  metadata: Record<string, string>
+  idempotencyKey: string
+}): Promise<string> {
+  const stripe = getStripeClient()
+  const item = await stripe.invoiceItems.create(
+    {
+      customer: input.customerId,
+      subscription: input.subscriptionId,
+      currency: 'gbp',
+      amount: Math.round(input.amount * 100),
+      description: input.description,
+      metadata: input.metadata,
+    },
+    { idempotencyKey: input.idempotencyKey },
+  )
+  return item.id
+}
+
+/**
+ * Take an extra off the next payment. False when it has already been invoiced
+ * (and so can't be taken off; the box then still packs it, because it was paid
+ * for), true when it came off.
+ */
+export async function removeInvoiceItem(invoiceItemId: string): Promise<boolean> {
+  const stripe = getStripeClient()
+  const item = await stripe.invoiceItems.retrieve(invoiceItemId)
+  if (item.invoice) return false
+  await stripe.invoiceItems.del(invoiceItemId)
+  return true
+}
+
 /** Open the Stripe billing portal so a member can manage their card / cancel. */
 export async function createBillingPortalSession(customerId: string, returnUrl: string): Promise<{ url: string }> {
   const stripe = getStripeClient()

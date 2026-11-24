@@ -1,5 +1,6 @@
 'use client'
 
+import { rememberBasketBeingPaid } from '@/lib/basket/paid'
 import { useCallback, useRef, useState } from 'react'
 import { basketToCheckoutLines } from '@/lib/basket/helpers'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
@@ -111,6 +112,9 @@ export function useShopCheckout() {
       // screen live traffic will rather than it only ever being tested in
       // production. This is a route change AFTER completion, which is fine;
       // OC-F-004 prohibits one DURING initiation.
+      // What this tab is paying for, so a confirmed order can empty the basket (`basket/paid`).
+      if (source === 'basket') rememberBasketBeingPaid()
+
       if (data.checkoutUrl.startsWith('#')) {
         clearTimeout(timeout)
         if (data.orderId) {

@@ -353,6 +353,11 @@ export async function createSubscriptionOrder(input: {
   cycle: number
   /** What this cycle's invoice actually charged (£) — see `Order.billedAmount`. */
   billedAmount?: number | null
+  /**
+   * Extras the member added to this box (`hub/next-box`), as the invoice paid
+   * for them. Packed with the box; a skipped box still sends what was paid for.
+   */
+  extras?: OrderLine[]
 }): Promise<Order> {
   // Idempotency: if this invoice already produced an order, return it unchanged.
   // This also protects the cycle: a redelivered webhook arriving after the clock
@@ -377,7 +382,7 @@ export async function createSubscriptionOrder(input: {
 
   // The free bonus the plan earned at signup ships in the first box only.
   const gift = input.cycle === 0 ? input.sub.bonus ?? null : null
-  const lines = subscriptionOrderLines(input.sub, input.catalogue, input.cycle)
+  const lines = [...subscriptionOrderLines(input.sub, input.catalogue, input.cycle), ...(input.extras ?? [])]
   if (gift) {
     lines.push({
       sku: gift.sku,

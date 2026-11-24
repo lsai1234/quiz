@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -44,6 +45,12 @@ const EXIT_MS = 160
 
 /** Lets `ModalHeader` close through the exit animation without prop-threading. */
 const ModalCloseContext = createContext<(() => void) | null>(null)
+/**
+ * The id `ModalHeader` puts on its title, so the dialog is named by it. Dialogs
+ * with a header used to have no accessible name at all: a screen reader said
+ * "dialog" and nothing else.
+ */
+const ModalTitleContext = createContext<string | undefined>(undefined)
 
 type Size = 'sm' | 'md' | 'lg'
 
@@ -74,6 +81,7 @@ export interface ModalProps {
 }
 
 export function Modal({ children, onClose, size = 'md', presentation = 'panel', label, className }: ModalProps) {
+  const titleId = useId()
   const [mounted, setMounted] = useState(false)
   const [closing, setClosing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -186,6 +194,8 @@ export function Modal({ children, onClose, size = 'md', presentation = 'panel', 
         role="dialog"
         aria-modal="true"
         aria-label={label}
+        // Named by its header's title when it has one; a `label` wins.
+        aria-labelledby={label ? undefined : titleId}
         tabIndex={-1}
         className={[
           'system-glass w-full flex flex-col overflow-hidden outline-none',
@@ -227,7 +237,9 @@ export function Modal({ children, onClose, size = 'md', presentation = 'panel', 
             />
           </div>
         )}
-        <ModalCloseContext.Provider value={requestClose}>{children}</ModalCloseContext.Provider>
+        <ModalCloseContext.Provider value={requestClose}>
+          <ModalTitleContext.Provider value={titleId}>{children}</ModalTitleContext.Provider>
+        </ModalCloseContext.Provider>
       </div>
     </div>,
     document.body,
@@ -256,6 +268,7 @@ export function ModalHeader({
   children?: ReactNode
 }) {
   const close = useContext(ModalCloseContext)
+  const titleId = useContext(ModalTitleContext)
 
   return (
     <div
@@ -283,6 +296,7 @@ export function ModalHeader({
           </p>
         )}
         <h2
+          id={titleId}
           style={{
             fontSize: 'var(--text-title)',
             fontWeight: 'var(--weight-display)',

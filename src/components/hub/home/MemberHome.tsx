@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } 
 import { Disclosure, Note, Skeleton } from '@/components/system'
 import { HUB_COPY as C } from '@/lib/hub/copy'
 import { HUB_PLAN_COPY } from '@/lib/hub-plan/copy'
+import { billingDayPhrase } from '@/lib/recharge/billing-day'
 import type { HubHome } from '@/lib/hub/home-types'
 import { DealsCard } from '../DealsCard'
 import { FeedbackLink } from '../feedback/FeedbackPage'
@@ -15,6 +16,7 @@ import { StackSection } from './StackSection'
 import { CheckInTile, DealsTile, TipsTile, WeekTile } from './Tiles'
 import { TodayCard } from './TodayCard'
 import { TrainerCard } from './TrainerCard'
+import { WhatYouHave } from './WhatYouHave'
 import { col, Rise, SectionHead } from './ui'
 
 /**
@@ -32,6 +34,28 @@ import { col, Rise, SectionHead } from './ui'
  * One request (`/api/hub/home`); every section is there only when it's theirs
  * and switched on. A closed hub keeps the guide and orders, read-only.
  */
+type Arrival = 'joined' | 'arrived' | 'plan-exists'
+
+/**
+ * The first thing someone sees after they arrive, in the words of how they
+ * came: what they now have, when it comes, and where the rest is.
+ */
+export function welcomeLine(arrival: Arrival, home: Pick<HubHome, 'plan' | 'access' | 'membership'>): string {
+  if (arrival === 'joined') return HUB_PLAN_COPY.welcome
+  if (arrival === 'plan-exists') return 'You already have a monthly plan, so we didn’t start a second one. Add to it, or put something in your next box, below.'
+  const plan = home.plan
+  if (plan && plan.status !== 'cancelled') {
+    const day = billingDayPhrase(plan.day)
+    if (plan.source === 'shop') return `Your monthly basket is set up. It comes on ${day} of each month, at the shop’s price. What’s on it, and how to change it, is below.`
+    if (plan.source === 'bundle') return `Your bundle is set up and your first box is on its way. After that it comes on ${day} of each month. What’s on it, and how to change it, is below.`
+    return `Your plan is set up and your first box is on its way. After that it comes on ${day} of each month, and your guide below says when to take each product.`
+  }
+  // The hub on its own, just joined (from the quiz, `?welcome=1`).
+  if (home.membership && home.membership.status !== 'cancelled') return HUB_PLAN_COPY.welcome
+  if (home.access.state === 'member') return 'Your order is on its way. Your hub is open for 90 days: your guide, your order and buying again are all here.'
+  return 'Welcome to your hub.'
+}
+
 export function MemberHome({ name, plan, none, data }: { name: string | null; plan?: ReactNode; none?: ReactNode; data?: ReactNode }) {
   const [home, setHome] = useState<HubHome | null>(null)
   const [failed, setFailed] = useState(false)
@@ -50,12 +74,14 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
     void load()
   }, [load])
 
-  // Just joined the hub on its own (`?joined=1`, or `?welcome=1` after the quiz): say so once.
-  const [welcome, setWelcome] = useState(false)
+  // Just arrived: joined the hub on its own (`?joined=1`), came from a checkout
+  // (`?welcome=…`), or tried to start a second plan (`?plan=exists`). Said once.
+  const [welcome, setWelcome] = useState<Arrival | null>(null)
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    if (q.get('joined') === '1' || q.get('welcome') === '1') {
-      setWelcome(true)
+    const arrival: Arrival | null = q.get('plan') === 'exists' ? 'plan-exists' : q.get('joined') === '1' ? 'joined' : q.get('welcome') ? 'arrived' : null
+    if (arrival) {
+      setWelcome(arrival)
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [])
@@ -138,8 +164,8 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
     <div className="hub-home" data-member-home data-hub-state={home.access.state}>
       {welcome && (
         <div className="hub-home-wide" style={at('welcome')} data-hub-welcome>
-          <Note tone="positive" icon="check" live="polite">
-            {HUB_PLAN_COPY.welcome}
+          <Note tone={welcome === 'plan-exists' ? 'info' : 'positive'} icon={welcome === 'plan-exists' ? 'info' : 'check'} live="polite">
+            {welcomeLine(welcome, home)}
           </Note>
         </div>
       )}
@@ -147,10 +173,22 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
         <HubHero home={home} name={name} />
       </Rise>
 
+      {/* What they have, plainly, before anything else: the plan, what they bought once, the hub on its own. */}
+      <Rise i={1} className="hub-home-wide" style={at('hero')}>
+        <WhatYouHave plan={home.plan ?? null} orders={home.orders} membership={home.membership} />
+      </Rise>
+
       <div className="hub-home-col">
         {open && (home.today || home.todaySession) && (
           <Rise i={1} style={at('today')}>
-            <TodayCard items={home.today?.items ?? []} session={home.todaySession} />
+            {/* Keyed on the day: the card holds its ticks, and a new day brings new times. */}
+            <TodayCard
+              key={home.guide ? [home.guide.day.wake, home.guide.day.bed, home.guide.day.trainAt, (home.guide.day.trainWeekdays ?? []).join('')].join('|') : 'no-guide'}
+              items={home.today?.items ?? []}
+              session={home.todaySession}
+              day={home.guide?.day ?? null}
+              onDayChanged={load}
+            />
           </Rise>
         )}
 
@@ -168,7 +206,7 @@ export function MemberHome({ name, plan, none, data }: { name: string | null; pl
 
         {plan && (
           <Rise i={5} style={at('plan')}>
-            <section data-plan>
+            <section data-plan tabIndex={-1} style={{ outline: 'none' }}>
               <SectionHead eyebrowText={C.planEyebrow} title={C.planTitle} />
               {plan}
             </section>

@@ -41,6 +41,10 @@ export type ConfirmationVariant =
 
 export interface ConfirmationLine {
   sku: string | null
+  /** The product, so a one-off can be put back in the basket ("Get these every month"). */
+  productId?: string
+  /** The free gift: never bought again. */
+  bonus?: boolean
   name: string
   qty: number
   /** Minor units (pence), as charged. */
@@ -173,6 +177,8 @@ function toLines(order: Order): ConfirmationLine[] {
   const shelf = lastChanceApplies(order) ? order.lastChance!.listPrice : null
   return order.lines.map((l: OrderLine) => ({
     sku: l.sku,
+    productId: l.productId,
+    ...(l.bonus ? { bonus: true } : {}),
     // The free bonus reads as one, at £0.00, as on the results page's receipt.
     name: `${l.bonus ? 'Free: ' : ''}${l.variantTitle ? `${l.title} – ${l.variantTitle}` : l.title}`,
     qty: l.quantity,

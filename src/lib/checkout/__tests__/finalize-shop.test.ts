@@ -124,3 +124,39 @@ describe('a monthly shop basket at checkout', () => {
     expect(args.metadata).toEqual({ userId: user.id, source: 'shop' })
   })
 })
+
+/**
+ * One plan per account. A second checkout used to overwrite the stored plan
+ * while the first Stripe subscription went on billing; a live plan is now
+ * changed from the hub instead.
+ */
+describe('a member who already has a plan', () => {
+  it('can’t start a second one while Stripe bills the first, and their plan is untouched', async () => {
+    const { PlanAlreadyExists } = await import('../finalize')
+    const { saveSubscription } = await import('@/lib/db/hub-data')
+    const { createMockSubscription } = await import('@/lib/recharge/mock')
+    const user = await createUser({ email: 'two-plans@example.com', passwordHash: 'h' })
+    const { products } = await getResolvedCatalogue()
+    const live = { ...createMockSubscription(products, user.email), stripeSubscriptionId: 'sub_live', stripeCustomerId: 'cus_live' }
+    await saveSubscription(user.id, live)
+
+    await expect(finalizeCheckout(user.id, user.email, { subscription: tampered, shop: { lines: await basket() }, consent } as CheckoutPayload)).rejects.toBeInstanceOf(PlanAlreadyExists)
+    expect((await getSubscription(user.id))?.stripeSubscriptionId).toBe('sub_live')
+    expect((await getSubscription(user.id))?.lines.map((l) => l.id)).toEqual(live.lines.map((l) => l.id))
+
+    // Paused is still theirs; ended is not.
+    await saveSubscription(user.id, { ...live, status: 'paused' })
+    await expect(finalizeCheckout(user.id, user.email, { subscription: tampered, shop: { lines: await basket() }, consent } as CheckoutPayload)).rejects.toBeInstanceOf(PlanAlreadyExists)
+    await saveSubscription(user.id, { ...live, status: 'cancelled' })
+    await expect(finalizeCheckout(user.id, user.email, { subscription: tampered, shop: { lines: await basket() }, consent } as CheckoutPayload)).resolves.toMatchObject({ checkoutUrl: '#mock-subscription' })
+  })
+
+  it('still replaces a plan Stripe has never heard of (the demo)', async () => {
+    const { saveSubscription } = await import('@/lib/db/hub-data')
+    const { createMockSubscription } = await import('@/lib/recharge/mock')
+    const user = await createUser({ email: 'demo-then-real@example.com', passwordHash: 'h' })
+    const { products } = await getResolvedCatalogue()
+    await saveSubscription(user.id, createMockSubscription(products, user.email))
+    await expect(finalizeCheckout(user.id, user.email, { subscription: tampered, shop: { lines: await basket() }, consent } as CheckoutPayload)).resolves.toMatchObject({ checkoutUrl: '#mock-subscription' })
+  })
+})

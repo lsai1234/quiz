@@ -20,7 +20,7 @@ test.describe('the shop, every month', () => {
 
     await drawer.getByRole('button', { name: 'Every month' }).click()
     await expect(drawer.getByRole('button', { name: 'Every month' })).toHaveAttribute('aria-pressed', 'true')
-    await expect(drawer.getByText(/a month, the same as buying it once/)).toBeVisible()
+    await expect(drawer.getByText(/of each month: the same as buying it once/)).toBeVisible()
     await expect(drawer.getByText(/member hub comes with it/i)).toBeVisible()
     await drawer.getByRole('button', { name: /Start monthly plan/ }).click()
 

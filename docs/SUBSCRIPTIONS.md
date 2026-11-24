@@ -17,9 +17,10 @@ every month" adds the product and opens the basket set to monthly.
 |---|---|
 | Price | What the same basket costs bought once (`priceOneOffLines`), so the basket's own saving (the £50+ tier) carries over. No subscribe-&-save rate. |
 | Minimum | `minSubscriptionMonthly` a month, as a quiz plan. |
-| Term | `minSubscriptionMonths`, raised by any product that needs longer, as a quiz plan. |
+| Term | None. No plan has a minimum term: the settings that used to raise one no longer do (`calculatePricing`), and the basket says "Cancel any time". |
 | Delivery | A monthly line under the free-delivery line (`recurringDeliveryOption`), as a quiz plan. |
-| Codes | A partner's code comes off the first month, as on a quiz plan; founder codes are for one-off orders. |
+| Codes | A partner's code comes off the first payment only, as on a quiz plan; founder codes are for one-off orders. |
+| The day | The day it's bought. Stripe bills on that day each month and every box is raised by that payment, so the hub, the calendar and the confirmation all say it (`recharge/billing-day`). |
 | The hub | Opens with the plan and stays open while it runs (`lib/hub/access`), as for any plan. Member prices on top-ups (`lib/deals`) come with it only while that service is switched on; the basket says so only then. |
 | Unavailable products | Taken out and the member told (`defaultChangePolicy: 'remove'`): a shop plan has no quiz answers to swap against safely. Changeable in the hub. |
 | No | Quiz answers, the free gift (its terms exclude shop baskets), or a personal guide. |
@@ -31,6 +32,47 @@ own catalogue; the plan the browser sends alongside only fills the account
 gate and is discarded. The Stripe session carries `source: 'shop'` in its
 metadata. Refusals (`ShopPlanRefused`: empty, unavailable, under the minimum)
 answer 409 with the sentence to show; nothing is stored or charged.
+
+## One plan per account, and how it grows
+
+An account holds one plan (`subscriptions` is a row per member). A checkout
+for a second one, while Stripe bills the first (active or paused), is refused
+before anything is stored or charged (`PlanAlreadyExists`, 409 `has-plan`, or
+`/myhub?plan=exists` from the account gate). It used to overwrite the stored
+plan while the first Stripe subscription carried on billing.
+
+Someone on a plan grows it instead, from wherever they are:
+
+- **The hub's "What you have"** (`components/hub/home/WhatYouHave.tsx`, data
+  from `lib/hub/summary.ts`): what's on the plan and how often, the monthly and
+  its day, the next box, "Manage your plan" and "Add a product".
+- **The shop.** A product page says "On your plan" where it is, and offers
+  "Add to your next box" with the box's date and the price; the basket offers
+  "Once" or "In my next box" instead of "Every month". Both read
+  `GET /api/hub/next-box`.
+- **Extras in the next box** (`lib/hub/next-box.ts`, `/api/hub/next-box`):
+  priced on the server (the variant's price with the plan saving, floored),
+  charged as a Stripe invoice item on the next payment, packed in the box that
+  payment raises (read off the paid invoice's lines, `extrasFromInvoice`), and
+  taken off again from the calendar. Only the next box takes extras, because
+  Stripe adds a pending item to the next invoice whichever box that is. Extras
+  are held by the server: a plan saved from the browser can neither add nor
+  drop one, and skipping their box takes them off the payment.
+
+## The plan's day, and what members can move
+
+A plan's day is Stripe's billing day: the day it was bought, read back from
+the subscription's billing anchor by the webhook. On a plan Stripe bills the
+hub shows the day rather than offering to change it, and doesn't offer "move
+this box": both only changed the screen, since Stripe charges and raises each
+box on its own day. Moving a member's day would mean moving Stripe's billing
+anchor, a payment change that hasn't been made. Skipping a box and taking
+items out of one are honoured (by cycle) and credited.
+
+The nightly job compares every plan with its Stripe subscription
+(`lib/payments/reconcile.ts`): status, monthly and day. Disagreements show on
+Monitoring ("Stripe agrees with our plans"); a day that differs is corrected to
+Stripe's.
 
 ## Quiz and bundle plans are checked on the server
 

@@ -1,6 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState, type ReactNode } from 'react'
+import { addToNextBox, useMyPlan } from '@/hooks/useMyPlan'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { useBasket } from '@/lib/basket/store'
@@ -154,10 +157,12 @@ interface Props {
    * preview passes it so its picture of the page still has them.
    */
   onSelectVariant?: (id: string) => void
+  /** The Founders Hub's picture of the page: shows what a visitor with no plan sees, and asks nothing about anyone's plan. */
+  preview?: boolean
   className?: string
 }
 
-export function ProductDetailBody({ product, variant, onSelectVariant, className }: Props) {
+export function ProductDetailBody({ product, variant, onSelectVariant, preview = false, className }: Props) {
   const price = variant?.price ?? product.basePrice
   const router = useRouter()
 
@@ -193,19 +198,23 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
       {onSelectVariant && <VariantOptions product={product} variant={variant} onSelectVariant={onSelectVariant} />}
 
       {/* Never on an accessory. A monthly shaker is not a plan, it is a
-          cupboard full of shakers — and the offer reads as one we would honour. */}
+          cupboard full of shakers — and the offer reads as one we would honour.
+          Someone already on a plan is offered their next box instead
+          (`PlanChoice`): an account holds one plan. */}
       {product.subscriptionEligible && !isAccessory(product) && (
-        <button type="button" data-interactive className="sf-pdp-plan" onClick={getMonthly} disabled={!variant?.available}>
-          <Icon name="calendar" size={22} />
-          <span className="sf-pdp-plan-words">
-            <b>Get it every month</b>
-            <span>Same price, delivered monthly, with the member hub</span>
-          </span>
-          <span className="sf-pdp-plan-price sf-num">
-            {formatGBP(price)}<small>/mo</small>
-          </span>
-          <Icon name="chevron-right" size={16} />
-        </button>
+        <PlanChoice product={product} variant={variant} preview={preview}>
+          <button type="button" data-interactive className="sf-pdp-plan" onClick={getMonthly} disabled={!variant?.available}>
+            <Icon name="calendar" size={22} />
+            <span className="sf-pdp-plan-words">
+              <b>Get it every month</b>
+              <span>Same price, delivered monthly, with the member hub</span>
+            </span>
+            <span className="sf-pdp-plan-price sf-num">
+              {formatGBP(price)}<small>/mo</small>
+            </span>
+            <Icon name="chevron-right" size={16} />
+          </button>
+        </PlanChoice>
       )}
 
       {cells.length > 0 && (
@@ -251,4 +260,81 @@ export function stockLine(variant: CatalogueVariant | undefined): string | null 
   if (!variant || !variant.available) return null
   const { count } = variantStock(variant)
   return count != null && count > 0 && count < 5 ? `${count} left in stock` : null
+}
+
+const boxDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/**
+ * What a product page offers about plans, by who is looking.
+ *
+ * Signed out or with no plan: `children`, the "Get it every month" row that
+ * starts a monthly basket. On a plan: whether this product is already on it,
+ * "Add to your next box" (paid with that box, no delivery charge), and the way
+ * to have it every delivery, in the hub. A paused plan says why there's no box
+ * to add to. Until the answer comes back, the ordinary row shows, so most
+ * visitors (who have no plan) never see anything move.
+ */
+function PlanChoice({ product, variant, preview, children }: { product: CatalogueProduct; variant: CatalogueVariant | undefined; preview: boolean; children: ReactNode }) {
+  if (preview) return <>{children}</>
+  return <MemberPlanChoice product={product} variant={variant}>{children}</MemberPlanChoice>
+}
+
+function MemberPlanChoice({ product, variant, children }: { product: CatalogueProduct; variant: CatalogueVariant | undefined; children: ReactNode }) {
+  const mine = useMyPlan(product.id, variant?.id ?? null)
+  const [busy, setBusy] = useState(false)
+  const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => setSaid(null), [product.id, variant?.id])
+
+  const live = mine.plan && mine.plan.status !== 'cancelled' ? mine.plan : null
+  if (!live) return <>{children}</>
+  const onPlan = live.productIds.includes(product.id)
+
+  const add = async () => {
+    if (!variant || busy) return
+    setBusy(true)
+    const r = await addToNextBox(product.id, variant.id)
+    setSaid({ ok: r.ok, text: r.message })
+    if (r.ok) track('add_to_basket', { id: product.id, source: 'next-box', price: mine.quote?.price ?? variant.price })
+    setBusy(false)
+    mine.reload()
+  }
+
+  return (
+    <div className="sf-pdp-mine" data-pdp-member-plan>
+      {onPlan && (
+        <p className="sf-pdp-onplan">
+          <Icon name="check" size={14} /> On your plan
+        </p>
+      )}
+      {live.status === 'paused' ? (
+        <p className="sf-pdp-mine-note">
+          Your plan is paused, so there’s no box to add to right now. <Link href="/myhub">Resume it in your hub</Link>
+        </p>
+      ) : said?.ok ? (
+        <p className="sf-pdp-mine-note sf-pdp-mine-done" role="status">
+          <Icon name="check" size={14} /> {said.text} <Link href="/myhub">See your box</Link>
+        </p>
+      ) : mine.quote ? (
+        <button type="button" data-interactive className="sf-pdp-plan" onClick={add} disabled={busy || !variant?.available} aria-busy={busy}>
+          <Icon name="box" size={22} />
+          <span className="sf-pdp-plan-words">
+            <b>{busy ? 'Adding to your box…' : 'Add to your next box'}</b>
+            <span>Ships {boxDate(mine.quote.box.date)} with your box, no delivery charge</span>
+          </span>
+          <span className="sf-pdp-plan-price sf-num">+{formatGBP(mine.quote.price)}</span>
+          <Icon name="chevron-right" size={16} />
+        </button>
+      ) : mine.refusal ? (
+        <p className="sf-pdp-mine-note">{mine.refusal.error}</p>
+      ) : null}
+      {said && !said.ok && (
+        <p className="sf-pdp-mine-note" role="alert">
+          {said.text}
+        </p>
+      )}
+      <Link href={onPlan ? '/myhub' : `/myhub?add=${encodeURIComponent(product.swapGroup)}`} className="sf-pdp-mine-link">
+        {onPlan ? 'Manage it on your plan, in your hub' : 'Or add it to every delivery, in your hub'}
+      </Link>
+    </div>
+  )
 }

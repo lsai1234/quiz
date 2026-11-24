@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getHubUser } from '@/lib/auth/session'
 import { kvGet, kvDelete } from '@/lib/db/kv'
-import { BonusUnavailable, CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX, PlanPriceRefused, ShopPlanRefused, StockUnavailable } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, PENDING_COOKIE, PENDING_KEY_PREFIX, PlanAlreadyExists, PlanPriceRefused, ShopPlanRefused, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
 import { getProvider } from '@/lib/auth/providers'
@@ -74,6 +74,10 @@ export async function GET(req: Request) {
       // Nothing saved or charged: back to the start, as for a sold-out plan.
       console.warn('[checkout/continue] free bonus refused:', err.message)
       return NextResponse.redirect(`${origin}/?checkout=gift-changed`)
+    }
+    if (err instanceof PlanAlreadyExists) {
+      // Their plan is in the hub, where it can grow.
+      return NextResponse.redirect(`${origin}/myhub?plan=exists`)
     }
     if (err instanceof PlanPriceRefused) {
       // Priced below what we sell it for, or under the minimum. Nothing saved

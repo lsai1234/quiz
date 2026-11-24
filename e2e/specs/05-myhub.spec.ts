@@ -48,7 +48,8 @@ test.describe('the dashboard', () => {
     await openHub(page)
     await dismissReconsent(page)
 
-    await expect(page.getByText(/YOUR NEXT BOX/i)).toBeVisible()
+    // The dashboard's own heading ("Your next box · ships in …"), not "What you have"'s shop link.
+    await expect(page.getByText(/^YOUR NEXT BOX ·/i)).toBeVisible()
     await expect(page.getByText(/HOW YOU’RE BILLED/i)).toBeVisible()
     await expect(page.getByText(/Next charge/i)).toBeVisible()
 

@@ -221,6 +221,29 @@ async function withShopPlan(payload: CheckoutPayload): Promise<CheckoutPayload> 
  * A quiz or bundle plan priced below what we sell it for. Thrown before
  * anything is stored or charged.
  */
+/**
+ * They already have a plan that Stripe bills (active or paused).
+ *
+ * An account holds one plan (`subscriptions` is one row per member), and a
+ * second checkout used to overwrite it: the new plan was stored, the old Stripe
+ * subscription carried on billing, and nothing in the hub could see or stop it.
+ * Refused before anything is stored or charged; the hub is where a plan grows
+ * (add, swap, a one-off in the next box).
+ *
+ * A plan Stripe has never heard of (mock payments, the demo) is replaced as
+ * before, and so is one that has ended.
+ */
+export class PlanAlreadyExists extends Error {
+  constructor() {
+    super('You already have a monthly plan. Add to it, swap products or put something in your next box from your hub.')
+    this.name = 'PlanAlreadyExists'
+  }
+}
+
+export function blocksNewPlan(existing: MemberSubscription | null): boolean {
+  return Boolean(existing?.stripeSubscriptionId) && (existing!.status === 'active' || existing!.status === 'paused')
+}
+
 export class PlanPriceRefused extends Error {
   constructor(message: string) {
     super(message)
@@ -367,6 +390,9 @@ export async function finalizeCheckout(
     throw new CheckoutRejected(consentErrorMessage(consent.error), consent.error, consent.versions)
   }
 
+  // 2a. One plan per account: a live one is changed from the hub, never replaced here.
+  if (blocksNewPlan(await getSubscription(userId).catch(() => null))) throw new PlanAlreadyExists()
+
   // 2b. A shop basket bought monthly: the plan is built HERE, from our
   //     catalogue and our prices (`buildShopPlan`). The browser sent products
   //     and quantities; whatever plan it also sent was for showing in the
@@ -434,6 +460,8 @@ export async function finalizeCheckout(
       // whatever the date; the webhook confirms the day from Stripe's anchor.
       startedAt: startedAt.toISOString(),
       dispatchDayOfMonth: billingDayOf(startedAt),
+      // Where it came from, for the hub's words: decided here for a shop basket.
+      source: fromShop ? 'shop' : payload.source === 'bundle' ? 'bundle' : payload.source === 'answers' || quizAnswers ? 'answers' : 'bundle',
       partnerCode: redemption?.ok ? redemption.code.code : null,
       // Snapshot the hard dietary/stimulant exclusions now, so a substitution
       // months from now is judged against what they told us at the point of sale

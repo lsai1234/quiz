@@ -5,6 +5,7 @@
 import type { HubAccess } from './access'
 import type { HubPlanView } from '@/lib/hub-plan/plan'
 import type { Tip } from '@/lib/tips/library'
+import type { OrderSummary, PlanSummary } from './summary'
 
 export interface TodayItem {
   productId: string
@@ -42,7 +43,13 @@ export interface HubHome {
   services: { training: boolean; deals: boolean; checkIns: boolean }
   /** Today's products on their day, ticked off as they go; null without a guide. */
   today: { date: string; items: TodayItem[] } | null
-  guide: { token: string; stackName: string | null; products: GuideProductLite[] } | null
+  guide: {
+    token: string
+    stackName: string | null
+    products: GuideProductLite[]
+    /** The day the guide is timed around; `assumed` when they never said (they can set it). */
+    day: { wake: number; bed: number; trainAt: number | null; trainWeekdays: number[] | null; assumed: boolean }
+  } | null
   checkIn: { token: string; nextDue: string | null; due: boolean; answered: number; stopped: boolean } | null
   tips: Tip[]
   training: {
@@ -66,7 +73,9 @@ export interface HubHome {
     last: { from: 'member' | 'trainer'; text: string; at: string } | null
   } | null
   deals: { open: number; upcoming: number; next: { short: string; line: string; opensInDays: number } | null; best: { short: string; line: string; total: number } | null } | null
-  orders: { reference: string; createdAt: string; total: number; items: string[]; status: string }[]
+  orders: OrderSummary[]
+  /** Their monthly plan, said plainly (`summary`), or null for none. */
+  plan: PlanSummary | null
   /** Today's training session for the Today card (coaching tools on): "6pm · Full body A · 45 min", with Start. */
   todaySession: { id: string; title: string; time: string | null; minutes: number; workout: boolean } | null
   /** The hub on its own, when they've joined; null otherwise. */

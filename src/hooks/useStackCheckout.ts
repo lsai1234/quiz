@@ -220,6 +220,8 @@ export function useStackCheckout() {
         bonus?: { productId: string; level: StackLevel } | null
         /** The stack guide's seed: their day, goals, first name. Checked server-side. */
         guide?: unknown
+        /** Where the plan comes from, for the hub's words (`PlanSource`). */
+        source?: 'answers' | 'bundle'
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -260,6 +262,7 @@ export function useStackCheckout() {
           // The free bonus, for the first box. Re-checked server-side.
           ...(subOpts.bonus ? { bonus: subOpts.bonus } : {}),
           ...(subOpts.guide ? { guide: subOpts.guide } : {}),
+          ...(subOpts.source ? { source: subOpts.source } : {}),
         }
         await runFinalize(payload, result.checkout)
         return

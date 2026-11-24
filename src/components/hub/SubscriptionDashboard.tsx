@@ -9,6 +9,7 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { ordinalSuffix, tint } from '@/lib/ui/tokens'
 import { billingDayPhrase } from '@/lib/recharge/billing-day'
+import { OPEN_ADD_PRODUCT } from './home/WhatYouHave'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice, skipCredit } from '@/lib/recharge/schedule'
@@ -51,7 +52,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     subscription: sub, feedback,
     setDispatchDay, resume,
     swapLine, addLine, removeLine, setLineUsage, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
-    skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
+    skipDelivery, unskipDelivery, rescheduleDelivery, removeItemFromDelivery, addExtra, removeExtra,
     snooze, applyDownsize, refresh,
   } = useHubStore()
   const { products } = useCatalogueProducts()
@@ -178,6 +179,13 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     url.searchParams.delete('billing')
     window.history.replaceState({}, '', `${url.pathname}${url.search}`)
   }, [sub, reduced])
+
+  // "Add a product" from the hub's "What you have" opens the add sheet here.
+  useEffect(() => {
+    const open = () => setShowAdd(true)
+    window.addEventListener(OPEN_ADD_PRODUCT, open)
+    return () => window.removeEventListener(OPEN_ADD_PRODUCT, open)
+  }, [])
 
   // Subtle premium entrance — the one piece of hub motion that was already
   // right. It just never asked whether the visitor wanted any.
@@ -648,9 +656,9 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               title: 'Add to this box', subtitle: product.title,
               monthlyBefore: sub.flatMonthly, monthlyAfter: sub.flatMonthly,
               oneOffNow: oneOffUnitPrice(product), effectiveFrom: selectedDelivery.date,
-              note: 'A one-off added to this box only. Your monthly plan is unchanged.',
+              note: 'A one-off in this box only, added to this box’s payment. It ships with the box, so there’s no delivery charge, and your monthly plan is unchanged.',
               confirmLabel: 'Add to box',
-              onConfirm: () => addItemToDelivery(selectedDelivery.id, product),
+              onConfirm: () => void addExtra(product.id),
             })
           }}
           onAddRecurring={(product) => {
@@ -678,7 +686,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                 ? `A one-off you added to this box. Removing it takes the ${formatGBP(item.price)} back off this month’s bill; your plan is untouched.`
                 : 'It stays on your plan and comes back next time — this box just won’t include it, and its value is credited against your next payment.',
               confirmLabel: item.oneOff ? 'Remove it' : 'Leave it out',
-              onConfirm: () => removeItemFromDelivery(selectedDelivery.id, item),
+              onConfirm: () => (item.extraId ? void removeExtra(item.extraId) : removeItemFromDelivery(selectedDelivery.id, item)),
             })
           }}
           onClose={() => setSelectedDeliveryId(null)}

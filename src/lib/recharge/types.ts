@@ -203,9 +203,18 @@ export interface SubscriptionBonus {
   codeNotApplied?: string | null
 }
 
+/**
+ * Where a plan came from, so the hub can say what it is: a stack built from
+ * their answers (the quiz or the Amp Consult), a bundle, or a shop basket
+ * bought every month. A label for words only; nothing is priced from it.
+ */
+export type PlanSource = 'answers' | 'bundle' | 'shop'
+
 export interface MemberSubscription {
   /** Recharge subscription/contract id when live. */
   id: string
+  /** Where it came from (`PlanSource`); unset on plans made before it was recorded. */
+  source?: PlanSource | null
   status: SubscriptionStatus
   customerEmail: string
   /**
@@ -394,14 +403,39 @@ export interface SubscriptionExit {
   by?: string | null
 }
 
+/**
+ * Something added to one box from the shop or the hub (`hub/next-box`): paid for
+ * with that box's payment and packed in that box. Held by the server: only
+ * `/api/hub/next-box` adds or takes one out, never a plan the browser saves.
+ */
+export interface BoxExtra {
+  id: string
+  productId: string
+  variantId: string | null
+  sku: string | null
+  title: string
+  variantTitle: string | null
+  /** What it adds to the box's payment (£). */
+  price: number
+  /** The Stripe invoice item that puts it on the payment; null where nothing is billed (no Stripe). */
+  invoiceItemId: string | null
+  addedAt: string
+}
+
 /** A member's edit to a single scheduled delivery (from the calendar). */
 export interface DeliveryOverride {
   /** Skip this box entirely (credits its value to the next payment). */
   skipped?: boolean
   /** Move this box to an explicit date (ISO). */
   dateOverride?: string
-  /** Product ids added to this box as a one-off (full price). */
+  /**
+   * Product ids added to this box as a one-off, the old way: shown on the
+   * calendar, never charged or packed. Kept for plans that have them; extras
+   * are `addedItems` now.
+   */
   addedProductIds?: string[]
+  /** Extras for this box, charged and packed (`BoxExtra`). */
+  addedItems?: BoxExtra[]
   /** Recurring line ids pulled out of this box only. */
   removedLineIds?: string[]
 }

@@ -71,7 +71,7 @@ export function ProductPreview({ payload }: { payload: Payload }) {
         <div style={{ maxWidth: '18rem' }}>
           <ShopProductCard product={product} />
         </div>
-        <ProductDetailBody product={product} variant={variant} onSelectVariant={setVariantId} />
+        <ProductDetailBody product={product} variant={variant} onSelectVariant={setVariantId} preview />
       </div>
     </Section>
   )

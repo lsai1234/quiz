@@ -139,6 +139,36 @@ async function save(fn: Change, retried = false): Promise<void> {
 }
 
 /**
+ * Run a request that changes the plan on the server (an extra for the next box)
+ * in the same line as the saves, so it never lands between a save and the
+ * version that save was made against. Then reload the plan as stored.
+ */
+function viaQueue<T>(job: () => Promise<T>): Promise<T> {
+  const run = queue.then(job)
+  queue = run.then(
+    () => {},
+    () => {},
+  )
+  return run
+}
+
+async function boxRequest(init: RequestInit & { url: string }, fallback: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const res = await fetch(init.url, init)
+    const data = (await res.json().catch(() => ({}))) as { error?: string; said?: string }
+    await useHubStore.getState().refresh()
+    if (res.ok) return { ok: true, message: data.said ?? '' }
+    const message = data.error ?? fallback
+    useHubStore.setState({ saveError: message })
+    return { ok: false, message }
+  } catch {
+    const message = 'We couldn’t reach your account. Check your connection and try again.'
+    useHubStore.setState({ saveError: message })
+    return { ok: false, message }
+  }
+}
+
+/**
  * Save a check-in. It shows at once; if it doesn't save, it comes off again and
  * the member is told, rather than being lost while it looks kept.
  */
@@ -246,6 +276,14 @@ interface HubStore {
 
   /** Log a single-dimension micro check-in (the inline "feeling it?" tap). */
   submitDimension: (dimension: FeedbackDimension, rating: number) => void
+
+  /**
+   * Add something to the next box (`/api/hub/next-box`): charged with that box's
+   * payment and packed in it. Resolves to whether it went in, and what to say.
+   */
+  addExtra: (productId: string, variantId?: string | null) => Promise<{ ok: boolean; message: string }>
+  /** Take an extra back out of its box, and off the payment. */
+  removeExtra: (extraId: string) => Promise<{ ok: boolean; message: string }>
 }
 
 /** Fetch the account's plan, its version and check-ins. `null` when it couldn't be loaded. */
@@ -412,6 +450,18 @@ export const useHubStore = create<HubStore>((set) => ({
     change((sub) => addItemToDeliveryMutation(sub, deliveryId, product)),
   removeItemFromDelivery: (deliveryId, item) =>
     change((sub) => removeItemFromDeliveryMutation(sub, deliveryId, item)),
+
+  addExtra: (productId, variantId = null) =>
+    viaQueue(() =>
+      boxRequest(
+        { url: '/api/hub/next-box', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId, variantId }) },
+        'That didn’t go in your box. Please try again.',
+      ),
+    ),
+  removeExtra: (extraId) =>
+    viaQueue(() =>
+      boxRequest({ url: `/api/hub/next-box?id=${encodeURIComponent(extraId)}`, method: 'DELETE' }, 'That didn’t come out of your box. Please try again.'),
+    ),
 
   submitDimension: (dimension, rating) =>
     set((s) => ({

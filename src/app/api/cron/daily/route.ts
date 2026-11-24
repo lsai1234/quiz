@@ -43,8 +43,18 @@ async function handle(req: Request) {
       } catch (err) {
         console.error('[cron/daily] consult retention sweep failed:', err)
       }
+      // Our plans against Stripe's subscriptions (`payments/reconcile`). Never allowed to fail the run.
+      let stripeCheck: { checked: number; disagree: number; daysFixed: number } | null = null
+      try {
+        const { reconcileWithStripe } = await import('@/lib/payments/reconcile')
+        const r = await reconcileWithStripe()
+        if (r) stripeCheck = { checked: r.checked, disagree: r.findings.length, daysFixed: r.daysFixed }
+      } catch (err) {
+        console.error('[cron/daily] Stripe comparison failed:', err)
+        await reportError(err, { surface: 'cron', severity: 'error', path: '/api/cron/daily', context: { step: 'reconcile-stripe' } })
+      }
       await recordCronHeartbeat({ at: new Date().toISOString(), ok: true, ms: Date.now() - startedAt })
-      return NextResponse.json({ ok: true, ms: Date.now() - startedAt, prunedErrorEvents: pruned, ...consultSweep, ...result })
+      return NextResponse.json({ ok: true, ms: Date.now() - startedAt, prunedErrorEvents: pruned, ...consultSweep, stripeCheck, ...result })
     }
 
     return NextResponse.json({ ok: true, ms: Date.now() - startedAt, ...result })

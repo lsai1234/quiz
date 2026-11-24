@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { BonusUnavailable, CheckoutRejected, PaymentStartFailed, PlanPriceRefused, ShopPlanRefused, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
+import { BonusUnavailable, CheckoutRejected, PaymentStartFailed, PlanAlreadyExists, PlanPriceRefused, ShopPlanRefused, StockUnavailable, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
 import { reportError } from '@/lib/monitoring/report'
@@ -65,6 +65,9 @@ export async function POST(req: Request) {
     }
     // The free bonus can't come with this plan any more. Nothing was stored or
     // charged; the page drops the gift and says why.
+    if (err instanceof PlanAlreadyExists) {
+      return NextResponse.json({ error: err.message, code: 'has-plan' }, { status: 409 })
+    }
     if (err instanceof PlanPriceRefused) {
       return NextResponse.json({ error: err.message, code: 'price-changed' }, { status: 409 })
     }

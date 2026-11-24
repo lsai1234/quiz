@@ -41,4 +41,10 @@ export interface CheckoutPayload {
    * ignores the one sent alongside (that one only fills the account gate).
    */
   shop?: { lines: ShopPlanLineInput[] } | null
+  /**
+   * Where the plan came from, for the hub's words (`PlanSource`): `bundle` from a
+   * bundle page, `answers` from the quiz or consult. A shop basket is always
+   * `shop`, decided on the server. A label only; nothing is priced from it.
+   */
+  source?: 'answers' | 'bundle' | null
 }

@@ -2536,6 +2536,14 @@
 .sf-pdp-plan-words span { font-size: 13px; color: var(--text-dim); }
 .sf-pdp-plan-price { font-size: 15px; font-weight: var(--weight-semibold); white-space: nowrap; }
 .sf-pdp-plan-price small { font-size: 12.5px; font-weight: var(--weight-regular); color: var(--text-dim); }
+/* On a plan already: whether this product is on it, the next box, and the hub. */
+.sf-pdp-mine { display: grid; gap: var(--space-2); }
+.sf-pdp-onplan { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: var(--weight-semibold); color: var(--text); }
+.sf-pdp-onplan svg { color: var(--accent); }
+.sf-pdp-mine-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.sf-pdp-mine-note a, .sf-pdp-mine-link { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.sf-pdp-mine-done svg { color: var(--accent); vertical-align: -2px; }
+.sf-pdp-mine-link { justify-self: start; font-size: 13px; }
 
 .sf-pdp-facts {
   display: grid;

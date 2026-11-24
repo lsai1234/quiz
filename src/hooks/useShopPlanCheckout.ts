@@ -1,5 +1,6 @@
 'use client'
 
+import { releasePaidBasket, rememberBasketBeingPaid } from '@/lib/basket/paid'
 import { useCallback, useRef, useState } from 'react'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -71,7 +72,10 @@ export function useShopPlanCheckout() {
         setState({ status: 'error', message: data?.ref ? `${message} Reference: ${data.ref}` : message })
         return
       }
+      rememberBasketBeingPaid()
       if (data.checkoutUrl.startsWith('#')) {
+        // Set up already (no live payments): the basket has been bought.
+        releasePaidBasket()
         setState({ status: 'mock-complete' })
         return
       }

@@ -7,6 +7,7 @@ import { COACHING_COPY as W } from '@/lib/training/coaching-copy'
 import { HUB_COPY as C } from '@/lib/hub/copy'
 import type { HubHome, TodayItem } from '@/lib/hub/home-types'
 import { body, ChargeRing, eyebrow, meta, strong } from './ui'
+import { SetYourDayButton } from './SetYourDay'
 
 /**
  * Today: the hub's centrepiece. A charge ring with a segment for each product
@@ -46,7 +47,18 @@ function SessionRow({ session }: { session: NonNullable<HubHome['todaySession']>
   )
 }
 
-export function TodayCard({ items: initial, session = null }: { items: TodayItem[]; session?: HubHome['todaySession'] }) {
+export function TodayCard({
+  items: initial,
+  session = null,
+  day = null,
+  onDayChanged,
+}: {
+  items: TodayItem[]
+  session?: HubHome['todaySession']
+  /** The day the guide is timed around, to set it ("Set your day"). */
+  day?: NonNullable<HubHome['guide']>['day'] | null
+  onDayChanged?: () => void
+}) {
   const [items, setItems] = useState(initial)
   const [busy, setBusy] = useState<string | null>(null)
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes()
@@ -157,6 +169,12 @@ export function TodayCard({ items: initial, session = null }: { items: TodayItem
             )
           })}
         </ol>
+
+        {day && onDayChanged && (
+          <div style={{ marginTop: 'var(--space-4)' }}>
+            <SetYourDayButton day={day} onSaved={onDayChanged} />
+          </div>
+        )}
       </Card>
     </div>
   )

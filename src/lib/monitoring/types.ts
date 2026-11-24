@@ -126,6 +126,8 @@ export function surfaceForPath(path: string | null | undefined): Surface {
   if (path.startsWith('/api/webhooks')) return 'webhook'
   if (path.startsWith('/api/cron')) return 'cron'
   if (path.startsWith('/api/checkout')) return 'checkout'
+  // The member hub's own routes belong to the hub, not to "api".
+  if (path.startsWith('/api/hub')) return 'myhub'
   if (path.startsWith('/api')) return 'api'
   // The quiz, plus the bundle and share routes it hands off to; everything
   // customer-facing that isn't the shop or the hub.
