@@ -25,7 +25,7 @@ import {
   type SubscriptionPlanOptions,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
-import { syncDeliveryCounts } from './clock'
+import { nextBoxCycle, syncDeliveryCounts, withInterval } from './clock'
 import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine, SafetyConstraints } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -119,6 +119,7 @@ export function buildMemberSubscription(
       quantity: l.unitsPerShipment,
       deliveryIntervalMonths: l.shipEveryMonths,
       usageLevel: l.usageLevel,
+      lastsMonths: l.monthsOneUnitLasts,
       pricePerDelivery: l.pricePerDelivery,
       swapGroup: l.product.swapGroup,
       addedAt: startedAt.toISOString(),
@@ -286,6 +287,8 @@ export function swapSubscriptionLine(
       variantId: variant?.id ?? null,
       pricePerDelivery: round(line.quantity * discountedUnit),
       swapGroup: newProduct.swapGroup,
+      // How long the new one lasts, for the words; its schedule stays the line's.
+      lastsMonths: sizeConsumption(newProduct, null, config, line.usageLevel ?? 'standard').monthsOneUnitLasts,
     }
   })
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
@@ -588,10 +591,11 @@ export function addLine(
     swapGroup: subProduct.swapGroup,
     addedAt: new Date().toISOString(),
     deliveriesMade: 0, // hasn't shipped yet
-    // Anchor it to the current cycle so the clock never credits this line with
-    // boxes that shipped before it was on the plan.
-    joinedAtMonth: sub.monthsActive,
-    nextShipAt: nextDispatchDate(sub.dispatchDayOfMonth).toISOString(),
+    // Its first box is the next one still to come. It used to be the current
+    // cycle, whose box had already gone: the clock counted a delivery that never
+    // happened, and a quarterly product first came three months later.
+    joinedAtMonth: nextBoxCycle(sub),
+    lastsMonths: sizing.monthsOneUnitLasts,
   }
   const lines = [...sub.lines, newLine]
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
@@ -606,16 +610,36 @@ export function removeLine(sub: MemberSubscription, lineId: string): { sub: Memb
   return { sub: { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }, settlement }
 }
 
-/** Change how often a line ships (clamped 1–maxDeliveryMonths). Re-derives the flat monthly. */
+/**
+ * Change how often a line ships (clamped 1–maxDeliveryMonths), counted from its
+ * last delivery (`withInterval`). Re-derives the flat monthly.
+ */
 export function setLineCadence(
   sub: MemberSubscription,
   lineId: string,
   months: number,
   config = getPricingConfig(),
+  now: Date = new Date(),
 ): MemberSubscription {
   const clamped = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(months)))
-  const lines = sub.lines.map((l) => (l.id === lineId ? { ...l, deliveryIntervalMonths: clamped } : l))
+  const next = nextBoxCycle(sub, now)
+  const lines = sub.lines.map((l) => (l.id === lineId ? withInterval(l, clamped, next) : l))
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
+}
+
+/**
+ * How often and how many, in one change: the hub's product sheet. Keeps the
+ * line's own unit price (a grandfathered price stays), counts the new cadence
+ * from the last delivery, and re-derives the flat monthly.
+ */
+export function setLineSchedule(
+  sub: MemberSubscription,
+  lineId: string,
+  change: { every: number; quantity: number },
+  config = getPricingConfig(),
+  now: Date = new Date(),
+): MemberSubscription {
+  return setLineCadence(setLineQuantity(sub, lineId, change.quantity), lineId, change.every, config, now)
 }
 
 /** Cadence options a line can move to, given the config bounds. */
@@ -679,6 +703,7 @@ export function setLineUsage(
           usageLevel,
           quantity: sizing.unitsPerShipment,
           deliveryIntervalMonths: sizing.shipEveryMonths,
+          lastsMonths: sizing.monthsOneUnitLasts,
           pricePerDelivery: round(sizing.unitsPerShipment * discountedUnit),
         }
       : l,
@@ -730,22 +755,6 @@ export function downsizePreview(sub: MemberSubscription, catalogue: CataloguePro
     keptLineIds: kept.map((l) => l.id),
     droppedLines: dropped.map((l) => ({ id: l.id, productTitle: l.productTitle, perMonth: lineMonthly(l) })),
   }
-}
-
-/**
- * Skip a line's next delivery: push its next ship date out by one cadence and
- * bank a credit equal to that delivery's value against the next payment, so the
- * member never pays for a box they didn't receive.
- */
-export function skipNextDelivery(sub: MemberSubscription, lineId: string): MemberSubscription {
-  const lines = sub.lines.map((l) => {
-    if (l.id !== lineId) return l
-    const from = l.nextShipAt ? new Date(l.nextShipAt) : nextDispatchDate(sub.dispatchDayOfMonth)
-    const next = new Date(from)
-    next.setMonth(next.getMonth() + Math.max(1, l.deliveryIntervalMonths))
-    return { ...l, nextShipAt: next.toISOString(), pendingCredit: round((l.pendingCredit ?? 0) + l.pricePerDelivery) }
-  })
-  return { ...sub, lines }
 }
 
 /** Full-price one-off charge for sending `qty` more of a line now (plan unchanged). */
@@ -848,15 +857,4 @@ export function computeCadenceImpact(
 export function computeOneOffImpact(sub: MemberSubscription, lineId: string, qty = 1): PlanChangeImpact {
   const line = sub.lines.find((l) => l.id === lineId)
   return { ...blankImpact(sub), oneOffNow: line ? oneOffCharge(line, qty) : 0, effectiveFrom: new Date().toISOString() }
-}
-
-export function computeSkipImpact(sub: MemberSubscription, lineId: string): PlanChangeImpact {
-  const line = sub.lines.find((l) => l.id === lineId)
-  const next = skipNextDelivery(sub, lineId)
-  const nextLine = next.lines.find((l) => l.id === lineId)
-  return {
-    ...blankImpact(sub),
-    credit: line ? round((nextLine?.pendingCredit ?? 0) - (line.pendingCredit ?? 0)) : 0,
-    effectiveFrom: nextLine?.nextShipAt ?? blankImpact(sub).effectiveFrom,
-  }
 }

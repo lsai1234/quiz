@@ -40,8 +40,10 @@
  */
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { discountedUnitFor, flatMonthlyOf, MAX_LINE_UNITS, nextDispatchDate } from './mock'
-import type { MemberSubscription, MemberSubscriptionLine } from './types'
+import { discountedUnitFor, flatMonthlyOf, MAX_LINE_UNITS } from './mock'
+import { nextBoxCycle, shipsAtCycle, withInterval } from './clock'
+import { cycleForMonth } from './schedule'
+import type { DeliveryOverride, MemberSubscription, MemberSubscriptionLine } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -50,25 +52,68 @@ export type RepriceResult =
   /** The change is refused outright; nothing should be saved or sent to Stripe. */
   | { ok: false; reason: string }
 
+/** The billing cycle a box id (`YYYY-MM`) belongs to, or null for one it can't read. */
+function cycleOfBox(sub: MemberSubscription, id: string, now: Date): number | null {
+  const [year, month] = id.split('-').map(Number)
+  if (!year || !month) return null
+  return cycleForMonth(sub, year, month - 1, now)
+}
+
 /**
- * Did this line's next delivery move later? That, and only that, is a skip —
- * and a skip is the one thing allowed to add to `pendingCredit`.
+ * The credit a skip of this line has just earned, and only that: the line's
+ * value for every box still to come that it was due in, that this request takes
+ * it out of, and that isn't skipped already (a skipped box is credited whole).
  *
- * A line does not always carry its own `nextShipAt`: lines created at signup
- * take the box's date from `dispatchDayOfMonth`, and only a line that has been
- * moved individually stores one. `skipNextDelivery` uses that same fallback, so
- * this has to as well — without it, the first skip of an untouched line looks
- * like no movement at all and the member is silently refused their credit.
+ * Skipping one product takes it out of its next box (`skipNextDelivery`), the
+ * same as pulling it out from the box's own sheet, and dispatch leaves out what
+ * a box has removed. So the credit is worked out from the boxes, here, from the
+ * stored plan: a hand-written credit, or one for a box that has already gone or
+ * that the product wasn't in, can't reach `creditCustomerBalance`.
+ *
+ * It used to be read off the line's `nextShipAt` moving later, which nothing
+ * shipped by: the member was credited and the product came anyway.
  */
-function movedLater(
-  sub: MemberSubscription,
-  previous: MemberSubscriptionLine | undefined,
-  incoming: MemberSubscriptionLine,
-): boolean {
-  if (!incoming.nextShipAt) return false
-  const fallback = nextDispatchDate(sub.dispatchDayOfMonth).getTime()
-  const was = previous?.nextShipAt ? new Date(previous.nextShipAt).getTime() : fallback
-  return new Date(incoming.nextShipAt).getTime() > was
+function skipAllowance(
+  previous: MemberSubscription,
+  incoming: MemberSubscription,
+  before: MemberSubscriptionLine,
+  now: Date,
+): number {
+  const next = nextBoxCycle(previous, now)
+  let allowance = 0
+  for (const [id, override] of Object.entries(incoming.deliveryOverrides ?? {})) {
+    if (!override?.removedLineIds?.includes(before.id)) continue
+    const stored = previous.deliveryOverrides?.[id]
+    if (stored?.removedLineIds?.includes(before.id)) continue
+    if (stored?.skipped || override.skipped) continue
+    const cycle = cycleOfBox(previous, id, now)
+    if (cycle == null || cycle < next || !shipsAtCycle(before, cycle)) continue
+    allowance = round(allowance + before.pricePerDelivery)
+  }
+  return allowance
+}
+
+/**
+ * A product taken out of a box still to come stays out once it's been
+ * credited: putting it back would ship it and keep the credit. (The hub has no
+ * control for it; this holds for anything else that sends the document.)
+ */
+function keepRemovals(
+  previous: MemberSubscription,
+  incoming: MemberSubscription['deliveryOverrides'],
+  now: Date,
+): MemberSubscription['deliveryOverrides'] {
+  const next = nextBoxCycle(previous, now)
+  const out: Record<string, DeliveryOverride> = { ...(incoming ?? {}) }
+  for (const [id, stored] of Object.entries(previous.deliveryOverrides ?? {})) {
+    const removed = stored?.removedLineIds ?? []
+    if (removed.length === 0) continue
+    const cycle = cycleOfBox(previous, id, now)
+    if (cycle == null || cycle < next) continue
+    const sent = out[id]?.removedLineIds ?? []
+    out[id] = { ...(out[id] ?? {}), removedLineIds: [...new Set([...sent, ...removed])] }
+  }
+  return out
 }
 
 /**
@@ -80,10 +125,14 @@ export function normaliseIncomingSubscription(
   incoming: MemberSubscription,
   catalogue: CatalogueProduct[],
   config: PricingConfig = getPricingConfig(),
+  now: Date = new Date(),
 ): RepriceResult {
   /* The subscribe-&-save rate is set once, from the bundle tier the member
      signed up on. It is not theirs to edit. */
   const rate = previous.subscriptionDiscountRate
+  /* The next box still to come: where a new product's first box is, and where a
+     change of how often counts from. */
+  const nextCycle = nextBoxCycle(previous, now)
 
   const byId = new Map(previous.lines.map((l) => [l.id, l]))
   const lines: MemberSubscriptionLine[] = []
@@ -116,12 +165,31 @@ export function normaliseIncomingSubscription(
 
     const pricePerDelivery = round(quantity * unit)
 
-    /* A skip banks the value of the delivery it skipped — no more, and only when
-       the delivery actually moved. Anything else keeps the stored figure, so a
-       hand-written credit cannot reach `creditCustomerBalance`. */
+    /* A skip banks the value of the delivery it skipped — no more, and only for
+       a box it really takes the product out of (`skipAllowance`). Anything else
+       keeps the stored figure, so a hand-written credit cannot reach
+       `creditCustomerBalance`. */
     const creditBefore = before?.pendingCredit ?? 0
-    const creditCeiling = movedLater(previous, before, line) ? round(creditBefore + pricePerDelivery) : creditBefore
+    const creditCeiling = before ? round(creditBefore + skipAllowance(previous, incoming, before, now)) : 0
     const pendingCredit = Math.min(Math.max(0, Number(line.pendingCredit) || 0), creditCeiling)
+
+    /* When it ships is the server's too. A line already on the plan keeps its
+       first box and its count; a changed cadence counts from its last delivery
+       (`withInterval`), worked out here from the stored line rather than taken
+       from the browser, which could otherwise time a quarterly tub into every
+       box. A new line's first box is the next one still to come.
+
+       `joinedAtMonth` used to fall back to the current month for any line that
+       didn't carry one, which is every line made at checkout: the first save of
+       anything at all (a skip, the out-of-stock choice) moved every product's
+       months, so a tub due in month 3 came in month 5 instead. */
+    const timing = before
+      ? withInterval(
+          { deliveryIntervalMonths: before.deliveryIntervalMonths, joinedAtMonth: before.joinedAtMonth, cadenceFrom: before.cadenceFrom },
+          cadence,
+          nextCycle,
+        )
+      : { deliveryIntervalMonths: cadence, joinedAtMonth: nextCycle, cadenceFrom: undefined }
 
     lines.push({
       ...line,
@@ -132,7 +200,10 @@ export function normaliseIncomingSubscription(
       /* Re-derived from the subscription clock on every paid cycle, and the
          basis of the exit settlement — never the client's to lower. */
       deliveriesMade: before?.deliveriesMade ?? 0,
-      joinedAtMonth: before?.joinedAtMonth ?? previous.monthsActive,
+      joinedAtMonth: timing.joinedAtMonth,
+      cadenceFrom: timing.cadenceFrom,
+      // Words only: a line keeps its own, and a new or swapped one brings the hub's sizing.
+      lastsMonths: carriedOver ? before.lastsMonths : typeof line.lastsMonths === 'number' && line.lastsMonths > 0 ? line.lastsMonths : undefined,
     })
   }
 
@@ -169,6 +240,7 @@ export function normaliseIncomingSubscription(
     subscription: {
       ...incoming,
       lines,
+      deliveryOverrides: keepRemovals(previous, incoming.deliveryOverrides, now),
       subscriptionDiscountRate: rate,
       flatMonthly: sameLines ? previous.flatMonthly : flatMonthlyOf(lines),
     },

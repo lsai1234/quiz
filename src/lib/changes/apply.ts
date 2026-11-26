@@ -35,10 +35,10 @@ import {
   paidToDate,
   removeLine,
   shippedValueToDate,
-  skipNextDelivery,
   subRateOf,
   swapSubscriptionLine,
 } from '@/lib/recharge/mock'
+import { skipNextDelivery } from '@/lib/recharge/schedule'
 import {
   discountWithFloor,
   getPricingConfig,

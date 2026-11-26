@@ -12,8 +12,9 @@ import { billingDayPhrase } from '@/lib/recharge/billing-day'
 import { OPEN_ADD_PRODUCT } from './home/WhatYouHave'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice, skipCredit } from '@/lib/recharge/schedule'
-import { computeAddImpact, computeSkipImpact, computeUsageImpact, projectedEconomics, oneOffCharge, nextDispatchDate } from '@/lib/recharge/mock'
+import { buildDeliverySchedule, computeSkipImpact, nextDelivery, oneOffUnitPrice, skipCredit, upcomingBoxesForLine } from '@/lib/recharge/schedule'
+import { rhythmLabel } from '@/lib/hub/line-facts'
+import { computeAddImpact, projectedEconomics, nextDispatchDate, setLineSchedule as setLineScheduleOf } from '@/lib/recharge/mock'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
 import { CheckIn } from './CheckIn'
@@ -51,7 +52,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     // Sign-out moved to the shell's header, where an account action belongs.
     subscription: sub, feedback,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineUsage, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineSchedule, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, removeItemFromDelivery, addExtra, removeExtra,
     snooze, applyDownsize, refresh,
   } = useHubStore()
@@ -430,6 +431,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                 onChange={openChange}
                 onManage={(id) => { setChangeLineId(null); setManageLineId(id) }}
                 onMicroFeedback={submitDimension}
+                next={sub.status === 'active' ? upcomingBoxesForLine(sub, line.id, 1)[0]?.date ?? null : null}
               />
             ))}
           </div>
@@ -554,47 +556,37 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
           subscription={sub}
           line={manageLine}
           product={products.find((p) => p.id === manageLine.productId)}
-          onSetUsage={(level) => {
-            const p = products.find((p) => p.id === manageLine.productId)
-            if (!p) return
-            const imp = computeUsageImpact(sub, manageLine.id, p, level)
+          onReviewSchedule={(change) => {
+            const after = setLineScheduleOf(sub, manageLine.id, change)
+            const [nextOne] = upcomingBoxesForLine(after, manageLine.id, 1)
             setPending({
-              title: 'Change how much you get through',
+              title: 'Change how often and how many',
               subtitle: manageLine.productTitle,
-              monthlyBefore: imp.currentMonthly,
-              monthlyAfter: imp.newMonthly,
-              effectiveFrom: imp.effectiveFrom,
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: after.flatMonthly,
+              effectiveFrom: nextOne?.date,
+              note: `${rhythmLabel(change.quantity, change.every).replace(/^./, (c) => c.toUpperCase())}, counted from the last one you had${nextOne ? `: the next one comes on ${fmtDay(nextOne.date)}` : ''}.`,
               confirmLabel: 'Confirm change',
-              onConfirm: () => { setLineUsage(manageLine.id, p, level); setManageLineId(null) },
+              onConfirm: () => { setLineSchedule(manageLine.id, change); setManageLineId(null) },
             })
           }}
           onSkip={() => {
             const imp = computeSkipImpact(sub, manageLine.id)
             setPending({
-              title: 'Skip next delivery',
+              title: 'Skip the next one',
               subtitle: manageLine.productTitle,
               monthlyBefore: sub.flatMonthly,
               monthlyAfter: sub.flatMonthly,
               credit: imp.credit,
               effectiveFrom: imp.effectiveFrom,
-              note: 'No box, no charge — its value is credited to your next payment. Your monthly plan is unchanged.',
+              note: imp.skipped
+                ? `It won’t be in your box on ${fmtDay(imp.skipped.date)}, and its value comes off your next payment.${imp.following ? ` The one after comes on ${fmtDay(imp.following.date)}.` : ''} Your monthly plan is unchanged.`
+                : 'There’s no delivery of this coming up to skip.',
               confirmLabel: 'Skip & credit',
               onConfirm: () => { skipNext(manageLine.id); setManageLineId(null) },
             })
           }}
-          onExpedite={(qty) => {
-            setPending({
-              title: 'Get one now',
-              subtitle: manageLine.productTitle,
-              monthlyBefore: sub.flatMonthly,
-              monthlyAfter: sub.flatMonthly,
-              oneOffNow: oneOffCharge(manageLine, qty),
-              effectiveFrom: new Date().toISOString(),
-              note: 'A one-off charge now; it ships with your next box. Your monthly plan is unchanged.',
-              confirmLabel: 'Confirm one-off',
-              onConfirm: () => setManageLineId(null),
-            })
-          }}
+          onAddToNextBox={() => addExtra(manageLine.productId, manageLine.variantId ?? null)}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
           onSetChangePolicy={(policy) => setLineChangePolicy(manageLine.id, policy)}
           onClose={() => setManageLineId(null)}

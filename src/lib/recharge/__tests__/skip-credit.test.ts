@@ -96,12 +96,23 @@ describe('the calendar and dispatch now agree', () => {
     const schedule = buildDeliverySchedule(plan(), [], 6, NOW)
     const hasTub = (index: number) => schedule[index].items.some((i) => i.productId === 'creatine')
 
-    // March is cycle 2 — no tub. April is cycle 3 — tub.
-    expect(hasTub(0)).toBe(false)
-    expect(hasTub(1)).toBe(true)
+    // It's 15 March and March's box went on the 10th, so the calendar starts at
+    // April. April is cycle 3 — tub. May and June — no tub. July — tub.
+    expect(schedule[0].id).toBe('2026-04')
+    expect(hasTub(0)).toBe(true)
+    expect(hasTub(1)).toBe(false)
     expect(hasTub(2)).toBe(false)
-    expect(hasTub(3)).toBe(false)
-    expect(hasTub(4)).toBe(true)
+    expect(hasTub(3)).toBe(true)
+  })
+
+  it('never starts with the box that has already gone', () => {
+    // Before the plan's day the month's own box is still to come…
+    expect(buildDeliverySchedule(plan(), [], 2, new Date('2026-03-05T12:00:00.000Z'))[0].id).toBe('2026-03')
+    // …and once it has gone, the next box is next month's, dated next month.
+    const after = buildDeliverySchedule(plan(), [], 2, NOW)
+    expect(after[0].id).toBe('2026-04')
+    expect(after[0].date.slice(0, 7)).toBe('2026-04')
+    expect(after[1].id).toBe('2026-05')
   })
 
   it('puts the monthly items in every box', () => {
@@ -143,8 +154,10 @@ describe('an item pulled out of one box', () => {
   it('does not double-credit when the whole box is then skipped', () => {
     // `creditForSkippedBox` already excludes removed lines, so the box credit
     // covers only what is left in it.
+    // The next box is April's, with the quarterly tub in it: what is left is
+    // the tub and the magnesium.
     const item = proteinIn(box().items) as never
     const after = removeItemFromDelivery(plan(), box().id, item)
-    expect(creditForSkippedBox(after, box().id, NOW)).toBe(12.74)
+    expect(creditForSkippedBox(after, box().id, NOW)).toBe(29.73)
   })
 })

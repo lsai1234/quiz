@@ -19,10 +19,10 @@ import {
   addLine as addLineMutation,
   removeLine as removeLineMutation,
   setLineCadence as setLineCadenceMutation,
+  setLineSchedule as setLineScheduleMutation,
   setLineQuantity as setLineQuantityMutation,
   setLineUsage as setLineUsageMutation,
   setLineSubstitution as setLineSubstitutionMutation,
-  skipNextDelivery as skipNextMutation,
   setNextDispatchDate as setNextDispatchDateMutation,
   sendNow as sendNowMutation,
   bringForward as bringForwardMutation,
@@ -34,6 +34,7 @@ import {
   rescheduleDelivery as rescheduleDeliveryMutation,
   addItemToDelivery as addItemToDeliveryMutation,
   removeItemFromDelivery as removeItemFromDeliveryMutation,
+  skipNextDelivery as skipNextMutation,
 } from '@/lib/recharge/schedule'
 import type { DeliveryItem } from '@/lib/recharge/schedule'
 
@@ -250,6 +251,8 @@ interface HubStore {
   addLine: (product: CatalogueProduct, catalogue: CatalogueProduct[]) => void
   removeLine: (lineId: string) => void
   setLineCadence: (lineId: string, months: number) => void
+  /** How often and how many, in one change (the product sheet). */
+  setLineSchedule: (lineId: string, change: { every: number; quantity: number }) => void
   setLineQuantity: (lineId: string, quantity: number) => void
   setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
   /**
@@ -420,6 +423,8 @@ export const useHubStore = create<HubStore>((set) => ({
     change((sub) => removeLineMutation(sub, lineId).sub),
   setLineCadence: (lineId, months) =>
     change((sub) => setLineCadenceMutation(sub, lineId, months)),
+  setLineSchedule: (lineId, schedule) =>
+    change((sub) => setLineScheduleMutation(sub, lineId, schedule)),
   setLineQuantity: (lineId, quantity) =>
     change((sub) => setLineQuantityMutation(sub, lineId, quantity)),
   setLineUsage: (lineId, product, usageLevel) =>

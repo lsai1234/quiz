@@ -12,6 +12,7 @@ import { ProgressRing } from './ProgressRing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { LineRecommendation, FeedbackDimension } from '@/lib/feedback'
+import { rhythmLabel, shortBoxDate } from '@/lib/hub/line-facts'
 
 /**
  * One product in the member's stack.
@@ -36,11 +37,15 @@ interface Props {
   onChange: (lineId: string) => void
   onManage: (lineId: string) => void
   onMicroFeedback: (dimension: FeedbackDimension, rating: number) => void
+  /** When it next really comes (`upcomingBoxesForLine`), or nothing while the plan isn't running. */
+  next?: string | null
 }
 
-function cadence(line: MemberSubscriptionLine): string {
-  const qty = line.quantity > 1 ? `${line.quantity}× · ` : ''
-  return line.deliveryIntervalMonths > 1 ? `${qty}every ${line.deliveryIntervalMonths} months` : `${qty}every month`
+/** "2 at a time, every 3 months · next 15 Dec": the words used for a product everywhere in the hub. */
+function cadence(line: MemberSubscriptionLine, next: string | null | undefined): string {
+  const rhythm = rhythmLabel(line.quantity, line.deliveryIntervalMonths)
+  const said = rhythm.charAt(0).toUpperCase() + rhythm.slice(1)
+  return next ? `${said} · next ${shortBoxDate(next)}` : said
 }
 
 export function StackItemCard({
@@ -50,6 +55,7 @@ export function StackItemCard({
   onChange,
   onManage,
   onMicroFeedback,
+  next,
 }: Props) {
   const review = rec.phase === 'review'
   const dimension = dimensionForSlot(line.stackSlot)
@@ -64,6 +70,7 @@ export function StackItemCard({
 
   return (
     <div
+      data-stack-line={line.productId}
       className="rounded-2xl overflow-hidden"
       style={{
         background: 'var(--surface-1)',
@@ -106,7 +113,7 @@ export function StackItemCard({
               {line.productTitle}
             </p>
             {line.variantTitle && <p className="text-xs text-[var(--ink-3)] mt-0.5">{line.variantTitle}</p>}
-            <p className="text-xs text-[var(--ink-2)] mt-1">{cadence(line)}</p>
+            <p className="text-xs text-[var(--ink-2)] mt-1">{cadence(line, next)}</p>
           </div>
 
           {/* Weight is rationed to the number. Everything else on this card is

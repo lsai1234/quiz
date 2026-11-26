@@ -1460,6 +1460,11 @@ export interface LineSizing {
   shipEveryMonths: number
   /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
   monthlyUnits: number
+  /**
+   * How many months one unit lasts at this usage, unrounded. For words ("one
+   * lasts you about 10 weeks"); the ship schedule above is what's priced.
+   */
+  monthsOneUnitLasts: number
 }
 
 /**
@@ -1502,6 +1507,7 @@ export function sizeConsumption(
     unitsPerShipment,
     shipEveryMonths,
     monthlyUnits: unitsPerShipment / shipEveryMonths,
+    monthsOneUnitLasts: Math.round(monthsOneUnitLasts * 100) / 100,
   }
 }
 
@@ -1525,6 +1531,8 @@ export interface SubscriptionLine {
   shipEveryMonths: number
   /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
   monthlyUnits: number
+  /** How many months one unit lasts this member, unrounded (`LineSizing`). Words only. */
+  monthsOneUnitLasts?: number
   /** The catalogue variant that will be billed and shipped. */
   variantId: string
   /** Undiscounted price of one unit. */
@@ -1739,6 +1747,7 @@ interface RawSubLine {
   unitsPerShipment: number
   shipEveryMonths: number
   monthlyUnits: number
+  monthsOneUnitLasts: number
   variant: CatalogueProduct['variants'][number] | undefined
   productRef: CatalogueProduct
   unitPrice: number
@@ -1872,6 +1881,7 @@ export function buildSubscriptionPlan(
       unitsPerShipment: sizing.unitsPerShipment,
       shipEveryMonths: sizing.shipEveryMonths,
       monthlyUnits: sizing.monthlyUnits,
+      monthsOneUnitLasts: sizing.monthsOneUnitLasts,
       variant,
       productRef: sub,
       unitPrice,
@@ -1896,6 +1906,7 @@ export function buildSubscriptionPlan(
       unitsPerShipment: r.unitsPerShipment,
       shipEveryMonths: r.shipEveryMonths,
       monthlyUnits: r.monthlyUnits,
+      monthsOneUnitLasts: r.monthsOneUnitLasts,
       variantId: r.variant?.id ?? r.product.id,
       unitPrice: round(r.unitPrice),
       unitCost: round(unitCost),

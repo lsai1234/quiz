@@ -10,10 +10,10 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine, DeliveryOverride } from './types'
-import { effectiveNextDispatch } from './mock'
+import { effectiveNextDispatch, type PlanChangeImpact } from './mock'
 import { getPricingConfig, discountWithFloor, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
-import { shipsAtCycle } from './clock'
+import { nextBoxCycle, shipsAtCycle } from './clock'
 import { dayInMonth } from './billing-day'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -141,14 +141,25 @@ export function buildDeliverySchedule(
   const deliveries: Delivery[] = []
   let nextAssigned = false
 
+  /*
+    The calendar starts at the next box that hasn't gone yet, not at this
+    calendar month. It used to start at this month and date that first entry
+    with the next dispatch, so once a month's day had passed (the second half
+    of most months) its first box was the one that had already shipped, wearing
+    next month's date. "Your next box", skipping it and adding extras to it all
+    landed on that box, so a skip did nothing and the box that actually came
+    next shipped as normal.
+  */
+  const first = effectiveNextDispatch(sub, now)
+
   for (let m = 0; m < monthsAhead; m++) {
-    const monthDate = new Date(now.getFullYear(), now.getMonth() + m, 1)
+    const monthDate = new Date(first.getFullYear(), first.getMonth() + m, 1)
     const year = monthDate.getFullYear()
     const monthIndex0 = monthDate.getMonth()
     const id = deliveryId(year, monthIndex0)
     const ov: DeliveryOverride = overrides[id] ?? {}
 
-    let date = m === 0 ? effectiveNextDispatch(sub, now) : dispatchDateInMonth(sub.dispatchDayOfMonth, year, monthIndex0)
+    let date = m === 0 ? first : dispatchDateInMonth(sub.dispatchDayOfMonth, year, monthIndex0)
     if (ov.dateOverride) {
       const d = new Date(ov.dateOverride)
       if (!Number.isNaN(d.getTime())) date = d
@@ -380,4 +391,85 @@ export function removeItemFromDelivery(sub: MemberSubscription, id: string, item
     ),
   }
   return withOverride(withCredit, id, { removedLineIds: [...cur, lineId] })
+}
+
+// ─── One product's next box ──────────────────────────────────────────────────
+
+/** A box a line is in: its id (`YYYY-MM`), its billing cycle and its date (ISO). */
+export interface LineBox {
+  id: string
+  cycle: number
+  date: string
+}
+
+/** The date of the box for a cycle: the plan's day that month, or that box's own moved date. */
+function boxDate(sub: MemberSubscription, cycle: number, now: Date): string {
+  const id = deliveryIdForCycle(sub, cycle)
+  const moved = id ? sub.deliveryOverrides?.[id]?.dateOverride : undefined
+  if (moved && !Number.isNaN(new Date(moved).getTime())) return new Date(moved).toISOString()
+  if (cycle === nextBoxCycle(sub, now)) return effectiveNextDispatch(sub, now).toISOString()
+  const start = new Date(sub.startedAt)
+  return dispatchDateInMonth(sub.dispatchDayOfMonth, start.getFullYear(), start.getMonth() + cycle).toISOString()
+}
+
+/**
+ * The boxes still to come that this line will really be in: due by its cadence
+ * (`shipsAtCycle`), the box not skipped, the line not taken out of it. The same
+ * three things dispatch checks (`subscriptionOrderLines`), so a date shown here
+ * is a date it arrives.
+ */
+export function upcomingBoxesForLine(sub: MemberSubscription, lineId: string, count = 2, now: Date = new Date(), horizon = 24): LineBox[] {
+  const line = sub.lines.find((l) => l.id === lineId)
+  if (!line) return []
+  const out: LineBox[] = []
+  const from = nextBoxCycle(sub, now)
+  for (let cycle = from; cycle < from + horizon && out.length < count; cycle++) {
+    if (!shipsAtCycle(line, cycle) || cycleIsSkipped(sub, cycle) || removedLinesAtCycle(sub, cycle).includes(lineId)) continue
+    const id = deliveryIdForCycle(sub, cycle)
+    if (id) out.push({ id, cycle, date: boxDate(sub, cycle, now) })
+  }
+  return out
+}
+
+/**
+ * Skip a product's next delivery: take it out of the next box it's in, and
+ * bank its value against the next payment.
+ *
+ * It used to push the line's `nextShipAt` out a cadence and bank the credit,
+ * and nothing that ships read `nextShipAt`: the member was credited and the
+ * product came anyway. The founders' out-of-stock hold (`changes/apply`) went
+ * the same way, so a product held for being out of stock was ordered from the
+ * supplier regardless. Now it's the same act as taking the item out of that
+ * box from the box's own sheet (`removeItemFromDelivery`), which dispatch does
+ * leave out, and the following one comes as normal.
+ */
+export function skipNextDelivery(sub: MemberSubscription, lineId: string, now: Date = new Date()): MemberSubscription {
+  const [box] = upcomingBoxesForLine(sub, lineId, 1, now)
+  const line = sub.lines.find((l) => l.id === lineId)
+  if (!box || !line) return sub
+  return removeItemFromDelivery(sub, box.id, {
+    lineId,
+    productId: line.productId,
+    productTitle: line.productTitle,
+    slotTitle: line.slotTitle,
+    units: line.quantity,
+    price: line.pricePerDelivery,
+  })
+}
+
+/** What skipping a product's next delivery does: the credit, and the box it comes out of. */
+export function computeSkipImpact(sub: MemberSubscription, lineId: string, now: Date = new Date()): PlanChangeImpact & { skipped: LineBox | null; following: LineBox | null } {
+  const line = sub.lines.find((l) => l.id === lineId)
+  const [skipped = null, following = null] = upcomingBoxesForLine(sub, lineId, 2, now)
+  return {
+    currentMonthly: sub.flatMonthly,
+    newMonthly: sub.flatMonthly,
+    monthlyDelta: 0,
+    oneOffNow: 0,
+    settlement: 0,
+    credit: line && skipped ? round(line.pricePerDelivery) : 0,
+    effectiveFrom: skipped?.date ?? effectiveNextDispatch(sub, now).toISOString(),
+    skipped,
+    following,
+  }
 }

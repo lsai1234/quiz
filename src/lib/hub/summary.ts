@@ -12,7 +12,7 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription, PlanSource } from '@/lib/recharge/types'
 import type { Order } from '@/lib/orders/types'
-import { buildDeliverySchedule, nextDelivery } from '@/lib/recharge/schedule'
+import { buildDeliverySchedule, nextDelivery, upcomingBoxesForLine } from '@/lib/recharge/schedule'
 import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 
 export interface PlanSummary {
@@ -25,7 +25,7 @@ export interface PlanSummary {
   /** Billed by Stripe, so its day is Stripe's and extras go on its payments. */
   billed: boolean
   /** What's on it. */
-  lines: { productId: string; title: string; variant: string | null; quantity: number; every: number }[]
+  lines: { productId: string; title: string; variant: string | null; quantity: number; every: number; next: string | null }[]
   /** The next box that ships, with what's in it (extras included). */
   nextBox: { id: string; date: string; items: string[]; extras: number } | null
   /** When it ended, for a cancelled plan. */
@@ -62,6 +62,8 @@ export function planSummary(sub: MemberSubscription | null, catalogue: Catalogue
       variant: l.variantTitle || null,
       quantity: l.quantity,
       every: Math.max(1, l.deliveryIntervalMonths),
+      // When it next really comes: due, its box not skipped, not taken out of it.
+      next: sub.status === 'active' ? upcomingBoxesForLine(sub, l.id, 1, now)[0]?.date ?? null : null,
     })),
     nextBox: box
       ? { id: box.id, date: box.date, items: box.items.map((i) => i.productTitle), extras: box.items.filter((i) => i.oneOff).length }
@@ -94,10 +96,7 @@ export function orderSummary(order: Order, catalogue: CatalogueProduct[]): Order
   }
 }
 
-/** "every month", "every 2 months": how often a line comes. */
-export function everyLabel(months: number): string {
-  return months <= 1 ? 'every month' : `every ${months} months`
-}
+export { everyLabel } from './line-facts'
 
 /** What the plan is, in a few words, from where it came from. */
 export function planKindLabel(source: PlanSource | null): string {

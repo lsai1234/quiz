@@ -380,16 +380,29 @@ live in `src/lib/recharge/mock.ts`; the UI is `AddProductSheet` and
   (`lineSettlement = max(0, shippedValueToDate − paidToDate)`) recovers the value
   already sent that the member hasn't paid off. This kills the "add a 3-month tub,
   get it cheap on the smoothed rate, cancel" arbitrage.
-- **Ship more / less often** (`setLineCadence`) — clamped `[1, maxDeliveryMonths]`;
-  only the frequency changes, the per-unit price (and its floor) never moves; flat
-  monthly is re-derived from `flatMonthlyOf`.
-- **Get one now** (`oneOffCharge` / `computeOneOffImpact`) — a one-off at the full
-  per-unit price, charged up front; the recurring plan is untouched.
-- **Skip next** (`skipNextDelivery`) — pushes the next ship date out and banks a
-  credit equal to the box value, so nobody pays for a box they didn't get.
+- **How often and how many** (`setLineSchedule`, from the product sheet) —
+  every 1 to `maxDeliveryMonths` months, 1–6 at a time; the per-unit price (and
+  its floor) never moves and the flat monthly is re-derived from `flatMonthlyOf`.
+  A new cadence counts from the line's **last delivery** (`withInterval` →
+  `cadenceFrom`), or the next box if that has already passed; the server works
+  this out from the stored line (`reprice`), never from the browser. The sheet
+  says how long one lasts (`lastsMonths`) and whether the rhythm runs short or
+  leaves spare (`hub/line-facts`).
+- **One more in the next box** — an extra through `/api/hub/next-box`, on that
+  box's payment and packed with it; the usual ones carry on. (The old "Get one
+  now" showed a charge and did nothing.)
+- **Skip the next one** (`skipNextDelivery`, in `schedule.ts`) — takes the line
+  out of the next box it's really in (`removedLineIds`, which dispatch leaves
+  out) and banks its value; the one after comes as normal. The server allows the
+  credit only for a box still to come that the line was due in and that isn't
+  skipped already, and keeps a credited line out of its box. The founders'
+  out-of-stock hold uses the same helper.
+- **A product added mid-plan** has its first box in the next box still to come
+  (`nextBoxCycle`), not the one that has already gone.
 - **Next-box date** (`sendNow` / `bringForward` / `delayDispatch`) — an explicit
   `nextDispatchOverride` for the upcoming delivery, on top of the day-of-month
-  cadence.
+  cadence. Plans Stripe bills don't offer these: each box is raised by that
+  month's payment.
 
 Live, these map onto Recharge: add/remove = subscription line changes, settlement
 and "get one now" = one-time line items, skip = a skipped charge with credit,
@@ -403,9 +416,9 @@ calendar only governs *what ships when*.
 
 - `buildDeliverySchedule(sub, catalogue, monthsAhead, now)`
   (`src/lib/recharge/schedule.ts`) projects the flat plan into dated `Delivery`
-  boxes. Each line is due in a month when `(m − offset(line)) % cadence === 0`,
-  with a stable per-line `offset` so multi-month items **stagger** into different
-  boxes (realistic, varied deliveries). The `m=0` box honours `nextDispatchOverride`.
+  boxes, starting at the next box that hasn't gone yet. Each line is in a box
+  when `shipsAtCycle` says so, the same function dispatch reads, so the calendar
+  and the parcel agree. The first box honours `nextDispatchOverride`.
 - Per-box edits are stored on `MemberSubscription.deliveryOverrides` (keyed
   `YYYY-MM`) and applied by `buildDeliverySchedule`. Pure mutations:
   `skipDelivery` / `unskipDelivery`, `rescheduleDelivery(date)`,

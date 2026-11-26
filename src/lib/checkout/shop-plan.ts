@@ -1,9 +1,19 @@
 import { billingDayOf } from '@/lib/recharge/billing-day'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
-import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig, priceOneOffLines, sizeConsumption, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { recurringDeliveryOption, type DeliveryOption } from '@/lib/pricing/delivery'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
+
+/** Months one unit lasts at the label's serving, or undefined where it can't be sized. Words only. */
+function lastsFor(product: CatalogueProduct, config: PricingConfig): number | undefined {
+  try {
+    const months = sizeConsumption(product, null, config).monthsOneUnitLasts
+    return Number.isFinite(months) && months > 0 ? months : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * A shop basket, bought every month.
@@ -146,6 +156,9 @@ export function buildShopPlan(
     stackSlot: product.stackSlots[0],
     quantity,
     deliveryIntervalMonths: 1,
+    // How long one lasts at the label's serving, for the hub's words. A basket
+    // bought every month comes every month; this only says so honestly.
+    lastsMonths: lastsFor(product, config),
     pricePerDelivery: round(priced.lines[i].lineTotal),
     swapGroup: product.swapGroup,
     addedAt: startedAt,

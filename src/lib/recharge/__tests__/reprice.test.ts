@@ -8,6 +8,8 @@
  */
 import { normaliseIncomingSubscription } from '../reprice'
 import { createMockSubscription, flatMonthlyOf } from '../mock'
+import { skipNextDelivery } from '../schedule'
+import { shipsAtCycle } from '../clock'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type { MemberSubscription } from '../types'
 
@@ -93,36 +95,121 @@ describe('skip credits', () => {
     for (const line of priced.lines) expect(line.pendingCredit).toBe(0)
   })
 
-  it('allows exactly one delivery’s value when the delivery actually moved', () => {
-    const previous = base()
-    const line = previous.lines[0]
-    const later = new Date(line.nextShipAt ?? Date.now())
-    later.setMonth(later.getMonth() + 1)
+  /*
+    A skip takes the product out of its next box (`skipNextDelivery`), and the
+    credit is worked out from that box on the server. It used to be read off the
+    line's `nextShipAt` moving later, which nothing that ships reads: the member
+    was credited and the product came anyway.
+  */
+  const NOW = new Date(2026, 10, 26, 12)
+  const plan = () => createMockSubscription(catalogue, 'member@example.com', null, NOW)
+  const firstLine = (sub: MemberSubscription) => sub.lines[0]
 
-    const skipped = claim(previous, {
-      lines: previous.lines.map((l) =>
-        l.id === line.id
-          ? { ...l, nextShipAt: later.toISOString(), pendingCredit: l.pricePerDelivery }
-          : l,
-      ),
-    })
-    const priced = ok(normaliseIncomingSubscription(previous, skipped, catalogue))
+  it('allows exactly one delivery’s value when the product really comes out of its next box', () => {
+    const previous = plan()
+    const line = firstLine(previous)
+    const skipped = skipNextDelivery(previous, line.id, NOW)
+    const priced = ok(normaliseIncomingSubscription(previous, skipped, catalogue, undefined, NOW))
     expect(priced.lines[0].pendingCredit).toBeCloseTo(line.pricePerDelivery, 2)
   })
 
   it('caps an inflated credit at the value of the delivery skipped', () => {
-    const previous = base()
-    const line = previous.lines[0]
-    const later = new Date(line.nextShipAt ?? Date.now())
-    later.setMonth(later.getMonth() + 1)
-
-    const greedy = claim(previous, {
-      lines: previous.lines.map((l) =>
-        l.id === line.id ? { ...l, nextShipAt: later.toISOString(), pendingCredit: 500 } : l,
-      ),
-    })
-    const priced = ok(normaliseIncomingSubscription(previous, greedy, catalogue))
+    const previous = plan()
+    const line = firstLine(previous)
+    const skipped = skipNextDelivery(previous, line.id, NOW)
+    const greedy = { ...skipped, lines: skipped.lines.map((l) => (l.id === line.id ? { ...l, pendingCredit: 500 } : l)) }
+    const priced = ok(normaliseIncomingSubscription(previous, greedy, catalogue, undefined, NOW))
     expect(priced.lines[0].pendingCredit).toBeCloseTo(line.pricePerDelivery, 2)
+  })
+
+  it('credits nothing for moving `nextShipAt`, which nothing ships by', () => {
+    const previous = plan()
+    const line = firstLine(previous)
+    const later = new Date(NOW)
+    later.setMonth(later.getMonth() + 2)
+    const moved = claim(previous, {
+      lines: previous.lines.map((l) => (l.id === line.id ? { ...l, nextShipAt: later.toISOString(), pendingCredit: l.pricePerDelivery } : l)),
+    })
+    const priced = ok(normaliseIncomingSubscription(previous, moved, catalogue, undefined, NOW))
+    expect(priced.lines[0].pendingCredit).toBe(0)
+  })
+
+  it('credits nothing for a box that has already gone, or one the product was not due in', () => {
+    const previous = plan()
+    const quarterly = previous.lines.find((l) => l.deliveryIntervalMonths === 3)!
+    const pulled = (id: string) =>
+      claim(previous, {
+        deliveryOverrides: { [id]: { removedLineIds: [quarterly.id] } },
+        lines: previous.lines.map((l) => (l.id === quarterly.id ? { ...l, pendingCredit: l.pricePerDelivery } : l)),
+      })
+    const credited = (id: string) =>
+      ok(normaliseIncomingSubscription(previous, pulled(id), catalogue, undefined, NOW)).lines.find((l) => l.id === quarterly.id)!.pendingCredit
+    // This month's box went on the plan's day (the plan started on the 26th, two months ago).
+    expect(credited('2026-11')).toBe(0)
+    // December is cycle 3, when the quarterly tub is due; January isn't.
+    expect(credited('2026-12')).toBeCloseTo(quarterly.pricePerDelivery, 2)
+    expect(credited('2027-01')).toBe(0)
+  })
+
+  it('credits nothing for a product taken out of a box that is already skipped (the box was credited whole)', () => {
+    const previous = { ...plan(), deliveryOverrides: { '2026-12': { skipped: true } } }
+    const line = firstLine(previous)
+    const pulled = claim(previous, {
+      deliveryOverrides: { '2026-12': { skipped: true, removedLineIds: [line.id] } },
+      lines: previous.lines.map((l) => (l.id === line.id ? { ...l, pendingCredit: l.pricePerDelivery } : l)),
+    })
+    expect(ok(normaliseIncomingSubscription(previous, pulled, catalogue, undefined, NOW)).lines[0].pendingCredit).toBe(0)
+  })
+
+  it('keeps a credited product out of its box: putting it back would ship it and keep the credit', () => {
+    const previous = plan()
+    const line = firstLine(previous)
+    const skipped = ok(normaliseIncomingSubscription(previous, skipNextDelivery(previous, line.id, NOW), catalogue, undefined, NOW))
+    const [boxId] = Object.keys(skipped.deliveryOverrides ?? {})
+    const putBack = claim(skipped, { deliveryOverrides: { [boxId]: { removedLineIds: [] } } })
+    const priced = ok(normaliseIncomingSubscription(skipped, putBack, catalogue, undefined, NOW))
+    expect(priced.deliveryOverrides?.[boxId]?.removedLineIds).toContain(line.id)
+  })
+})
+
+describe('when things ship is the server’s too', () => {
+  const NOW = new Date(2026, 10, 26, 12)
+  const plan = () => createMockSubscription(catalogue, 'member@example.com', null, NOW)
+  const months = (line: MemberSubscription['lines'][number], from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((c) => shipsAtCycle(line, c))
+
+  it('leaves every product’s months alone on a save that changes something else', () => {
+    // Lines made at checkout carry no `joinedAtMonth`. Any save used to stamp the
+    // current month on them, so a tub due in month 3 came in month 5.
+    const previous = plan()
+    const tub = previous.lines.find((l) => l.deliveryIntervalMonths === 3)!
+    const priced = ok(normaliseIncomingSubscription(previous, claim(previous, { defaultChangePolicy: 'remove' }), catalogue, undefined, NOW))
+    const after = priced.lines.find((l) => l.id === tub.id)!
+    expect(months(after, 0, 9)).toEqual(months(tub, 0, 9))
+    expect(months(after, 0, 9)).toEqual([0, 3, 6, 9])
+  })
+
+  it('puts a new product in the next box, and counts no delivery before it', () => {
+    const previous = plan() // two months in: the next box is cycle 3
+    const product = catalogue.find((p) => p.subscriptionEligible && !previous.lines.some((l) => l.productId === p.id))!
+    const added = claim(previous, {
+      lines: [...previous.lines, { ...previous.lines[0], id: 'line-added', productId: product.id, productTitle: product.title, deliveryIntervalMonths: 3, joinedAtMonth: 0 }],
+    })
+    const line = ok(normaliseIncomingSubscription(previous, added, catalogue, undefined, NOW)).lines.find((l) => l.id === 'line-added')!
+    expect(months(line, 0, 9)).toEqual([3, 6, 9])
+  })
+
+  it('counts a change of how often from the last delivery, whatever the browser sends', () => {
+    const previous = plan()
+    const monthly = previous.lines.find((l) => l.deliveryIntervalMonths === 1)!
+    // Every month → every 3 months, two months in: the last one was in cycle 2.
+    // A browser that also sends its own timing (to get a tub in every box) is ignored.
+    const changed = claim(previous, {
+      lines: previous.lines.map((l) => (l.id === monthly.id ? { ...l, deliveryIntervalMonths: 3, cadenceFrom: { cycle: 3, made: 0, last: 0 }, joinedAtMonth: 3 } : l)),
+    })
+    const line = ok(normaliseIncomingSubscription(previous, changed, catalogue, undefined, NOW)).lines.find((l) => l.id === monthly.id)!
+    expect(months(line, 3, 11)).toEqual([5, 8, 11])
+    expect(line.cadenceFrom).toEqual({ cycle: 5, made: 3, last: 2 })
   })
 })
 

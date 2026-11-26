@@ -17,7 +17,6 @@ import {
   setLineQuantity,
   snoozeSubscription,
   downsizePreview,
-  skipNextDelivery,
   oneOffCharge,
   lineMonthly,
   lineSettlement,
@@ -32,6 +31,7 @@ import {
   computeRemoveImpact,
   computeOneOffImpact,
 } from '../mock'
+import { buildDeliverySchedule, skipNextDelivery } from '../schedule'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { getPricingConfig, unitCostOf } from '@/lib/stack-blueprint/pricing'
 
@@ -296,13 +296,17 @@ describe('setLineQuantity', () => {
 })
 
 describe('skip + one-off', () => {
-  it('skip banks a credit equal to the box value and pushes the next ship date', () => {
+  it('skip banks a credit equal to the box value and takes it out of its next box', () => {
     const s = sub()
     const line = s.lines[0]
+    const boxWith = (x: typeof s) => buildDeliverySchedule(x, MOCK_CATALOGUE, 6).find((d) => d.items.some((i) => i.lineId === line.id))!
+    const was = boxWith(s)
     const next = skipNextDelivery(s, line.id)
     const nl = next.lines.find((l) => l.id === line.id)!
     expect(nl.pendingCredit).toBeCloseTo(line.pricePerDelivery, 2)
-    expect(new Date(nl.nextShipAt!).getTime()).toBeGreaterThan(Date.now())
+    // The box it was due in no longer has it, and the next one with it is later.
+    expect(next.deliveryOverrides?.[was.id]?.removedLineIds).toContain(line.id)
+    expect(new Date(boxWith(next).date).getTime()).toBeGreaterThan(new Date(was.date).getTime())
   })
 
   it('one-off charges the full per-unit price and leaves the plan untouched', () => {

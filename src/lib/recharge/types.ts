@@ -154,7 +154,26 @@ export interface MemberSubscriptionLine {
    * four being credited with the four boxes that shipped before it existed.
    */
   joinedAtMonth?: number
-  /** Next scheduled ship date for this line (ISO), if it differs from the box default. */
+  /**
+   * Where the cadence counts from since the member last changed how often this
+   * comes (`clock.withInterval`): delivery number `made + 1` is in the box for
+   * `cycle`, then one every `deliveryIntervalMonths`; `last` is the cycle of
+   * delivery number `made`. Absent until the first change, when the cadence
+   * counts from `joinedAtMonth`. Worked out by the server from the stored line,
+   * never taken from the browser.
+   */
+  cadenceFrom?: { cycle: number; made: number; last: number }
+  /**
+   * How many months one unit lasts this member at their own usage, when the line
+   * was sized (`sizeConsumption`). Words only: the hub says "one lasts you about
+   * 10 weeks" from it. Nothing is priced or scheduled from it.
+   */
+  lastsMonths?: number
+  /**
+   * @deprecated Nothing ships by this. "Skip next" used to push it out a cadence
+   * and dispatch never read it, so a skipped product shipped anyway; a skip now
+   * takes the line out of its next box (`schedule.skipNextDelivery`).
+   */
   nextShipAt?: string
   /**
    * A one-off credit banked against the next payment (e.g. from skipping a

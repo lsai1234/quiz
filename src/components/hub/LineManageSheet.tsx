@@ -1,18 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { Button, Card, Modal, ModalBody, ModalHeader, Segmented } from '@/components/system'
-import { Icon, type IconName } from '@/components/ui/Icon'
-import { tint } from '@/lib/ui/tokens'
-import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
-import {
-  computeRemoveImpact,
-  lineMonthly,
-  oneOffCharge,
-  setLineUsage,
-  formatDispatchDate,
-  effectiveNextDispatch,
-} from '@/lib/recharge/mock'
+import { useEffect, useMemo, useState } from 'react'
+import { Button, Card, Modal, ModalBody, ModalHeader, Note, Segmented } from '@/components/system'
+import { Icon } from '@/components/ui/Icon'
+import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { computeRemoveImpact, lineMonthly, MAX_LINE_UNITS, setLineSchedule } from '@/lib/recharge/mock'
+import { upcomingBoxesForLine } from '@/lib/recharge/schedule'
+import { boxDateLabel, everyLabel, lastsLabel, rhythmLabel, supplyFit, supplyFitSentence } from '@/lib/hub/line-facts'
+import { usePricingConfig } from '@/hooks/usePricingConfig'
 import { policyForLine } from '@/lib/changes/policy'
 import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
 import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
@@ -20,112 +15,221 @@ import { BillingImpact } from './BillingImpact'
 import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
+/**
+ * One product on a plan, and everything a member does with it, in one sheet:
+ * how often it comes and how many, one in the next box, skipping the next one,
+ * what happens if it's out of stock, and taking it off.
+ *
+ * The same sheet whichever way the plan started. It used to offer "how much do
+ * you get through?" (a little, as recommended, a lot), which meant nothing for a
+ * shop basket and hid the answer people want, which is how often it comes; and a
+ * "Get one now" that showed a charge and then only closed. Every action here does
+ * what it says: changes go through the review screen and the server, the extra
+ * goes in the box and on its payment (`/api/hub/next-box`), and a skipped product
+ * comes out of its box (`skipNextDelivery`).
+ */
+
 interface Props {
   subscription: MemberSubscription
   line: MemberSubscriptionLine
   product?: CatalogueProduct
-  onSetUsage: (usageLevel: UsageLevel) => void
+  /** Review a new rhythm (the dashboard raises the confirmation). */
+  onReviewSchedule: (change: { every: number; quantity: number }) => void
   onSkip: () => void
-  onExpedite: (qty: number) => void
+  /** Put one in the next box, on that box's payment. */
+  onAddToNextBox: () => Promise<{ ok: boolean; message: string }>
   onRemove: () => void
   /** What to do with this line if its product becomes unavailable. */
   onSetChangePolicy?: (policy: ChangePolicy) => void
   onClose: () => void
 }
 
-const USAGE_LABEL: Record<UsageLevel, string> = { light: 'A little', standard: 'As recommended', heavy: 'A lot' }
+/** What the server says one more in the next box costs, or why it can't go in. */
+type Quote = { price: number; date: string } | { refusal: string } | null
 
-/** One of the two one-tap moves — an action card, not a bordered grey box. */
-function QuickMove({ icon, title, sub, onClick }: { icon: IconName; title: string; sub: string; onClick: () => void }) {
-  return (
-    <Card interactive padding="none">
-      <Button variant="ghost" fullWidth layout="stack" onClick={onClick}>
-        <span style={{ color: 'var(--ink-3)' }}>
-          <Icon name={icon} size={17} />
-        </span>
-        <span
-          className="block"
-          style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)', marginTop: 'var(--space-2)' }}
-        >
-          {title}
-        </span>
-        <span
-          className="block"
-          style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}
-        >
-          {sub}
-        </span>
-      </Button>
-    </Card>
-  )
-}
+const heading = { fontSize: 'var(--text-body)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' } as const
+const body = { fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' } as const
+const meta = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' } as const
 
-function shipSummary(units: number, months: number, noun: string): string {
-  if (months > 1) return `1 ${noun} every ${months} months`
-  if (units > 1) return `${units} ${noun}s a month`
-  return `1 ${noun} a month`
-}
-
-export function LineManageSheet({ subscription, line, product, onSetUsage, onSkip, onExpedite, onRemove, onSetChangePolicy, onClose }: Props) {
-  const [usage, setUsage] = useState<UsageLevel>(line.usageLevel ?? 'standard')
+export function LineManageSheet({ subscription, line, product, onReviewSchedule, onSkip, onAddToNextBox, onRemove, onSetChangePolicy, onClose }: Props) {
+  const config = usePricingConfig()
+  const maxEvery = Math.max(1, config.maxDeliveryMonths)
+  const currentEvery = Math.min(maxEvery, Math.max(1, Math.round(line.deliveryIntervalMonths)))
+  const [every, setEvery] = useState(currentEvery)
+  const [quantity, setQuantity] = useState(line.quantity)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [quote, setQuote] = useState<Quote>(null)
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState<{ ok: boolean; message: string } | null>(null)
 
-  const usageChanged = usage !== (line.usageLevel ?? 'standard')
-  // Pure projection of the pending slider choice (not applied until confirmed).
-  const previewLine = product
-    ? setLineUsage(subscription, line.id, product, usage).lines.find((l) => l.id === line.id) ?? line
-    : line
+  const active = subscription.status === 'active'
+  const changed = every !== currentEvery || quantity !== line.quantity
+  // The pending choice, priced and timed the way it will be once confirmed.
+  const preview = useMemo(
+    () => (changed ? setLineSchedule(subscription, line.id, { every, quantity }, config) : subscription),
+    [changed, subscription, line.id, every, quantity, config],
+  )
+  const previewLine = preview.lines.find((l) => l.id === line.id) ?? line
+  const [next, following] = useMemo(() => (active ? upcomingBoxesForLine(subscription, line.id, 2) : []), [active, subscription, line.id])
+  const [previewNext] = useMemo(() => (active ? upcomingBoxesForLine(preview, line.id, 1) : []), [active, preview, line.id])
+  const lasts = lastsLabel(line.lastsMonths)
+  const fit = supplyFit(line.lastsMonths, quantity, every)
   const removeImpact = computeRemoveImpact(subscription, line.id)
-  const oneOff = oneOffCharge(line, 1)
-  const nextBox = formatDispatchDate(effectiveNextDispatch(subscription))
-  const noun = (product?.formats[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
   const constraintsLabel = describeConstraints(constraintsFor(subscription))
+
+  /* What one more in the next box costs: asked of the server, which prices and
+     places it the same way it will when it's added. */
+  useEffect(() => {
+    if (!active) return
+    let live = true
+    const params = new URLSearchParams({ productId: line.productId })
+    if (line.variantId) params.set('variantId', line.variantId)
+    fetch(`/api/hub/next-box?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { quote?: { price: number; box: { date: string } } | null; refusal?: { error: string } | null } | null) => {
+        if (!live || !data) return
+        if (data.quote) setQuote({ price: data.quote.price, date: data.quote.box.date })
+        else if (data.refusal) setQuote({ refusal: data.refusal.error })
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [active, line.productId, line.variantId])
+
+  async function addOne() {
+    if (adding) return
+    setAdding(true)
+    setAdded(null)
+    const result = await onAddToNextBox()
+    setAdded(result)
+    setAdding(false)
+  }
+
+  const inNextBox = next != null && quote != null && 'date' in quote && next.date.slice(0, 10) === quote.date.slice(0, 10)
 
   return (
     <Modal onClose={onClose} presentation="sheet">
       <ModalHeader eyebrow={line.slotTitle} title={`Manage ${line.productTitle}`} />
 
       <ModalBody className="space-y-6">
-        {/* How much you get through — one slider, we do the maths */}
-        <div>
-          <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How much do you get through?</p>
-          <p className="text-xs text-[var(--ink-3)] mb-3">Pick the one that sounds like you — we&apos;ll sort how much ships and how often. You only ever pay for what ships.</p>
-          {/* A segmented control, not an unstyled `input[type=range]`. The
-              native slider drew a different widget in every browser and gave
-              no clue that it had exactly three stops. */}
-          <Segmented
-            label="How much do you get through?"
-            columns={3}
-            value={usage}
-            onChange={setUsage}
-            options={USAGE_LEVELS.map((lvl) => ({ value: lvl, label: USAGE_LABEL[lvl] }))}
-          />
-          {/* Live preview of the pending choice — text only, so nothing reflows. */}
-          <p className="text-xs text-[var(--ink-3)] mt-3">
-            {shipSummary(previewLine.quantity, previewLine.deliveryIntervalMonths, noun)} · {formatGBP(previewLine.pricePerDelivery)}/box
+        {/* What it is now, in the words used everywhere else. */}
+        <div data-line-facts>
+          <p style={{ ...body, color: 'var(--ink-1)' }}>
+            {rhythmLabel(line.quantity, currentEvery).replace(/^./, (c) => c.toUpperCase())}
+            {next ? (
+              <>
+                {' '}· next one <strong>{boxDateLabel(next.date)}</strong>
+              </>
+            ) : active ? (
+              ' · not in a box in the next two years'
+            ) : (
+              ''
+            )}
           </p>
-          {/* Always rendered (disabled when unchanged) so it never shifts the layout. */}
-          <Button variant="primary" iconRight="arrow-right" onClick={() => onSetUsage(usage)} disabled={!usageChanged} className="mt-3">
+          {lasts && <p style={meta}>One lasts you {lasts}.</p>}
+        </div>
+
+        {/* How often and how many: the two things people change. */}
+        <div data-line-rhythm>
+          <p style={heading}>How often</p>
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <Segmented
+              label="How often"
+              columns={maxEvery <= 4 ? (maxEvery as 2 | 3 | 4) : 'wrap'}
+              value={every}
+              onChange={setEvery}
+              options={Array.from({ length: maxEvery }, (_, i) => i + 1).map((m) => ({ value: m, label: m === 1 ? 'Every month' : `Every ${m} months` }))}
+            />
+          </div>
+
+          <div className="flex items-center justify-between" style={{ marginTop: 'var(--space-4)', gap: 'var(--space-3)' }}>
+            <p style={heading} id={`qty-${line.id}`}>
+              How many each time
+            </p>
+            <div className="flex items-center" style={{ gap: 'var(--space-2)' }} role="group" aria-labelledby={`qty-${line.id}`}>
+              <Button variant="secondary" size="sm" icon="dash" aria-label="One fewer" disabled={quantity <= 1} onClick={() => setQuantity((q) => Math.max(1, q - 1))} />
+              <span aria-live="polite" style={{ ...heading, minWidth: '2ch', textAlign: 'center' }} data-line-quantity>
+                {quantity}
+              </span>
+              <Button variant="secondary" size="sm" icon="plus" aria-label="One more" disabled={quantity >= MAX_LINE_UNITS} onClick={() => setQuantity((q) => Math.min(MAX_LINE_UNITS, q + 1))} />
+            </div>
+          </div>
+
+          {/* What that choice means, said once, from how long one lasts. */}
+          <div aria-live="polite" style={{ marginTop: 'var(--space-3)' }}>
+            {fit && (
+              <p style={{ ...body, color: fit.kind === 'short' ? 'var(--tone-attention)' : 'var(--ink-2)' }} data-line-fit={fit.kind}>
+                {supplyFitSentence(fit)}
+              </p>
+            )}
+            <p style={meta}>
+              {formatGBP(previewLine.pricePerDelivery)} a delivery
+              {changed ? (
+                <>
+                  {' '}· your monthly {formatGBP(subscription.flatMonthly)} → <strong>{formatGBP(preview.flatMonthly)}</strong>
+                  {previewNext ? ` · next one ${boxDateLabel(previewNext.date)}` : ''}
+                </>
+              ) : (
+                ` · ${formatGBP(lineMonthly(line))} of your monthly`
+              )}
+            </p>
+          </div>
+
+          {/* Always there (disabled until something changes), so nothing jumps. */}
+          <Button variant="primary" iconRight="arrow-right" onClick={() => onReviewSchedule({ every, quantity })} disabled={!changed} className="mt-3">
             Review change
           </Button>
         </div>
 
-        {/* Quick moves */}
-        <div className="grid grid-cols-2 gap-2">
-          <QuickMove icon="skip-forward" title="Get one now" sub={`One-off ${formatGBP(oneOff)} · ships ASAP`} onClick={() => onExpedite(1)} />
-          <QuickMove icon="pause" title="Skip next" sub={`Credit ${formatGBP(line.pricePerDelivery)} to next payment`} onClick={onSkip} />
-        </div>
-        <p className="text-[11px] text-[var(--ink-3)] -mt-3">Next box: {nextBox}.</p>
+        {/* The next one: sooner, or not this time. */}
+        {active && (
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 'var(--space-2)' }}>
+            <Card padding="tight">
+              <p style={heading}>{inNextBox ? 'One more in your next box' : 'Need one sooner?'}</p>
+              {quote && 'refusal' in quote ? (
+                <p style={{ ...meta, marginTop: 'var(--space-1)' }}>{quote.refusal}</p>
+              ) : quote && 'date' in quote ? (
+                <>
+                  <p style={{ ...meta, marginTop: 'var(--space-1)' }}>
+                    {formatGBP(quote.price)}, added to the payment for your box on {boxDateLabel(quote.date)} and sent with it.
+                    {!inNextBox && ` Your usual ones still come ${everyLabel(currentEvery)}.`}
+                  </p>
+                  <Button variant="secondary" size="sm" icon="plus" onClick={addOne} disabled={adding || added?.ok === true} className="mt-2">
+                    {added?.ok ? 'Added' : adding ? 'Adding…' : 'Add one to your next box'}
+                  </Button>
+                </>
+              ) : (
+                <p style={{ ...meta, marginTop: 'var(--space-1)' }}>Checking your next box…</p>
+              )}
+              {added && (
+                <div style={{ marginTop: 'var(--space-2)' }}>
+                  <Note tone={added.ok ? 'positive' : 'attention'} live="polite">
+                    {added.message}
+                  </Note>
+                </div>
+              )}
+            </Card>
+            {next && (
+              <Card padding="tight">
+                <p style={heading}>Skip the next one</p>
+                <p style={{ ...meta, marginTop: 'var(--space-1)' }}>
+                  It won’t come on {boxDateLabel(next.date)}, and {formatGBP(line.pricePerDelivery)} comes off your next payment.
+                  {following ? ` The one after comes on ${boxDateLabel(following.date)}.` : ''}
+                </p>
+                <Button variant="secondary" size="sm" icon="skip-forward" onClick={onSkip} className="mt-2">
+                  Skip the next one
+                </Button>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* What happens if this product becomes unavailable */}
         {onSetChangePolicy && (
           <div>
-            <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-              If it&apos;s out of stock
-            </p>
-            <p className="text-xs text-[var(--ink-3)] mb-3">
-              We&apos;ll sort it without holding up your box, and email you either way.
-            </p>
+            <p style={heading}>If it&apos;s out of stock</p>
+            <p style={{ ...meta, margin: 'var(--space-1) 0 var(--space-3)' }}>We&apos;ll sort it without holding up your box, and email you either way.</p>
             <ChangePolicyChoice
               policy={policyForLine(subscription, line)}
               onChange={onSetChangePolicy}
@@ -141,26 +245,41 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
         <div>
           {!confirmRemove ? (
             <Button variant="ghost" icon="trash" onClick={() => setConfirmRemove(true)}>
-              Remove from stack
+              Remove from your plan
             </Button>
           ) : (
-            <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: `color-mix(in srgb, ${'var(--tone-attention)'} 40%, transparent)`, background: `color-mix(in srgb, ${'var(--tone-attention)'} 6%, transparent)` }}>
-              <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>Remove {line.productTitle}?</p>
+            <div
+              className="rounded-2xl border p-4 space-y-3"
+              style={{ borderColor: 'color-mix(in srgb, var(--tone-attention) 40%, transparent)', background: 'color-mix(in srgb, var(--tone-attention) 6%, transparent)' }}
+            >
+              <p style={heading}>Remove {line.productTitle}?</p>
               <BillingImpact
                 monthlyBefore={removeImpact.currentMonthly}
                 monthlyAfter={removeImpact.newMonthly}
                 settlement={removeImpact.settlement}
-                note={removeImpact.settlement > 0.01
-                  ? `A one-off settlement covers the box already sent that you haven’t finished paying for. Your monthly then drops to ${formatGBP(removeImpact.newMonthly)}.`
-                  : `Nothing’s shipped yet, so there’s no charge. Your monthly drops to ${formatGBP(removeImpact.newMonthly)}.`}
+                note={
+                  removeImpact.settlement > 0.01
+                    ? `A one-off settlement covers the box already sent that you haven’t finished paying for. Your monthly then drops to ${formatGBP(removeImpact.newMonthly)}.`
+                    : `Nothing’s shipped yet, so there’s no charge. Your monthly drops to ${formatGBP(removeImpact.newMonthly)}.`
+                }
               />
               <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setConfirmRemove(false)}>Keep it</Button>
-                <Button variant="destructive" size="sm" icon="trash" onClick={onRemove}>Remove</Button>
+                <Button variant="secondary" size="sm" onClick={() => setConfirmRemove(false)}>
+                  Keep it
+                </Button>
+                <Button variant="destructive" size="sm" icon="trash" onClick={onRemove}>
+                  Remove
+                </Button>
               </div>
             </div>
           )}
         </div>
+
+        {product == null && (
+          <p style={meta} className="flex items-center gap-1">
+            <Icon name="info" size={12} /> This product isn’t in the shop right now; it stays on your plan as it is.
+          </p>
+        )}
       </ModalBody>
     </Modal>
   )

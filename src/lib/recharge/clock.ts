@@ -24,6 +24,31 @@
  * by tests rather than left to a comment.
  */
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
+import { nextPlanDate } from './billing-day'
+
+type CadenceFields = Pick<MemberSubscriptionLine, 'deliveryIntervalMonths' | 'joinedAtMonth' | 'cadenceFrom'>
+
+/**
+ * The cycle of the next box that hasn't gone yet: the first one a change can
+ * still reach.
+ *
+ * Cycles count calendar months from the plan's start (0 is the box at signup),
+ * and `monthsActive` is the last one paid for. The two normally agree that the
+ * next box is `monthsActive + 1`; where they don't (a plan whose day has started
+ * but whose renewal hasn't been paid yet, or a plan with no Stripe behind it,
+ * whose clock never advances), the later of the two is the box still to come.
+ */
+export function nextBoxCycle(
+  sub: Pick<MemberSubscription, 'startedAt' | 'dispatchDayOfMonth' | 'monthsActive' | 'nextDispatchOverride'>,
+  now: Date = new Date(),
+): number {
+  const override = sub.nextDispatchOverride ? new Date(sub.nextDispatchOverride) : null
+  const next = override && !Number.isNaN(override.getTime()) ? override : nextPlanDate(sub.dispatchDayOfMonth, now)
+  const start = new Date(sub.startedAt)
+  const from = Number.isNaN(start.getTime()) ? now : start
+  const byCalendar = (next.getFullYear() - from.getFullYear()) * 12 + (next.getMonth() - from.getMonth())
+  return Math.max(sub.monthsActive + 1, byCalendar)
+}
 
 /**
  * How many deliveries of a line have shipped by `monthsActive`.
@@ -34,17 +59,69 @@ import type { MemberSubscription, MemberSubscriptionLine } from './types'
  * consistent with what the member has been billed, and a swap that keeps the line
  * id keeps its delivery history for free.
  *
- * `joinedAtMonth` is the cycle the line was added on (0 for everything created at
- * signup), so a product added in month four isn't credited with the four boxes
- * that shipped before it existed.
+ * `joinedAtMonth` is the cycle of the line's first box (0 for everything created
+ * at signup, the next box for a product added later), so a product added in
+ * month four isn't credited with the four boxes that shipped before it existed.
+ *
+ * Once the member has changed how often it comes, it counts from `cadenceFrom`
+ * instead (`withInterval`): the deliveries made by then, the box the next one
+ * is in, and every `deliveryIntervalMonths` after that. Before that box it
+ * stands still, so nothing ships between the change and the next one. (Months
+ * before the change aren't replayed: nothing asks about them once they've
+ * shipped, and the stored `deliveriesMade` already holds their count.)
  */
-export function deliveriesMadeFor(
-  line: Pick<MemberSubscriptionLine, 'deliveryIntervalMonths' | 'joinedAtMonth'>,
-  monthsActive: number,
-): number {
+export function deliveriesMadeFor(line: CadenceFields, monthsActive: number): number {
+  const every = Math.max(1, line.deliveryIntervalMonths)
+  const from = line.cadenceFrom
+  if (from) {
+    if (monthsActive >= from.cycle) return from.made + 1 + Math.floor((monthsActive - from.cycle) / every)
+    return monthsActive >= from.last ? from.made : Math.max(0, from.made - 1)
+  }
   const cyclesOnPlan = monthsActive - (line.joinedAtMonth ?? 0)
   if (cyclesOnPlan < 0) return 0
-  return Math.floor(cyclesOnPlan / Math.max(1, line.deliveryIntervalMonths)) + 1
+  return Math.floor(cyclesOnPlan / every) + 1
+}
+
+/** The cycle of the line's latest delivery at or before `upTo`, or null if it hasn't had one. */
+export function lastDeliveryCycle(line: CadenceFields, upTo: number): number | null {
+  const every = Math.max(1, line.deliveryIntervalMonths)
+  const from = line.cadenceFrom
+  if (from) {
+    if (upTo >= from.cycle) return from.cycle + Math.floor((upTo - from.cycle) / every) * every
+    return upTo >= from.last ? from.last : null
+  }
+  const joined = line.joinedAtMonth ?? 0
+  if (upTo < joined) return null
+  return joined + Math.floor((upTo - joined) / every) * every
+}
+
+/**
+ * The line, coming every `every` months, counted from its last delivery.
+ *
+ * Changing how often something comes used to keep counting from the plan's
+ * start, so a tub that came every 2 months, changed to every 3 in month 3, came
+ * again in month 3, one month after the last; and the other way a change could
+ * leave a long gap. Now the next one comes `every` months after the last, or in
+ * the next box if that's already passed. A line that hasn't had its first box
+ * yet keeps it where it is.
+ *
+ * `nextCycle` is the next box still to come (`nextBoxCycle`). Pure; the server
+ * works this out itself from the stored line (`reprice`), so the schedule can't
+ * be set from the browser.
+ */
+export function withInterval<L extends CadenceFields>(line: L, every: number, nextCycle: number): L {
+  const months = Math.max(1, Math.round(every))
+  if (months === Math.max(1, line.deliveryIntervalMonths)) return line
+  const made = deliveriesMadeFor(line, nextCycle - 1)
+  const last = lastDeliveryCycle(line, nextCycle - 1)
+  if (made === 0 || last == null) return { ...line, deliveryIntervalMonths: months }
+  return { ...line, deliveryIntervalMonths: months, cadenceFrom: { cycle: Math.max(last + months, nextCycle), made, last } }
+}
+
+/** The first box at or after `fromCycle` this line is due in (within `horizon` cycles). */
+export function nextDueCycle(line: CadenceFields, fromCycle: number, horizon = 24): number | null {
+  for (let c = fromCycle; c < fromCycle + horizon; c++) if (shipsAtCycle(line, c)) return c
+  return null
 }
 
 /**
@@ -60,10 +137,7 @@ export function deliveriesMadeFor(
  * money, and would make the exit settlement — which bills against this exact
  * model — describe something that never happened.
  */
-export function shipsAtCycle(
-  line: Pick<MemberSubscriptionLine, 'deliveryIntervalMonths' | 'joinedAtMonth'>,
-  cycle: number,
-): boolean {
+export function shipsAtCycle(line: CadenceFields, cycle: number): boolean {
   return deliveriesMadeFor(line, cycle) > deliveriesMadeFor(line, cycle - 1)
 }
 

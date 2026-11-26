@@ -9,7 +9,8 @@ import { reorderLines } from '@/lib/basket/reorder'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { billingDayPhrase } from '@/lib/recharge/billing-day'
-import { everyLabel, planKindLabel, type OrderSummary, type PlanSummary } from '@/lib/hub/summary'
+import { planKindLabel, type OrderSummary, type PlanSummary } from '@/lib/hub/summary'
+import { rhythmLabel, shortBoxDate } from '@/lib/hub/line-facts'
 import type { HubPlanView } from '@/lib/hub-plan/plan'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { body, col, meta, SectionHead, strong } from './ui'
@@ -73,9 +74,9 @@ export function WhatYouHave({ plan, orders, membership }: { plan: PlanSummary | 
                         {l.title}
                         {l.variant && <span style={{ color: 'var(--ink-3)' }}> · {l.variant}</span>}
                       </span>
-                      <span style={{ ...meta, whiteSpace: 'nowrap' }}>
-                        {l.quantity > 1 ? `${l.quantity} × ` : ''}
-                        {everyLabel(l.every)}
+                      <span style={{ ...meta, textAlign: 'right', flexShrink: 0 }}>
+                        <span style={{ display: 'block', whiteSpace: 'nowrap' }}>{rhythmLabel(l.quantity, l.every)}</span>
+                        {l.next && <span style={{ display: 'block', whiteSpace: 'nowrap' }}>next {shortBoxDate(l.next)}</span>}
                       </span>
                     </li>
                   ))}
