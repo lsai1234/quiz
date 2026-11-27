@@ -117,12 +117,16 @@ export function removedLinesAtCycle(sub: MemberSubscription, cycle: number): str
 /** The plan's day in a month, or that month's last day (`billing-day`). */
 const dispatchDateInMonth = dayInMonth
 
-/** Full-price one-off unit price for a product added to a box. */
-export function oneOffUnitPrice(product: CatalogueProduct, config = getPricingConfig()): number {
+/**
+ * What one of a product costs added to a box: at the plan's own saving (pass
+ * `rate`, the member's), never below the margin floor; as `hub/extra-price`
+ * charges it.
+ */
+export function oneOffUnitPrice(product: CatalogueProduct, config = getPricingConfig(), rate: number = config.subscriptionDiscount): number {
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
   const unitPrice = variant?.price ?? product.basePrice
-  const cost = unitCostOf(product, unitPrice, config)
-  return round(discountWithFloor(unitPrice, config.subscriptionDiscount, cost, config))
+  const cost = variant?.cost ?? unitCostOf(product, unitPrice, config)
+  return round(discountWithFloor(unitPrice, rate, cost, config, product.vatRate))
 }
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────

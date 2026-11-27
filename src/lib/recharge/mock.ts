@@ -151,6 +151,8 @@ export function buildMemberSubscription(
     paymentMethod: { brand: 'Visa', last4: '4242' },
     // What every product was sized from, kept so the hub sizes the same way.
     routine: routineFromAnswers(answers) ?? ESTIMATED_ROUTINE,
+    // A plan made part-way through (the demo) has had a box each month so far.
+    ...(monthsActive > 0 ? { boxesSent: monthsActive + 1 } : {}),
     defaultChangePolicy: defaultPolicy,
     safetyConstraints: opts.safetyConstraints,
     lines,

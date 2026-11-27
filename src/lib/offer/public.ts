@@ -72,5 +72,7 @@ export function publicOffer(
     // The trainer as members see them; where their alerts go stays private.
     trainer: { ...settings.trainer, notifyEmail: null },
     hubPrice: { ...settings.hubPrice },
+    // Switches and ceilings for plan members; which gift a box carries is a surprise, so not here.
+    planPerks: { tryNew: { ...settings.planPerks.tryNew }, gifts: { on: settings.planPerks.gifts.on, milestones: [] } },
   }
 }

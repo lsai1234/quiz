@@ -260,6 +260,16 @@ export interface MemberSubscription {
   source?: PlanSource | null
   /** How they use it, which every product's rhythm is worked out from (`PlanRoutine`). */
   routine?: PlanRoutine | null
+  /** Products tried at their first-time price (`hub/try-new`). Server-held: once each. */
+  tried?: string[]
+  /** Products they said "not for me" to, so we stop suggesting them. */
+  tryDismissed?: string[]
+  /**
+   * How many boxes have gone (each with something in it), counted as each one's
+   * payment is taken (`payments/webhook`). Server-held. The thank-you gifts are
+   * in box 3 and box 6 by this count (`hub/thank-you`).
+   */
+  boxesSent?: number
   status: SubscriptionStatus
   customerEmail: string
   /**
@@ -465,6 +475,8 @@ export interface BoxExtra {
   /** The Stripe invoice item that puts it on the payment; null where nothing is billed (no Stripe). */
   invoiceItemId: string | null
   addedAt: string
+  /** At its first-time price ("try something new", `hub/try-new`): once per product. */
+  kind?: 'try'
 }
 
 /** A member's edit to a single scheduled delivery (from the calendar). */

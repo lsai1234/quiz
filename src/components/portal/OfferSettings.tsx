@@ -6,7 +6,7 @@ import { Badge, Button, Card, Checkbox, Input, Note, Segmented } from '@/compone
 import { ProductPicker } from './ProductPicker'
 import { OfferRulebook } from './OfferRulebook'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus, type ServiceSettings } from '@/lib/offer/settings'
+import { HERO_CHECK_LABEL, STACK_LEVELS, type BonusSettings, type HeroStatus, type PlanPerkSettings, type ServiceSettings } from '@/lib/offer/settings'
 import { LEVEL_NAME, type GiftVerdict } from '@/lib/offer/bonus-economics'
 import type { OfferView } from '@/lib/offer/view'
 import { productHref } from '@/lib/portal/product-links'
@@ -55,7 +55,7 @@ export function OfferSettings() {
       .catch(() => setError('Could not load the offer settings. Reload the page to try again.'))
   }, [])
 
-  const save = useCallback(async (body: { heroEnabled?: boolean; bonus?: Partial<BonusSettings>; services?: Partial<ServiceSettings> }) => {
+  const save = useCallback(async (body: { heroEnabled?: boolean; bonus?: Partial<BonusSettings>; services?: Partial<ServiceSettings>; planPerks?: { tryNew?: Partial<PlanPerkSettings['tryNew']>; gifts?: Partial<PlanPerkSettings['gifts']> } }) => {
     setSaving(true)
     try {
       const res = await fetch('/api/portal/offer', {
@@ -87,9 +87,128 @@ export function OfferSettings() {
       <HeroCard view={view} saving={saving} onSwitch={(on) => save({ heroEnabled: on })} />
       <BonusCard view={view} saving={saving} onSave={(bonus) => save({ bonus })} />
       <ServicesCard view={view} saving={saving} onSwitch={(services) => save({ services })} />
+      <PlanPerksCard view={view} saving={saving} onSave={(planPerks) => save({ planPerks })} />
       {/* Every offer side by side, after the switches it depends on. */}
       <OfferRulebook />
     </div>
+  )
+}
+
+/* ── For members on a plan ─────────────────────────────────────────────── */
+
+const TRY_SIZES = [0.1, 0.15, 0.2, 0.25]
+
+/**
+ * What a plan's members get beyond their plan saving (which already covers
+ * everything on their plan and anything added to a box): one product at a time
+ * to try at a first-time price, and a thank-you gift in their third and sixth box.
+ */
+function PlanPerksCard({
+  view,
+  saving,
+  onSave,
+}: {
+  view: OfferView
+  saving: boolean
+  onSave: (patch: { tryNew?: Partial<PlanPerkSettings['tryNew']>; gifts?: Partial<PlanPerkSettings['gifts']> }) => void
+}) {
+  const { tryNew, gifts } = view.settings.planPerks
+  const [picking, setPicking] = useState<number | null>(null)
+  const titleOf = new Map(view.products.map((p) => [p.id, p.title]))
+  const setGift = (box: number, productId: string | null) =>
+    onSave({ gifts: { milestones: gifts.milestones.map((m) => (m.box === box ? { ...m, productId, variantId: null } : m)) } })
+
+  return (
+    <Card elevation={1}>
+      <div style={{ display: 'grid', gap: 'var(--space-5)' }} data-plan-perks>
+        <div>
+          <h2 style={HEADING}>For members on a plan</h2>
+          <p style={{ ...META, marginTop: 'var(--space-1)' }}>
+            Their plan saving (13%, 15% or 20% by plan size) already covers everything on their plan and anything they add to a box. These are the two
+            things they get beyond it. Every price still keeps your margin floor.
+          </p>
+        </div>
+
+        <section style={{ display: 'grid', gap: 'var(--space-2)' }} aria-labelledby="try-new-h">
+          <h3 id="try-new-h" style={{ ...BODY, fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+            Try something new
+          </h3>
+          <p style={META}>
+            One product at a time they don’t have, at a first-time price in their next box: once per product, never something their answers rule out,
+            and only when it beats their own plan price.
+          </p>
+          <Segmented
+            label="Try something new"
+            columns={2}
+            value={tryNew.on ? 'on' : 'off'}
+            onChange={(v) => !saving && onSave({ tryNew: { on: v === 'on' } })}
+            options={[
+              { value: 'off', label: 'Off', sub: 'Not offered' },
+              { value: 'on', label: 'On', sub: 'In the hub' },
+            ]}
+          />
+          {tryNew.on && (
+            <Segmented
+              label="Up to this much off the shop price"
+              columns={4}
+              value={Math.round(tryNew.maxPct * 100)}
+              onChange={(v) => !saving && onSave({ tryNew: { maxPct: v / 100 } })}
+              options={TRY_SIZES.map((p) => ({ value: Math.round(p * 100), label: pct(p) }))}
+            />
+          )}
+        </section>
+
+        <section style={{ display: 'grid', gap: 'var(--space-2)' }} aria-labelledby="gifts-h">
+          <h3 id="gifts-h" style={{ ...BODY, fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+            Thank-you gifts
+          </h3>
+          <p style={META}>
+            The product you pick goes in that box free, counted in boxes that actually go. It’s left out for anyone it doesn’t suit (their answers rule
+            it out, or it’s already on their plan) and when it’s sold out. A box with no gift picked has none.
+          </p>
+          <Segmented
+            label="Thank-you gifts"
+            columns={2}
+            value={gifts.on ? 'on' : 'off'}
+            onChange={(v) => !saving && onSave({ gifts: { on: v === 'on' } })}
+            options={[
+              { value: 'off', label: 'Off', sub: 'No gifts' },
+              { value: 'on', label: 'On', sub: 'In the boxes below' },
+            ]}
+          />
+          {gifts.on &&
+            gifts.milestones.map((m) => (
+              <div key={m.box} className="flex flex-wrap items-center justify-between" style={{ gap: 'var(--space-2)' }} data-gift-box={m.box}>
+                <p style={BODY}>
+                  Box {m.box}: <span style={{ color: 'var(--ink-1)' }}>{m.productId ? titleOf.get(m.productId) ?? 'a product no longer in the catalogue' : 'no gift picked'}</span>
+                </p>
+                <div className="flex" style={{ gap: 'var(--space-2)' }}>
+                  <Button variant="secondary" size="sm" disabled={saving} onClick={() => setPicking(m.box)}>
+                    {m.productId ? 'Change' : 'Choose a gift'}
+                  </Button>
+                  {m.productId && (
+                    <Button variant="ghost" size="sm" disabled={saving} onClick={() => setGift(m.box, null)}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+        </section>
+      </div>
+      {picking != null && (
+        <ProductPicker
+          label={`A thank-you gift for box ${picking}`}
+          products={view.products.map((p) => ({ ...p, stackSlots: p.stackSlot ? [p.stackSlot] : [] }) as unknown as CatalogueProduct)}
+          disabledIds={new Set(gifts.milestones.filter((m) => m.box === picking && m.productId).map((m) => m.productId as string))}
+          onPick={(p) => {
+            setGift(picking, p.id)
+            setPicking(null)
+          }}
+          onClose={() => setPicking(null)}
+        />
+      )}
+    </Card>
   )
 }
 

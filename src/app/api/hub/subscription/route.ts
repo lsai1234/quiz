@@ -135,6 +135,13 @@ export async function PUT(req: Request) {
     shippingAddress: previous.shippingAddress,
     monthsActive: previous.monthsActive,
     billingStatus: previous.billingStatus,
+    // What's been tried at its first-time price is the server's (`next-box`);
+    // what they've said "not for me" to is theirs, kept to product ids.
+    tried: previous.tried,
+    boxesSent: previous.boxesSent,
+    tryDismissed: Array.isArray(incoming.tryDismissed)
+      ? [...new Set(incoming.tryDismissed.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 120))].slice(0, 100)
+      : previous.tryDismissed,
     // Their routine is theirs to change, but only to the choices on offer.
     routine: incoming.routine === undefined ? previous.routine : cleanRoutine(incoming.routine) ?? previous.routine,
     // Stripe bills a linked plan on its own day and each box is raised by that

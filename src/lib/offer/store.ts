@@ -23,6 +23,8 @@ import {
   type OfferSettings,
   type ServiceSettings,
   normaliseMemberDeals,
+  normalisePlanPerks,
+  type PlanPerkSettings,
   normaliseTrainer,
   normaliseHubPrice,
   type HubPriceSettings,
@@ -102,6 +104,17 @@ export async function saveBonusSettings(patch: Partial<BonusSettings>): Promise<
 export async function saveMemberDealSettings(patch: Partial<MemberDealSettings>): Promise<OfferSettings> {
   return mutate((state) => {
     state.memberDeals = normaliseMemberDeals({ ...state.memberDeals, ...patch, pct: { ...state.memberDeals.pct, ...(patch.pct ?? {}) } })
+    return state
+  })
+}
+
+/** Settings → Offer → "For members on a plan": merged and checked. */
+export async function savePlanPerks(patch: { tryNew?: Partial<PlanPerkSettings['tryNew']>; gifts?: Partial<PlanPerkSettings['gifts']> }): Promise<OfferSettings> {
+  return mutate((state) => {
+    state.planPerks = normalisePlanPerks({
+      tryNew: { ...state.planPerks.tryNew, ...(patch.tryNew ?? {}) },
+      gifts: { ...state.planPerks.gifts, ...(patch.gifts ?? {}) },
+    })
     return state
   })
 }

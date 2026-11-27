@@ -25,7 +25,9 @@ import type { BoxExtra, MemberSubscription } from '@/lib/recharge/types'
 import type { OrderLine } from '@/lib/orders/types'
 import { buildDeliverySchedule, nextDelivery } from '@/lib/recharge/schedule'
 import { type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { extraPrice } from './extra-price'
+import { extraPrice, tryPrice } from './extra-price'
+import { tryBlocker, tryWaiting } from './try-rules'
+import { storedRateOf } from '@/lib/recharge/plan-rate'
 
 /** Enough for a real top-up, few enough that a box stays a box. */
 export const MAX_BOX_EXTRAS = 8
@@ -48,6 +50,7 @@ export type AddRefusal =
   | 'not-for-sale'
   | 'sold-out'
   | 'full'
+  | 'try-not-offered'
 
 export const ADD_REFUSAL_COPY: Record<AddRefusal, string> = {
   'no-plan': 'There’s no plan on this account to add to.',
@@ -57,6 +60,7 @@ export const ADD_REFUSAL_COPY: Record<AddRefusal, string> = {
   'not-for-sale': 'That product can’t be added to a box.',
   'sold-out': 'That’s sold out just now.',
   full: `Your next box already has ${MAX_BOX_EXTRAS} extras in it, which is as many as one box takes.`,
+  'try-not-offered': 'That first-time price isn’t available for this product just now. You can still add it to your box at your plan price.',
 }
 
 /**
@@ -70,6 +74,10 @@ export function planExtra(input: {
   variantId?: string | null
   now?: Date
   config?: PricingConfig
+  /** 'try': at its first-time price ("try something new"), if it's offered for this product. */
+  offer?: 'try' | null
+  /** The founders' switch and size for trying something new. */
+  tryNew?: { on: boolean; maxPct: number }
 }): { ok: true; box: { id: string; date: string }; extra: BoxExtra } | { ok: false; reason: AddRefusal } {
   const { sub, catalogue } = input
   const now = input.now ?? new Date()
@@ -87,6 +95,18 @@ export function planExtra(input: {
   const box = nextBox(sub, catalogue, now)
   if (!box) return { ok: false, reason: 'no-box' }
   if ((sub.deliveryOverrides?.[box.id]?.addedItems ?? []).length >= MAX_BOX_EXTRAS) return { ok: false, reason: 'full' }
+  // Their own plan saving, on anything they add (`extraPrice`).
+  let price = extraPrice(product, variant, input.config, storedRateOf(sub, input.config))
+  let kind: 'try' | undefined
+  if (input.offer === 'try') {
+    // The first-time price, re-checked here whatever the hub was shown (`try-new`).
+    const settings = input.tryNew
+    if (!settings?.on || tryBlocker(sub, product) || tryWaiting(sub)) return { ok: false, reason: 'try-not-offered' }
+    const first = tryPrice(product, variant, settings.maxPct, input.config)
+    if (first > price - 0.5) return { ok: false, reason: 'try-not-offered' }
+    price = first
+    kind = 'try'
+  }
   const extra: BoxExtra = {
     id: `x-${now.getTime().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
     productId: product.id,
@@ -94,9 +114,10 @@ export function planExtra(input: {
     sku: variant.sku ?? null,
     title: product.title,
     variantTitle: [variant.flavour, variant.size].filter(Boolean).join(' · ') || null,
-    price: extraPrice(product, variant, input.config),
+    price,
     invoiceItemId: null,
     addedAt: now.toISOString(),
+    ...(kind ? { kind } : {}),
   }
   return { ok: true, box, extra }
 }

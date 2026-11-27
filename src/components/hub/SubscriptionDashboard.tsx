@@ -17,6 +17,8 @@ import { rhythmLabel } from '@/lib/hub/line-facts'
 import { planRateChange, rateNote, withPlanRate } from '@/lib/recharge/plan-rate'
 import { routineMatters, routineWords } from '@/lib/recharge/routine'
 import { RoutineSheet } from './RoutineSheet'
+import { TryNewCard } from './TryNewCard'
+import { useBoxPerks } from '@/hooks/useBoxPerks'
 import { computeAddImpact, projectedEconomics, nextDispatchDate, setLineChoice as setLineChoiceOf } from '@/lib/recharge/mock'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
@@ -55,7 +57,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     // Sign-out moved to the shell's header, where an account action belongs.
     subscription: sub, feedback,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineChoice, setRoutine, setCatalogue, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineChoice, setRoutine, setCatalogue, dismissTry, addTry, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, removeItemFromDelivery, addExtra, removeExtra,
     snooze, applyDownsize, refresh,
   } = useHubStore()
@@ -135,6 +137,8 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     [sub, products],
   )
   const next = nextDelivery(deliveries)
+  // A product to try, and whether the next box is a thank-you box: asked again as the plan changes.
+  const perks = useBoxPerks(sub ? `${sub.lines.map((l) => l.productId).join(',')}|${(sub.tryDismissed ?? []).join(',')}|${sub.status}|${next?.id ?? ''}` : '')
 
   /**
    * Deep links from member emails.
@@ -369,6 +373,13 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
                   <p className="text-xs text-[var(--ink-2)] mt-2.5">
                     {next.items.map((it) => it.productTitle).slice(0, 3).join(', ')}{next.items.length > 3 ? ` +${next.items.length - 3} more` : ''}
                   </p>
+                  {/* A milestone box: the gift itself stays a surprise until it arrives. */}
+                  {perks.thankYou && (
+                    <p className="text-xs text-[var(--ink-1)] mt-2 flex items-center gap-1.5" data-thank-you>
+                      <Icon name="gift" size={13} /> Your {perks.thankYou.box}
+                      {ordinalSuffix(perks.thankYou.box)} box: there’s a thank-you gift from us in it.
+                    </p>
+                  )}
 
                   <div className="flex gap-2 mt-4">
                     <Button variant="primary" icon="box" onClick={() => setSelectedDeliveryId(next.id)}>
@@ -395,6 +406,13 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
           <div className="mb-5" data-reveal>
             <BillingSummary subscription={sub} deliveries={deliveries} />
           </div>
+
+          {/* One product they might like to try, at a first-time price, while the plan runs. */}
+          {sub.status === 'active' && (
+            <div className="mb-5" data-reveal>
+              <TryNewCard offer={perks.offer} onAdd={addTry} onDismiss={dismissTry} onTaken={perks.clearOffer} />
+            </div>
+          )}
 
           {/* Delivery calendar */}
           <div className="mb-6" data-reveal>
@@ -673,7 +691,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
             setPending({
               title: 'Add to this box', subtitle: product.title,
               monthlyBefore: sub.flatMonthly, monthlyAfter: sub.flatMonthly,
-              oneOffNow: oneOffUnitPrice(product), effectiveFrom: selectedDelivery.date,
+              oneOffNow: oneOffUnitPrice(product, undefined, sub.subscriptionDiscountRate ?? undefined), effectiveFrom: selectedDelivery.date,
               note: 'A one-off in this box only, added to this box’s payment. It ships with the box, so there’s no delivery charge, and your monthly plan is unchanged.',
               confirmLabel: 'Add to box',
               onConfirm: () => void addExtra(product.id),

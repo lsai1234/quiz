@@ -358,6 +358,11 @@ export async function createSubscriptionOrder(input: {
    * for them. Packed with the box; a skipped box still sends what was paid for.
    */
   extras?: OrderLine[]
+  /**
+   * A thank-you gift for this box (`hub/thank-you`): free, packed with it, only
+   * when the box has something in it to go with.
+   */
+  thankYou?: { product: CatalogueProduct; variant: CatalogueProduct['variants'][number] } | null
 }): Promise<Order> {
   // Idempotency: if this invoice already produced an order, return it unchanged.
   // This also protects the cycle: a redelivered webhook arriving after the clock
@@ -393,6 +398,20 @@ export async function createSubscriptionOrder(input: {
       unitPrice: 0,
       supplierCost: gift.supplierCost,
       weightGrams: gift.weightGrams,
+      bonus: true,
+    })
+  }
+  // A thank-you from us in a milestone box: free, and only in a box that goes.
+  if (input.thankYou && lines.length > 0) {
+    const { product, variant } = input.thankYou
+    lines.push({
+      sku: variant.sku ?? null,
+      productId: product.id,
+      title: product.title,
+      variantTitle: [variant.flavour, variant.size].filter(Boolean).join(' · ') || null,
+      quantity: 1,
+      unitPrice: 0,
+      supplierCost: variant.cost ?? product.cost ?? null,
       bonus: true,
     })
   }

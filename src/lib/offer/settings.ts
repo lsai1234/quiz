@@ -420,6 +420,49 @@ export function normaliseMemberDeals(raw: unknown): MemberDealSettings {
   }
 }
 
+/**
+ * Settings → Offer → "For members on a plan": what a plan's members get beyond
+ * their plan saving, which already covers everything on the plan and anything
+ * added to a box.
+ *
+ *   tryNew   one product at a time they don't have, once each, at a first-time
+ *            price in their next box: up to `maxPct` off, never below the
+ *            margin floor, and only when that beats their own plan price.
+ *   gifts    a thank-you in a given box (their third and sixth, to start):
+ *            the product the founders pick, free in that box. A milestone with
+ *            no product picked gives nothing.
+ */
+export interface PlanPerkSettings {
+  tryNew: { on: boolean; maxPct: number }
+  gifts: { on: boolean; milestones: { box: number; productId: string | null; variantId: string | null }[] }
+}
+
+export const DEFAULT_PLAN_PERKS: PlanPerkSettings = {
+  tryNew: { on: true, maxPct: 0.25 },
+  gifts: { on: true, milestones: [{ box: 3, productId: null, variantId: null }, { box: 6, productId: null, variantId: null }] },
+}
+
+export function normalisePlanPerks(raw: unknown): PlanPerkSettings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<PlanPerkSettings>
+  const t = (r.tryNew && typeof r.tryNew === 'object' ? r.tryNew : {}) as Partial<PlanPerkSettings['tryNew']>
+  const g = (r.gifts && typeof r.gifts === 'object' ? r.gifts : {}) as Partial<PlanPerkSettings['gifts']>
+  const pct = typeof t.maxPct === 'number' && Number.isFinite(t.maxPct) ? Math.min(0.5, Math.max(0, t.maxPct)) : DEFAULT_PLAN_PERKS.tryNew.maxPct
+  const milestones = Array.isArray(g.milestones)
+    ? g.milestones
+        .filter((m) => m && typeof m === 'object' && Number.isInteger((m as { box?: unknown }).box) && (m as { box: number }).box >= 2 && (m as { box: number }).box <= 24)
+        .slice(0, 6)
+        .map((m) => ({
+          box: (m as { box: number }).box,
+          productId: typeof m.productId === 'string' && m.productId ? m.productId.slice(0, 120) : null,
+          variantId: typeof m.variantId === 'string' && m.variantId ? m.variantId.slice(0, 120) : null,
+        }))
+    : DEFAULT_PLAN_PERKS.gifts.milestones
+  return {
+    tryNew: { on: typeof t.on === 'boolean' ? t.on : DEFAULT_PLAN_PERKS.tryNew.on, maxPct: pct },
+    gifts: { on: typeof g.on === 'boolean' ? g.on : DEFAULT_PLAN_PERKS.gifts.on, milestones },
+  }
+}
+
 export interface OfferSettings {
   /** Settings → Offer → "Hero products". Off: the core offer is today's top pick. */
   heroEnabled: boolean
@@ -431,9 +474,11 @@ export interface OfferSettings {
   trainer: TrainerProfile
   /** The hub's price on its own, for its value on the box. */
   hubPrice: HubPriceSettings
+  /** For members on a plan: try something new, and thank-you gifts. */
+  planPerks: PlanPerkSettings
 }
 
-export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS, trainer: DEFAULT_TRAINER, hubPrice: DEFAULT_HUB_PRICE }
+export const DEFAULT_OFFER: OfferSettings = { heroEnabled: false, heroes: {}, bonus: DEFAULT_BONUS, services: DEFAULT_SERVICES, memberDeals: DEFAULT_MEMBER_DEALS, trainer: DEFAULT_TRAINER, hubPrice: DEFAULT_HUB_PRICE, planPerks: DEFAULT_PLAN_PERKS }
 
 const NOVEL: readonly NovelFoodStatus[] = ['not-novel', 'authorised', 'unauthorised', 'unknown']
 const num = (v: unknown, fallback: number, min = 0, max = Number.POSITIVE_INFINITY) =>
@@ -479,7 +524,7 @@ export function normaliseOffer(raw: unknown): OfferSettings {
   if (r.heroes && typeof r.heroes === 'object') {
     for (const [id, a] of Object.entries(r.heroes)) heroes[id] = normaliseHeroApproval(id, a)
   }
-  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals), trainer: normaliseTrainer(r.trainer), hubPrice: normaliseHubPrice(r.hubPrice) }
+  return { heroEnabled: r.heroEnabled === true, heroes, bonus: normaliseBonus(r.bonus), services: normaliseServices(r.services), memberDeals: normaliseMemberDeals(r.memberDeals), trainer: normaliseTrainer(r.trainer), hubPrice: normaliseHubPrice(r.hubPrice), planPerks: normalisePlanPerks(r.planPerks) }
 }
 
 /* ── What Phase 3 reads ─────────────────────────────────────────────────── */

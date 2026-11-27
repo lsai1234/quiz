@@ -30,8 +30,10 @@ export type BuyChannel =
   | 'stack-monthly'
   /** The member hub's top-up box. */
   | 'hub-top-up'
+  /** Added to a plan's next box, from the hub or the shop (`hub/next-box`). */
+  | 'next-box'
 
-export const BUY_CHANNELS: readonly BuyChannel[] = ['shop-once', 'shop-monthly', 'stack-once', 'stack-monthly', 'hub-top-up']
+export const BUY_CHANNELS: readonly BuyChannel[] = ['shop-once', 'shop-monthly', 'stack-once', 'stack-monthly', 'hub-top-up', 'next-box']
 
 export const CHANNEL_LABEL: Record<BuyChannel, string> = {
   'shop-once': 'Shop, once',
@@ -39,6 +41,7 @@ export const CHANNEL_LABEL: Record<BuyChannel, string> = {
   'stack-once': 'Quiz or consult stack, once',
   'stack-monthly': 'Quiz, consult or bundle plan',
   'hub-top-up': 'Hub top-up box',
+  'next-box': 'Added to a plan’s next box',
 }
 
 export type OfferId =
@@ -51,6 +54,8 @@ export type OfferId =
   | 'free-gift'
   | 'member-prices'
   | 'guarantee'
+  | 'try-new'
+  | 'thank-you-gift'
 
 export interface OfferRule {
   id: OfferId
@@ -98,9 +103,9 @@ export const OFFER_RULES: readonly OfferRule[] = [
   {
     id: 'plan-saving',
     name: 'Plan saving (13%, 15% or 20% by plan size)',
-    channels: only('stack-monthly', 'shop-monthly'),
+    channels: only('stack-monthly', 'shop-monthly', 'next-box'),
     switch: null,
-    note: 'Every plan, wherever it was set up: 13%, 15% from £35 a month, 20% from £55 (the quiz’s own bands, set in Pricing). A quiz depth is sold at its rate; after that a plan’s saving moves when a change takes it into another band, up or down, and the member sees it before confirming.',
+    note: 'Every plan, wherever it was set up: 13%, 15% from £35 a month, 20% from £55 (the quiz’s own bands, set in Pricing). A quiz depth is sold at its rate; after that a plan’s saving moves when a change takes it into another band, up or down, and the member sees it before confirming. Anything added to a box is at the member’s own plan saving, with no delivery charge.',
   },
   {
     id: 'first-month',
@@ -122,6 +127,20 @@ export const OFFER_RULES: readonly OfferRule[] = [
     channels: only('hub-top-up'),
     switch: 'Settings → Offer → Box services (sizes in Settings → Member hub)',
     note: 'In the hub, on products a member has bought, while their hub is open.',
+  },
+  {
+    id: 'try-new',
+    name: 'Try something new (up to 25% off)',
+    channels: only('next-box'),
+    switch: 'Settings → Offer → For members on a plan',
+    note: 'One product at a time a plan member doesn’t have, at a first-time price in their next box: once per product, never something their answers rule out, and only when it beats their own plan price. Replaces the plan saving on that one product; it never adds to it.',
+  },
+  {
+    id: 'thank-you-gift',
+    name: 'Thank-you gifts (box 3 and box 6)',
+    channels: only('stack-monthly', 'shop-monthly'),
+    switch: 'Settings → Offer → For members on a plan (pick a gift for each box)',
+    note: 'The product the founders pick, free in a member’s third and sixth box, counted in boxes that actually go. Left out for anyone it doesn’t suit and when it’s sold out. Every plan, wherever it was set up.',
   },
   {
     id: 'guarantee',

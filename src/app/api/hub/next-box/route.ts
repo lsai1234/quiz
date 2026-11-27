@@ -6,6 +6,10 @@ import { getPaymentSource } from '@/lib/payments'
 import { reportErrorAsync } from '@/lib/monitoring/report'
 import { ADD_REFUSAL_COPY, extraMetadata, planExtra, withExtra, withoutExtra } from '@/lib/hub/next-box'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { storedRateOf } from '@/lib/recharge/plan-rate'
+import { tryOffer } from '@/lib/hub/try-new'
+import { nextBoxNumber, thankYouFor } from '@/lib/hub/thank-you'
+import { getOfferSettings } from '@/lib/offer/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,21 +43,36 @@ export async function GET(req: Request) {
   const summary = planSummary(sub, products)
   // What the shop needs to know about their plan: whether there is one, what's on it, when the next box goes.
   const plan = summary
-    ? { status: summary.status, day: summary.day, nextBox: summary.nextBox ? { id: summary.nextBox.id, date: summary.nextBox.date } : null, productIds: summary.lines.map((l) => l.productId) }
+    ? {
+        status: summary.status,
+        day: summary.day,
+        nextBox: summary.nextBox ? { id: summary.nextBox.id, date: summary.nextBox.date } : null,
+        productIds: summary.lines.map((l) => l.productId),
+        // Their plan saving: what anything added to a box is priced at.
+        rate: sub ? storedRateOf(sub) : null,
+      }
     : null
-  if (!productId) return NextResponse.json({ plan, quote: null, refusal: null })
+  const { planPerks } = await getOfferSettings()
+  // One product they might like to try, at its first-time price (`try-new`).
+  const offer = tryOffer(sub, products, planPerks.tryNew)
+  // Whether the next box is a thank-you box (the gift stays a surprise until it arrives).
+  const boxNumber = sub ? nextBoxNumber(sub) : null
+  const thankYou = sub && sub.status === 'active' && boxNumber && thankYouFor(sub, boxNumber, planPerks.gifts, products) ? { box: boxNumber } : null
+  if (!productId) return NextResponse.json({ plan, quote: null, refusal: null, try: offer, thankYou })
   const planned = planExtra({ sub, catalogue: products, productId, variantId: url.searchParams.get('variantId') })
   return NextResponse.json({
     plan,
     quote: planned.ok ? { box: planned.box, price: planned.extra.price } : null,
     refusal: planned.ok ? null : { reason: planned.reason, error: ADD_REFUSAL_COPY[planned.reason] },
+    try: offer,
+    thankYou,
   })
 }
 
 export async function POST(req: Request) {
   const user = await getHubUser()
   if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
-  let body: { productId?: unknown; variantId?: unknown }
+  let body: { productId?: unknown; variantId?: unknown; offer?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -62,11 +81,14 @@ export async function POST(req: Request) {
   if (typeof body.productId !== 'string') return NextResponse.json({ error: 'Which product?' }, { status: 400 })
 
   const [stored, { products }] = await Promise.all([getStoredPlan(user.id), getResolvedCatalogue()])
+  const { planPerks } = await getOfferSettings()
   const planned = planExtra({
     sub: stored?.subscription ?? null,
     catalogue: products,
     productId: body.productId,
     variantId: typeof body.variantId === 'string' ? body.variantId : null,
+    offer: body.offer === 'try' ? 'try' : null,
+    tryNew: planPerks.tryNew,
   })
   if (!planned.ok) return NextResponse.json({ error: ADD_REFUSAL_COPY[planned.reason], reason: planned.reason }, { status: 409 })
   const sub = stored!.subscription
@@ -91,7 +113,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const version = await saveSubscription(user.id, withExtra(sub, planned.box.id, extra))
+    const boxed = withExtra(sub, planned.box.id, extra)
+    // A first-time price is once per product.
+    const tried = extra.kind === 'try' ? { ...boxed, tried: [...new Set([...(boxed.tried ?? []), extra.productId])] } : boxed
+    const version = await saveSubscription(user.id, tried)
     return NextResponse.json({
       ok: true,
       box: planned.box,
@@ -132,6 +157,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'We couldn’t take that off your next payment just now. Nothing has changed. Please try again.' }, { status: 502 })
     }
   }
-  const version = await saveSubscription(user.id, sub)
+  const untried = removed.kind === 'try' ? { ...sub, tried: (sub.tried ?? []).filter((id) => id !== removed.productId) } : sub
+  const version = await saveSubscription(user.id, untried)
   return NextResponse.json({ ok: true, version })
 }

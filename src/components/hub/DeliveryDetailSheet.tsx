@@ -133,7 +133,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                       <div className={`grid ${delivery.isNext ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
                         {delivery.isNext && (
                           <Button variant="secondary" size="sm" onClick={() => { onAddItem(p); setAdding(false) }}>
-                            Just this box · +{formatGBP(oneOffUnitPrice(p))}
+                            Just this box · +{formatGBP(oneOffUnitPrice(p, undefined, subscription.subscriptionDiscountRate ?? undefined))}
                           </Button>
                         )}
                         <Button variant="primary" size="sm" onClick={() => { onAddRecurring(p); setAdding(false) }}>

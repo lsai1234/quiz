@@ -161,7 +161,8 @@ export function BasketDrawer({
   )
   const monthly = plan === 'monthly' && !hasPlan
   const toBox = intoBox && Boolean(boxPlan)
-  const boxTotal = Math.round(resolved.reduce((sum, l) => sum + extraPrice(l.product, l.variant, config) * l.quantity, 0) * 100) / 100
+  // At their own plan saving, as the server will charge it (`extraPrice`).
+  const boxTotal = Math.round(resolved.reduce((sum, l) => sum + extraPrice(l.product, l.variant, config, boxPlan?.rate ?? undefined) * l.quantity, 0) * 100) / 100
 
   /** Every unit into the next box, one request each; what went in leaves the basket. */
   const addAllToBox = async () => {

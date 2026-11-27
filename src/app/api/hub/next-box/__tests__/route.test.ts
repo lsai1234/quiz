@@ -71,3 +71,57 @@ it('can’t be written or dropped by saving the whole plan', async () => {
   expect(res.status).toBe(200)
   expect(extrasOf((await getStoredPlan(user.id))!.subscription).map((x) => x.id)).toEqual([extra.id])
 })
+
+describe('try something new', () => {
+  it('offers one product the plan doesn’t have, at a first-time price, once', async () => {
+    const user = await member()
+    const plan = (await getStoredPlan(user.id))!.subscription
+    const first = (await (await GET(new Request('http://x/api/hub/next-box'))).json()).try
+    expect(first).toMatchObject({ productId: expect.any(String), price: expect.any(Number), usual: expect.any(Number), box: { id: expect.any(String) } })
+    expect(plan.lines.some((l) => l.productId === first.productId)).toBe(false)
+    expect(first.price).toBeLessThan(first.usual)
+
+    const added = await post({ productId: first.productId, variantId: first.variantId, offer: 'try' })
+    expect(added.status).toBe(200)
+    const body = await added.json()
+    expect(body.extra).toMatchObject({ productId: first.productId, price: first.price, kind: 'try' })
+    const stored = (await getStoredPlan(user.id))!.subscription
+    expect(stored.tried).toEqual([first.productId])
+    // One at a time: nothing else is offered while it's waiting in a box.
+    expect((await (await GET(new Request('http://x/api/hub/next-box'))).json()).try).toBeNull()
+    // And never twice at that price.
+    const again = await post({ productId: first.productId, variantId: first.variantId, offer: 'try' })
+    expect(again.status).toBe(409)
+    expect(await again.json()).toMatchObject({ reason: 'try-not-offered' })
+
+    // Taken back out before it ships, it can be tried later.
+    await DELETE(new Request(`http://x/api/hub/next-box?id=${body.extra.id}`, { method: 'DELETE' }))
+    expect((await getStoredPlan(user.id))!.subscription.tried).toEqual([])
+  })
+
+  it('won’t give the first-time price on something already on the plan', async () => {
+    const user = await member()
+    const onPlan = (await getStoredPlan(user.id))!.subscription.lines[0]
+    const res = await post({ productId: onPlan.productId, offer: 'try' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ reason: 'try-not-offered' })
+  })
+
+  it('stops suggesting something they said wasn’t for them', async () => {
+    const user = await member()
+    const first = (await (await GET(new Request('http://x/api/hub/next-box'))).json()).try
+    const stored = (await getStoredPlan(user.id))!
+    const res = await PUT(new Request('http://x/api/hub/subscription', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: { ...stored.subscription, tryDismissed: [first.productId], tried: ['anything'] }, version: stored.version }),
+    }))
+    expect(res.status).toBe(200)
+    const saved = (await getStoredPlan(user.id))!.subscription
+    expect(saved.tryDismissed).toEqual([first.productId])
+    // What's been tried is the server's own record, whatever the browser sends.
+    expect(saved.tried ?? []).toEqual([])
+    const next = (await (await GET(new Request('http://x/api/hub/next-box'))).json()).try
+    expect(next?.productId).not.toBe(first.productId)
+  })
+})

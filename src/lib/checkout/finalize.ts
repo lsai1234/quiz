@@ -590,6 +590,9 @@ export async function finalizeCheckout(
       // truthful to read in mock mode rather than a hole.
       billedAmount: subscription.firstMonth ?? subscription.flatMonthly,
     })
+    // The first box has gone, for the thank-you count, as the webhook counts it live.
+    const stored = await getSubscription(userId)
+    if (stored) await saveSubscription(userId, { ...stored, boxesSent: Math.max(1, stored.boxesSent ?? 0) })
   } catch (err) {
     console.error('[finalizeCheckout] mock subscription order creation failed:', err)
   }

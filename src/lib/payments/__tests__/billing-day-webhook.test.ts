@@ -59,3 +59,37 @@ it('packs a paid extra in the renewal box', async () => {
   const order = await getOrder('ord_inv_in_extra')
   expect(order?.lines).toEqual(expect.arrayContaining([expect.objectContaining({ productId: extra.id, unitPrice: 12.99, quantity: 1 })]))
 })
+
+/** A thank-you gift: free in the member's third box, once, and the box counted. */
+it('packs the founders’ thank-you gift in the third box, once, and counts the box', async () => {
+  const { getOrder } = await import('@/lib/orders/repo')
+  const { savePlanPerks } = await import('@/lib/offer/store')
+  const user = await createUser({ email: 'thank-you@example.com' })
+  const base = createMockSubscription(MOCK_CATALOGUE, 'thank-you@example.com')
+  const gift = MOCK_CATALOGUE.find((p) => !base.lines.some((l) => l.productId === p.id) && p.variants.some((v) => v.available) && !p.hasStimulants && !p.isSubscriptionOnly)!
+  await savePlanPerks({ gifts: { on: true, milestones: [{ box: 3, productId: gift.id, variantId: null }, { box: 6, productId: null, variantId: null }] } })
+  await saveSubscription(user.id, { ...base, boxesSent: 2, stripeSubscriptionId: 'sub_thanks', stripeCustomerId: 'cus_thanks' })
+  const { linkStripeSubscription } = await import('@/lib/payments/subscription-link')
+  await linkStripeSubscription('sub_thanks', user.id)
+
+  const paid = (id: string) =>
+    handleStripeEvent({
+      id: `evt_${id}`,
+      type: 'invoice.paid',
+      data: { object: { id, subscription: 'sub_thanks', billing_reason: 'subscription_cycle', amount_paid: 5000, lines: { data: [] } } as unknown as Stripe.Invoice },
+    } as unknown as Stripe.Event)
+
+  await paid('in_box3')
+  const third = await getOrder('ord_inv_in_box3')
+  expect(third?.lines).toEqual(expect.arrayContaining([expect.objectContaining({ productId: gift.id, unitPrice: 0, quantity: 1, bonus: true })]))
+  expect((await getSubscription(user.id))?.boxesSent).toBe(3)
+
+  // The same invoice again: no second gift, no second count.
+  await paid('in_box3')
+  expect((await getSubscription(user.id))?.boxesSent).toBe(3)
+  // The fourth box has no gift.
+  await paid('in_box4')
+  expect((await getOrder('ord_inv_in_box4'))?.lines.some((l) => l.productId === gift.id)).toBe(false)
+  expect((await getSubscription(user.id))?.boxesSent).toBe(4)
+  await savePlanPerks({ gifts: { on: true, milestones: [{ box: 3, productId: null, variantId: null }, { box: 6, productId: null, variantId: null }] } })
+})

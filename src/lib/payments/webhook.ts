@@ -226,6 +226,17 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         ((invoice as unknown as { lines?: { data?: Array<{ amount?: number | null; quantity?: number | null; description?: string | null; metadata?: Record<string, string> | null }> } }).lines?.data) ?? [],
         products,
       )
+      /*
+        Which box this is, counting only boxes that go, and its thank-you gift
+        if it's a milestone (`hub/thank-you`). Decided once, when the order is
+        raised: a redelivered invoice gets the order it already has.
+      */
+      const cycle = isFirstInvoice ? 0 : sub.monthsActive + 1
+      const { subscriptionOrderLines } = await import('@/lib/orders/service')
+      const boxGoes = subscriptionOrderLines(sub, products, cycle).length + extras.length + (cycle === 0 && sub.bonus ? 1 : 0) > 0
+      const { thankYouFor, nextBoxNumber } = await import('@/lib/hub/thank-you')
+      const { getOfferSettings } = await import('@/lib/offer/store')
+      const thankYou = boxGoes ? thankYouFor(sub, nextBoxNumber(sub), (await getOfferSettings()).planPerks.gifts, products) : null
       const order = await createSubscriptionOrder({
         id: orderId,
         userId,
@@ -233,6 +244,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         sub,
         catalogue: products,
         stripeSubscriptionId,
+        thankYou,
         /**
          * Which delivery this invoice pays for.
          *
@@ -247,7 +259,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
          * later cycle, but `createSubscriptionOrder` returns the existing order
          * before it gets here.
          */
-        cycle: isFirstInvoice ? 0 : sub.monthsActive + 1,
+        cycle,
         // Stripe's own figure for what this cycle cost, in major units. The
         // authoritative record of what the card was charged — intro coupon,
         // proration and all — and the half of the exit settlement that cannot be
@@ -273,6 +285,8 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
       if (!alreadyProcessed && invoice.billing_reason === 'subscription_cycle') {
         next = advanceCycle(next)
       }
+      // One more box gone, for the thank-you count. Once per invoice, like the clock.
+      if (!alreadyProcessed && boxGoes) next = { ...next, boxesSent: (next.boxesSent ?? 0) + 1 }
 
       /**
        * A member who chose to leave on their next free date.

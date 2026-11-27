@@ -1,4 +1,8 @@
 import { BUY_CHANNELS, CHANNEL_LABEL, OFFER_RULES, offerWorksOn } from '../rulebook'
+import { createMockSubscription } from '@/lib/recharge/mock'
+import { planExtra } from '@/lib/hub/next-box'
+import { tryOffer } from '@/lib/hub/try-new'
+import { thankYouFor } from '@/lib/hub/thank-you'
 import { worksOn } from '@/lib/partners/redeem'
 import { founderCodeWorksOn } from '@/lib/founder-codes/redeem'
 import { buildShopPlan } from '@/lib/checkout/shop-plan'
@@ -73,6 +77,30 @@ describe('the rulebook agrees with checkout', () => {
   it('the plan savings are the ones the settings give, by bundle size', () => {
     expect(Object.values(config.levelSubscriptionDiscount).map((r) => Math.round(r * 100))).toEqual([13, 15, 20])
     expect(OFFER_RULES.find((r) => r.id === 'plan-saving')!.name).toContain('13%, 15% or 20%')
+  })
+})
+
+describe('plan members’ extras, tries and gifts', () => {
+  it('anything added to a box is at the member’s own plan saving, and the try price only there', () => {
+    const sub = { ...createMockSubscription(MOCK_CATALOGUE, 'm@example.com'), subscriptionDiscountRate: 0.2 }
+    const p = MOCK_CATALOGUE.find((x) => x.title.includes('Sport Multivitamin'))!
+    const v = p.variants.find((x) => x.available)!
+    const planned = planExtra({ sub, catalogue: MOCK_CATALOGUE, productId: p.id })
+    if (!planned.ok) throw new Error(planned.reason)
+    expect(planned.extra.price).toBeCloseTo(discountWithFloor(v.price, 0.2, v.cost ?? unitCostOf(p, v.price, config), config, p.vatRate), 2)
+    expect(offerWorksOn('plan-saving', 'next-box')).toBe(true)
+    // The first-time price exists only for a box (`planExtra` with `offer: 'try'`).
+    expect(BUY_CHANNELS.filter((c) => offerWorksOn('try-new', c))).toEqual(['next-box'])
+    expect(tryOffer(sub, MOCK_CATALOGUE, { on: true, maxPct: 0.25 })).not.toBeNull()
+  })
+
+  it('thank-you gifts go in plan boxes, never in a one-off order', () => {
+    const sub = createMockSubscription(MOCK_CATALOGUE, 'm@example.com')
+    const gift = MOCK_CATALOGUE.find((p) => !sub.lines.some((l) => l.productId === p.id) && p.variants.some((v) => v.available) && !p.hasStimulants)!
+    const settings = { on: true, milestones: [{ box: 3, productId: gift.id, variantId: null }] }
+    expect(thankYouFor(sub, 3, settings, MOCK_CATALOGUE)?.product.id).toBe(gift.id)
+    expect(thankYouFor(sub, 4, settings, MOCK_CATALOGUE)).toBeNull()
+    expect(BUY_CHANNELS.filter((c) => offerWorksOn('thank-you-gift', c))).toEqual(['shop-monthly', 'stack-monthly'])
   })
 })
 

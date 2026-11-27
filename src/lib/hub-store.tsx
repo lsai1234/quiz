@@ -274,6 +274,8 @@ interface HubStore {
   setRoutine: (routine: PlanRoutine) => void
   /** The catalogue the plan saving is worked out from on screen. */
   setCatalogue: (products: CatalogueProduct[]) => void
+  /** "Not for me" to a product offered to try: it isn't suggested again. */
+  dismissTry: (productId: string) => void
   setLineQuantity: (lineId: string, quantity: number) => void
   setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
   /**
@@ -308,6 +310,8 @@ interface HubStore {
   addExtra: (productId: string, variantId?: string | null) => Promise<{ ok: boolean; message: string }>
   /** Take an extra back out of its box, and off the payment. */
   removeExtra: (extraId: string) => Promise<{ ok: boolean; message: string }>
+  /** Put one in the next box at its first-time price ("try something new"). */
+  addTry: (productId: string, variantId: string) => Promise<{ ok: boolean; message: string }>
 }
 
 /** Fetch the account's plan, its version and check-ins. `null` when it couldn't be loaded. */
@@ -453,6 +457,8 @@ export const useHubStore = create<HubStore>((set) => ({
   setCatalogue: (products) => {
     catalogueRef = products
   },
+  dismissTry: (productId) =>
+    change((sub) => ({ ...sub, tryDismissed: [...new Set([...(sub.tryDismissed ?? []), productId])] })),
   setLineQuantity: (lineId, quantity) =>
     change((sub) => setLineQuantityMutation(sub, lineId, quantity)),
   setLineUsage: (lineId, product, usageLevel) =>
@@ -488,6 +494,13 @@ export const useHubStore = create<HubStore>((set) => ({
     viaQueue(() =>
       boxRequest(
         { url: '/api/hub/next-box', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId, variantId }) },
+        'That didn’t go in your box. Please try again.',
+      ),
+    ),
+  addTry: (productId, variantId) =>
+    viaQueue(() =>
+      boxRequest(
+        { url: '/api/hub/next-box', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productId, variantId, offer: 'try' }) },
         'That didn’t go in your box. Please try again.',
       ),
     ),

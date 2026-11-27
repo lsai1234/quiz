@@ -16,6 +16,8 @@ export interface MyPlan {
   day: number
   nextBox: { id: string; date: string } | null
   productIds: string[]
+  /** Their plan saving (0–1): what anything added to a box is priced at. */
+  rate?: number | null
 }
 
 export interface MyPlanState {
