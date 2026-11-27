@@ -20,7 +20,9 @@ test.describe('the shop, every month', () => {
 
     await drawer.getByRole('button', { name: 'Every month' }).click()
     await expect(drawer.getByRole('button', { name: 'Every month' })).toHaveAttribute('aria-pressed', 'true')
-    await expect(drawer.getByText(/of each month: the same as buying it once/)).toBeVisible()
+    // The quiz's own plan saving, in place of the one-off price.
+    await expect(drawer.getByText(/of each month\. Your first box has everything in it\./)).toBeVisible()
+    await expect(drawer.locator('[data-plan-saving]')).toContainText(/Subscribe and save 13%: £[\d.]+ off a month\. Plans from £35 a month save 15%\./)
     await expect(drawer.getByText(/member hub comes with it/i)).toBeVisible()
     await drawer.getByRole('button', { name: /Start monthly plan/ }).click()
 

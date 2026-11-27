@@ -128,7 +128,8 @@ test('a monthly shop basket: what’s on it, how to manage it, and adding to the
 
 test('setting your day re-times the guide', async ({ page }) => {
   await signUpViaApi(page, real('day'))
-  await startMonthlyBasket(page, 'Creatine Monohydrate')
+  // Whey: a creatine tub alone comes every 3 months, under the £10-a-month minimum.
+  await startMonthlyBasket(page, 'Whey Protein')
   const setDay = page.getByRole('button', { name: /Set your day|Change your day/ })
   await expect(setDay).toBeVisible({ timeout: 20_000 })
   await setDay.click()

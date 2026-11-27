@@ -106,7 +106,7 @@ test.describe('swapping a product', () => {
 })
 
 test.describe('the plan total follows what is on the plan', () => {
-  test('removing a line lowers the monthly by that line’s share', async ({ page }) => {
+  test('removing a line lowers the monthly by that line’s share, and the plan saving follows the smaller plan', async ({ page }) => {
     await openHub(page)
     const before = await storedPlan(page)
     const dropped = before.lines[0]
@@ -117,7 +117,15 @@ test.describe('the plan total follows what is on the plan', () => {
 
     const after = await storedPlan(page)
     expect(after.lines).toHaveLength(before.lines.length - 1)
-    expect(after.flatMonthly).toBeCloseTo(before.flatMonthly - share, 1)
+    const was = before.subscriptionDiscountRate
+    const now = after.subscriptionDiscountRate
+    // Without the whey the demo plan is under £35 a month, a 13% plan: what's
+    // left is re-priced at 13% rather than kept at 15% (`plan-rate`).
+    expect(was).toBe(0.15)
+    expect(now).toBe(0.13)
+    const rest = before.lines.slice(1).reduce((s, l) => s + (l.pricePerDelivery * (1 - now)) / (1 - was) / l.deliveryIntervalMonths, 0)
+    expect(after.flatMonthly).toBeCloseTo(rest, 0)
+    expect(after.flatMonthly).toBeGreaterThan(before.flatMonthly - share)
   })
 
   test('a cadence change re-spreads the cost rather than discounting it', async ({ page }) => {

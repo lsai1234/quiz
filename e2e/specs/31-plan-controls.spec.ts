@@ -10,13 +10,15 @@ import { openHub, storedPlan } from '../support/hub'
  * would: how often (counted from the last delivery, worked out by the server),
  * skipping the next one (the product comes out of that box, and is credited),
  * and one more in the next box (on that box's payment). The demo plan is two
- * months in, with pre-workout every 3 months, last sent at signup.
+ * months in, with pre-workout about every 11 weeks (it lasts 2½ months at our
+ * estimate of three training days a week): sent at signup and in month 2.
  */
 
 test.setTimeout(180_000)
 
 type Stored = {
   flatMonthly: number
+  subscriptionDiscountRate?: number
   lines: Array<{ id: string; productId: string; productTitle: string; deliveryIntervalMonths: number; pendingCredit?: number; cadenceFrom?: { cycle: number; made: number; last: number } }>
   deliveryOverrides?: Record<string, { removedLineIds?: string[]; addedItems?: { productId: string }[] }>
 }
@@ -45,13 +47,16 @@ test('how often, skipping the next one and one more in the next box all change t
   await openHub(page)
   const before = (await storedPlan(page)) as unknown as Stored
   const pre = before.lines.find((l) => /Pre-Workout/.test(l.productTitle))!
-  expect(pre.deliveryIntervalMonths).toBe(3)
+  expect(pre.deliveryIntervalMonths).toBe(2.5)
 
-  // How often: every 3 months runs out early for how fast it's used; every 2 doesn't.
+  // How often: "when you'd run out" by default, and what a chosen rhythm would do.
   let sheet = await openSheet(page, pre.productId, pre.productTitle)
-  await expect(sheet.getByText('One lasts you about 11 weeks.')).toBeVisible()
-  await expect(sheet.getByRole('button', { name: 'Add one to your next box' })).toBeVisible({ timeout: 15_000 })
+  await expect(sheet.getByText(/One lasts you about 11 weeks: 1 scoop each training day, about 3 days a week \(our estimate\)/)).toBeVisible()
+  await expect(sheet.getByRole('button', { name: /Add one to your next box/ })).toBeVisible({ timeout: 15_000 })
   await auditSheet(page)
+  await expect(sheet.getByRole('radio', { name: /About every 11 weeks/ })).toBeChecked()
+  await expect(sheet.getByText('Each one comes about when you run out.')).toBeVisible()
+  await sheet.getByRole('radio', { name: 'Every 3 months' }).click()
   await expect(sheet.getByText(/You’d run out about 2 weeks before each one comes/)).toBeVisible()
   await sheet.getByRole('radio', { name: 'Every 2 months' }).click()
   await expect(sheet.getByText(/You’ll have about 2 weeks spare each time/)).toBeVisible()
@@ -60,15 +65,18 @@ test('how often, skipping the next one and one more in the next box all change t
   const review = page.getByRole('dialog', { name: 'Change how often and how many' })
   await expect(review).toBeVisible({ timeout: 15_000 })
   await expect(review.getByText(/counted from the last one you had: the next one comes on/)).toBeVisible()
+  // More often makes the plan bigger: past £55 a month, its saving goes up to 20% on everything, and says so.
+  await expect(review.getByText(/Your plan is now big enough to save 20% on everything on it \(it was 15%\)/)).toBeVisible()
   await review.getByRole('button', { name: /^Confirm change$/ }).click()
 
   await expect
     .poll(async () => ((await storedPlan(page)) as unknown as Stored).lines.find((l) => l.id === pre.id)?.deliveryIntervalMonths, { timeout: 20_000 })
     .toBe(2)
   const changed = (await storedPlan(page)) as unknown as Stored
-  // Worked out by the server: last sent at signup (cycle 0), so the next is the next box (cycle 3), then every 2.
-  expect(changed.lines.find((l) => l.id === pre.id)!.cadenceFrom).toEqual({ cycle: 3, made: 1, last: 0 })
-  expect(changed.flatMonthly).toBeGreaterThan(before.flatMonthly)
+  // Worked out by the server: last sent in month 2, so the next is two months on (cycle 4), then every 2.
+  expect(changed.lines.find((l) => l.id === pre.id)!.cadenceFrom).toEqual({ cycle: 4, made: 2, last: 2 })
+  expect(changed.subscriptionDiscountRate).toBe(0.2)
+  expect(before.subscriptionDiscountRate).toBe(0.15)
   await expect(page.locator(`[data-stack-line="${pre.productId}"]`)).toContainText(/Every 2 months · next/)
 
   // Skip the next one: it comes out of that box, and its value is credited.

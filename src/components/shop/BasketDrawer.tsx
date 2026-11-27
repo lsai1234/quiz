@@ -457,12 +457,16 @@ export function BasketDrawer({
                 <>
                   {shopPlan.saving > 0.01 && (
                     <>
+                      {/* A month of the plan at shop prices (each product over how
+                          often it comes), then the plan saving: they add up to
+                          the monthly. Not the basket's one-off figures, which
+                          price one of everything, every month. */}
                       <p className="sf-drawer-row">
-                        <span>Subtotal</span>
-                        <b className="sf-num">{formatGBP(subtotal)}</b>
+                        <span>At shop prices, a month</span>
+                        <b className="sf-num">{formatGBP(Math.round((shopPlan.monthly + shopPlan.saving) * 100) / 100)}</b>
                       </p>
                       <p className="sf-drawer-row">
-                        <span>{priced.tierLabel ?? 'Bundle discount'}</span>
+                        <span>Plan saving ({Math.round(shopPlan.rate * 100)}%)</span>
                         <b className="sf-num">−{formatGBP(shopPlan.saving)}</b>
                       </p>
                     </>

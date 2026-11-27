@@ -671,3 +671,29 @@ is idempotent, so running it more often than daily is harmless.
 | `priceChangeNoticeDays` | 30 | Notice before an increase may bill |
 | `discontinuedAfterMissedSyncs` | 3 | Syncs absent before "discontinued" |
 | `founderReviewHours` | 24 | Override window before a change auto-applies (0 = immediate) |
+
+### The plan saving, the routine and plan members' extras (2026-11)
+
+One rule for every plan, wherever it was set up. The code is the reference;
+each module's header explains its part.
+
+- **Plan saving** (`src/lib/recharge/plan-rate.ts`): the quiz's own 13% / 15% /
+  20%, by the plan's size (`tierBands`: 15% from £35 a month, 20% from £55). A
+  quiz depth is sold at its rate; a monthly shop basket gets its band's rate
+  (`checkout/shop-plan`); after sign-up a plan's saving moves when a change takes
+  it into another band, up or down, re-priced on the server (`reprice`), held
+  prices kept in proportion, margin floor kept. Previews use the same function.
+- **Rhythms** (`stack-blueprint/pricing` `sizeConsumption`, `recharge/clock`): each
+  product comes about when it would run out. A fractional rhythm (2.5 months)
+  ships in the box before it runs out (2, 5, 7, 10…).
+- **Routine** (`recharge/routine.ts`): training days, optional weight and
+  when-needed answers on every plan: the quiz's, the shopper's, or our estimate.
+  "Your routine" in the hub re-times every product that follows it in one
+  confirm; the product sheet's "Refine" sets how much they take each time.
+- **Extras** (`hub/extra-price`, `hub/next-box`): at the member's own plan saving.
+- **Try something new** (`hub/try-new`, `hub/try-rules`): one product at a time at
+  a first-time price in the next box, once each; server-checked.
+- **Thank-you gifts** (`hub/thank-you`): the founders' pick, free in box 3 and box
+  6, counted in boxes that go (`boxesSent`, advanced by the renewal webhook).
+- **Skip credits both ways** (`hub/skip-credits`): restoring a skipped box takes
+  its credit back; the founders' out-of-stock hold credit reaches Stripe.
