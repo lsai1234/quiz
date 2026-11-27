@@ -3,6 +3,8 @@ import { getHubUser } from '@/lib/auth/session'
 import { getStoredPlan, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
+import { boxCreditMoves, type BoxCreditMove } from '@/lib/hub/skip-credits'
+import { cleanRoutine } from '@/lib/recharge/routine'
 import { normaliseIncomingSubscription } from '@/lib/recharge/reprice'
 import { seedsDemoSubscription } from '@/lib/recharge/demo-seed'
 import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
@@ -133,6 +135,8 @@ export async function PUT(req: Request) {
     shippingAddress: previous.shippingAddress,
     monthsActive: previous.monthsActive,
     billingStatus: previous.billingStatus,
+    // Their routine is theirs to change, but only to the choices on offer.
+    routine: incoming.routine === undefined ? previous.routine : cleanRoutine(incoming.routine) ?? previous.routine,
     // Stripe bills a linked plan on its own day and each box is raised by that
     // charge, so the day is Stripe's (`billing-day`), not the browser's.
     dispatchDayOfMonth: previous.stripeSubscriptionId ? previous.dispatchDayOfMonth : incoming.dispatchDayOfMonth,
@@ -154,7 +158,11 @@ export async function PUT(req: Request) {
   if (!priced.ok) {
     return NextResponse.json({ error: priced.reason }, { status: 400 })
   }
-  const subscription = priced.subscription
+  /* A skipped box's credit, both ways (`hub/skip-credits`): recorded on the box
+     before the plan is saved, paid or taken back in Stripe after. */
+  const billed = Boolean(previous.stripeCustomerId) && getPaymentSource() === 'stripe'
+  const moves = boxCreditMoves(previous, priced.subscription, { billed })
+  const subscription = moves.subscription
 
   const sync = await syncSubscriptionToStripe(previous, subscription)
   if (!sync.ok) {
@@ -171,57 +179,58 @@ export async function PUT(req: Request) {
 
   const version = await saveSubscription(user.id, subscription)
   await unchargeSkippedExtras(user.id, previous, subscription)
-  await creditNewlySkippedBoxes(user.id, previous, subscription)
+  await settleSkippedBoxes(user.id, subscription, moves)
   await creditNewlySkippedLines(user.id, previous, subscription)
   return NextResponse.json({ ok: true, version, subscription })
 }
 
 /**
- * Credit a box the member has just skipped.
+ * Credit a box the member has just skipped, or take back the credit for one
+ * they've just restored.
  *
- * The Terms promise it — *"the value of the skipped box is credited against your
- * next one"* — and until now nothing did: the skip set a flag, dispatch sends
- * nothing, and Stripe billed the full monthly anyway. A member who skipped paid
- * in full for an empty month.
- *
- * Priced SERVER-SIDE from the lines actually due in that cycle, never from the
- * document the browser sent — the value of a box is money, and this route
- * already takes a whole subscription from the client.
- *
- * Only boxes that are newly skipped by THIS request are credited, and the
- * idempotency key is the box itself, so an unskip-then-reskip cannot stack
- * credits. Never throws: a credit that fails to reach Stripe is a bookkeeping
- * problem, and failing the member's skip over it would be a worse one.
+ * The Terms promise it: *"the value of the skipped box is credited against your
+ * next one"*. The value is priced SERVER-SIDE from the lines due in that cycle
+ * (`creditForSkippedBox`), never from the document the browser sent, and each
+ * credit is keyed by the box and its number (`skipSeq`), so a replayed save
+ * can't pay it twice, and a restore takes back exactly the credit it undoes.
+ * Never throws: a credit that fails to reach Stripe is a bookkeeping problem
+ * for the founders, reported as critical, and failing the member's skip over
+ * it would be a worse one.
  */
-async function creditNewlySkippedBoxes(
+async function settleSkippedBoxes(
   userId: string,
-  previous: MemberSubscription,
   next: MemberSubscription,
+  moves: { credits: BoxCreditMove[]; debits: BoxCreditMove[] },
 ): Promise<void> {
   if (!next.stripeCustomerId || getPaymentSource() !== 'stripe') return
+  if (moves.credits.length === 0 && moves.debits.length === 0) return
+  const { creditCustomerBalance, debitCustomerBalance } = await import('@/lib/payments/stripe')
+  const key = next.stripeSubscriptionId ?? userId
 
-  const wasSkipped = (sub: MemberSubscription, id: string) => sub.deliveryOverrides?.[id]?.skipped === true
-  const newlySkipped = Object.keys(next.deliveryOverrides ?? {}).filter(
-    (id) => wasSkipped(next, id) && !wasSkipped(previous, id),
-  )
-  if (newlySkipped.length === 0) return
-
-  const { creditForSkippedBox } = await import('@/lib/recharge/schedule')
-  const { creditCustomerBalance } = await import('@/lib/payments/stripe')
-
-  for (const id of newlySkipped) {
-    const amount = creditForSkippedBox(previous, id)
-    if (amount <= 0) continue
+  for (const move of moves.credits) {
     try {
       await creditCustomerBalance({
         customerId: next.stripeCustomerId,
-        amount,
-        description: `CHRGD — credit for the box you skipped (${id})`,
-        idempotencyKey: `skip:${next.stripeSubscriptionId ?? userId}:${id}`,
+        amount: move.amount,
+        description: `CHRGD — credit for the box you skipped (${move.id})`,
+        idempotencyKey: `skip:${key}:${move.id}:${move.seq}`,
       })
     } catch (err) {
-      console.error(`[hub] skip credit of £${amount} failed to reach Stripe for ${userId}:`, err)
-      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'skip-credit', amount } })
+      console.error(`[hub] skip credit of £${move.amount} failed to reach Stripe for ${userId}:`, err)
+      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'skip-credit', amount: move.amount } })
+    }
+  }
+  for (const move of moves.debits) {
+    try {
+      await debitCustomerBalance({
+        customerId: next.stripeCustomerId,
+        amount: move.amount,
+        description: `CHRGD — the box you restored (${move.id}) ships, so its skip credit comes back off`,
+        idempotencyKey: `unskip:${key}:${move.id}:${move.seq}`,
+      })
+    } catch (err) {
+      console.error(`[hub] taking back a skip credit of £${move.amount} failed in Stripe for ${userId}:`, err)
+      reportErrorAsync(err, { surface: 'myhub', severity: 'critical', path: '/api/hub/subscription', userId, context: { step: 'unskip-debit', amount: move.amount } })
     }
   }
 }

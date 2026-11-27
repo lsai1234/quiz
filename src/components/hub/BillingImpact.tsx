@@ -5,6 +5,7 @@ import { Card } from '@/components/system'
 import { Eyebrow } from './Eyebrow'
 import { MoneyRow } from './MoneyRow'
 import type { LineEconomics } from '@/lib/recharge/mock'
+import { everyLabel } from '@/lib/hub/line-facts'
 
 interface Props {
   monthlyBefore: number
@@ -49,7 +50,7 @@ export function BillingImpact({ monthlyBefore, monthlyAfter, oneOffNow = 0, cred
           )}
           <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>
             {economics.units > 1 ? `${economics.units} units ` : ''}
-            {economics.shipEveryMonths > 1 ? `every ${economics.shipEveryMonths} months` : 'every month'}
+            {everyLabel(economics.shipEveryMonths)}
             {' · '}
             <span style={{ fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>{formatGBP(economics.perDelivery)}</span> per box
           </p>

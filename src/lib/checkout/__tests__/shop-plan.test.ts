@@ -2,6 +2,7 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { buildShopPlan, shopPlanMinMonths, shopPlanTermLine } from '../shop-plan'
 import { priceBasket, resolveBasket } from '@/lib/basket/helpers'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { bandFor } from '@/lib/recharge/plan-rate'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const config = getPricingConfig()
@@ -12,29 +13,57 @@ const lineFor = (p: CatalogueProduct, quantity = 1) => {
 }
 
 describe('a shop basket bought every month', () => {
-  it('costs what the same basket costs once, with no subscribe-and-save rate', () => {
+  it('gets the plan saving for its size, with each product at its own rhythm', () => {
     const input = [lineFor(sellable[0], 2), lineFor(sellable[1])]
     const plan = buildShopPlan(input, MOCK_CATALOGUE, config)
     expect(plan.ok).toBe(true)
     if (!plan.ok) return
-    const once = priceBasket(resolveBasket(input, MOCK_CATALOGUE), config)
-    expect(plan.monthly).toBeCloseTo(once.total, 2)
-    expect(plan.subscription.flatMonthly).toBeCloseTo(once.total, 2)
-    expect(plan.subscription.subscriptionDiscountRate).toBe(0)
+    const listMonthly = plan.subscription.lines.reduce((s, l) => {
+      const v = MOCK_CATALOGUE.find((p) => p.id === l.productId)!.variants.find((x) => x.id === l.variantId)!
+      return s + (v.price * l.quantity) / l.deliveryIntervalMonths
+    }, 0)
+    expect(plan.rate).toBe(bandFor(listMonthly, config).rate)
+    expect(plan.subscription.subscriptionDiscountRate).toBe(plan.rate)
     expect(plan.subscription.introDiscountRate).toBe(0)
     expect(plan.subscription.firstMonth).toBe(plan.monthly)
-    // The lines add up to the monthly, so the hub's sums agree with the charge.
-    const sum = plan.subscription.lines.reduce((s, l) => s + l.pricePerDelivery, 0)
-    expect(sum).toBeCloseTo(plan.monthly, 2)
+    // The lines add up to the monthly, each over how often it comes, so the hub's sums agree with the charge.
+    const sum = plan.subscription.lines.reduce((s, l) => s + l.pricePerDelivery / l.deliveryIntervalMonths, 0)
+    expect(sum).toBeCloseTo(plan.monthly, 1)
+    expect(plan.saving).toBeCloseTo(listMonthly - plan.monthly, 1)
   })
 
-  it('keeps the basket’s own saving (the £50+ tier) when it earns one', () => {
+  it('takes the plan saving in place of the basket’s 8%, which it always beats', () => {
     const big = [...sellable].sort((a, b) => b.variants[0].price - a.variants[0].price).slice(0, 3).map((p) => lineFor(p))
     const plan = buildShopPlan(big, MOCK_CATALOGUE, config)
     expect(plan.ok).toBe(true)
     if (!plan.ok) return
     const once = priceBasket(resolveBasket(big, MOCK_CATALOGUE), config)
-    expect(plan.saving).toBeCloseTo(once.discount, 2)
+    expect(once.discount).toBeGreaterThan(0)
+    expect(plan.rate).toBeGreaterThanOrEqual(0.13)
+  })
+
+  it('sizes each product to our estimate, and to the shopper’s routine when they give one', () => {
+    const pre = MOCK_CATALOGUE.find((p) => p.title.includes('Pre-Workout'))!
+    const whey = MOCK_CATALOGUE.find((p) => p.title.includes('Whey Protein'))!
+    const estimate = buildShopPlan([lineFor(pre), lineFor(whey)], MOCK_CATALOGUE, config)
+    const trains = buildShopPlan([lineFor(pre), lineFor(whey)], MOCK_CATALOGUE, config, new Date(), { trainingFrequency: '5-6x', weightBand: '90-105', source: 'member' })
+    if (!estimate.ok || !trains.ok) throw new Error('expected plans')
+    const every = (plan: typeof estimate, id: string) => plan.subscription.lines.find((l) => l.productId === id)!
+    // About three training days a week: a 30-serving tub lasts 2½ months.
+    expect(estimate.subscription.routine?.source).toBe('estimate')
+    expect(every(estimate, pre.id).deliveryIntervalMonths).toBe(2.5)
+    // Five or six: about every 5½ weeks. At 90–105kg, 1½ scoops of whey a day: two tubs about every 6 weeks.
+    expect(every(trains, pre.id).deliveryIntervalMonths).toBe(1.25)
+    expect(every(trains, whey.id).quantity).toBe(2)
+    expect(every(trains, whey.id).deliveryIntervalMonths).toBeCloseTo(1.33, 2)
+    expect(trains.subscription.routine).toEqual({ trainingFrequency: '5-6x', weightBand: '90-105', source: 'member' })
+  })
+
+  it('says where the next saving starts, from a figure people can compare', () => {
+    const cheap = [...sellable].sort((a, b) => a.variants[0].price - b.variants[0].price)
+    const plan = buildShopPlan([lineFor(cheap[cheap.length - 1])], MOCK_CATALOGUE, config)
+    if (!plan.ok) throw new Error('expected a plan')
+    if (plan.rate < 0.2) expect(plan.nextBand?.from).toBeGreaterThan(plan.monthly)
   })
 
   it('refuses a basket under the monthly minimum, and says what the minimum is', () => {

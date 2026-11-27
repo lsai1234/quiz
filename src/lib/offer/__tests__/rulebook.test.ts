@@ -5,7 +5,7 @@ import { buildShopPlan } from '@/lib/checkout/shop-plan'
 import { priceBasket, resolveBasket } from '@/lib/basket/helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint/mock-blueprint'
-import { calculatePricing, getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, discountWithFloor, getPricingConfig, unitCostOf } from '@/lib/stack-blueprint/pricing'
 
 /**
  * The offer rulebook (`rulebook.ts`) is a table for people. These hold it to
@@ -43,7 +43,7 @@ describe('the rulebook agrees with checkout', () => {
     expect(offerWorksOn('founder-code', 'shop-monthly')).toBe(founderCodeWorksOn('subscription'))
   })
 
-  it('a monthly shop basket: no plan saving, no first-month discount, no gift, and the basket saving kept', () => {
+  it('a monthly shop basket: the plan saving in place of the basket saving, no first-month discount, no gift', () => {
     const big = [...sellable].sort((a, b) => b.variants[0].price - a.variants[0].price).slice(0, 3).map((p) => lineFor(p.id))
     const plan = buildShopPlan(big, MOCK_CATALOGUE, config)
     expect(plan.ok).toBe(true)
@@ -53,7 +53,16 @@ describe('the rulebook agrees with checkout', () => {
     expect(Boolean(plan.subscription.bonus)).toBe(offerWorksOn('free-gift', 'shop-monthly'))
     const once = priceBasket(resolveBasket(big, MOCK_CATALOGUE), config)
     expect(once.discount).toBeGreaterThan(0)
-    expect(plan.saving > 0).toBe(offerWorksOn('basket-tier', 'shop-monthly'))
+    // Every line at the plan saving and nothing more: the basket's 8% doesn't stack on it.
+    const rate = plan.subscription.subscriptionDiscountRate ?? 0
+    const onlyPlanSaving = plan.subscription.lines.every((l) => {
+      const p = MOCK_CATALOGUE.find((x) => x.id === l.productId)!
+      const v = p.variants.find((x) => x.id === l.variantId)!
+      const unit = discountWithFloor(v.price, rate, v.cost ?? unitCostOf(p, v.price, config), config, p.vatRate)
+      return Math.abs(l.pricePerDelivery - Math.round(unit * l.quantity * 100) / 100) < 0.01
+    })
+    expect(onlyPlanSaving).toBe(true)
+    expect(offerWorksOn('basket-tier', 'shop-monthly')).toBe(false)
   })
 
   it('a stack plan: the bundle’s saving', () => {

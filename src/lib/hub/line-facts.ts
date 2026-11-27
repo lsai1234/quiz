@@ -8,10 +8,15 @@
 /** Days in an average month, for turning months of supply into days. */
 const DAYS_PER_MONTH = 30.44
 
-/** "every month", "every 2 months": how often a line comes. */
+/**
+ * "every month", "every 2 months", or "about every 11 weeks" for a rhythm that
+ * isn't a whole number of months (a tub that lasts 2½ months comes in the box
+ * before it runs out, two or three months apart).
+ */
 export function everyLabel(months: number): string {
-  const m = Math.max(1, Math.round(months))
-  return m === 1 ? 'every month' : `every ${m} months`
+  const m = Math.max(1, Math.round(Number(months) * 100) / 100 || 1)
+  if (Number.isInteger(m)) return m === 1 ? 'every month' : `every ${m} months`
+  return `about every ${Math.round((m * DAYS_PER_MONTH) / 7)} weeks`
 }
 
 /** "2 at a time", or nothing for one. */

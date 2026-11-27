@@ -5,14 +5,27 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { BasketLine } from './types'
 import { addLine, setLineQty, removeLine, pruneBasket } from './helpers'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { TrainingFrequency, WeightBand } from '@/lib/types'
 
 /** How the basket is bought: once, or every month (`lib/checkout/shop-plan`). */
 export type BasketPlan = 'once' | 'monthly'
+
+/**
+ * What a monthly basket is sized from, when the shopper has told us (`PlanRoutine`
+ * without its source): how many days a week they train, and their weight. Unset,
+ * the plan is sized from our estimate and says so.
+ */
+export interface BasketRoutine {
+  trainingFrequency: TrainingFrequency | null
+  weightBand: WeightBand | null
+}
 
 interface BasketStore {
   lines: BasketLine[]
   plan: BasketPlan
   setPlan: (plan: BasketPlan) => void
+  routine: BasketRoutine | null
+  setRoutine: (routine: BasketRoutine | null) => void
   add: (productId: string, variantId: string, qty?: number) => void
   setQty: (productId: string, variantId: string, qty: number) => void
   remove: (productId: string, variantId: string) => void
@@ -39,6 +52,8 @@ export const useBasket = create<BasketStore>()(
       lines: [],
       plan: 'once',
       setPlan: (plan) => set({ plan }),
+      routine: null,
+      setRoutine: (routine) => set({ routine }),
       add: (productId, variantId, qty = 1) =>
         set((s) => ({ lines: addLine(s.lines, productId, variantId, qty) })),
       setQty: (productId, variantId, qty) =>
@@ -63,7 +78,7 @@ export const useBasket = create<BasketStore>()(
       storage: createJSONStorage(() =>
         (typeof window !== 'undefined' ? window.localStorage : undefined) as Storage,
       ),
-      partialize: (s) => ({ lines: s.lines, plan: s.plan }),
+      partialize: (s) => ({ lines: s.lines, plan: s.plan, routine: s.routine }),
     },
   ),
 )

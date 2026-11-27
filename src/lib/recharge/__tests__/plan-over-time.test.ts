@@ -101,7 +101,24 @@ describe('a plan over two years', () => {
 
   it('counts a change of how often from the last delivery, with no extra box and no gap', () => {
     expect(cyclesWith('Whey')).toEqual([1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15, 17, 19, 21, 23])
-    expect(cyclesWith('Pre-Workout')).toEqual([3, 6, 9, 12, 15, 16, 17, 18, 19, 22])
+    // A tub that lasts 2½ months comes in the box before it runs out (2, 5, 7,
+    // 10, 12, 15); every month from its last (15), then every 3 from its last (19).
+    expect(cyclesWith('Pre-Workout')).toEqual([2, 5, 7, 10, 12, 15, 16, 17, 18, 19, 22])
+  })
+
+  it('never runs out of a product left on its own rhythm, and never piles it up', () => {
+    // Electrolytes last 2½ months at three training days a week, and nobody touches them.
+    const lasts = titled(sub, 'Electrolyte').lastsMonths!
+    expect(lasts).toBeCloseTo(2.5, 2)
+    let supply = lasts // the tub in the box at signup
+    for (let cycle = 1; cycle <= 24; cycle++) {
+      // Just before this box arrives, a month more has been used.
+      expect({ cycle, left: Math.round((supply - cycle) * 100) / 100 }).toEqual({ cycle, left: expect.any(Number) })
+      expect(supply - cycle).toBeGreaterThanOrEqual(-0.01)
+      if (has(cycle, 'Electrolyte')) supply += lasts
+      // Never more than one tub and a month ahead.
+      expect(supply - cycle).toBeLessThanOrEqual(lasts + 1)
+    }
   })
 
   it('sends a product added mid-plan in the next box, then on its cadence', () => {

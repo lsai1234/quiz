@@ -365,7 +365,10 @@ describe('the founder can move the bands without a deploy', () => {
   })
 
   it('a raised target buys more product for the same depth', () => {
-    const a = answers({ goals: ['hydration', 'focus'] })
+    // Three training days a week: at five or six, the training-day products
+    // come about every 5½ weeks (they last 30 sessions), which brings the
+    // smallest depth close enough to the next to fold into it.
+    const a = answers({ goals: ['hydration', 'focus'], trainingFrequency: '3-4x' })
     const full = buildStackBlueprint(a, MOCK_CATALOGUE)
 
     setPricingOverrides({

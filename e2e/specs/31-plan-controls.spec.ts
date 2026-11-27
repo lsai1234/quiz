@@ -15,8 +15,9 @@ import { openHub, storedPlan } from '../support/hub'
 
 test.setTimeout(180_000)
 
-type Stored = Awaited<ReturnType<typeof storedPlan>> & {
-  lines: Array<{ id: string; productTitle: string; deliveryIntervalMonths: number; pendingCredit?: number; cadenceFrom?: { cycle: number; made: number; last: number } }>
+type Stored = {
+  flatMonthly: number
+  lines: Array<{ id: string; productId: string; productTitle: string; deliveryIntervalMonths: number; pendingCredit?: number; cadenceFrom?: { cycle: number; made: number; last: number } }>
   deliveryOverrides?: Record<string, { removedLineIds?: string[]; addedItems?: { productId: string }[] }>
 }
 
@@ -42,7 +43,7 @@ async function openSheet(page: Page, productId: string, title: string) {
 
 test('how often, skipping the next one and one more in the next box all change the plan for real', async ({ page }) => {
   await openHub(page)
-  const before = (await storedPlan(page)) as Stored
+  const before = (await storedPlan(page)) as unknown as Stored
   const pre = before.lines.find((l) => /Pre-Workout/.test(l.productTitle))!
   expect(pre.deliveryIntervalMonths).toBe(3)
 
@@ -62,9 +63,9 @@ test('how often, skipping the next one and one more in the next box all change t
   await review.getByRole('button', { name: /^Confirm change$/ }).click()
 
   await expect
-    .poll(async () => ((await storedPlan(page)) as Stored).lines.find((l) => l.id === pre.id)?.deliveryIntervalMonths, { timeout: 20_000 })
+    .poll(async () => ((await storedPlan(page)) as unknown as Stored).lines.find((l) => l.id === pre.id)?.deliveryIntervalMonths, { timeout: 20_000 })
     .toBe(2)
-  const changed = (await storedPlan(page)) as Stored
+  const changed = (await storedPlan(page)) as unknown as Stored
   // Worked out by the server: last sent at signup (cycle 0), so the next is the next box (cycle 3), then every 2.
   expect(changed.lines.find((l) => l.id === pre.id)!.cadenceFrom).toEqual({ cycle: 3, made: 1, last: 0 })
   expect(changed.flatMonthly).toBeGreaterThan(before.flatMonthly)
@@ -77,9 +78,9 @@ test('how often, skipping the next one and one more in the next box all change t
   await expect(skip.getByText(/It won’t be in your box on .*The one after comes on/)).toBeVisible({ timeout: 15_000 })
   await skip.getByRole('button', { name: /Skip & credit/ }).click()
   await expect
-    .poll(async () => ((await storedPlan(page)) as Stored).lines.find((l) => l.id === pre.id)?.pendingCredit ?? 0, { timeout: 20_000 })
+    .poll(async () => ((await storedPlan(page)) as unknown as Stored).lines.find((l) => l.id === pre.id)?.pendingCredit ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0)
-  const skipped = (await storedPlan(page)) as Stored
+  const skipped = (await storedPlan(page)) as unknown as Stored
   const removedFrom = Object.entries(skipped.deliveryOverrides ?? {}).filter(([, o]) => o.removedLineIds?.includes(pre.id))
   expect(removedFrom).toHaveLength(1)
 
@@ -89,7 +90,7 @@ test('how often, skipping the next one and one more in the next box all change t
   await expect(add).toBeVisible({ timeout: 15_000 })
   await add.click()
   await expect(sheet.getByRole('button', { name: 'Added' })).toBeVisible({ timeout: 20_000 })
-  const withExtra = (await storedPlan(page)) as Stored
+  const withExtra = (await storedPlan(page)) as unknown as Stored
   const extras = Object.values(withExtra.deliveryOverrides ?? {}).flatMap((o) => o.addedItems ?? [])
   expect(extras.map((e) => e.productId)).toContain(pre.productId)
 })

@@ -25,7 +25,9 @@ import {
   type SubscriptionPlanOptions,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
-import { nextBoxCycle, syncDeliveryCounts, withInterval } from './clock'
+import { deliveriesMadeFor, nextBoxCycle, roundInterval, syncDeliveryCounts, withInterval } from './clock'
+import { answersFor, ESTIMATED_ROUTINE, routineFromAnswers } from './routine'
+import { planRateChange, withPlanRate } from './plan-rate'
 import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine, SafetyConstraints } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -147,6 +149,8 @@ export function buildMemberSubscription(
     monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },
+    // What every product was sized from, kept so the hub sizes the same way.
+    routine: routineFromAnswers(answers) ?? ESTIMATED_ROUTINE,
     defaultChangePolicy: defaultPolicy,
     safetyConstraints: opts.safetyConstraints,
     lines,
@@ -166,7 +170,9 @@ export function createMockSubscription(
 
 /** Deliveries shipped after `months` for a line shipping every `everyMonths` (first at signup). */
 export function deliveriesInMonths(months: number, everyMonths: number): number {
-  return Math.floor(Math.max(0, months) / Math.max(1, everyMonths)) + 1
+  // The clock's own count (deliveries at ⌊k × every⌋ from signup), so a 2½-month
+  // rhythm counts the boxes that really went: 0, 2, 5, 7…
+  return deliveriesMadeFor({ deliveryIntervalMonths: everyMonths, joinedAtMonth: 0 }, Math.max(0, months))
 }
 
 // ─── Dates ────────────────────────────────────────────────────────────────────
@@ -288,7 +294,7 @@ export function swapSubscriptionLine(
       pricePerDelivery: round(line.quantity * discountedUnit),
       swapGroup: newProduct.swapGroup,
       // How long the new one lasts, for the words; its schedule stays the line's.
-      lastsMonths: sizeConsumption(newProduct, null, config, line.usageLevel ?? 'standard').monthsOneUnitLasts,
+      lastsMonths: sizeConsumption(newProduct, answersFor(sub.routine), config, line.usageLevel ?? 'standard').monthsOneUnitLasts,
     }
   })
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
@@ -571,7 +577,9 @@ export function addLine(
   // De-dupe: never add a product that's already in the stack.
   if (sub.lines.some((l) => l.productId === subProduct.id)) return sub
 
-  const sizing = sizeConsumption(subProduct, answers, config)
+  // Sized to the plan's routine (how often they train, their weight), as the
+  // rest of the plan is; it used to assume three training days a week for anyone.
+  const sizing = sizeConsumption(subProduct, answers ?? answersFor(sub.routine), config)
   const variant = subProduct.variants.find((v) => v.available) ?? subProduct.variants[0]
   const { discountedUnit } = discountedUnitFor(subProduct, config, subRateOf(sub, config))
 
@@ -596,6 +604,7 @@ export function addLine(
     // happened, and a quarterly product first came three months later.
     joinedAtMonth: nextBoxCycle(sub),
     lastsMonths: sizing.monthsOneUnitLasts,
+    rhythm: 'routine',
   }
   const lines = [...sub.lines, newLine]
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
@@ -621,7 +630,7 @@ export function setLineCadence(
   config = getPricingConfig(),
   now: Date = new Date(),
 ): MemberSubscription {
-  const clamped = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(months)))
+  const clamped = Math.min(config.maxDeliveryMonths, roundInterval(months))
   const next = nextBoxCycle(sub, now)
   const lines = sub.lines.map((l) => (l.id === lineId ? withInterval(l, clamped, next) : l))
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
@@ -640,6 +649,36 @@ export function setLineSchedule(
   now: Date = new Date(),
 ): MemberSubscription {
   return setLineCadence(setLineQuantity(sub, lineId, change.quantity), lineId, change.every, config, now)
+}
+
+/** The product sheet's whole choice for one product. */
+export interface LineChoice {
+  /** How much they take each time (half, one or two servings). */
+  usageLevel: UsageLevel
+  /** How many come each time. */
+  quantity: number
+  /** How often, in months (a fraction for a rhythm such as every 2½ months). */
+  every: number
+  /** True when it's the routine's own rhythm (and so moves with the routine); false for one they chose. */
+  follows: boolean
+  /** How long one lasts at that usage, for the words. */
+  lastsMonths?: number
+}
+
+export function setLineChoice(
+  sub: MemberSubscription,
+  lineId: string,
+  choice: LineChoice,
+  config = getPricingConfig(),
+  now: Date = new Date(),
+): MemberSubscription {
+  const scheduled = setLineSchedule(sub, lineId, { every: choice.every, quantity: choice.quantity }, config, now)
+  const lines = scheduled.lines.map((l) =>
+    l.id === lineId
+      ? { ...l, usageLevel: choice.usageLevel, rhythm: (choice.follows ? 'routine' : 'chosen') as 'routine' | 'chosen', lastsMonths: choice.lastsMonths ?? l.lastsMonths }
+      : l,
+  )
+  return { ...scheduled, lines }
 }
 
 /** Cadence options a line can move to, given the config bounds. */
@@ -694,7 +733,7 @@ export function setLineUsage(
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
 ): MemberSubscription {
-  const sizing = sizeConsumption(product, answers, config, usageLevel)
+  const sizing = sizeConsumption(product, answers ?? answersFor(sub.routine), config, usageLevel)
   const { discountedUnit } = discountedUnitFor(product, config, subRateOf(sub, config))
   const lines = sub.lines.map((l) =>
     l.id === lineId
@@ -814,6 +853,8 @@ export interface PlanChangeImpact {
   /** Credit (stored positive) banked to the next payment (e.g. skip). */
   credit: number
   effectiveFrom: string
+  /** The plan saving before and after, when the change moves it (`plan-rate`). */
+  rate?: { from: number; to: number } | null
 }
 
 function blankImpact(sub: MemberSubscription): PlanChangeImpact {
@@ -835,13 +876,23 @@ export function computeAddImpact(
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
 ): PlanChangeImpact {
-  const next = addLine(sub, product, catalogue, answers, config)
-  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+  const added = addLine(sub, product, catalogue, answers, config)
+  // The plan saving follows the plan's size, as the server will save it.
+  const next = withPlanRate(sub, added, catalogue, config)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly), rate: planRateChange(sub, added, catalogue, config) }
 }
 
-export function computeRemoveImpact(sub: MemberSubscription, lineId: string): PlanChangeImpact {
-  const { sub: next, settlement } = removeLine(sub, lineId)
-  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly), settlement }
+export function computeRemoveImpact(sub: MemberSubscription, lineId: string, catalogue: CatalogueProduct[] = []): PlanChangeImpact {
+  const { sub: removed, settlement } = removeLine(sub, lineId)
+  // With the catalogue, the plan saving follows the smaller plan, as the server will save it.
+  const next = catalogue.length ? withPlanRate(sub, removed, catalogue) : removed
+  return {
+    ...blankImpact(sub),
+    newMonthly: next.flatMonthly,
+    monthlyDelta: round(next.flatMonthly - sub.flatMonthly),
+    settlement,
+    rate: catalogue.length ? planRateChange(sub, removed, catalogue) : null,
+  }
 }
 
 export function computeCadenceImpact(

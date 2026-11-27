@@ -3,6 +3,24 @@ import type { SwapGroup, StackSlot, DietaryTag, SafetyFlag } from '@/lib/catalog
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import type { Ingredient } from '@/lib/consult/circuit'
+import type { AsNeededFrequency, TrainingFrequency, WeightBand } from '@/lib/types'
+import type { AsNeededTrigger } from '@/lib/catalogue/types'
+
+/**
+ * How someone uses their plan: what every product's rhythm is worked out from
+ * (`routine.ts`). Training days size the training-day products, weight sizes
+ * protein, and the "when you need it" products follow how often they reach for
+ * them. From the quiz's answers when there are some; otherwise an estimate from
+ * the label (about three training days a week), which they can refine.
+ */
+export interface PlanRoutine {
+  trainingFrequency: TrainingFrequency | null
+  /** Optional: only protein is sized by it. Never shown anywhere but their hub. */
+  weightBand: WeightBand | null
+  asNeeded?: Partial<Record<AsNeededTrigger, AsNeededFrequency>>
+  /** The quiz's answers, the member's own, or our estimate. */
+  source: 'answers' | 'member' | 'estimate'
+}
 
 /** Subscription as the customer manages it — shaped like a Recharge subscription contract. */
 
@@ -170,6 +188,12 @@ export interface MemberSubscriptionLine {
    */
   lastsMonths?: number
   /**
+   * Whether its rhythm follows the plan's routine (`routine`, the default: it
+   * comes about when they'd run out, and moves when the routine does) or one the
+   * member chose ("every month"), which a routine change leaves alone.
+   */
+  rhythm?: 'routine' | 'chosen'
+  /**
    * @deprecated Nothing ships by this. "Skip next" used to push it out a cadence
    * and dispatch never read it, so a skipped product shipped anyway; a skip now
    * takes the line out of its next box (`schedule.skipNextDelivery`).
@@ -234,6 +258,8 @@ export interface MemberSubscription {
   id: string
   /** Where it came from (`PlanSource`); unset on plans made before it was recorded. */
   source?: PlanSource | null
+  /** How they use it, which every product's rhythm is worked out from (`PlanRoutine`). */
+  routine?: PlanRoutine | null
   status: SubscriptionStatus
   customerEmail: string
   /**
@@ -457,4 +483,12 @@ export interface DeliveryOverride {
   addedItems?: BoxExtra[]
   /** Recurring line ids pulled out of this box only. */
   removedLineIds?: string[]
+  /**
+   * The credit given for skipping this box, while it stands: what it was and
+   * which skip it was for. Server-held (`hub/skip-credits`): restoring the box
+   * takes it back, and skipping it again credits it again under a new number.
+   */
+  skipCredit?: { amount: number; seq: number } | null
+  /** How many times this box has been skipped and credited; numbers each credit. */
+  skipSeq?: number
 }

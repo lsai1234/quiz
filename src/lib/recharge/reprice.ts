@@ -41,8 +41,9 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { discountedUnitFor, flatMonthlyOf, MAX_LINE_UNITS } from './mock'
-import { nextBoxCycle, shipsAtCycle, withInterval } from './clock'
+import { nextBoxCycle, roundInterval, shipsAtCycle, withInterval } from './clock'
 import { cycleForMonth } from './schedule'
+import { withPlanRate } from './plan-rate'
 import type { DeliveryOverride, MemberSubscription, MemberSubscriptionLine } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -143,10 +144,10 @@ export function normaliseIncomingSubscription(
     // Bounds the hub's own controls already apply — re-applied here because the
     // hub is not the only thing that can send this document.
     const quantity = Math.min(MAX_LINE_UNITS, Math.max(1, Math.round(Number(line.quantity) || 1)))
-    const cadence = Math.min(
-      config.maxDeliveryMonths,
-      Math.max(1, Math.round(Number(line.deliveryIntervalMonths) || 1)),
-    )
+    // A fraction (2.5 for a tub that lasts two and a half months) is a rhythm
+    // like any other: the monthly is the delivery price over it, so any value
+    // from a month to the cap is priced fairly. Kept to two places.
+    const cadence = Math.min(config.maxDeliveryMonths, roundInterval(Number(line.deliveryIntervalMonths) || 1))
 
     /* A line already on the plan keeps its own unit price, whatever the
        catalogue says today — that is what protects a grandfathered price. A new
@@ -235,14 +236,16 @@ export function normaliseIncomingSubscription(
       )
     })
 
-  return {
-    ok: true,
-    subscription: {
-      ...incoming,
-      lines,
-      deliveryOverrides: keepRemovals(previous, incoming.deliveryOverrides, now),
-      subscriptionDiscountRate: rate,
-      flatMonthly: sameLines ? previous.flatMonthly : flatMonthlyOf(lines),
-    },
+  const priced: MemberSubscription = {
+    ...incoming,
+    lines,
+    deliveryOverrides: keepRemovals(previous, incoming.deliveryOverrides, now),
+    subscriptionDiscountRate: rate,
+    flatMonthly: sameLines ? previous.flatMonthly : flatMonthlyOf(lines),
   }
+
+  /* The plan saving follows the plan's size (`plan-rate`): a change that takes
+     it into another band re-prices every line at that band's saving. Worked out
+     from the lines priced above, never from a rate the browser sent. */
+  return { ok: true, subscription: sameLines ? priced : withPlanRate(previous, priced, catalogue, config) }
 }

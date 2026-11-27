@@ -7,6 +7,7 @@ import type { BillingChange, MemberSubscription } from '@/lib/recharge/types'
 import type { ChangeEvent } from '@/lib/changes/types'
 import type { Notification } from '@/lib/notify/types'
 import type { ConsentRecord } from '@/lib/legal/consent'
+import { everyLabel } from '@/lib/hub/line-facts'
 
 
 interface Payload {
@@ -78,8 +79,7 @@ export function SubscriptionDetail({ userId }: { userId: string }) {
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-[var(--ink-2)] truncate">{line.productTitle}</p>
                 <p className="text-[11px] text-[var(--ink-3)]">
-                  {line.slotTitle} · {formatGBP(line.pricePerDelivery)} every{' '}
-                  {line.deliveryIntervalMonths === 1 ? 'month' : `${line.deliveryIntervalMonths} months`}
+                  {line.slotTitle} · {formatGBP(line.pricePerDelivery)} {everyLabel(line.deliveryIntervalMonths)}
                 </p>
               </div>
               <span className="text-[10px] font-bold uppercase whitespace-nowrap" style={{ color: 'var(--accent)' }}>

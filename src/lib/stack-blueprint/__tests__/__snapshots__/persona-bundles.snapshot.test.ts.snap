@@ -95,7 +95,7 @@ exports[`persona → bundle regression perf-muscle-hypertrophy-complete 1`] = `
   ],
   "stackName": "Performance Core Stack",
   "subscriptionItemCount": 6,
-  "subscriptionTotal": 87.69,
+  "subscriptionTotal": 80.01,
 }
 `;
 
@@ -112,7 +112,7 @@ exports[`persona → bundle regression perf-muscle-under30 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 1,
-  "subscriptionTotal": 52.18,
+  "subscriptionTotal": 39.24,
 }
 `;
 
@@ -200,7 +200,7 @@ exports[`persona → bundle regression perf-performance-hydration-football 1`] =
   ],
   "stackName": "Endurance Edge Stack",
   "subscriptionItemCount": 7,
-  "subscriptionTotal": 117.27,
+  "subscriptionTotal": 105.59,
 }
 `;
 
@@ -276,7 +276,7 @@ exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
   ],
   "stackName": "Performance Core Stack",
   "subscriptionItemCount": 6,
-  "subscriptionTotal": 103.36,
+  "subscriptionTotal": 95.2,
 }
 `;
 

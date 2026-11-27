@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Modal, ModalBody, ModalHeader, Note, Segmented } from '@/components/system'
 import { Icon } from '@/components/ui/Icon'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { computeRemoveImpact, lineMonthly, MAX_LINE_UNITS, setLineSchedule } from '@/lib/recharge/mock'
+import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
+import { computeRemoveImpact, lineMonthly, MAX_LINE_UNITS, setLineChoice, type LineChoice } from '@/lib/recharge/mock'
+import { routineRhythmFor, rhythmFor, servingsPerTime, usageWords } from '@/lib/recharge/routine'
+import { planRateChange, ratePct, withPlanRate } from '@/lib/recharge/plan-rate'
 import { upcomingBoxesForLine } from '@/lib/recharge/schedule'
 import { boxDateLabel, everyLabel, lastsLabel, rhythmLabel, supplyFit, supplyFitSentence } from '@/lib/hub/line-facts'
 import { usePricingConfig } from '@/hooks/usePricingConfig'
@@ -33,8 +35,12 @@ interface Props {
   subscription: MemberSubscription
   line: MemberSubscriptionLine
   product?: CatalogueProduct
-  /** Review a new rhythm (the dashboard raises the confirmation). */
-  onReviewSchedule: (change: { every: number; quantity: number }) => void
+  /** The catalogue, for the plan saving a change could move. */
+  catalogue?: CatalogueProduct[]
+  /** Review a new choice (the dashboard raises the confirmation). */
+  onReviewChoice: (choice: LineChoice) => void
+  /** Open "Your routine", which every rhythm is worked out from. */
+  onOpenRoutine?: () => void
   onSkip: () => void
   /** Put one in the next box, on that box's payment. */
   onAddToNextBox: () => Promise<{ ok: boolean; message: string }>
@@ -44,6 +50,16 @@ interface Props {
   onClose: () => void
 }
 
+/** "½ scoop", "1 scoop", "1½ scoops": an amount to choose. */
+function servingsLabel(n: number, product: CatalogueProduct): string {
+  const quarters = Math.max(1, Math.round(n * 4))
+  const whole = Math.floor(quarters / 4)
+  const part = ['', '¼', '½', '¾'][quarters % 4]
+  const powder = (product.formats ?? []).some((f) => f.toLowerCase().includes('powder'))
+  const noun = powder ? 'scoop' : 'serving'
+  return `${whole === 0 ? part : `${whole}${part}`} ${n > 1 ? `${noun}s` : noun}`
+}
+
 /** What the server says one more in the next box costs, or why it can't go in. */
 type Quote = { price: number; date: string } | { refusal: string } | null
 
@@ -51,31 +67,60 @@ const heading = { fontSize: 'var(--text-body)', fontWeight: 'var(--weight-strong
 const body = { fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' } as const
 const meta = { fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' } as const
 
-export function LineManageSheet({ subscription, line, product, onReviewSchedule, onSkip, onAddToNextBox, onRemove, onSetChangePolicy, onClose }: Props) {
+export function LineManageSheet({ subscription, line, product, catalogue = [], onReviewChoice, onOpenRoutine, onSkip, onAddToNextBox, onRemove, onSetChangePolicy, onClose }: Props) {
   const config = usePricingConfig()
   const maxEvery = Math.max(1, config.maxDeliveryMonths)
-  const currentEvery = Math.min(maxEvery, Math.max(1, Math.round(line.deliveryIntervalMonths)))
-  const [every, setEvery] = useState(currentEvery)
+  const startUsage: UsageLevel = line.usageLevel ?? 'standard'
+  const follows = line.rhythm !== 'chosen'
+  const [usage, setUsage] = useState<UsageLevel>(startUsage)
   const [quantity, setQuantity] = useState(line.quantity)
+  // 'routine' is "when you'd run out", whatever that works out at; a number is a rhythm they chose.
+  const [choice, setChoice] = useState<'routine' | number>(follows ? 'routine' : Math.min(maxEvery, Math.max(1, Math.round(line.deliveryIntervalMonths))))
+  const [refining, setRefining] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [quote, setQuote] = useState<Quote>(null)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState<{ ok: boolean; message: string } | null>(null)
 
   const active = subscription.status === 'active'
-  const changed = every !== currentEvery || quantity !== line.quantity
-  // The pending choice, priced and timed the way it will be once confirmed.
+  // How long one lasts at the usage chosen, from the plan's routine.
+  const sized = product ? routineRhythmFor(line, product, subscription.routine, usage, config) : null
+  const lastsMonths = sized?.lastsMonths ?? line.lastsMonths
+  // The routine's rhythm for this many at a time: about when they'd run out.
+  const routineEvery = lastsMonths ? rhythmFor(lastsMonths, quantity, config) : line.deliveryIntervalMonths
+  const fractional = !Number.isInteger(routineEvery)
+  const every = choice === 'routine' ? routineEvery : choice
+  const followsNow = choice === 'routine' || (!fractional && choice === routineEvery)
+  const pending: LineChoice = { usageLevel: usage, quantity, every, follows: followsNow, lastsMonths }
+  const changed =
+    usage !== startUsage ||
+    quantity !== line.quantity ||
+    Math.abs(every - line.deliveryIntervalMonths) > 0.001 ||
+    followsNow !== follows
+  // The pending choice, priced and timed the way it will be once confirmed, the plan saving included.
   const preview = useMemo(
-    () => (changed ? setLineSchedule(subscription, line.id, { every, quantity }, config) : subscription),
-    [changed, subscription, line.id, every, quantity, config],
+    () => (changed ? withPlanRate(subscription, setLineChoice(subscription, line.id, pending, config), catalogue, config) : subscription),
+    // `pending` is rebuilt every render from the values listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [changed, subscription, line.id, usage, quantity, every, followsNow, lastsMonths, catalogue, config],
   )
+  const rateMove = changed ? planRateChange(subscription, setLineChoice(subscription, line.id, pending, config), catalogue, config) : null
   const previewLine = preview.lines.find((l) => l.id === line.id) ?? line
   const [next, following] = useMemo(() => (active ? upcomingBoxesForLine(subscription, line.id, 2) : []), [active, subscription, line.id])
   const [previewNext] = useMemo(() => (active ? upcomingBoxesForLine(preview, line.id, 1) : []), [active, preview, line.id])
-  const lasts = lastsLabel(line.lastsMonths)
-  const fit = supplyFit(line.lastsMonths, quantity, every)
-  const removeImpact = computeRemoveImpact(subscription, line.id)
+  const lasts = lastsLabel(lastsMonths)
+  const fit = supplyFit(lastsMonths, quantity, every)
+  const removeImpact = computeRemoveImpact(subscription, line.id, catalogue)
   const constraintsLabel = describeConstraints(constraintsFor(subscription))
+  const everyOptions = [
+    ...(fractional ? [{ value: 'routine' as const, label: everyLabel(routineEvery).replace(/^./, (c) => c.toUpperCase()), sub: 'When you’d run out' }] : []),
+    ...Array.from({ length: maxEvery }, (_, i) => i + 1).map((m) => ({
+      value: m,
+      label: m === 1 ? 'Every month' : `Every ${m} months`,
+      ...(!fractional && m === routineEvery ? { sub: 'When you’d run out' } : {}),
+    })),
+  ]
+  const choiceValue: 'routine' | number = choice === 'routine' && !fractional ? routineEvery : choice
 
   /* What one more in the next box costs: asked of the server, which prices and
      places it the same way it will when it's added. */
@@ -116,7 +161,7 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
         {/* What it is now, in the words used everywhere else. */}
         <div data-line-facts>
           <p style={{ ...body, color: 'var(--ink-1)' }}>
-            {rhythmLabel(line.quantity, currentEvery).replace(/^./, (c) => c.toUpperCase())}
+            {rhythmLabel(line.quantity, line.deliveryIntervalMonths).replace(/^./, (c) => c.toUpperCase())}
             {next ? (
               <>
                 {' '}· next one <strong>{boxDateLabel(next.date)}</strong>
@@ -127,7 +172,45 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
               ''
             )}
           </p>
-          {lasts && <p style={meta}>One lasts you {lasts}.</p>}
+          {lasts && (
+            <p style={meta}>
+              One lasts you {lasts}
+              {product ? `: ${usageWords(product, subscription.routine, usage)}` : ''}.{' '}
+              {product && (
+                <Button variant="ghost" size="sm" fullWidth={false} className="underline -ml-1" aria-expanded={refining} onClick={() => setRefining((r) => !r)}>
+                  {refining ? 'Done' : 'Refine'}
+                </Button>
+              )}
+            </p>
+          )}
+          {/* The estimate, refined: how much they take each time, and the routine behind it. */}
+          {refining && product && (
+            <div style={{ marginTop: 'var(--space-3)' }} data-line-refine>
+              <p style={heading}>How much you take each time</p>
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                <Segmented
+                  label="How much you take each time"
+                  columns={3}
+                  value={usage}
+                  onChange={(v) => {
+                    setUsage(v)
+                    // A new usage gives a new "when you'd run out", and the routine's own count at a time.
+                    const resized = routineRhythmFor(line, product, subscription.routine, v, config)
+                    setQuantity(resized.quantity)
+                  }}
+                  options={USAGE_LEVELS.map((lvl) => ({ value: lvl, label: servingsLabel(servingsPerTime(product, subscription.routine, lvl), product) }))}
+                />
+              </div>
+              {onOpenRoutine && (
+                <p style={{ ...meta, marginTop: 'var(--space-2)' }}>
+                  Training days and weight are your routine, for your whole plan.{' '}
+                  <Button variant="ghost" size="sm" fullWidth={false} className="underline -ml-1" onClick={onOpenRoutine}>
+                    Change your routine
+                  </Button>
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* How often and how many: the two things people change. */}
@@ -136,10 +219,10 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
           <div style={{ marginTop: 'var(--space-2)' }}>
             <Segmented
               label="How often"
-              columns={maxEvery <= 4 ? (maxEvery as 2 | 3 | 4) : 'wrap'}
-              value={every}
-              onChange={setEvery}
-              options={Array.from({ length: maxEvery }, (_, i) => i + 1).map((m) => ({ value: m, label: m === 1 ? 'Every month' : `Every ${m} months` }))}
+              columns={2}
+              value={choiceValue}
+              onChange={(v) => setChoice(v === routineEvery && !fractional ? 'routine' : v)}
+              options={everyOptions}
             />
           </div>
 
@@ -169,6 +252,7 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
                 <>
                   {' '}· your monthly {formatGBP(subscription.flatMonthly)} → <strong>{formatGBP(preview.flatMonthly)}</strong>
                   {previewNext ? ` · next one ${boxDateLabel(previewNext.date)}` : ''}
+                  {rateMove ? ` · your plan saving ${ratePct(rateMove.from)} → ${ratePct(rateMove.to)}` : ''}
                 </>
               ) : (
                 ` · ${formatGBP(lineMonthly(line))} of your monthly`
@@ -177,7 +261,7 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
           </div>
 
           {/* Always there (disabled until something changes), so nothing jumps. */}
-          <Button variant="primary" iconRight="arrow-right" onClick={() => onReviewSchedule({ every, quantity })} disabled={!changed} className="mt-3">
+          <Button variant="primary" iconRight="arrow-right" onClick={() => onReviewChoice(pending)} disabled={!changed} className="mt-3">
             Review change
           </Button>
         </div>
@@ -193,7 +277,7 @@ export function LineManageSheet({ subscription, line, product, onReviewSchedule,
                 <>
                   <p style={{ ...meta, marginTop: 'var(--space-1)' }}>
                     {formatGBP(quote.price)}, added to the payment for your box on {boxDateLabel(quote.date)} and sent with it.
-                    {!inNextBox && ` Your usual ones still come ${everyLabel(currentEvery)}.`}
+                    {!inNextBox && ` Your usual ones still come ${everyLabel(line.deliveryIntervalMonths)}.`}
                   </p>
                   <Button variant="secondary" size="sm" icon="plus" onClick={addOne} disabled={adding || added?.ok === true} className="mt-2">
                     {added?.ok ? 'Added' : adding ? 'Adding…' : 'Add one to your next box'}

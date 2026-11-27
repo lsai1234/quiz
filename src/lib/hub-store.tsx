@@ -3,7 +3,9 @@
 import { create } from 'zustand'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
-import type { ChangePolicy, MemberSubscription } from '@/lib/recharge/types'
+import type { ChangePolicy, MemberSubscription, PlanRoutine } from '@/lib/recharge/types'
+import { withPlanRate } from '@/lib/recharge/plan-rate'
+import { applyRoutine } from '@/lib/recharge/routine'
 import {
   setLineChangePolicy as setLineChangePolicyMutation,
   setDefaultChangePolicy as setDefaultChangePolicyMutation,
@@ -20,6 +22,8 @@ import {
   removeLine as removeLineMutation,
   setLineCadence as setLineCadenceMutation,
   setLineSchedule as setLineScheduleMutation,
+  setLineChoice as setLineChoiceMutation,
+  type LineChoice,
   setLineQuantity as setLineQuantityMutation,
   setLineUsage as setLineUsageMutation,
   setLineSubstitution as setLineSubstitutionMutation,
@@ -82,6 +86,17 @@ type Change = (sub: MemberSubscription) => MemberSubscription
 let stored: { subscription: MemberSubscription; version: string | null } | null = null
 let queue: Promise<void> = Promise.resolve()
 let waiting = 0
+/**
+ * The catalogue, once the hub has it (`setCatalogue`): what a change's plan
+ * saving is worked out from on screen (`withPlanRate`), the same way the server
+ * works it out on save, so the monthly shown is the monthly stored.
+ */
+let catalogueRef: CatalogueProduct[] = []
+
+/** A change with the plan saving following the plan's size, as the server will save it. */
+function rated(before: MemberSubscription, after: MemberSubscription): MemberSubscription {
+  return catalogueRef.length > 0 ? withPlanRate(before, after, catalogueRef) : after
+}
 
 function setStored(subscription: MemberSubscription | null, version: string | null) {
   stored = subscription ? { subscription, version } : null
@@ -91,7 +106,7 @@ function setStored(subscription: MemberSubscription | null, version: string | nu
 function change(fn: Change): void {
   const current = useHubStore.getState().subscription
   if (!current) return
-  useHubStore.setState({ subscription: fn(current) })
+  useHubStore.setState({ subscription: rated(current, fn(current)) })
   waiting += 1
   queue = queue
     .then(() => save(fn))
@@ -106,7 +121,7 @@ function change(fn: Change): void {
 
 async function save(fn: Change, retried = false): Promise<void> {
   if (!stored) return
-  const subscription = fn(stored.subscription)
+  const subscription = rated(stored.subscription, fn(stored.subscription))
   let res: Response
   try {
     res = await fetch('/api/hub/subscription', {
@@ -253,6 +268,12 @@ interface HubStore {
   setLineCadence: (lineId: string, months: number) => void
   /** How often and how many, in one change (the product sheet). */
   setLineSchedule: (lineId: string, change: { every: number; quantity: number }) => void
+  /** The product sheet's whole choice: how much they take, how many come, how often, and whether it follows the routine. */
+  setLineChoice: (lineId: string, choice: LineChoice) => void
+  /** Re-time the plan to a routine, in one change (`applyRoutine`). */
+  setRoutine: (routine: PlanRoutine) => void
+  /** The catalogue the plan saving is worked out from on screen. */
+  setCatalogue: (products: CatalogueProduct[]) => void
   setLineQuantity: (lineId: string, quantity: number) => void
   setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
   /**
@@ -425,6 +446,13 @@ export const useHubStore = create<HubStore>((set) => ({
     change((sub) => setLineCadenceMutation(sub, lineId, months)),
   setLineSchedule: (lineId, schedule) =>
     change((sub) => setLineScheduleMutation(sub, lineId, schedule)),
+  setLineChoice: (lineId, choice) =>
+    change((sub) => setLineChoiceMutation(sub, lineId, choice)),
+  setRoutine: (routine) =>
+    change((sub) => applyRoutine(sub, routine, catalogueRef)),
+  setCatalogue: (products) => {
+    catalogueRef = products
+  },
   setLineQuantity: (lineId, quantity) =>
     change((sub) => setLineQuantityMutation(sub, lineId, quantity)),
   setLineUsage: (lineId, product, usageLevel) =>

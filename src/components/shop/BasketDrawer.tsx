@@ -14,6 +14,7 @@ import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerC
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
+import { PlanRhythms } from './PlanRhythms'
 import type { ShopPlanCheckoutState } from '@/hooks/useShopPlanCheckout'
 import { useOfferSettings } from '@/hooks/useOfferSettings'
 import { addToNextBox, useMyPlan } from '@/hooks/useMyPlan'
@@ -83,7 +84,7 @@ export function BasketDrawer({
   onCheckout,
   onClose,
 }: Props) {
-  const { setQty, remove, plan, setPlan } = useBasket()
+  const { setQty, remove, plan, setPlan, routine, setRoutine } = useBasket()
   /*
     Someone already on a plan: these can go in their next box (paid with that
     box, no delivery charge) or be bought once, never start a second plan. An
@@ -148,8 +149,15 @@ export function BasketDrawer({
     only, so it rules the monthly plan out while it is applied.
   */
   const shopPlan = useMemo(
-    () => buildShopPlan(resolved.map((l) => ({ productId: l.product.id, variantId: l.variant.id, quantity: l.quantity })), products ?? [], config),
-    [resolved, products, config],
+    () =>
+      buildShopPlan(
+        resolved.map((l) => ({ productId: l.product.id, variantId: l.variant.id, quantity: l.quantity })),
+        products ?? [],
+        config,
+        undefined,
+        routine ? { ...routine, source: 'member' } : null,
+      ),
+    [resolved, products, config, routine],
   )
   const monthly = plan === 'monthly' && !hasPlan
   const toBox = intoBox && Boolean(boxPlan)
@@ -377,7 +385,22 @@ export function BasketDrawer({
                 ) : monthly && shopPlan.ok ? (
                   /* What happens, in order: today, then each month, then where it's run from. */
                   <ul className="sf-drawer-planlist" data-monthly-how>
-                    <li><Icon name="calendar" size={15} />Your first box today, then {formatGBP(shopPlan.monthly)} on {billingDayPhrase(billingDayOf(new Date()))} of each month: the same as buying it once</li>
+                    <li><Icon name="calendar" size={15} />Your first box today, then {formatGBP(shopPlan.monthly)} on {billingDayPhrase(billingDayOf(new Date()))} of each month. Your first box has everything in it.</li>
+                    {/* The plan saving: the quiz's own, by the plan's size. */}
+                    <li data-plan-saving>
+                      <Icon name="percent" size={15} />
+                      <span>
+                        Subscribe and save {Math.round(shopPlan.rate * 100)}%: {formatGBP(shopPlan.saving)} off a month.
+                        {shopPlan.nextBand && ` Plans from ${formatGBP(shopPlan.nextBand.from).replace(/\.00$/, '')} a month save ${Math.round(shopPlan.nextBand.rate * 100)}%.`}
+                      </span>
+                    </li>
+                    <li>
+                      <Icon name="refresh" size={15} />
+                      <span>
+                        Each product comes about when you’d run out, so you never run short and don’t pile up:
+                        <PlanRhythms plan={shopPlan.subscription} products={products ?? []} routine={routine} onRoutine={setRoutine} />
+                      </span>
+                    </li>
                     <li><Icon name="truck" size={15} />{shopPlan.delivery ? `${formatGBP(shopPlan.delivery.price)} delivery a month` : 'Free UK delivery every month'}</li>
                     <li><Icon name="sliders" size={15} />It’s run from your hub: add, swap or remove products, skip a month, pause or cancel any time</li>
                     <li><Icon name="home" size={15} />{memberPrices ? 'The member hub comes with it, with member prices when you top up' : 'The member hub comes with it'}</li>

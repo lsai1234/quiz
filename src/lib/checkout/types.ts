@@ -40,7 +40,7 @@ export interface CheckoutPayload {
    * the server builds `subscription` from these lines and our catalogue, and
    * ignores the one sent alongside (that one only fills the account gate).
    */
-  shop?: { lines: ShopPlanLineInput[] } | null
+  shop?: { lines: ShopPlanLineInput[]; routine?: unknown } | null
   /**
    * Where the plan came from, for the hub's words (`PlanSource`): `bundle` from a
    * bundle page, `answers` from the quiz or consult. A shop basket is always

@@ -340,6 +340,7 @@ export async function applyChangeEvent(
       })
     }
     await saveSubscription(event.userId, outcome.subscription)
+    await creditHeldLine(event, subscription, outcome.subscription)
   }
 
   // Queue the member's email against the plan as it now stands. Queueing is
@@ -373,6 +374,38 @@ export async function applyChangeEvent(
  */
 export function isUndecided(event: ChangeEvent): boolean {
   return event.resolution === undefined
+}
+
+/**
+ * The credit for a product held out of its next box (`applyHold`), in Stripe.
+ *
+ * Holding a product takes it out of the box it was due in and banks its value
+ * against the next payment, as the member's own "skip the next one" does. The
+ * member's skip reached Stripe; the founders' hold didn't, so the hub showed a
+ * credit that never came off. Keyed by the event, so a re-run can't pay it twice.
+ * Never throws: a failure is reported as critical, for the founders to settle.
+ */
+async function creditHeldLine(event: ChangeEvent, before: MemberSubscription, after: MemberSubscription): Promise<void> {
+  if (!after.stripeCustomerId) return
+  const was = before.lines.find((l) => l.id === event.lineId)?.pendingCredit ?? 0
+  const now = after.lines.find((l) => l.id === event.lineId)?.pendingCredit ?? 0
+  const amount = Math.round((now - was) * 100) / 100
+  if (amount <= 0) return
+  const { getPaymentSource } = await import('@/lib/payments')
+  if (getPaymentSource() !== 'stripe') return
+  try {
+    const { creditCustomerBalance } = await import('@/lib/payments/stripe')
+    await creditCustomerBalance({
+      customerId: after.stripeCustomerId,
+      amount,
+      description: `CHRGD — credit for ${after.lines.find((l) => l.id === event.lineId)?.productTitle ?? 'a product'}, held out of your next box`,
+      idempotencyKey: `hold:${event.id}`,
+    })
+  } catch (err) {
+    console.error(`[changes] hold credit of £${amount} failed to reach Stripe for ${event.userId}:`, err)
+    const { reportErrorAsync } = await import('@/lib/monitoring/report')
+    reportErrorAsync(err, { surface: 'hub', severity: 'critical', path: 'changes/apply', userId: event.userId, context: { step: 'hold-credit', amount } })
+  }
 }
 
 /**

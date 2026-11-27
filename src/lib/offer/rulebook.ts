@@ -22,7 +22,7 @@
 export type BuyChannel =
   /** The shop, one at a time. */
   | 'shop-once'
-  /** The shop's basket, every month (`checkout/shop-plan`). */
+  /** The shop's basket, every month (`checkout/shop-plan`): a plan like any other. */
   | 'shop-monthly'
   /** A stack from the quiz or the Amp Consult, bought once. */
   | 'stack-once'
@@ -91,16 +91,16 @@ export const OFFER_RULES: readonly OfferRule[] = [
   {
     id: 'basket-tier',
     name: 'Basket saving (8% over £50)',
-    channels: only('shop-once', 'shop-monthly', 'stack-once'),
+    channels: only('shop-once', 'stack-once'),
     switch: null,
-    note: 'Any basket bought once, a quiz stack included. A monthly shop basket is priced exactly as the same basket bought once, so it keeps this saving too.',
+    note: 'Any basket bought once, a quiz stack included. A basket bought every month gets the plan saving instead, which is always more.',
   },
   {
     id: 'plan-saving',
-    name: 'Plan saving (13%, 15% or 20% by bundle size)',
-    channels: only('stack-monthly'),
+    name: 'Plan saving (13%, 15% or 20% by plan size)',
+    channels: only('stack-monthly', 'shop-monthly'),
     switch: null,
-    note: 'Stacks and bundles only. A monthly shop basket has no plan saving: same price as buying it once.',
+    note: 'Every plan, wherever it was set up: 13%, 15% from £35 a month, 20% from £55 (the quiz’s own bands, set in Pricing). A quiz depth is sold at its rate; after that a plan’s saving moves when a change takes it into another band, up or down, and the member sees it before confirming.',
   },
   {
     id: 'first-month',

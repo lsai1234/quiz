@@ -18,6 +18,8 @@ import { normaliseGuideSeed } from '@/lib/guide/build'
 import type { CheckoutPayload } from './types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { billingDayOf } from '@/lib/recharge/billing-day'
+import { roundInterval } from '@/lib/recharge/clock'
+import { cleanRoutine, ESTIMATED_ROUTINE, routineFromAnswers } from '@/lib/recharge/routine'
 import { getSubscription, saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
@@ -206,7 +208,8 @@ async function withShopPlan(payload: CheckoutPayload): Promise<CheckoutPayload> 
     import('./shop-plan'),
   ])
   const { products } = await getResolvedCatalogue()
-  const plan = buildShopPlan(payload.shop?.lines ?? [], products, getPricingConfig())
+  // Sized from the routine the basket carried (checked there), or our estimate.
+  const plan = buildShopPlan(payload.shop?.lines ?? [], products, getPricingConfig(), new Date(), payload.shop?.routine)
   if (!plan.ok) throw new ShopPlanRefused(plan.message, plan.reason)
   return {
     ...payload,
@@ -292,7 +295,7 @@ export async function assertPlanPrice(sub: MemberSubscription): Promise<void> {
       product.variants[0]
     const unitPrice = variant?.price ?? product.basePrice
     const units = Math.max(1, Math.floor(Number(line.quantity) || 1))
-    const every = Math.min(config.maxDeliveryMonths, Math.max(1, Math.floor(Number(line.deliveryIntervalMonths) || 1)))
+    const every = Math.min(config.maxDeliveryMonths, roundInterval(Number(line.deliveryIntervalMonths) || 1))
     const unit = discountWithFloor(unitPrice, deepest, unitCostOf(product, unitPrice, config), config)
     floor += Math.round((units / every) * unit * 100) / 100
     priced++
@@ -462,6 +465,9 @@ export async function finalizeCheckout(
       dispatchDayOfMonth: billingDayOf(startedAt),
       // Where it came from, for the hub's words: decided here for a shop basket.
       source: fromShop ? 'shop' : payload.source === 'bundle' ? 'bundle' : payload.source === 'answers' || quizAnswers ? 'answers' : 'bundle',
+      // What every product's rhythm is worked out from: their answers where
+      // they came with the order, else the plan's own (checked), else our estimate.
+      routine: (fromShop ? cleanRoutine(payload.subscription.routine) : routineFromAnswers(quizAnswers) ?? cleanRoutine(payload.subscription.routine)) ?? ESTIMATED_ROUTINE,
       partnerCode: redemption?.ok ? redemption.code.code : null,
       // Snapshot the hard dietary/stimulant exclusions now, so a substitution
       // months from now is judged against what they told us at the point of sale

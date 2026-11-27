@@ -25,6 +25,7 @@ import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ChangePolicy } from '@/lib/recharge/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { everyLabel } from '@/lib/hub/line-facts'
 import type { ReceiptData, ReceiptItem, ReceiptRow } from './types'
 
 /**
@@ -64,8 +65,7 @@ function receiptTime(d: Date): string {
 }
 
 export function deliveryLabel(months: number): string {
-  if (months <= 1) return 'every month'
-  return `every ${months} months`
+  return everyLabel(months)
 }
 
 /**

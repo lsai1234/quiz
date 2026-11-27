@@ -13,6 +13,7 @@ import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { shortNameOf } from '@/lib/catalogue/short-name'
+import { everyLabel } from '@/lib/hub/line-facts'
 
 /**
  * What can be said of a product without saying what it does: its type, the
@@ -57,7 +58,7 @@ function ProductCard({
         </div>
         <p className="text-[11px] text-[var(--ink-3)] mt-2.5">
           {econ.discountPct > 0 && <><span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% · </>}
-          {econ.shipEveryMonths > 1 ? `ships every ${econ.shipEveryMonths} months, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
+          {econ.shipEveryMonths > 1 ? `ships ${everyLabel(econ.shipEveryMonths)}, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
         </p>
         <Button variant="primary" size="sm" icon="plus" onClick={() => onAdd(p)} className="mt-3">
           Add to every delivery

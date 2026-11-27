@@ -4,6 +4,7 @@ import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import { cadenceNote, formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
 import { ProductTile } from './ProductTile'
+import { shipsAtCycle } from '@/lib/recharge/clock'
 
 const ACCENT = '#00D4FF'
 
@@ -17,10 +18,12 @@ const FREQ_LABEL: Record<string, string> = {
 /** How many months of the delivery schedule to visualise. */
 const HORIZON = 3
 
-/** Whether a line delivers in month `m` (1-indexed), given its ship cadence. */
+/**
+ * Whether a line delivers in month `m` (1-indexed): the clock dispatch runs on,
+ * so a 2½-month tub shows in months 1 and 3, as it will really come.
+ */
 function shipsInMonth(line: SubscriptionLine, m: number): boolean {
-  const every = Math.max(1, line.shipEveryMonths)
-  return (m - 1) % every === 0
+  return shipsAtCycle({ deliveryIntervalMonths: line.shipEveryMonths, joinedAtMonth: 0 }, m - 1)
 }
 
 interface Props {

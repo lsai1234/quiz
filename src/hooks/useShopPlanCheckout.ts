@@ -1,5 +1,6 @@
 'use client'
 
+import type { BasketRoutine } from '@/lib/basket/store'
 import { releasePaidBasket, rememberBasketBeingPaid } from '@/lib/basket/paid'
 import { useCallback, useRef, useState } from 'react'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
@@ -90,9 +91,10 @@ export function useShopPlanCheckout() {
 
   /** Start the monthly checkout for this basket. */
   const checkout = useCallback(
-    (resolved: ResolvedBasketLine[], catalogue: CatalogueProduct[], partnerCode: string | null) => {
+    (resolved: ResolvedBasketLine[], catalogue: CatalogueProduct[], partnerCode: string | null, routine: BasketRoutine | null = null) => {
       const lines = resolved.map((l) => ({ productId: l.product.id, variantId: l.variant.id, quantity: l.quantity }))
-      const preview = buildShopPlan(lines, catalogue)
+      const shopRoutine = routine ? { ...routine, source: 'member' as const } : null
+      const preview = buildShopPlan(lines, catalogue, undefined, undefined, shopRoutine)
       if (!preview.ok) {
         setState({ status: 'error', message: preview.message })
         return
@@ -100,7 +102,7 @@ export function useShopPlanCheckout() {
       track('checkout_start', { source: 'shop_plan', items: resolved.length, value: preview.monthly })
       void submit({
         subscription: preview.subscription,
-        shop: { lines },
+        shop: { lines, routine: shopRoutine },
         ...(partnerCode ? { partnerCode } : {}),
       })
     },

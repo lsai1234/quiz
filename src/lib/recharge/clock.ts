@@ -71,28 +71,63 @@ export function nextBoxCycle(
  * shipped, and the stored `deliveriesMade` already holds their count.)
  */
 export function deliveriesMadeFor(line: CadenceFields, monthsActive: number): number {
-  const every = Math.max(1, line.deliveryIntervalMonths)
+  const every = intervalOf(line)
   const from = line.cadenceFrom
   if (from) {
-    if (monthsActive >= from.cycle) return from.made + 1 + Math.floor((monthsActive - from.cycle) / every)
+    if (monthsActive >= from.cycle) return from.made + countFrom(from.cycle, every, monthsActive)
     return monthsActive >= from.last ? from.made : Math.max(0, from.made - 1)
   }
-  const cyclesOnPlan = monthsActive - (line.joinedAtMonth ?? 0)
-  if (cyclesOnPlan < 0) return 0
-  return Math.floor(cyclesOnPlan / every) + 1
+  return countFrom(line.joinedAtMonth ?? 0, every, monthsActive)
+}
+
+/** Float dust: 5 / 2.5 can land a hair over 2, and a ceiling would count a box that isn't there. */
+const EPS = 1e-9
+
+/**
+ * How often a line comes, in months: a whole number, or a fraction such as 2.5
+ * for a tub that lasts two and a half months. Never under a month (one box a
+ * month), kept to two places.
+ */
+export function intervalOf(line: Pick<MemberSubscriptionLine, 'deliveryIntervalMonths'>): number {
+  return roundInterval(line.deliveryIntervalMonths)
+}
+
+export function roundInterval(months: number): number {
+  const m = Number(months)
+  return Number.isFinite(m) ? Math.max(1, Math.round(m * 100) / 100) : 1
+}
+
+/**
+ * Deliveries made by cycle `m` of a line that comes every `every` months from a
+ * delivery at `base`: deliveries at base + ⌊k × every⌋ for k = 0, 1, 2…
+ *
+ * Rounding each one DOWN to its month is what makes a fractional rhythm never
+ * run out: a tub that lasts 2½ months comes at 0, 2, 5, 7, 10…, so each arrives
+ * in the box before the last one runs out (2 < 2.5, 5 = 5, 7 < 7.5…), and on
+ * average every 2½ months, which is what the flat monthly charges for. For a
+ * whole number it is exactly every `every` months, as it always was.
+ */
+function countFrom(base: number, every: number, m: number): number {
+  if (m < base) return 0
+  return Math.ceil((m - base + 1) / every - EPS)
+}
+
+/** The cycle of delivery `k` (0 is the one at `base`). */
+function cycleOfDelivery(base: number, every: number, k: number): number {
+  return base + Math.floor(k * every + EPS)
 }
 
 /** The cycle of the line's latest delivery at or before `upTo`, or null if it hasn't had one. */
 export function lastDeliveryCycle(line: CadenceFields, upTo: number): number | null {
-  const every = Math.max(1, line.deliveryIntervalMonths)
+  const every = intervalOf(line)
   const from = line.cadenceFrom
   if (from) {
-    if (upTo >= from.cycle) return from.cycle + Math.floor((upTo - from.cycle) / every) * every
+    if (upTo >= from.cycle) return cycleOfDelivery(from.cycle, every, countFrom(from.cycle, every, upTo) - 1)
     return upTo >= from.last ? from.last : null
   }
   const joined = line.joinedAtMonth ?? 0
   if (upTo < joined) return null
-  return joined + Math.floor((upTo - joined) / every) * every
+  return cycleOfDelivery(joined, every, countFrom(joined, every, upTo) - 1)
 }
 
 /**
@@ -101,21 +136,26 @@ export function lastDeliveryCycle(line: CadenceFields, upTo: number): number | n
  * Changing how often something comes used to keep counting from the plan's
  * start, so a tub that came every 2 months, changed to every 3 in month 3, came
  * again in month 3, one month after the last; and the other way a change could
- * leave a long gap. Now the next one comes `every` months after the last, or in
- * the next box if that's already passed. A line that hasn't had its first box
- * yet keeps it where it is.
+ * leave a long gap. Now the next one comes `every` months after the last (the
+ * box before it would run out, for a fractional rhythm), or in the next box if
+ * that's already passed. A line that hasn't had its first box yet keeps it
+ * where it is.
  *
  * `nextCycle` is the next box still to come (`nextBoxCycle`). Pure; the server
  * works this out itself from the stored line (`reprice`), so the schedule can't
  * be set from the browser.
  */
 export function withInterval<L extends CadenceFields>(line: L, every: number, nextCycle: number): L {
-  const months = Math.max(1, Math.round(every))
-  if (months === Math.max(1, line.deliveryIntervalMonths)) return line
+  const months = roundInterval(every)
+  if (months === intervalOf(line)) return line
   const made = deliveriesMadeFor(line, nextCycle - 1)
   const last = lastDeliveryCycle(line, nextCycle - 1)
   if (made === 0 || last == null) return { ...line, deliveryIntervalMonths: months }
-  return { ...line, deliveryIntervalMonths: months, cadenceFrom: { cycle: Math.max(last + months, nextCycle), made, last } }
+  return {
+    ...line,
+    deliveryIntervalMonths: months,
+    cadenceFrom: { cycle: Math.max(last + Math.floor(months + EPS), nextCycle), made, last },
+  }
 }
 
 /** The first box at or after `fromCycle` this line is due in (within `horizon` cycles). */

@@ -2873,3 +2873,24 @@
 .storefront .sf-qf-tiles[data-more='true'] :focus-visible {
   outline-offset: -2px;
 }
+
+/* A monthly basket's products and how often each comes (`PlanRhythms`). */
+.sf-drawer-rhythms { display: grid; gap: 8px; margin-top: 6px; }
+.sf-drawer-rhythms ul { list-style: none; display: grid; gap: 4px; margin: 0; padding: 0; }
+.sf-drawer-rhythms li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text); }
+.sf-drawer-rhythms li span:last-child { flex: none; color: var(--text-2); white-space: nowrap; }
+.sf-drawer-routine p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.sf-drawer-routine-ask { display: grid; gap: 8px; margin-top: 8px; }
+.sf-drawer-routine-ask > p { color: var(--text); }
+.sf-drawer-seg--wrap { display: flex; flex-wrap: wrap; flex: initial; }
+.storefront .sf-linkbutton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}

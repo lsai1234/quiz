@@ -14,7 +14,10 @@ import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, computeSkipImpact, nextDelivery, oneOffUnitPrice, skipCredit, upcomingBoxesForLine } from '@/lib/recharge/schedule'
 import { rhythmLabel } from '@/lib/hub/line-facts'
-import { computeAddImpact, projectedEconomics, nextDispatchDate, setLineSchedule as setLineScheduleOf } from '@/lib/recharge/mock'
+import { planRateChange, rateNote, withPlanRate } from '@/lib/recharge/plan-rate'
+import { routineMatters, routineWords } from '@/lib/recharge/routine'
+import { RoutineSheet } from './RoutineSheet'
+import { computeAddImpact, projectedEconomics, nextDispatchDate, setLineChoice as setLineChoiceOf } from '@/lib/recharge/mock'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
 import { CheckIn } from './CheckIn'
@@ -52,7 +55,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
     // Sign-out moved to the shell's header, where an account action belongs.
     subscription: sub, feedback,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineSchedule, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineChoice, setRoutine, setCatalogue, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, removeItemFromDelivery, addExtra, removeExtra,
     snooze, applyDownsize, refresh,
   } = useHubStore()
@@ -62,6 +65,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
   const [manageLineId, setManageLineId] = useState<string | null>(null)
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showRoutine, setShowRoutine] = useState(false)
   const [addFocusGroup, setAddFocusGroup] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingChange | null>(null)
   const [showJourney, setShowJourney] = useState(false)
@@ -73,6 +77,11 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
   const billingRef = useRef<HTMLDivElement>(null)
   const billingButtonRef = useRef<HTMLButtonElement>(null)
   const reduced = useReducedMotion()
+
+  // The plan saving on screen is worked out from the catalogue, as the server's is.
+  useEffect(() => {
+    if (products.length) setCatalogue(products)
+  }, [products, setCatalogue])
 
   /** The catalogue entry behind each line, for photos. */
   const productById = useMemo(
@@ -421,6 +430,15 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               Add product
             </Button>
           </div>
+          {/* What every rhythm is worked out from, and the way to refine it. */}
+          {routineMatters(products.filter((p) => sub.lines.some((l) => l.productId === p.id))) && (
+            <p className="text-xs text-[var(--ink-2)] mb-3" data-routine-line>
+              Each product comes about when you’d run out, worked out from {routineWords(sub.routine)}.{' '}
+              <Button variant="ghost" size="sm" fullWidth={false} className="underline -ml-1" onClick={() => setShowRoutine(true)}>
+                Change your routine
+              </Button>
+            </p>
+          )}
           <div className="space-y-3" data-reveal>
             {sub.lines.map((line) => (
               <StackItemCard
@@ -556,18 +574,26 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
           subscription={sub}
           line={manageLine}
           product={products.find((p) => p.id === manageLine.productId)}
-          onReviewSchedule={(change) => {
-            const after = setLineScheduleOf(sub, manageLine.id, change)
+          catalogue={products}
+          onOpenRoutine={() => { setManageLineId(null); setShowRoutine(true) }}
+          onReviewChoice={(choice) => {
+            const changed = setLineChoiceOf(sub, manageLine.id, choice)
+            // The plan saving follows the plan's size, as the server will save it.
+            const after = withPlanRate(sub, changed, products)
             const [nextOne] = upcomingBoxesForLine(after, manageLine.id, 1)
+            const said = rhythmLabel(choice.quantity, choice.every).replace(/^./, (c) => c.toUpperCase())
             setPending({
               title: 'Change how often and how many',
               subtitle: manageLine.productTitle,
               monthlyBefore: sub.flatMonthly,
               monthlyAfter: after.flatMonthly,
               effectiveFrom: nextOne?.date,
-              note: `${rhythmLabel(change.quantity, change.every).replace(/^./, (c) => c.toUpperCase())}, counted from the last one you had${nextOne ? `: the next one comes on ${fmtDay(nextOne.date)}` : ''}.`,
+              note: [
+                `${said}${choice.follows ? ', about when you’d run out' : ''}, counted from the last one you had${nextOne ? `: the next one comes on ${fmtDay(nextOne.date)}` : ''}.`,
+                rateNote(planRateChange(sub, changed, products)),
+              ].filter(Boolean).join(' '),
               confirmLabel: 'Confirm change',
-              onConfirm: () => { setLineSchedule(manageLine.id, change); setManageLineId(null) },
+              onConfirm: () => { setLineChoice(manageLine.id, choice); setManageLineId(null) },
             })
           }}
           onSkip={() => {
@@ -625,7 +651,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               monthlyAfter: sub.flatMonthly,
               effectiveFrom: selectedDelivery.date,
               note: credit > 0.01
-                ? `This box ships again, so the ${formatGBP(credit)} credited for skipping it no longer applies. Your monthly plan is unchanged.`
+                ? `This box ships again, so the ${formatGBP(credit)} credited for skipping it comes back off: it’s added to your next payment. Your monthly plan is unchanged.`
                 : 'This box ships again. Your monthly plan is unchanged.',
               confirmLabel: 'Restore it',
               onConfirm: () => unskipDelivery(selectedDelivery.id),
@@ -659,6 +685,7 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               title: 'Add to every delivery', subtitle: product.title,
               monthlyBefore: imp.currentMonthly, monthlyAfter: imp.newMonthly,
               effectiveFrom: imp.effectiveFrom, economics: projectedEconomics(product),
+              note: rateNote(imp.rate) || undefined,
               confirmLabel: 'Add to plan',
               onConfirm: () => addLine(product, products),
             })
@@ -696,12 +723,22 @@ export function SubscriptionDashboard({ embedded = false }: { embedded?: boolean
               title: 'Add to your plan', subtitle: product.title,
               monthlyBefore: imp.currentMonthly, monthlyAfter: imp.newMonthly,
               effectiveFrom: imp.effectiveFrom, economics: projectedEconomics(product),
+              note: rateNote(imp.rate) || undefined,
               confirmLabel: 'Add to plan',
               onConfirm: () => addLine(product, products),
             })
           }}
           focusSwapGroup={addFocusGroup}
           onClose={() => { setShowAdd(false); setAddFocusGroup(null) }}
+        />
+      )}
+
+      {showRoutine && (
+        <RoutineSheet
+          subscription={sub}
+          catalogue={products}
+          onConfirm={(routine) => { setRoutine(routine); setShowRoutine(false) }}
+          onClose={() => setShowRoutine(false)}
         />
       )}
 

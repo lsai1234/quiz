@@ -1,41 +1,41 @@
 import { billingDayOf } from '@/lib/recharge/billing-day'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
-import { formatGBP, getPricingConfig, priceOneOffLines, sizeConsumption, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import type { MemberSubscription, MemberSubscriptionLine, PlanRoutine } from '@/lib/recharge/types'
+import { cleanRoutine, ESTIMATED_ROUTINE, rhythmFor, sizeFor } from '@/lib/recharge/routine'
+import { bandFor, nextBand } from '@/lib/recharge/plan-rate'
+import { discountWithFloor, formatGBP, getPricingConfig, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { recurringDeliveryOption, type DeliveryOption } from '@/lib/pricing/delivery'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 
-/** Months one unit lasts at the label's serving, or undefined where it can't be sized. Words only. */
-function lastsFor(product: CatalogueProduct, config: PricingConfig): number | undefined {
-  try {
-    const months = sizeConsumption(product, null, config).monthsOneUnitLasts
-    return Number.isFinite(months) && months > 0 ? months : undefined
-  } catch {
-    return undefined
-  }
-}
-
 /**
- * A shop basket, bought every month.
+ * A shop basket, bought every month: a plan like any other.
  *
  * ── The terms ───────────────────────────────────────────────────────────────
- * The quiz's, apart from the discount:
- *   price        what the same basket costs bought once, savings included
- *                (`priceOneOffLines`, the function `/api/cart` bills from), and
- *                no subscribe-&-save rate on top
+ * The quiz's, all of them:
+ *   saving       the plan saving, 13%, 15% or 20% by the plan's size, the
+ *                quiz's own bands (`plan-rate`), on every product, never below
+ *                the margin floor. It replaces the one-off basket saving, and
+ *                is always more than it.
+ *   rhythm       each product comes about when it would run out (`sizeConsumption`),
+ *                as many at a time as are in the basket, worked out from the
+ *                routine: the one they gave, or our estimate from the label
+ *                (about three training days a week), said as an estimate.
+ *   price        one flat monthly: each delivery's price over how often it
+ *                comes. The first box has everything in it.
  *   minimum      `minSubscriptionMonthly` a month, as for a quiz plan
- *   term         the configured minimum, raised by any product that needs
- *                longer (`minSubscriptionMonths`), as for a quiz plan
+ *   term         none: cancel any time, as for a quiz plan
  *   delivery     a monthly delivery line under the free-delivery line
  *                (`recurringDeliveryOption`), as for a quiz plan
- *   the hub      opens with the plan and stays open while it runs, as for any
- *                plan (`lib/hub/access`): member prices on top-ups come with it
+ *   the hub      opens with the plan and stays open while it runs
+ *
+ * It used to be the basket's one-off price, every product every month: no plan
+ * saving, and a creatine tub that lasts three months sent every month.
  *
  * ── Who decides the price ───────────────────────────────────────────────────
  * The same function runs in the basket (to show the monthly) and on the server
- * (to charge it), from the catalogue each side has. The browser sends products
- * and quantities only; `finalizeCheckout` rebuilds the plan here and ignores
- * any figure that came with them.
+ * (to charge it), from the catalogue each side has. The browser sends products,
+ * quantities and the routine only; `finalizeCheckout` rebuilds the plan here and
+ * ignores any figure that came with them.
  *
  * ── Unavailable products ────────────────────────────────────────────────────
  * A shop plan has no quiz answers, so nobody has told us what they can't have.
@@ -59,8 +59,14 @@ export type ShopPlanResult =
       minMonths: number
       /** The monthly delivery line, when the plan is under the free line. */
       delivery: DeliveryOption | null
-      /** The saving the basket earns, as on a one-off (the £50+ tier). */
+      /** What the plan saving takes off a month (£). */
       saving: number
+      /** The plan saving, 0–1. */
+      rate: number
+      /** The next band up: its saving and the monthly it starts at, or null at the top. */
+      nextBand: { rate: number; from: number } | null
+      /** The routine it was sized from. */
+      routine: PlanRoutine
     }
   | {
       ok: false
@@ -95,7 +101,9 @@ export function buildShopPlan(
   catalogue: CatalogueProduct[],
   config: PricingConfig = getPricingConfig(),
   now: Date = new Date(),
+  routineInput?: unknown,
 ): ShopPlanResult {
+  const routine: PlanRoutine = cleanRoutine(routineInput) ?? ESTIMATED_ROUTINE
   const minimum = config.minSubscriptionMonthly
   const wanted = (Array.isArray(input) ? input : [])
     .filter((l) => l && typeof l.productId === 'string' && typeof l.variantId === 'string')
@@ -129,23 +137,34 @@ export function buildShopPlan(
     }
   }
 
-  const priced = priceOneOffLines(
-    resolved.map(({ product, variant, quantity }) => ({ price: variant.price, cost: unitCostOf(product, variant.price, config), quantity })),
-    config,
-  )
-  const monthly = round(priced.total)
+  /* Each product sized to the routine: as many at a time as are in the basket
+     (more, for one that wouldn't last a month), about as often as that runs out. */
+  const sized = resolved.map(({ product, variant, quantity }) => {
+    const sizing = sizeFor(product, routine, 'standard', config)
+    const units = Math.max(quantity, sizing.unitsPerShipment)
+    return { product, variant, units, every: rhythmFor(sizing.monthsOneUnitLasts, units, config), lastsMonths: sizing.monthsOneUnitLasts }
+  })
+
+  // The plan saving for a plan this size: the quiz's own bands.
+  const listMonthly = round(sized.reduce((sum, l) => sum + (l.variant.price * l.units) / l.every, 0))
+  const band = bandFor(listMonthly, config)
+  const priced = sized.map((l) => {
+    const unit = discountWithFloor(l.variant.price, band.rate, l.variant.cost ?? unitCostOf(l.product, l.variant.price, config), config, l.product.vatRate)
+    return { ...l, pricePerDelivery: round(unit * l.units) }
+  })
+  const monthly = round(priced.reduce((sum, l) => sum + l.pricePerDelivery / l.every, 0))
   if (monthly < minimum) {
     return {
       ok: false,
       reason: 'minimum',
-      message: `Monthly plans start at ${formatGBP(minimum).replace(/\.00$/, '')} a month. This basket is ${formatGBP(monthly)}.`,
+      message: `Monthly plans start at ${formatGBP(minimum).replace(/\.00$/, '')} a month. This basket comes to ${formatGBP(monthly)} a month.`,
       monthly,
       minimum,
     }
   }
 
   const startedAt = now.toISOString()
-  const lines: MemberSubscriptionLine[] = resolved.map(({ product, variant, quantity }, i) => ({
+  const lines: MemberSubscriptionLine[] = priced.map(({ product, variant, units, every, lastsMonths, pricePerDelivery }, i) => ({
     id: `line-${i}-${product.id}`,
     productId: product.id,
     productTitle: product.title,
@@ -154,12 +173,12 @@ export function buildShopPlan(
     variantId: variant.id,
     slotTitle: product.category,
     stackSlot: product.stackSlots[0],
-    quantity,
-    deliveryIntervalMonths: 1,
-    // How long one lasts at the label's serving, for the hub's words. A basket
-    // bought every month comes every month; this only says so honestly.
-    lastsMonths: lastsFor(product, config),
-    pricePerDelivery: round(priced.lines[i].lineTotal),
+    quantity: units,
+    deliveryIntervalMonths: every,
+    usageLevel: 'standard',
+    lastsMonths,
+    rhythm: 'routine',
+    pricePerDelivery,
     swapGroup: product.swapGroup,
     addedAt: startedAt,
     deliveriesMade: 1,
@@ -172,7 +191,8 @@ export function buildShopPlan(
     status: 'active',
     customerEmail: '',
     flatMonthly: monthly,
-    subscriptionDiscountRate: 0,
+    subscriptionDiscountRate: band.rate,
+    routine,
     // The day it starts is the day Stripe bills it, and so the day each box goes (`billing-day`).
     dispatchDayOfMonth: billingDayOf(now),
     source: 'shop',
@@ -192,6 +212,12 @@ export function buildShopPlan(
     monthly,
     minMonths,
     delivery: recurringDeliveryOption(monthly, config),
-    saving: round(priced.discount),
+    saving: round(listMonthly - monthly),
+    rate: band.rate,
+    nextBand: (() => {
+      const up = nextBand(listMonthly, config)
+      return up ? { rate: up.band.rate, from: up.band.from } : null
+    })(),
+    routine,
   }
 }

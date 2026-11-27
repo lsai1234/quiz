@@ -1032,7 +1032,7 @@ export function ShopShell() {
           checkoutState={state}
           planState={planState}
           onCheckout={() => (plan === 'monthly'
-            ? checkoutPlan(resolved, products, appliedCode?.code ?? null)
+            ? checkoutPlan(resolved, products, appliedCode?.code ?? null, useBasket.getState().routine)
             : checkout(resolved, 'basket', appliedCode?.code ?? null))}
           onClose={closeDrawer}
         />

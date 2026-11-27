@@ -1,3 +1,4 @@
+import { everyLabel } from '@/lib/hub/line-facts'
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
 import type { QuizAnswers, Budget, StackLevel, StackPreference } from '@/lib/types'
@@ -1489,15 +1490,31 @@ export function sizeConsumption(
   const servingsPerMonth = occasionsPerMonth * servingsPerOccasion
   const monthsOneUnitLasts = servingsPerMonth > 0 ? servingsPerUnit / servingsPerMonth : config.maxDeliveryMonths
 
+  /*
+    Never run out, never stockpile. Each delivery comes about when the last one
+    runs out: a tub that lasts 2½ months comes every 2½ months on average, in
+    the box before it would run out (`clock`: 2, 5, 7, 10…), and the flat
+    monthly charges for exactly what is used.
+
+    This used to round to the nearest whole month, which ran the 2½-month
+    products (pre-workout, electrolytes, BCAA) out about two weeks before each
+    one came, and sent one unit a month of a product that lasted three weeks.
+    Something that lasts under a month comes as many at a time as cover a
+    month (two tubs that last three weeks each come about every six weeks).
+    Nothing comes further apart than `maxDeliveryMonths`.
+  */
   let unitsPerShipment: number
-  let shipEveryMonths: number
   if (monthsOneUnitLasts >= 1) {
     unitsPerShipment = 1
-    shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
   } else {
-    unitsPerShipment = Math.max(1, Math.round(servingsPerMonth / servingsPerUnit))
-    shipEveryMonths = 1
+    // Within about a day and a half of a month counts as a month.
+    unitsPerShipment = Math.max(1, Math.ceil(1 / monthsOneUnitLasts - 0.05))
   }
+  // Rounded DOWN to the hundredth, so a rhythm is never later than the run-out.
+  const shipEveryMonths = Math.min(
+    config.maxDeliveryMonths,
+    Math.max(1, Math.floor(unitsPerShipment * monthsOneUnitLasts * 100 + 1e-6) / 100),
+  )
 
   return {
     cadence,
@@ -1507,7 +1524,7 @@ export function sizeConsumption(
     unitsPerShipment,
     shipEveryMonths,
     monthlyUnits: unitsPerShipment / shipEveryMonths,
-    monthsOneUnitLasts: Math.round(monthsOneUnitLasts * 100) / 100,
+    monthsOneUnitLasts: Math.round(monthsOneUnitLasts * 10000) / 10000,
   }
 }
 
@@ -1668,12 +1685,10 @@ export function planComparison(
  */
 export function cadenceLine(line: SubscriptionLine): string {
   const noun = (line.product.formats?.[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
-  const ship =
-    line.shipEveryMonths > 1
-      ? `1 ${noun} every ${line.shipEveryMonths} months`
-      : line.unitsPerShipment > 1
-        ? `${line.unitsPerShipment} ${noun}s a month`
-        : `1 ${noun} a month`
+  // The hub's words (`everyLabel`): "every 3 months", or "about every 11
+  // weeks" for a tub that lasts 2½ months and comes in the box before it runs out.
+  const count = line.unitsPerShipment > 1 ? `${line.unitsPerShipment} ${noun}s` : `1 ${noun}`
+  const ship = Math.max(1, line.shipEveryMonths) === 1 ? `${count} a month` : `${count} ${everyLabel(line.shipEveryMonths)}`
   const taken =
     line.cadence === 'daily'
       ? 'every day'
@@ -1708,7 +1723,9 @@ export function cadenceNote(plan: readonly SubscriptionLine[]): string | null {
 
   const monthly = plan.filter((l) => Math.max(1, l.shipEveryMonths) === 1).length
   const longer = plan.length - monthly
-  const longest = plan.reduce((m, l) => Math.max(m, Math.max(1, l.shipEveryMonths)), 1)
+  // The longest gap between two boxes: a 2½-month rhythm is two or three months apart.
+  const longest = Math.ceil(plan.reduce((m, l) => Math.max(m, Math.max(1, l.shipEveryMonths)), 1) - 1e-9)
+  const longestRhythm = plan.reduce((m, l) => Math.max(m, Math.max(1, l.shipEveryMonths)), 1)
 
   if (longer === 0) {
     return plan.length === 1
@@ -1718,7 +1735,7 @@ export function cadenceNote(plan: readonly SubscriptionLine[]): string | null {
 
   if (monthly === 0) {
     return plan.length === 1
-      ? `One delivery every ${longest} months — the cost is spread evenly, so you pay the same each month.`
+      ? `One delivery ${everyLabel(longestRhythm)} — the cost is spread evenly, so you pay the same each month.`
       : `Nothing here needs replacing monthly: each one arrives when it runs out, up to every ${longest} months. The cost is spread evenly across them.`
   }
 
@@ -2119,7 +2136,7 @@ export function calculatePricing(
   for (const line of subPlan) {
     monthlyCost += line.monthlyUnits * line.unitCost
     // Deliveries within the minimum term (first delivery at signup / month 0).
-    const deliveries = Math.floor((subscriptionMinMonths - 1) / line.shipEveryMonths) + 1
+    const deliveries = Math.ceil(Math.max(1, subscriptionMinMonths) / Math.max(1, line.shipEveryMonths) - 1e-9)
     committedCost += deliveries * line.unitsPerShipment * line.unitCost
   }
   const subscriptionMonthlyMargin = round(subscriptionTotal - monthlyCost)

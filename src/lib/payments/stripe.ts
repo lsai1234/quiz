@@ -936,6 +936,31 @@ export async function creditCustomerBalance(opts: {
   )
 }
 
+/**
+ * Take a credit back: a positive customer-balance entry, which the next invoice
+ * collects. For a skipped box the member restores (`hub/skip-credits`): the box
+ * ships again, so the credit given for skipping it no longer stands.
+ */
+export async function debitCustomerBalance(opts: {
+  customerId: string
+  amount: number
+  description: string
+  idempotencyKey: string
+  currency?: string
+}): Promise<void> {
+  if (opts.amount <= 0) return
+  const stripe = getStripeClient()
+  await stripe.customers.createBalanceTransaction(
+    opts.customerId,
+    {
+      amount: Math.round(opts.amount * 100),
+      currency: (opts.currency ?? DEFAULT_CURRENCY).toLowerCase(),
+      description: opts.description,
+    },
+    { idempotencyKey: opts.idempotencyKey },
+  )
+}
+
 export async function refundPayment(paymentIntentId: string): Promise<void> {
   const stripe = getStripeClient()
   await stripe.refunds.create({ payment_intent: paymentIntentId })
